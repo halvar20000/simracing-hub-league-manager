@@ -1,6 +1,5 @@
-// Prisma schema for Simracing-Hub's League Manager
-// Week 1: Auth.js tables + base User model with role
-// Week 2 will extend this with League, Season, Round, Registration, etc.
+// Simracing-Hub's League Manager — full domain schema
+// Auth.js tables + League/Season/Round/Registration + Results/Scoring + Reporting
 
 generator client {
   provider = "prisma-client-js"
@@ -11,10 +10,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  DRIVER
-}
+// ==========================================
+// Auth.js tables
+// ==========================================
 
 model User {
   id              String    @id @default(cuid())
@@ -23,7 +21,6 @@ model User {
   emailVerified   DateTime?
   image           String?
 
-  // Our custom fields
   firstName       String?
   lastName        String?
   iracingMemberId String?   @unique
@@ -32,6 +29,16 @@ model User {
 
   accounts        Account[]
   sessions        Session[]
+
+  // Domain back-relations
+  leaguesCreated         League[]                       @relation("LeagueCreatedBy")
+  registrations          Registration[]
+  approvedRegistrations  Registration[]                 @relation("RegistrationApprovedBy")
+  csvImports             CsvImport[]
+  incidentReports        IncidentReport[]
+  incidentEvidence       IncidentReportEvidence[]
+  incidentComments       IncidentReportComment[]
+  incidentDecisions      IncidentDecision[]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -70,4 +77,421 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// ==========================================
+// League domain
+// ==========================================
+
+model League {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  logoUrl     String?
+
+  createdById String
+  createdBy   User      @relation("LeagueCreatedBy", fields: [createdById], references: [id])
+
+  seasons     Season[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Season {
+  id                  String          @id @default(cuid())
+  leagueId            String
+  league              League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name                String
+  year                Int
+  status              SeasonStatus    @default(DRAFT)
+  startsOn            DateTime?
+  endsOn              DateTime?
+  isMulticlass        Boolean         @default(false)
+  proAmEnabled        Boolean         @default(false)
+
+  scoringSystemId     String
+  scoringSystem       ScoringSystem   @relation(fields: [scoringSystemId], references: [id])
+
+  teamScoringMode     TeamScoringMode @default(NONE)
+  teamScoringBestN    Int?
+
+  carClasses          CarClass[]
+  cars                Car[]
+  teams               Team[]
+  rounds              Round[]
+  registrations       Registration[]
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model CarClass {
+  id            String         @id @default(cuid())
+  seasonId      String
+  season        Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name          String
+  shortCode     String
+  displayOrder  Int            @default(0)
+
+  cars          Car[]
+  registrations Registration[]
+  fprAwards     FPRAward[]
+
+  @@unique([seasonId, shortCode])
+}
+
+model Car {
+  id            String         @id @default(cuid())
+  seasonId      String
+  season        Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  carClassId    String
+  carClass      CarClass       @relation(fields: [carClassId], references: [id], onDelete: Cascade)
+  name          String
+  iracingCarId  Int?
+
+  registrations Registration[]
+}
+
+model Team {
+  id            String         @id @default(cuid())
+  seasonId      String
+  season        Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name          String
+  shortName     String?
+  logoUrl       String?
+
+  registrations Registration[]
+  fprAwards     FPRAward[]
+
+  @@unique([seasonId, name])
+}
+
+model Round {
+  id                      String           @id @default(cuid())
+  seasonId                String
+  season                  Season           @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  roundNumber             Int
+  name                    String
+  track                   String
+  trackConfig             String?
+  startsAt                DateTime
+  countsForChampionship   Boolean          @default(true)
+  raceLengthMinutes       Int?
+  status                  RoundStatus      @default(UPCOMING)
+
+  raceResults             RaceResult[]
+  csvImports              CsvImport[]
+  incidentReports         IncidentReport[]
+  fprAwards               FPRAward[]
+  penalties               Penalty[]
+
+  @@unique([seasonId, roundNumber])
+}
+
+model Registration {
+  id              String              @id @default(cuid())
+  seasonId        String
+  season          Season              @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                @relation(fields: [userId], references: [id])
+
+  status          RegistrationStatus  @default(PENDING)
+  startNumber     Int?
+
+  teamId          String?
+  team            Team?               @relation(fields: [teamId], references: [id])
+  carClassId      String?
+  carClass        CarClass?           @relation(fields: [carClassId], references: [id])
+  carId           String?
+  car             Car?                @relation(fields: [carId], references: [id])
+  proAmClass      ProAmClass?
+
+  notes           String?
+  approvedById    String?
+  approvedBy      User?               @relation("RegistrationApprovedBy", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+
+  raceResults             RaceResult[]
+  reportedIncidents       IncidentReport[]                @relation("IncidentReporter")
+  involvedInIncidents     IncidentReportInvolvedDriver[]
+  penalties               Penalty[]
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([seasonId, userId])
+}
+
+model RaceResult {
+  id                          String        @id @default(cuid())
+  roundId                     String
+  round                       Round         @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  registrationId              String
+  registration                Registration  @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  finishPosition              Int
+  classPosition               Int?
+  lapsCompleted               Int           @default(0)
+  raceDistancePct             Int           @default(0)
+  totalTimeMs                 Int?
+  bestLapTimeMs               Int?
+  incidents                   Int           @default(0)
+  finishStatus                FinishStatus  @default(CLASSIFIED)
+
+  rawPointsAwarded            Int           @default(0)
+  participationPointsAwarded  Int           @default(0)
+  manualPenaltyPoints         Int           @default(0)
+  manualPenaltyReason         String?
+  notes                       String?
+
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+
+  @@unique([roundId, registrationId])
+}
+
+model ScoringSystem {
+  id                            String    @id @default(cuid())
+  name                          String    @unique
+  description                   String?
+  pointsTable                   Json
+  participationPoints           Int       @default(0)
+  participationMinDistancePct   Int       @default(75)
+  bonusFastestLap               Int?
+  bonusPole                     Int?
+  bonusMostLapsLed              Int?
+  dropWorstNRounds              Int?
+  fprEnabled                    Boolean   @default(false)
+  fprTiers                      Json?
+  fprMode                       FprMode   @default(ALL_TEAMS_TIERED)
+
+  seasons                       Season[]
+}
+
+model FPRAward {
+  id                  String      @id @default(cuid())
+  roundId             String
+  round               Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  teamId              String
+  team                Team        @relation(fields: [teamId], references: [id])
+  carClassId          String?
+  carClass            CarClass?   @relation(fields: [carClassId], references: [id])
+  teamIncidentTotal   Int
+  fprPointsAwarded    Int
+
+  @@unique([roundId, teamId, carClassId])
+}
+
+model CsvImport {
+  id                String    @id @default(cuid())
+  roundId           String
+  round             Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  uploadedById      String
+  uploadedBy        User      @relation(fields: [uploadedById], references: [id])
+  originalFilename  String
+  rowsImported      Int       @default(0)
+  rowsSkipped       Int       @default(0)
+  errorLog          Json?
+
+  createdAt         DateTime  @default(now())
+}
+
+// ==========================================
+// Reporting system
+// ==========================================
+
+model IncidentReport {
+  id                          String          @id @default(cuid())
+  roundId                     String
+  round                       Round           @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  reporterUserId              String
+  reporterUser                User            @relation(fields: [reporterUserId], references: [id])
+  reporterRegistrationId      String
+  reporterRegistration        Registration    @relation("IncidentReporter", fields: [reporterRegistrationId], references: [id])
+
+  lapNumber                   Int?
+  turnOrSector                String?
+  description                 String
+  status                      IncidentStatus  @default(SUBMITTED)
+  submittedAt                 DateTime        @default(now())
+
+  involvedDrivers             IncidentReportInvolvedDriver[]
+  evidence                    IncidentReportEvidence[]
+  comments                    IncidentReportComment[]
+  decision                    IncidentDecision?
+
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
+}
+
+model IncidentReportInvolvedDriver {
+  id                  String          @id @default(cuid())
+  incidentReportId    String
+  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  registrationId      String
+  registration        Registration    @relation(fields: [registrationId], references: [id])
+  role                ParticipantRole
+
+  @@unique([incidentReportId, registrationId])
+}
+
+model IncidentReportEvidence {
+  id                  String          @id @default(cuid())
+  incidentReportId    String
+  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  kind                EvidenceKind
+  content             String
+  addedByUserId       String
+  addedByUser         User            @relation(fields: [addedByUserId], references: [id])
+
+  createdAt           DateTime        @default(now())
+}
+
+model IncidentReportComment {
+  id                  String          @id @default(cuid())
+  incidentReportId    String
+  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  authorUserId        String
+  authorUser          User            @relation(fields: [authorUserId], references: [id])
+  body                String
+  isInternal          Boolean         @default(true)
+
+  createdAt           DateTime        @default(now())
+}
+
+model IncidentDecision {
+  id                  String          @id @default(cuid())
+  incidentReportId    String          @unique
+  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  decidedByUserId     String
+  decidedByUser       User            @relation(fields: [decidedByUserId], references: [id])
+  decidedAt           DateTime        @default(now())
+  verdict             Verdict
+  publicSummary       String
+  internalNotes       String?
+  publishedAt         DateTime?
+
+  penalties           Penalty[]
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+model Penalty {
+  id                          String              @id @default(cuid())
+  registrationId              String
+  registration                Registration        @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  roundId                     String
+  round                       Round               @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  source                      PenaltySource
+  sourceIncidentDecisionId    String?
+  sourceIncidentDecision      IncidentDecision?   @relation(fields: [sourceIncidentDecisionId], references: [id])
+
+  type                        PenaltyType
+  timePenaltySeconds          Int?
+  pointsValue                 Int?
+  gridPositions               Int?
+  reason                      String
+  appliedAt                   DateTime            @default(now())
+
+  createdAt                   DateTime            @default(now())
+}
+
+// ==========================================
+// Enums
+// ==========================================
+
+enum Role {
+  ADMIN
+  DRIVER
+}
+
+enum SeasonStatus {
+  DRAFT
+  OPEN_REGISTRATION
+  ACTIVE
+  COMPLETED
+}
+
+enum RoundStatus {
+  UPCOMING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ProAmClass {
+  PRO
+  AM
+}
+
+enum FinishStatus {
+  CLASSIFIED
+  DNF
+  DNS
+  DSQ
+}
+
+enum TeamScoringMode {
+  NONE
+  SUM_ALL
+  SUM_BEST_N
+}
+
+enum FprMode {
+  LOWEST_TEAM_ONLY
+  ALL_TEAMS_TIERED
+}
+
+enum IncidentStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  DECIDED
+  DISMISSED
+}
+
+enum ParticipantRole {
+  REPORTER
+  ACCUSED
+  WITNESS
+}
+
+enum EvidenceKind {
+  YOUTUBE_LINK
+  URL
+  IRACING_REPLAY_REF
+  IMAGE_URL
+  TEXT
+}
+
+enum Verdict {
+  NO_ACTION
+  WARNING
+  REPRIMAND
+  TIME_PENALTY
+  POINTS_DEDUCTION
+  GRID_PENALTY_NEXT_ROUND
+  SUSPENSION
+}
+
+enum PenaltySource {
+  INCIDENT_DECISION
+  ADMIN_MANUAL
+  IRACECONTROL_IMPORT
+}
+
+enum PenaltyType {
+  TIME_PENALTY
+  POINTS_DEDUCTION
+  GRID_PENALTY
+  WARNING
 }
