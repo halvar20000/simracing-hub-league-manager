@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma";
 export default async function Nav() {
   const session = await auth();
 
-  // Re-fetch user role so the Admin link appears correctly even if the
-  // session was cached before the role changed.
   let isAdmin = false;
   if (session?.user?.id) {
     const user = await prisma.user.findUnique({
@@ -26,6 +24,16 @@ export default async function Nav() {
           <Link href="/leagues" className="hover:text-orange-400">
             Leagues
           </Link>
+          {session?.user && (
+            <>
+              <Link href="/registrations" className="hover:text-orange-400">
+                My Registrations
+              </Link>
+              <Link href="/profile" className="hover:text-orange-400">
+                Profile
+              </Link>
+            </>
+          )}
           {isAdmin && (
             <Link href="/admin" className="hover:text-orange-400">
               Admin
@@ -33,7 +41,7 @@ export default async function Nav() {
           )}
           {session?.user ? (
             <>
-              <span className="text-zinc-400">
+              <span className="hidden text-zinc-500 md:inline">
                 {session.user.name ?? session.user.email}
               </span>
               <form

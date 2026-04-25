@@ -20,6 +20,10 @@ export default async function AdminSeasonDetail({
 
   if (!season || season.league.slug !== slug) notFound();
 
+  const pendingCount = await prisma.registration.count({
+    where: { seasonId, status: "PENDING" },
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -45,6 +49,24 @@ export default async function AdminSeasonDetail({
           </Link>
         </div>
       </div>
+
+      <nav className="flex flex-wrap gap-2 border-b border-zinc-800 pb-3 text-sm">
+        <span className="rounded bg-zinc-800 px-3 py-1.5 text-zinc-200">
+          Calendar
+        </span>
+        <Link
+          href={`/admin/leagues/${slug}/seasons/${seasonId}/roster`}
+          className="rounded px-3 py-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          Roster ({season._count.registrations}
+          {pendingCount > 0 && (
+            <span className="ml-1 rounded bg-amber-900 px-1.5 text-xs text-amber-200">
+              {pendingCount}
+            </span>
+          )}
+          )
+        </Link>
+      </nav>
 
       <section className="grid gap-4 md:grid-cols-3">
         <Stat label="Rounds" value={season.rounds.length} />
