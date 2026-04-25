@@ -14,7 +14,13 @@ export default async function AdminSeasonDetail({
       league: true,
       scoringSystem: true,
       rounds: { orderBy: { roundNumber: "asc" } },
-      _count: { select: { registrations: true } },
+      _count: {
+        select: {
+          registrations: true,
+          teams: true,
+          carClasses: true,
+        },
+      },
     },
   });
 
@@ -65,6 +71,18 @@ export default async function AdminSeasonDetail({
             </span>
           )}
           )
+        </Link>
+        <Link
+          href={`/admin/leagues/${slug}/seasons/${seasonId}/teams`}
+          className="rounded px-3 py-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          Teams ({season._count.teams})
+        </Link>
+        <Link
+          href={`/admin/leagues/${slug}/seasons/${seasonId}/classes`}
+          className="rounded px-3 py-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          Classes ({season._count.carClasses})
         </Link>
       </nav>
 

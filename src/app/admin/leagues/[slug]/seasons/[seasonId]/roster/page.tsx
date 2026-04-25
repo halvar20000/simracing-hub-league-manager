@@ -28,8 +28,9 @@ export default async function RosterPage({
     orderBy: [{ status: "asc" }, { createdAt: "asc" }],
   });
 
-  const pendingCount = registrations.filter((r) => r.status === "PENDING")
-    .length;
+  const pendingCount = registrations.filter(
+    (r) => r.status === "PENDING"
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -122,16 +123,12 @@ export default async function RosterPage({
                         </form>
                       </>
                     )}
-                    {r.status === "APPROVED" && (
-                      <form action={rejectRegistration.bind(null, r.id)}>
-                        <button
-                          type="submit"
-                          className="rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-600"
-                        >
-                          Revoke
-                        </button>
-                      </form>
-                    )}
+                    <Link
+                      href={`/admin/leagues/${slug}/seasons/${seasonId}/roster/${r.id}/edit`}
+                      className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                    >
+                      Edit
+                    </Link>
                   </div>
                 </td>
               </tr>
@@ -149,11 +146,6 @@ export default async function RosterPage({
           </tbody>
         </table>
       </div>
-
-      <p className="text-xs text-zinc-500">
-        Phase 2 will add per-registration edit (start number override, team
-        assignment, Pro/Am classification).
-      </p>
     </div>
   );
 }
