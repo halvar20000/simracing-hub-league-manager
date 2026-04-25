@@ -27,6 +27,29 @@ function findHeader(
   return null;
 }
 
+/**
+ * iRacing hosted-session CSVs have 7 lines of metadata before the real
+ * header row. Find the header line by looking for "Fin Pos" + "Cust ID".
+ */
+function detectHeaderLineIndex(text: string): number {
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < Math.min(lines.length, 40); i++) {
+    const line = lines[i].toLowerCase();
+    if (
+      (line.includes('"fin pos"') ||
+        line.includes("fin pos,") ||
+        line.includes('"finish pos"') ||
+        line.includes('"pos"')) &&
+      (line.includes('"cust id"') ||
+        line.includes("cust id,") ||
+        line.includes('"custid"'))
+    ) {
+      return i;
+    }
+  }
+  return 0;
+}
+
 export async function importResultsCsv(
   leagueSlug: string,
   seasonId: string,
@@ -42,8 +65,14 @@ export async function importResultsCsv(
     );
   }
 
-  const text = await file.text();
-  const parsed = Papa.parse<IRacingRow>(text, {
+  const rawText = await file.text();
+  const headerIdx = detectHeaderLineIndex(rawText);
+  const csvText = rawText
+    .split(/\r?\n/)
+    .slice(headerIdx)
+    .join("\n");
+
+  const parsed = Papa.parse<IRacingRow>(csvText, {
     header: true,
     skipEmptyLines: true,
   });
@@ -63,6 +92,7 @@ export async function importResultsCsv(
     "irid",
   ]);
   const colPos = findHeader(fields, [
+    "finpos",
     "pos",
     "finishposition",
     "finishpos",
@@ -70,6 +100,7 @@ export async function importResultsCsv(
     "finishingposition",
   ]);
   const colLaps = findHeader(fields, [
+    "lapscomp",
     "lapsdone",
     "laps",
     "lapscompleted",
@@ -82,6 +113,7 @@ export async function importResultsCsv(
     "interval",
   ]);
   const colBestTime = findHeader(fields, [
+    "fastestlaptime",
     "bestlaptime",
     "fastestlap",
     "besttime",
@@ -94,14 +126,15 @@ export async function importResultsCsv(
     "status",
     "outcome",
   ]);
+  const colCarNum = findHeader(fields, ["car", "carnum", "carnumber"]);
 
   if (!colCustID || !colPos) {
     redirect(
-      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}/import?error=CSV+missing+required+columns+(CustID+and+Pos+required)`
+      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}/import?error=CSV+missing+required+columns+(Cust+ID+and+Fin+Pos+required)`
     );
   }
 
-  // Compute max laps for raceDistancePct
+  // Compute max laps for raceDistancePct (winner's lap count = 100%)
   let maxLaps = 0;
   if (colLaps) {
     for (const row of parsed.data) {
@@ -119,7 +152,7 @@ export async function importResultsCsv(
     const custIdRaw = String(row[colCustID] ?? "").trim();
     if (!custIdRaw) {
       skipped++;
-      errors.push({ row: i + 2, reason: "CustID is empty" });
+      errors.push({ row: i + 2, reason: "Cust ID is empty" });
       continue;
     }
     const custId = custIdRaw.replace(/[^0-9]/g, "");
@@ -146,7 +179,7 @@ export async function importResultsCsv(
       ? parseInt(row[colLaps] ?? "0", 10) || 0
       : 0;
     const raceDistancePct =
-      maxLaps > 0 ? Math.round((lapsCompleted / maxLaps) * 100) : 100;
+      maxLaps > 0 ? Math.round((lapsCompleted / maxLaps) * 100) : 0;
     const totalTimeMs = colTotalTime
       ? parseTimeToMs(row[colTotalTime])
       : null;
@@ -159,7 +192,7 @@ export async function importResultsCsv(
     const outReason = colOut ? String(row[colOut] ?? "").trim() : "";
 
     let finishStatus: FinishStatus = "CLASSIFIED";
-    if (outReason) {
+    if (outReason && outReason.toLowerCase() !== "running") {
       const lc = outReason.toLowerCase();
       if (lc.includes("disq") || lc.includes("dsq")) finishStatus = "DSQ";
       else if (lc.includes("dns") || lc.includes("did not start"))
