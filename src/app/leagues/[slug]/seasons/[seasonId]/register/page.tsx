@@ -138,9 +138,13 @@ export default async function RegisterPage({
           </span>
         </label>
 
-        {teams.length > 0 ? (
+        <fieldset className="space-y-2 rounded border border-zinc-800 bg-zinc-900/50 p-4">
+          <legend className="px-2 text-sm text-zinc-300">Team</legend>
+
           <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">Team</span>
+            <span className="mb-1 block text-xs text-zinc-400">
+              Pick an existing team
+            </span>
             <select
               name="teamId"
               defaultValue={existing?.teamId ?? ""}
@@ -154,12 +158,25 @@ export default async function RegisterPage({
               ))}
             </select>
           </label>
-        ) : (
-          <p className="text-xs text-zinc-500">
-            No teams created yet for this season. The admin can assign you to a
-            team after registration.
-          </p>
-        )}
+
+          <div className="text-center text-xs text-zinc-500">— or —</div>
+
+          <label className="block">
+            <span className="mb-1 block text-xs text-zinc-400">
+              Create a new team
+            </span>
+            <input
+              name="newTeamName"
+              placeholder="Type a new team name to create it"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+            <span className="mt-1 block text-xs text-zinc-500">
+              If filled, this creates a new team for the season and overrides
+              the dropdown above. Leave empty if you picked from the dropdown
+              or are racing independently.
+            </span>
+          </label>
+        </fieldset>
 
         {season.isMulticlass &&
           (carClasses.length > 0 ? (

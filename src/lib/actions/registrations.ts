@@ -40,9 +40,29 @@ export async function createRegistration(
 
   const startNumberRaw = String(formData.get("startNumber") ?? "").trim();
   const startNumber = startNumberRaw ? parseInt(startNumberRaw, 10) : null;
-  const teamId = String(formData.get("teamId") ?? "").trim() || null;
+  const teamIdFromDropdown =
+    String(formData.get("teamId") ?? "").trim() || null;
+  const newTeamName = String(formData.get("newTeamName") ?? "").trim();
   const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  // Resolve team:
+  //   - If newTeamName is provided, find or create that team (it wins)
+  //   - Otherwise use the team from the dropdown
+  let teamId: string | null = teamIdFromDropdown;
+  if (newTeamName) {
+    const existingTeam = await prisma.team.findUnique({
+      where: { seasonId_name: { seasonId, name: newTeamName } },
+    });
+    if (existingTeam) {
+      teamId = existingTeam.id;
+    } else {
+      const created = await prisma.team.create({
+        data: { seasonId, name: newTeamName },
+      });
+      teamId = created.id;
+    }
+  }
 
   if (season.isMulticlass && !carClassId) {
     redirect(
@@ -90,6 +110,9 @@ export async function createRegistration(
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}`);
   revalidatePath(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${leagueSlug}/seasons/${seasonId}/teams`
   );
   redirect("/registrations?success=1");
 }
