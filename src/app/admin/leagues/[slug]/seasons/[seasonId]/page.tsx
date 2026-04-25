@@ -13,7 +13,10 @@ export default async function AdminSeasonDetail({
     include: {
       league: true,
       scoringSystem: true,
-      rounds: { orderBy: { roundNumber: "asc" } },
+      rounds: {
+        orderBy: { roundNumber: "asc" },
+        include: { _count: { select: { raceResults: true } } },
+      },
       _count: {
         select: {
           registrations: true,
@@ -115,6 +118,7 @@ export default async function AdminSeasonDetail({
                 <th className="px-4 py-3">Track</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Results</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -125,7 +129,14 @@ export default async function AdminSeasonDetail({
                   className="border-t border-zinc-800 hover:bg-zinc-900"
                 >
                   <td className="px-4 py-3 text-zinc-500">{r.roundNumber}</td>
-                  <td className="px-4 py-3 font-medium">{r.name}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <Link
+                      href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
+                      className="hover:text-orange-400"
+                    >
+                      {r.name}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-zinc-400">
                     {r.track}
                     {r.trackConfig ? ` (${r.trackConfig})` : ""}
@@ -136,20 +147,31 @@ export default async function AdminSeasonDetail({
                   <td className="px-4 py-3 text-zinc-400">
                     {r.status.replace("_", " ")}
                   </td>
+                  <td className="px-4 py-3 text-zinc-400">
+                    {r._count.raceResults}
+                  </td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}/edit`}
-                      className="text-orange-400 hover:underline"
-                    >
-                      Edit
-                    </Link>
+                    <div className="flex justify-end gap-3 text-xs">
+                      <Link
+                        href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
+                        className="text-orange-400 hover:underline"
+                      >
+                        Results
+                      </Link>
+                      <Link
+                        href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}/edit`}
+                        className="text-zinc-400 hover:underline"
+                      >
+                        Edit
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
               {season.rounds.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-6 text-center text-zinc-500"
                   >
                     No rounds yet. Add the first one.

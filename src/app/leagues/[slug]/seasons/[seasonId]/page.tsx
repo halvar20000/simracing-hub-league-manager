@@ -13,7 +13,10 @@ export default async function PublicSeasonDetail({
     include: {
       league: true,
       scoringSystem: true,
-      rounds: { orderBy: { roundNumber: "asc" } },
+      rounds: {
+        orderBy: { roundNumber: "asc" },
+        include: { _count: { select: { raceResults: true } } },
+      },
       registrations: {
         where: { status: "APPROVED" },
         include: { user: true, team: true, carClass: true },
@@ -69,13 +72,21 @@ export default async function PublicSeasonDetail({
                 <th className="px-4 py-3">Track</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {season.rounds.map((r) => (
                 <tr key={r.id} className="border-t border-zinc-800">
                   <td className="px-4 py-3 text-zinc-500">{r.roundNumber}</td>
-                  <td className="px-4 py-3 font-medium">{r.name}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <Link
+                      href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
+                      className="hover:text-orange-400"
+                    >
+                      {r.name}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-zinc-400">
                     {r.track}
                     {r.trackConfig ? ` (${r.trackConfig})` : ""}
@@ -86,12 +97,24 @@ export default async function PublicSeasonDetail({
                   <td className="px-4 py-3 text-zinc-400">
                     {r.status.replace("_", " ")}
                   </td>
+                  <td className="px-4 py-3 text-right text-zinc-500">
+                    {r._count.raceResults > 0 ? (
+                      <Link
+                        href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
+                        className="text-orange-400 hover:underline"
+                      >
+                        Results →
+                      </Link>
+                    ) : (
+                      <span className="text-xs">No results</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {season.rounds.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-6 text-center text-zinc-500"
                   >
                     No rounds scheduled yet.
@@ -108,9 +131,7 @@ export default async function PublicSeasonDetail({
           Roster ({season.registrations.length} approved)
         </h2>
         {season.registrations.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            No approved drivers yet.
-          </p>
+          <p className="text-sm text-zinc-500">No approved drivers yet.</p>
         ) : (
           <div className="overflow-hidden rounded border border-zinc-800">
             <table className="w-full text-sm">
@@ -119,12 +140,8 @@ export default async function PublicSeasonDetail({
                   <th className="px-4 py-3">#</th>
                   <th className="px-4 py-3">Driver</th>
                   <th className="px-4 py-3">Team</th>
-                  {season.isMulticlass && (
-                    <th className="px-4 py-3">Class</th>
-                  )}
-                  {season.proAmEnabled && (
-                    <th className="px-4 py-3">Pro/Am</th>
-                  )}
+                  {season.isMulticlass && <th className="px-4 py-3">Class</th>}
+                  {season.proAmEnabled && <th className="px-4 py-3">Pro/Am</th>}
                 </tr>
               </thead>
               <tbody>
