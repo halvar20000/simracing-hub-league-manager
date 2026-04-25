@@ -29,6 +29,7 @@ export default async function PublicSeasonDetail({
 
   const registrationOpen =
     season.status === "OPEN_REGISTRATION" || season.status === "ACTIVE";
+  const hasResults = season.rounds.some((r) => r._count.raceResults > 0);
 
   return (
     <div className="space-y-6">
@@ -50,14 +51,24 @@ export default async function PublicSeasonDetail({
               {season.proAmEnabled && " • Pro/Am"}
             </p>
           </div>
-          {registrationOpen && (
-            <Link
-              href={`/leagues/${slug}/seasons/${seasonId}/register`}
-              className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-            >
-              Register for this season →
-            </Link>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {hasResults && (
+              <Link
+                href={`/leagues/${slug}/seasons/${seasonId}/standings`}
+                className="rounded border border-orange-500 px-4 py-2 text-sm font-medium text-orange-400 hover:bg-orange-500/10"
+              >
+                Standings →
+              </Link>
+            )}
+            {registrationOpen && (
+              <Link
+                href={`/leagues/${slug}/seasons/${seasonId}/register`}
+                className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
+              >
+                Register for this season →
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

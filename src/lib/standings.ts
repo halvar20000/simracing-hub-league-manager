@@ -1,0 +1,188 @@
+import type { PrismaClient } from "@prisma/client";
+
+export interface DriverStanding {
+  registrationId: string;
+  startNumber: number | null;
+  driverFirstName: string | null;
+  driverLastName: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  carClassId: string | null;
+  carClassName: string | null;
+  proAmClass: "PRO" | "AM" | null;
+  totalPoints: number;
+  rawPoints: number;
+  participationPoints: number;
+  manualPenalties: number;
+  roundsCompleted: number;
+}
+
+export interface TeamStanding {
+  teamId: string;
+  teamName: string;
+  totalPoints: number;
+  scoringPoints: number;
+  fprPoints: number;
+  bestN: number;
+  driversCount: number;
+}
+
+export async function computeDriverStandings(
+  prisma: PrismaClient,
+  seasonId: string
+): Promise<DriverStanding[]> {
+  const registrations = await prisma.registration.findMany({
+    where: { seasonId, status: "APPROVED" },
+    include: {
+      user: true,
+      team: true,
+      carClass: true,
+      raceResults: true,
+    },
+  });
+
+  const standings: DriverStanding[] = registrations.map((reg) => {
+    let raw = 0;
+    let participation = 0;
+    let penalty = 0;
+    for (const r of reg.raceResults) {
+      raw += r.rawPointsAwarded;
+      participation += r.participationPointsAwarded;
+      penalty += r.manualPenaltyPoints;
+    }
+    return {
+      registrationId: reg.id,
+      startNumber: reg.startNumber,
+      driverFirstName: reg.user.firstName,
+      driverLastName: reg.user.lastName,
+      teamId: reg.teamId,
+      teamName: reg.team?.name ?? null,
+      carClassId: reg.carClassId,
+      carClassName: reg.carClass?.name ?? null,
+      proAmClass: reg.proAmClass as "PRO" | "AM" | null,
+      totalPoints: raw + participation - penalty,
+      rawPoints: raw,
+      participationPoints: participation,
+      manualPenalties: penalty,
+      roundsCompleted: reg.raceResults.length,
+    };
+  });
+
+  standings.sort(
+    (a, b) =>
+      b.totalPoints - a.totalPoints ||
+      b.rawPoints - a.rawPoints ||
+      b.roundsCompleted - a.roundsCompleted ||
+      (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
+  );
+
+  return standings;
+}
+
+export async function computeTeamStandings(
+  prisma: PrismaClient,
+  seasonId: string
+): Promise<TeamStanding[]> {
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { teams: true },
+  });
+  if (!season || season.teamScoringMode === "NONE") return [];
+
+  const bestN =
+    season.teamScoringMode === "SUM_BEST_N"
+      ? season.teamScoringBestN ?? 2
+      : Number.POSITIVE_INFINITY;
+
+  const rounds = await prisma.round.findMany({
+    where: { seasonId },
+    include: {
+      raceResults: {
+        include: {
+          registration: { select: { teamId: true } },
+        },
+      },
+      fprAwards: true,
+    },
+  });
+
+  // Initialize team counters
+  const teamMap = new Map<
+    string,
+    {
+      team: { id: string; name: string };
+      scoringPoints: number;
+      fprPoints: number;
+      driverIds: Set<string>;
+    }
+  >();
+
+  for (const t of season.teams) {
+    teamMap.set(t.id, {
+      team: { id: t.id, name: t.name },
+      scoringPoints: 0,
+      fprPoints: 0,
+      driverIds: new Set(),
+    });
+  }
+
+  for (const round of rounds) {
+    // Group results by team for this round
+    const byTeam = new Map<string, number[]>();
+    for (const r of round.raceResults) {
+      const teamId = r.registration.teamId;
+      if (!teamId) continue;
+      const points =
+        r.rawPointsAwarded +
+        r.participationPointsAwarded -
+        r.manualPenaltyPoints;
+      if (!byTeam.has(teamId)) byTeam.set(teamId, []);
+      byTeam.get(teamId)!.push(points);
+    }
+
+    for (const [teamId, pointsList] of byTeam) {
+      const sorted = [...pointsList].sort((a, b) => b - a);
+      const taken = Number.isFinite(bestN)
+        ? sorted.slice(0, bestN as number)
+        : sorted;
+      const sum = taken.reduce((s, p) => s + p, 0);
+      const t = teamMap.get(teamId);
+      if (t) t.scoringPoints += sum;
+    }
+
+    for (const award of round.fprAwards) {
+      const t = teamMap.get(award.teamId);
+      if (t) t.fprPoints += award.fprPointsAwarded;
+    }
+  }
+
+  // Count distinct drivers per team
+  const regs = await prisma.registration.findMany({
+    where: { seasonId, status: "APPROVED", teamId: { not: null } },
+    select: { teamId: true, userId: true },
+  });
+  for (const r of regs) {
+    if (!r.teamId) continue;
+    const t = teamMap.get(r.teamId);
+    if (t) t.driverIds.add(r.userId);
+  }
+
+  const standings: TeamStanding[] = Array.from(teamMap.values())
+    .map((t) => ({
+      teamId: t.team.id,
+      teamName: t.team.name,
+      scoringPoints: t.scoringPoints,
+      fprPoints: t.fprPoints,
+      totalPoints: t.scoringPoints + t.fprPoints,
+      bestN: Number.isFinite(bestN) ? (bestN as number) : 0,
+      driversCount: t.driverIds.size,
+    }))
+    .sort(
+      (a, b) =>
+        b.totalPoints - a.totalPoints ||
+        b.scoringPoints - a.scoringPoints ||
+        a.teamName.localeCompare(b.teamName)
+    );
+
+  return standings;
+}
