@@ -74,6 +74,10 @@ export async function updateSeason(
       ? parseInt(teamScoringBestNRaw, 10)
       : null;
 
+  const irlmLeagueName = String(formData.get("irlmLeagueName") ?? "").trim() || null;
+  const irlmSeasonIdRaw = String(formData.get("irlmSeasonId") ?? "").trim();
+  const irlmSeasonId = irlmSeasonIdRaw ? parseInt(irlmSeasonIdRaw, 10) : null;
+
   await prisma.season.update({
     where: { id: seasonId },
     data: {
