@@ -22,7 +22,7 @@ export default async function Home() {
         <img
           src="/logos/cas-community.webp"
           alt="CAS Community"
-          className="h-5 w-5 shrink-0 object-contain"
+          className="h-9 w-9 shrink-0 object-contain"
         />
         <h1 className="flex-1 font-display text-base font-bold tracking-tight">
           CAS Community League Manager
@@ -71,10 +71,10 @@ export default async function Home() {
                   <img
                     src={league.logoUrl}
                     alt={league.name}
-                    className="h-5 w-full object-contain"
+                    className="h-9 w-full object-contain"
                   />
                 ) : (
-                  <div className="h-5 w-full rounded bg-zinc-800" />
+                  <div className="h-9 w-full rounded bg-zinc-800" />
                 )}
                 <div className="w-full">
                   <div className="truncate font-display text-[10px] font-semibold tracking-wide group-hover:text-[#ff6b35]">
