@@ -174,39 +174,51 @@ export default async function StandingsPage({
   );
 }
 
-function PosDelta({ delta }: { delta: number | null }) {
-  if (delta == null || delta === 0) return null;
-  const positive = delta > 0;
+function PosCell({ pos, delta }: { pos: number; delta: number | null }) {
   return (
-    <span
-      className={`ml-1 text-[9px] tabular-nums ${positive ? "text-emerald-400" : "text-red-400"}`}
-    >
-      {positive ? "▲" : "▼"}
-      {Math.abs(delta)}
-    </span>
+    <>
+      <span className="inline-block w-6 text-right tabular-nums">{pos}</span>
+      <span className="inline-block w-10 text-left text-[9px] tabular-nums">
+        {delta == null || delta === 0 ? null : (
+          <span className={delta > 0 ? "text-emerald-400" : "text-red-400"}>
+            {delta > 0 ? "▲" : "▼"}{Math.abs(delta)}
+          </span>
+        )}
+      </span>
+    </>
   );
 }
 
-function ValueDelta({
+function ValueCell({
+  value,
   delta,
   lowerIsBetter = false,
+  width = "w-10",
 }: {
+  value: number | string;
   delta: number | null;
   lowerIsBetter?: boolean;
+  width?: string;
 }) {
-  if (delta == null || delta === 0) return null;
-  const isGood = lowerIsBetter ? delta < 0 : delta > 0;
-  const sign = delta > 0 ? "+" : "";
+  const isGood =
+    delta == null || delta === 0
+      ? false
+      : lowerIsBetter
+      ? delta < 0
+      : delta > 0;
   return (
-    <span
-      className={`ml-1 text-[9px] tabular-nums ${isGood ? "text-emerald-400" : "text-red-400"}`}
-    >
-      {sign}
-      {delta}
-    </span>
+    <>
+      <span className={`inline-block ${width} text-right tabular-nums`}>{value}</span>
+      <span className="inline-block w-10 text-left text-[9px] tabular-nums">
+        {delta == null || delta === 0 ? null : (
+          <span className={isGood ? "text-emerald-400" : "text-red-400"}>
+            {delta > 0 ? `+${delta}` : delta}
+          </span>
+        )}
+      </span>
+    </>
   );
 }
-
 function DriversTable({
   rows,
   previousRows,
@@ -268,10 +280,7 @@ function DriversTable({
                 key={r.registrationId}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
-                <td className="px-3 py-2 font-medium tabular-nums">
-                  {idx + 1}
-                  <PosDelta delta={positionDelta} />
-                </td>
+                <td className="px-3 py-2 font-medium tabular-nums"><PosCell pos={idx + 1} delta={positionDelta} /></td>
                 <td className="px-3 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
                 <td className="px-3 py-2 font-medium">
                   {r.driverFirstName} {r.driverLastName}
@@ -283,28 +292,16 @@ function DriversTable({
                   <td className="px-3 py-2 text-zinc-400">{r.carClassName ?? "—"}</td>
                 )}
                 <td className="px-3 py-2 text-right text-zinc-400">{r.roundsCompleted}</td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.totalIncidents}
-                  <ValueDelta delta={incDelta} lowerIsBetter />
-                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={r.totalIncidents} delta={incDelta} lowerIsBetter /></td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
                   {r.iRating ?? "—"}
                 </td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.rawPoints}
-                  <ValueDelta delta={rawDelta} />
-                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={r.rawPoints} delta={rawDelta} /></td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
                   {r.participationPoints}
                 </td>
-                <td className="px-3 py-2 text-right text-red-400 tabular-nums">
-                  {r.manualPenalties > 0 ? `−${r.manualPenalties}` : 0}
-                  <ValueDelta delta={penDelta} lowerIsBetter />
-                </td>
-                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
-                  {total}
-                  <ValueDelta delta={totalDelta} />
-                </td>
+                <td className="px-3 py-2 text-right text-red-400 tabular-nums"><ValueCell value={r.manualPenalties > 0 ? `−${r.manualPenalties}` : 0} delta={penDelta} lowerIsBetter /></td>
+                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums"><ValueCell value={total} delta={totalDelta} width="w-12" /></td>
               </tr>
             );
           })}
