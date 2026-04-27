@@ -43,13 +43,22 @@ export default async function AdminSeasonDetail({
         >
           ← Back to {season.league.name}
         </Link>
-        <div className="mt-2 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{season.name}</h1>
-            <p className="text-sm text-zinc-400">
-              {season.year} • {season.scoringSystem.name} •{" "}
-              {season.status.replace("_", " ")}
-            </p>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {season.league.logoUrl && (
+              <img
+                src={season.league.logoUrl}
+                alt={season.league.name}
+                className="h-9 w-9 shrink-0 object-contain"
+              />
+            )}
+            <div>
+              <h1 className="text-2xl font-bold">{season.name}</h1>
+              <p className="text-sm text-zinc-400">
+                {season.year} • {season.scoringSystem.name} •{" "}
+                {season.status.replace("_", " ")}
+              </p>
+            </div>
           </div>
           <Link
             href={`/admin/leagues/${slug}/seasons/${seasonId}/edit`}

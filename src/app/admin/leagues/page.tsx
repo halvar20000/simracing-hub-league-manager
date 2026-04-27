@@ -23,7 +23,7 @@ export default async function AdminLeaguesList() {
         <table className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
-              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">League</th>
               <th className="px-4 py-3">Slug</th>
               <th className="px-4 py-3">Seasons</th>
               <th className="px-4 py-3"></th>
@@ -35,7 +35,20 @@ export default async function AdminLeaguesList() {
                 key={league.id}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
-                <td className="px-4 py-3 font-medium">{league.name}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    {league.logoUrl ? (
+                      <img
+                        src={league.logoUrl}
+                        alt={league.name}
+                        className="h-6 w-6 shrink-0 object-contain"
+                      />
+                    ) : (
+                      <div className="h-6 w-6 shrink-0 rounded bg-zinc-800" />
+                    )}
+                    <span className="font-medium">{league.name}</span>
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-zinc-500">{league.slug}</td>
                 <td className="px-4 py-3 text-zinc-400">
                   {league._count.seasons}

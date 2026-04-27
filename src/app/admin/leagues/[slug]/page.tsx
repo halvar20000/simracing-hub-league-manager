@@ -32,8 +32,17 @@ export default async function AdminLeagueDetail({
         >
           ← All leagues
         </Link>
-        <div className="mt-2 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">{league.name}</h1>
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {league.logoUrl && (
+              <img
+                src={league.logoUrl}
+                alt={league.name}
+                className="h-9 w-9 shrink-0 object-contain"
+              />
+            )}
+            <h1 className="text-2xl font-bold">{league.name}</h1>
+          </div>
           <Link
             href={`/admin/leagues/${league.slug}/edit`}
             className="text-sm text-orange-400 hover:underline"
