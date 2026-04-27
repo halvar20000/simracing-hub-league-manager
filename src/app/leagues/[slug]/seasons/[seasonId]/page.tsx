@@ -46,7 +46,7 @@ export default async function PublicSeasonDetail({
             <img
               src={season.league.logoUrl}
               alt={season.league.name}
-              className="h-[15px] w-[15px] shrink-0 object-contain"
+              className="h-5 w-5 shrink-0 object-contain"
             />
           )}
           <div>

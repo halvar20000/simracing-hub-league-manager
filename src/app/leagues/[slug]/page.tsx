@@ -37,7 +37,7 @@ export default async function PublicLeagueDetail({
           <img
             src={league.logoUrl}
             alt={league.name}
-            className="h-[15px] w-[15px] shrink-0 object-contain"
+            className="h-5 w-5 shrink-0 object-contain"
           />
         )}
         <h1 className="font-display text-lg font-bold tracking-tight sm:text-xl">

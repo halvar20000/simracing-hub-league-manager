@@ -21,11 +21,16 @@ export default async function Nav() {
           <img
             src="/logos/site-logo.svg"
             alt="Simracing-Hub"
-            className="h-6 w-6"
+            className="h-7 w-7"
           />
-          <span className="font-display text-sm font-bold tracking-wide group-hover:text-[#ff6b35] transition-colors">
-            SIMRACING-HUB
-          </span>
+          <div className="leading-tight">
+            <div className="font-display text-sm font-bold tracking-wide group-hover:text-[#ff6b35] transition-colors">
+              SIMRACING-HUB
+            </div>
+            <div className="text-[9px] uppercase tracking-[0.22em] text-zinc-500">
+              League Manager
+            </div>
+          </div>
         </Link>
         <div className="flex items-center gap-1 text-sm">
           <NavLink href="/leagues">Leagues</NavLink>

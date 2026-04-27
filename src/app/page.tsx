@@ -71,10 +71,10 @@ export default async function Home() {
                   <img
                     src={league.logoUrl}
                     alt={league.name}
-                    className="h-[15px] w-full object-contain"
+                    className="h-5 w-full object-contain"
                   />
                 ) : (
-                  <div className="h-[15px] w-full rounded bg-zinc-800" />
+                  <div className="h-5 w-full rounded bg-zinc-800" />
                 )}
                 <div className="w-full">
                   <div className="truncate font-display text-[10px] font-semibold tracking-wide group-hover:text-[#ff6b35]">
