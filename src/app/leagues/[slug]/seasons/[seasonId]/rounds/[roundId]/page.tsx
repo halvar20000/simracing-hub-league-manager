@@ -101,6 +101,7 @@ export default async function PublicRoundResults({
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
                   <th className="px-3 py-2">Pos</th>
+                  <th className="px-3 py-2">Grid</th>
                   <th className="px-3 py-2">#</th>
                   <th className="px-3 py-2">Driver</th>
                   <th className="px-3 py-2">Team</th>
@@ -109,6 +110,7 @@ export default async function PublicRoundResults({
                   )}
                   <th className="px-3 py-2 text-right">Laps</th>
                   <th className="px-3 py-2 text-right">Time</th>
+                  <th className="px-3 py-2 text-right">Quali</th>
                   <th className="px-3 py-2 text-right">Best lap</th>
                   <th className="px-3 py-2 text-right">Inc</th>
                   <th className="px-3 py-2 text-right">Pts</th>
@@ -135,6 +137,9 @@ export default async function PublicRoundResults({
                           : r.finishStatus}
                       </td>
                       <td className="px-3 py-2 text-zinc-500">
+                        {r.startPosition ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-zinc-500">
                         {r.registration.startNumber ?? "—"}
                       </td>
                       <td className="px-3 py-2">
@@ -158,6 +163,9 @@ export default async function PublicRoundResults({
                           : r.finishStatus === "CLASSIFIED" && gap != null
                             ? `+${formatMsToTime(gap)}`
                             : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                        {formatMsToTime(r.qualifyingTimeMs) || "—"}
                       </td>
                       <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
                         {formatMsToTime(r.bestLapTimeMs) || "—"}
