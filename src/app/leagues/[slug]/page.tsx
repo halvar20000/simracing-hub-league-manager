@@ -24,7 +24,7 @@ export default async function PublicLeagueDetail({
   if (!league) notFound();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <Link
           href="/leagues"
@@ -32,26 +32,40 @@ export default async function PublicLeagueDetail({
         >
           ← All leagues
         </Link>
-        <h1 className="mt-2 text-3xl font-bold">{league.name}</h1>
-        {league.description && (
-          <p className="mt-2 text-zinc-400">{league.description}</p>
-        )}
+        <div className="mt-3 flex flex-col items-center gap-6 rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-black p-8 sm:flex-row sm:gap-8 sm:p-10">
+          {league.logoUrl ? (
+            <img
+              src={league.logoUrl}
+              alt={league.name}
+              className="h-32 w-32 object-contain sm:h-40 sm:w-40"
+            />
+          ) : null}
+          <div className="text-center sm:text-left">
+            <span className="tag tag-orange">CAS Community</span>
+            <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
+              {league.name}
+            </h1>
+            {league.description && (
+              <p className="mt-2 text-zinc-400">{league.description}</p>
+            )}
+          </div>
+        </div>
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Seasons</h2>
+        <h2 className="mb-3 font-display text-xl font-bold">Seasons</h2>
         <div className="grid gap-3 md:grid-cols-2">
           {league.seasons.map((s) => (
             <Link
               key={s.id}
               href={`/leagues/${league.slug}/seasons/${s.id}`}
-              className="block rounded border border-zinc-800 bg-zinc-900 p-4 hover:border-orange-500"
+              className="block rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
             >
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold">
+                <h3 className="font-display text-lg font-semibold tracking-wide">
                   {s.name} {s.year}
                 </h3>
-                <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+                <span className="tag tag-zinc">
                   {s.status.replace("_", " ")}
                 </span>
               </div>

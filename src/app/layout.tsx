@@ -1,14 +1,26 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Rajdhani } from "next/font/google";
 import Nav from "@/components/nav";
+import Footer from "@/components/footer";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const rajdhani = Rajdhani({
+  weight: ["500", "600", "700"],
+  subsets: ["latin"],
+  variable: "--font-rajdhani",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "Simracing-Hub's League Manager",
+  title: "Simracing-Hub League Manager — CAS iRacing Community",
   description:
-    "League management for iRacing communities — registrations, seasons, results, standings, and more.",
+    "League management for the CAS iRacing community. Six championships, live standings, Fair Play Rating, race-by-race results.",
 };
 
 export default function RootLayout({
@@ -18,9 +30,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} min-h-screen bg-zinc-950 text-zinc-100`}>
+      <body
+        className={`${inter.variable} ${rajdhani.variable} font-sans min-h-screen flex flex-col`}
+        style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
+      >
         <Nav />
-        <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+          {children}
+        </main>
+        <Footer />
       </body>
     </html>
   );

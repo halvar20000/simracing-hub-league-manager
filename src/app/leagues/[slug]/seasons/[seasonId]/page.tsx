@@ -40,22 +40,31 @@ export default async function PublicSeasonDetail({
         >
           ← {season.league.name}
         </Link>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">
-              {season.name} {season.year}
-            </h1>
-            <p className="mt-1 text-sm text-zinc-400">
-              {season.scoringSystem.name} • {season.status.replace("_", " ")}
-              {season.isMulticlass && " • Multiclass"}
-              {season.proAmEnabled && " • Pro/Am"}
-            </p>
+        <div className="mt-3 flex flex-col gap-5 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            {season.league.logoUrl && (
+              <img
+                src={season.league.logoUrl}
+                alt={season.league.name}
+                className="h-16 w-16 object-contain"
+              />
+            )}
+            <div>
+              <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                {season.name} {season.year}
+              </h1>
+              <p className="mt-1 text-sm text-zinc-400">
+                {season.scoringSystem.name} • {season.status.replace("_", " ")}
+                {season.isMulticlass && " • Multiclass"}
+                {season.proAmEnabled && " • Pro/Am"}
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {hasResults && (
               <Link
                 href={`/leagues/${slug}/seasons/${seasonId}/standings`}
-                className="rounded border border-orange-500 px-4 py-2 text-sm font-medium text-orange-400 hover:bg-orange-500/10"
+                className="rounded border border-[#ff6b35] px-4 py-2 text-sm font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"
               >
                 Standings →
               </Link>
@@ -63,7 +72,7 @@ export default async function PublicSeasonDetail({
             {registrationOpen && (
               <Link
                 href={`/leagues/${slug}/seasons/${seasonId}/register`}
-                className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
+                className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-[#ff8550]"
               >
                 Register for this season →
               </Link>
@@ -73,27 +82,29 @@ export default async function PublicSeasonDetail({
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Race calendar</h2>
-        <div className="overflow-hidden rounded border border-zinc-800">
+        <h2 className="mb-3 font-display text-lg font-bold">Race calendar</h2>
+        <div className="overflow-hidden rounded-xl border border-zinc-800">
           <table className="w-full text-sm">
             <thead className="bg-zinc-900 text-left text-zinc-400">
               <tr>
-                <th className="px-4 py-3">Rd</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Track</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 font-display tracking-wider">Rd</th>
+                <th className="px-4 py-3 font-display tracking-wider">Name</th>
+                <th className="px-4 py-3 font-display tracking-wider">Track</th>
+                <th className="px-4 py-3 font-display tracking-wider">Date</th>
+                <th className="px-4 py-3 font-display tracking-wider">Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {season.rounds.map((r) => (
                 <tr key={r.id} className="border-t border-zinc-800">
-                  <td className="px-4 py-3 text-zinc-500">{r.roundNumber}</td>
+                  <td className="px-4 py-3 font-display text-zinc-500">
+                    {r.roundNumber}
+                  </td>
                   <td className="px-4 py-3 font-medium">
                     <Link
                       href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
-                      className="hover:text-orange-400"
+                      className="hover:text-[#ff6b35]"
                     >
                       {r.name}
                     </Link>
@@ -112,7 +123,7 @@ export default async function PublicSeasonDetail({
                     {r._count.raceResults > 0 ? (
                       <Link
                         href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
-                        className="text-orange-400 hover:underline"
+                        className="text-[#ff6b35] hover:underline"
                       >
                         Results →
                       </Link>
@@ -138,27 +149,31 @@ export default async function PublicSeasonDetail({
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">
+        <h2 className="mb-3 font-display text-lg font-bold">
           Roster ({season.registrations.length} approved)
         </h2>
         {season.registrations.length === 0 ? (
           <p className="text-sm text-zinc-500">No approved drivers yet.</p>
         ) : (
-          <div className="overflow-hidden rounded border border-zinc-800">
+          <div className="overflow-hidden rounded-xl border border-zinc-800">
             <table className="w-full text-sm">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
-                  <th className="px-4 py-3">#</th>
-                  <th className="px-4 py-3">Driver</th>
-                  <th className="px-4 py-3">Team</th>
-                  {season.isMulticlass && <th className="px-4 py-3">Class</th>}
-                  {season.proAmEnabled && <th className="px-4 py-3">Pro/Am</th>}
+                  <th className="px-4 py-3 font-display tracking-wider">#</th>
+                  <th className="px-4 py-3 font-display tracking-wider">Driver</th>
+                  <th className="px-4 py-3 font-display tracking-wider">Team</th>
+                  {season.isMulticlass && (
+                    <th className="px-4 py-3 font-display tracking-wider">Class</th>
+                  )}
+                  {season.proAmEnabled && (
+                    <th className="px-4 py-3 font-display tracking-wider">Pro/Am</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {season.registrations.map((r) => (
                   <tr key={r.id} className="border-t border-zinc-800">
-                    <td className="px-4 py-3 text-zinc-500">
+                    <td className="px-4 py-3 font-display text-zinc-500">
                       {r.startNumber ?? "—"}
                     </td>
                     <td className="px-4 py-3 font-medium">

@@ -16,37 +16,60 @@ export default async function PublicLeaguesList() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Leagues</h1>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div>
+        <span className="tag tag-orange">CAS Community</span>
+        <h1 className="mt-2 font-display text-3xl font-bold">Leagues</h1>
+        <p className="mt-1 text-sm text-zinc-400">
+          {leagues.length} championship
+          {leagues.length === 1 ? "" : "s"} run by the CAS iRacing community.
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {leagues.map((league) => {
           const activeSeason = league.seasons[0];
           return (
             <Link
               key={league.id}
               href={`/leagues/${league.slug}`}
-              className="block rounded border border-zinc-800 bg-zinc-900 p-5 hover:border-orange-500 hover:bg-zinc-800"
+              className="group flex flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
             >
-              <h2 className="text-lg font-semibold">{league.name}</h2>
-              {league.description && (
-                <p className="mt-1 text-sm text-zinc-400">
-                  {league.description}
-                </p>
-              )}
-              <p className="mt-3 text-xs text-zinc-500">
-                {league._count.seasons} season
-                {league._count.seasons === 1 ? "" : "s"}
-                {activeSeason && (
-                  <span className="ml-2 rounded bg-emerald-950 px-2 py-0.5 text-emerald-300">
-                    {activeSeason.name} {activeSeason.year}
+              <div className="flex h-40 items-center justify-center bg-gradient-to-br from-zinc-900 to-black p-6">
+                {league.logoUrl ? (
+                  <img
+                    src={league.logoUrl}
+                    alt={league.name}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  <span className="font-display text-2xl text-zinc-700">
+                    {league.name}
                   </span>
                 )}
-              </p>
+              </div>
+              <div className="border-t border-zinc-800 p-4">
+                <h3 className="font-display text-lg font-semibold tracking-wide group-hover:text-[#ff6b35]">
+                  {league.name}
+                </h3>
+                {league.description && (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {league.description}
+                  </p>
+                )}
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className="text-zinc-500">
+                    {league._count.seasons} season
+                    {league._count.seasons === 1 ? "" : "s"}
+                  </span>
+                  {activeSeason && (
+                    <span className="tag tag-orange">
+                      {activeSeason.name} {activeSeason.year}
+                    </span>
+                  )}
+                </div>
+              </div>
             </Link>
           );
         })}
-        {leagues.length === 0 && (
-          <p className="text-zinc-500">No leagues yet.</p>
-        )}
       </div>
     </div>
   );

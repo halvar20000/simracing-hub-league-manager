@@ -15,35 +15,34 @@ export default async function Nav() {
   }
 
   return (
-    <nav className="border-b border-zinc-800 bg-zinc-950 text-zinc-100">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link href="/" className="text-lg font-bold tracking-tight">
-          Simracing-Hub&apos;s League Manager
+    <nav className="border-b border-zinc-800 bg-[#0a0a0f]/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+        <Link href="/" className="flex items-center gap-3 group">
+          <img
+            src="/logos/site-logo.svg"
+            alt="Simracing-Hub"
+            className="h-9 w-9"
+          />
+          <div className="leading-tight">
+            <div className="font-display text-base font-bold tracking-wide group-hover:text-[#ff6b35] transition-colors">
+              SIMRACING-HUB
+            </div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+              League Manager
+            </div>
+          </div>
         </Link>
-        <div className="flex items-center gap-4 text-sm">
-          <Link href="/leagues" className="hover:text-orange-400">
-            Leagues
-          </Link>
+        <div className="flex items-center gap-1 text-sm">
+          <NavLink href="/leagues">Leagues</NavLink>
           {session?.user && (
             <>
-              <Link href="/registrations" className="hover:text-orange-400">
-                My Registrations
-              </Link>
-              <Link href="/profile" className="hover:text-orange-400">
-                Profile
-              </Link>
+              <NavLink href="/registrations">My Registrations</NavLink>
+              <NavLink href="/profile">Profile</NavLink>
             </>
           )}
-          {isAdmin && (
-            <Link href="/admin" className="hover:text-orange-400">
-              Admin
-            </Link>
-          )}
-          {session?.user ? (
-            <>
-              <span className="hidden text-zinc-500 md:inline">
-                {session.user.name ?? session.user.email}
-              </span>
+          {isAdmin && <NavLink href="/admin">Admin</NavLink>}
+          <div className="ml-2">
+            {session?.user ? (
               <form
                 action={async () => {
                   "use server";
@@ -52,29 +51,46 @@ export default async function Nav() {
               >
                 <button
                   type="submit"
-                  className="rounded bg-zinc-800 px-3 py-1.5 hover:bg-zinc-700"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
                 >
                   Sign out
                 </button>
               </form>
-            </>
-          ) : (
-            <form
-              action={async () => {
-                "use server";
-                await signIn("discord");
-              }}
-            >
-              <button
-                type="submit"
-                className="rounded bg-indigo-600 px-3 py-1.5 font-medium hover:bg-indigo-500"
+            ) : (
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("discord");
+                }}
               >
-                Sign in with Discord
-              </button>
-            </form>
-          )}
+                <button
+                  type="submit"
+                  className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500"
+                >
+                  Sign in with Discord
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     </nav>
+  );
+}
+
+function NavLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="rounded px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-[#ff6b35] transition-colors"
+    >
+      {children}
+    </Link>
   );
 }
