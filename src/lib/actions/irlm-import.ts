@@ -99,6 +99,12 @@ async function importRow(
   const incidents = Math.round(Number(row.incidents ?? 0));
   const bestLapTimeMs = durationToMs(row.fastestLapTime);
   const iRating = typeof row.newIrating === "number" ? row.newIrating : null;
+  const qualifyingTimeMs = durationToMs(row.qualifyingTime);
+  const startPositionRaw = Number(row.startPosition ?? 0);
+  const startPosition =
+    Number.isFinite(startPositionRaw) && startPositionRaw > 0
+      ? Math.round(startPositionRaw)
+      : null;
 
   await prisma.raceResult.upsert({
     where: { roundId_registrationId: { roundId, registrationId: reg.id } },
@@ -113,6 +119,8 @@ async function importRow(
       totalTimeMs: null,
       incidents,
       iRating,
+      qualifyingTimeMs,
+      startPosition,
     },
     update: {
       finishStatus,
@@ -122,6 +130,8 @@ async function importRow(
       bestLapTimeMs,
       incidents,
       iRating,
+      qualifyingTimeMs,
+      startPosition,
     },
   });
   return { ok: true };

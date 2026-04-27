@@ -255,6 +255,8 @@ model RaceResult {
   updatedAt                   DateTime      @updatedAt
 
   @@unique([roundId, registrationId])
+  qualifyingTimeMs Int?
+  startPosition    Int?
 }
 
 model ScoringSystem {
