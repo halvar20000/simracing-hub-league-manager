@@ -12,104 +12,85 @@ export default async function Home() {
         orderBy: { year: "desc" },
         take: 1,
       },
-      _count: { select: { seasons: true } },
     },
   });
 
   return (
-    <div className="space-y-12">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black p-8 md:p-12">
-        <div className="grid items-center gap-8 md:grid-cols-[auto_1fr]">
-          <img
-            src="/logos/cas-community.webp"
-            alt="CAS iRacing Community"
-            className="mx-auto h-32 w-32 object-contain md:mx-0 md:h-40 md:w-40"
-          />
-          <div>
-            <span className="tag tag-orange">CAS iRacing Community</span>
-            <h1 className="mt-3 font-display text-4xl font-bold tracking-tight md:text-5xl">
-              League Manager
-            </h1>
-            <p className="mt-3 max-w-xl text-zinc-400 md:text-lg">
-              Six community championships. Live standings, race-by-race
-              results, Fair Play Rating, and team scoring — all in one place.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                href="/leagues"
-                className="rounded bg-[#ff6b35] px-6 py-2.5 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550]"
+    <div className="space-y-6">
+      {/* Compact hero */}
+      <section className="flex flex-col items-center gap-4 rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-black p-5 sm:flex-row sm:items-center sm:gap-6 sm:p-6">
+        <img
+          src="/logos/cas-community.webp"
+          alt="CAS iRacing Community"
+          className="h-16 w-16 object-contain sm:h-20 sm:w-20"
+        />
+        <div className="flex-1 text-center sm:text-left">
+          <span className="tag tag-orange">CAS iRacing Community</span>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+            League Manager
+          </h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Six championships • live standings • Fair Play Rating
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2 sm:flex-nowrap">
+          <Link
+            href="/leagues"
+            className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550]"
+          >
+            Browse leagues →
+          </Link>
+          {!session && (
+            <form
+              action={async () => {
+                "use server";
+                await signIn("discord");
+              }}
+            >
+              <button
+                type="submit"
+                className="rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
               >
-                Browse leagues →
-              </Link>
-              {!session && (
-                <form
-                  action={async () => {
-                    "use server";
-                    await signIn("discord");
-                  }}
-                >
-                  <button
-                    type="submit"
-                    className="rounded border border-zinc-700 bg-zinc-900 px-6 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
-                  >
-                    Sign in with Discord
-                  </button>
-                </form>
-              )}
-            </div>
-          </div>
+                Sign in
+              </button>
+            </form>
+          )}
         </div>
       </section>
 
-      {/* League grid */}
+      {/* Flat 6-up league grid */}
       <section>
-        <div className="mb-6 flex items-baseline justify-between">
-          <h2 className="font-display text-2xl font-bold">Championships</h2>
-          <Link
-            href="/leagues"
-            className="text-sm text-[#ff6b35] hover:underline"
-          >
-            All leagues →
-          </Link>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="mb-3 font-display text-lg font-bold tracking-wide">
+          Championships
+        </h2>
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-3 md:grid-cols-6">
           {leagues.map((league) => {
             const activeSeason = league.seasons[0];
             return (
               <Link
                 key={league.id}
                 href={`/leagues/${league.slug}`}
-                className="group flex flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
+                className="group flex flex-col items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-center transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
+                title={league.name}
               >
-                <div className="flex h-28 items-center justify-center bg-gradient-to-br from-zinc-900 to-black p-4">
-                  {league.logoUrl ? (
-                    <img
-                      src={league.logoUrl}
-                      alt={league.name}
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  ) : (
-                    <span className="font-display text-2xl text-zinc-700">
-                      {league.name}
-                    </span>
-                  )}
-                </div>
-                <div className="border-t border-zinc-800 p-4">
-                  <h3 className="font-display text-lg font-semibold tracking-wide group-hover:text-[#ff6b35]">
+                {league.logoUrl ? (
+                  <img
+                    src={league.logoUrl}
+                    alt={league.name}
+                    className="h-12 w-full object-contain"
+                  />
+                ) : (
+                  <div className="h-12 w-full rounded bg-zinc-800" />
+                )}
+                <div className="w-full">
+                  <div className="truncate font-display text-xs font-semibold tracking-wide group-hover:text-[#ff6b35]">
                     {league.name}
-                  </h3>
-                  <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className="text-zinc-500">
-                      {league._count.seasons} season
-                      {league._count.seasons === 1 ? "" : "s"}
-                    </span>
-                    {activeSeason && (
-                      <span className="tag tag-orange">
-                        {activeSeason.name} {activeSeason.year}
-                      </span>
-                    )}
                   </div>
+                  {activeSeason && (
+                    <div className="mt-0.5 truncate text-[10px] text-zinc-500">
+                      {activeSeason.name} {activeSeason.year}
+                    </div>
+                  )}
                 </div>
               </Link>
             );

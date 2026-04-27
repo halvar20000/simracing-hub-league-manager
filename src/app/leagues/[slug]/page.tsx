@@ -24,36 +24,36 @@ export default async function PublicLeagueDetail({
   if (!league) notFound();
 
   return (
-    <div className="space-y-8">
-      <div>
-        <Link
-          href="/leagues"
-          className="text-sm text-zinc-400 hover:text-zinc-200"
-        >
-          ← All leagues
-        </Link>
-        <div className="mt-3 flex flex-col items-center gap-6 rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-black p-8 sm:flex-row sm:gap-8 sm:p-10">
-          {league.logoUrl ? (
-            <img
-              src={league.logoUrl}
-              alt={league.name}
-              className="h-20 w-20 object-contain sm:h-24 sm:w-24"
-            />
-          ) : null}
-          <div className="text-center sm:text-left">
-            <span className="tag tag-orange">CAS Community</span>
-            <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              {league.name}
-            </h1>
-            {league.description && (
-              <p className="mt-2 text-zinc-400">{league.description}</p>
-            )}
-          </div>
+    <div className="space-y-6">
+      <Link
+        href="/leagues"
+        className="text-sm text-zinc-400 hover:text-zinc-200"
+      >
+        ← All leagues
+      </Link>
+
+      {/* Compact corner header */}
+      <div className="flex items-center gap-4">
+        {league.logoUrl && (
+          <img
+            src={league.logoUrl}
+            alt={league.name}
+            className="h-12 w-12 shrink-0 object-contain sm:h-14 sm:w-14"
+          />
+        )}
+        <div>
+          <span className="tag tag-orange">CAS Community</span>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+            {league.name}
+          </h1>
+          {league.description && (
+            <p className="mt-1 text-sm text-zinc-400">{league.description}</p>
+          )}
         </div>
       </div>
 
       <section>
-        <h2 className="mb-3 font-display text-xl font-bold">Seasons</h2>
+        <h2 className="mb-3 font-display text-lg font-bold">Seasons</h2>
         <div className="grid gap-3 md:grid-cols-2">
           {league.seasons.map((s) => (
             <Link
