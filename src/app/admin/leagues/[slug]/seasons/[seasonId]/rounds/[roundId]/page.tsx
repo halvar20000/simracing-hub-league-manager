@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { upsertRaceResult } from "@/lib/actions/race-results";
 import { formatMsToTime } from "@/lib/time";
+import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
 import { formatDateTime } from "@/lib/date";
 
 export default async function AdminRoundResults({
@@ -62,6 +63,16 @@ export default async function AdminRoundResults({
             </p>
           </div>
           <div className="flex gap-2">
+            {round.irlmEventId && round.season.irlmLeagueName && (
+              <form action={pullResultsFromIRLM.bind(null, slug, seasonId, roundId)}>
+                <button
+                  type="submit"
+                  className="rounded border border-emerald-600 bg-emerald-950/40 px-3 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-900"
+                >
+                  Pull from iRLM
+                </button>
+              </form>
+            )}
             <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/import`}
               className="rounded bg-orange-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-orange-400"

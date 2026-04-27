@@ -135,6 +135,30 @@ export default async function EditSeasonPage({
           />
         </label>
 
+        <fieldset className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
+          <legend className="px-2 text-xs uppercase tracking-wider text-zinc-500">iRLeagueManager bridge</legend>
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">iRLM league name (URL slug)</span>
+            <input
+              name="irlmLeagueName"
+              defaultValue={season.irlmLeagueName ?? ""}
+              placeholder="e.g. casgt3wct"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <label className="mt-3 block">
+            <span className="mb-1 block text-sm text-zinc-300">iRLM season ID</span>
+            <input
+              name="irlmSeasonId"
+              type="number"
+              defaultValue={season.irlmSeasonId ?? ""}
+              placeholder="123"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+            <span className="mt-1 block text-xs text-zinc-500">Reference only — used by future cron sync.</span>
+          </label>
+        </fieldset>
+
         <div className="flex gap-2">
           <button
             type="submit"

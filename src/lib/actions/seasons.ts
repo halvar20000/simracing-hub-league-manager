@@ -77,6 +77,8 @@ export async function updateSeason(
   await prisma.season.update({
     where: { id: seasonId },
     data: {
+      irlmLeagueName,
+      irlmSeasonId,
       name,
       year,
       scoringSystemId,

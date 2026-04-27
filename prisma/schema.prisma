@@ -116,6 +116,8 @@ model Season {
 
   teamScoringMode     TeamScoringMode @default(NONE)
   teamScoringBestN    Int?
+  irlmLeagueName      String?
+  irlmSeasonId        Int?
   scheduleImageUrl    String?
 
   carClasses          CarClass[]
@@ -181,6 +183,7 @@ model Round {
   countsForChampionship   Boolean          @default(true)
   raceLengthMinutes       Int?
   status                  RoundStatus      @default(UPCOMING)
+  irlmEventId             Int?
 
   raceResults             RaceResult[]
   csvImports              CsvImport[]

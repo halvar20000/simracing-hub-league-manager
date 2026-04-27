@@ -110,6 +110,18 @@ export default async function EditRoundPage({
           />
           Counts for championship points
         </label>
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">iRLM event ID (for the bridge)</span>
+          <input
+            name="irlmEventId"
+            type="number"
+            defaultValue={round.irlmEventId ?? ""}
+            placeholder="e.g. 2645"
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">Find in iRLeagueManager URL when viewing the event's results page.</span>
+        </label>
+
         <div className="flex gap-2">
           <button
             type="submit"

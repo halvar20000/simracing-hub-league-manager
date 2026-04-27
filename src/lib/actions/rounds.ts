@@ -72,6 +72,8 @@ export async function updateRound(
   const raceLengthRaw = String(formData.get("raceLengthMinutes") ?? "");
   const countsForChampionship = formData.get("countsForChampionship") !== null;
   const status = String(formData.get("status") ?? "UPCOMING") as RoundStatus;
+  const irlmEventIdRaw = String(formData.get("irlmEventId") ?? "").trim();
+  const irlmEventId = irlmEventIdRaw ? parseInt(irlmEventIdRaw, 10) : null;
 
   const startsAt = new Date(startsAtRaw);
   const raceLengthMinutes = raceLengthRaw
@@ -81,6 +83,7 @@ export async function updateRound(
   await prisma.round.update({
     where: { id: roundId },
     data: {
+      irlmEventId,
       name,
       track,
       trackConfig,
