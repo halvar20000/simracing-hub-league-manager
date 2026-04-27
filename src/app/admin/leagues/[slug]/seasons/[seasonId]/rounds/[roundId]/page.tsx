@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { upsertRaceResult } from "@/lib/actions/race-results";
 import { formatMsToTime } from "@/lib/time";
+import { formatDateTime } from "@/lib/date";
 
 export default async function AdminRoundResults({
   params,
@@ -54,7 +55,7 @@ export default async function AdminRoundResults({
             <p className="text-sm text-zinc-400">
               {round.track}
               {round.trackConfig ? ` (${round.trackConfig})` : ""} •{" "}
-              {new Date(round.startsAt).toLocaleString()} •{" "}
+              {formatDateTime(round.startsAt)} •{" "}
               {round.status.replace("_", " ")}
             </p>
           </div>

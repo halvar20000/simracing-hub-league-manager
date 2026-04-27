@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
+import { formatDateTime } from "@/lib/date";
 
 export default async function PublicRoundResults({
   params,
@@ -55,7 +56,7 @@ export default async function PublicRoundResults({
         <p className="mt-1 text-sm text-zinc-400">
           {round.track}
           {round.trackConfig ? ` (${round.trackConfig})` : ""} •{" "}
-          {new Date(round.startsAt).toLocaleString()}
+          {formatDateTime(round.startsAt)}
         </p>
       </div>
 

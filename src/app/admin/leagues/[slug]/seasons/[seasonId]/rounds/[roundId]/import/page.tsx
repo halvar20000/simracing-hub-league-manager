@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { importResultsCsv } from "@/lib/actions/csv-import";
+import { formatDateTime } from "@/lib/date";
 
 export default async function ImportCsvPage({
   params,
@@ -107,7 +108,7 @@ export default async function ImportCsvPage({
                 {round.csvImports.map((imp) => (
                   <tr key={imp.id} className="border-t border-zinc-800">
                     <td className="px-3 py-2 text-zinc-400">
-                      {new Date(imp.createdAt).toLocaleString()}
+                      {formatDateTime(imp.createdAt)}
                     </td>
                     <td className="px-3 py-2 text-zinc-400">
                       {imp.uploadedBy.name ?? imp.uploadedBy.email ?? "—"}

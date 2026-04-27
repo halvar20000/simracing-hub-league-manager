@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { formatDateTime } from "@/lib/date";
 
 export default async function AdminSeasonDetail({
   params,
@@ -142,7 +143,7 @@ export default async function AdminSeasonDetail({
                     {r.trackConfig ? ` (${r.trackConfig})` : ""}
                   </td>
                   <td className="px-4 py-3 text-zinc-400">
-                    {new Date(r.startsAt).toLocaleString()}
+                    {formatDateTime(r.startsAt)}
                   </td>
                   <td className="px-4 py-3 text-zinc-400">
                     {r.status.replace("_", " ")}
