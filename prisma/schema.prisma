@@ -116,6 +116,7 @@ model Season {
 
   teamScoringMode     TeamScoringMode @default(NONE)
   teamScoringBestN    Int?
+  scheduleImageUrl    String?
 
   carClasses          CarClass[]
   cars                Car[]

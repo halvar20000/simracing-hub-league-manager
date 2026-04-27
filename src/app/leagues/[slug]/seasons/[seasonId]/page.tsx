@@ -80,6 +80,27 @@ export default async function PublicSeasonDetail({
         </div>
       </div>
 
+      {season.scheduleImageUrl && (
+        <section>
+          <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+            Schedule
+          </h2>
+          <a
+            href={season.scheduleImageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block max-w-2xl"
+            title="Open full-size in new tab"
+          >
+            <img
+              src={season.scheduleImageUrl}
+              alt={`${season.name} schedule`}
+              className="w-full rounded border border-zinc-800 transition-opacity hover:opacity-90"
+            />
+          </a>
+        </section>
+      )}
+
       <section>
         <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
           Race calendar
