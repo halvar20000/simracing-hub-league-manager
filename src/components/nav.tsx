@@ -29,6 +29,7 @@ export default async function Nav() {
           {session?.user && (
             <>
               <NavLink href="/registrations">My Registrations</NavLink>
+              <NavLink href="/reports">My Reports</NavLink>
               <NavLink href="/profile">Profile</NavLink>
             </>
           )}

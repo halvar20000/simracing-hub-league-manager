@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
+import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
 
 export default async function PublicRoundResults({
@@ -37,6 +38,16 @@ export default async function PublicRoundResults({
     notFound();
   }
 
+  const session = await auth();
+  let canReport = false;
+  if (session?.user?.id) {
+    const reg = await prisma.registration.findFirst({
+      where: { seasonId, userId: session.user.id, status: "APPROVED" },
+      select: { id: true },
+    });
+    canReport = !!reg;
+  }
+
   const winner = round.raceResults.find(
     (r) => r.finishStatus === "CLASSIFIED" && r.finishPosition === 1
   );
@@ -58,6 +69,14 @@ export default async function PublicRoundResults({
           {round.trackConfig ? ` (${round.trackConfig})` : ""} •{" "}
           {formatDateTime(round.startsAt)}
         </p>
+        {canReport && (
+          <Link
+            href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
+            className="mt-3 inline-block rounded border border-[#ff6b35] px-3 py-1.5 text-xs font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"
+          >
+            Report an incident
+          </Link>
+        )}
       </div>
 
       <section>

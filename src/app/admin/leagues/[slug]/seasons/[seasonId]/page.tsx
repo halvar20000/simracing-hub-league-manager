@@ -33,6 +33,12 @@ export default async function AdminSeasonDetail({
   const pendingCount = await prisma.registration.count({
     where: { seasonId, status: "PENDING" },
   });
+  const reportCount = await prisma.incidentReport.count({
+    where: { round: { seasonId } },
+  });
+  const reportNewCount = await prisma.incidentReport.count({
+    where: { round: { seasonId }, status: "SUBMITTED" },
+  });
 
   return (
     <div className="space-y-6">
@@ -90,6 +96,18 @@ export default async function AdminSeasonDetail({
           className="rounded px-3 py-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
         >
           Teams ({season._count.teams})
+        </Link>
+        <Link
+          href={`/admin/leagues/${slug}/seasons/${seasonId}/reports`}
+          className="rounded px-3 py-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          Reports ({reportCount}
+          {reportNewCount > 0 && (
+            <span className="ml-1 rounded bg-amber-900 px-1.5 text-xs text-amber-200">
+              {reportNewCount}
+            </span>
+          )}
+          )
         </Link>
         <Link
           href={`/admin/leagues/${slug}/seasons/${seasonId}/classes`}
