@@ -114,6 +114,7 @@ export async function pullResultsFromIRLM(formData: FormData): Promise<void> {
   const leagueSlug = String(formData.get("leagueSlug") ?? "");
   const seasonId = String(formData.get("seasonId") ?? "");
   const roundId = String(formData.get("roundId") ?? "");
+  console.log("[IRLM] action invoked", { leagueSlug, seasonId, roundId });
   if (!leagueSlug || !seasonId || !roundId) return;
 
   const admin = await requireAdmin();
