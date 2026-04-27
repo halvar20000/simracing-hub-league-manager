@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { formatDate } from "@/lib/date";
 import {
   computeDriverStandings,
   computeTeamStandings,
@@ -327,68 +329,86 @@ function RaceByRaceTable({
     const bt = kind === "combined" ? b.combinedTotal : b.classTotal;
     return bt - at;
   });
+
+  function formatShortDate(d: Date): string {
+    const date = new Date(d);
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yy = String(date.getFullYear()).slice(2);
+    return `${dd}.${mm}.${yy}`;
+  }
+
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
-      <table className="min-w-full text-xs">
-        <thead className="bg-zinc-900 text-left text-zinc-400">
+      <table className="min-w-full text-[11px]">
+        <thead className="bg-zinc-900 text-zinc-400">
           <tr>
-            <th className="sticky left-0 z-10 bg-zinc-900 px-3 py-2">Pos</th>
-            <th className="bg-zinc-900 px-2 py-2">#</th>
-            <th className="bg-zinc-900 px-2 py-2">Driver</th>
+            <th rowSpan={2} className="sticky left-0 z-10 bg-zinc-900 px-2 py-2 text-left">Pos</th>
+            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left">#</th>
+            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left">Driver</th>
+            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">Total</th>
             {rounds.map((r) => (
               <th
                 key={r.roundId}
-                className="bg-zinc-900 px-2 py-2 text-right whitespace-nowrap"
+                colSpan={4}
+                className="border-l border-zinc-800 bg-zinc-900 px-2 py-2 text-center whitespace-nowrap"
               >
-                <div className="flex flex-col items-end leading-tight">
-                  <span className="text-[9px] text-zinc-500">R{r.roundNumber}</span>
-                  <span className="text-xs font-display">{r.roundName}</span>
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[10px] text-zinc-500">R{r.roundNumber} • {formatShortDate(r.roundDate)}</span>
+                  <span className="font-display text-xs">{r.roundName}</span>
                 </div>
               </th>
             ))}
-            <th className="bg-zinc-900 px-2 py-2 text-right">Inc</th>
-            <th className="bg-zinc-900 px-2 py-2 text-right">iR</th>
-            <th className="bg-zinc-900 px-2 py-2 text-right">Total</th>
+            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">Inc</th>
+            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">iR</th>
+          </tr>
+          <tr>
+            {rounds.map((r) => (
+              <Fragment key={r.roundId}>
+                <th className="border-l border-zinc-800 bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-400">Total</th>
+                <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">R</th>
+                <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">B</th>
+                <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">P</th>
+              </Fragment>
+            ))}
           </tr>
         </thead>
         <tbody>
           {sorted.map((r, idx) => {
-            const total = kind === "combined" ? r.combinedTotal : r.classTotal;
+            const seasonTotal = kind === "combined" ? r.combinedTotal : r.classTotal;
             return (
               <tr
                 key={r.registrationId}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
-                <td className="sticky left-0 z-10 bg-zinc-950 px-3 py-2 font-medium align-top">
-                  {idx + 1}
-                </td>
-                <td className="px-2 py-2 text-zinc-500 align-top">{r.startNumber ?? "—"}</td>
-                <td className="px-2 py-2 font-medium whitespace-nowrap align-top">
+                <td className="sticky left-0 z-10 bg-zinc-950 px-2 py-1.5 font-medium">{idx + 1}</td>
+                <td className="px-2 py-1.5 text-zinc-500">{r.startNumber ?? "—"}</td>
+                <td className="px-2 py-1.5 font-medium whitespace-nowrap">
                   {r.driverFirstName} {r.driverLastName}
                 </td>
-                {r.roundPoints.map((rp) => (
-                  <td
-                    key={rp.roundId}
-                    className="px-2 py-2 text-right tabular-nums align-top"
-                  >
-                    {rp.hasResult ? (
-                      <div className="flex flex-col items-end leading-tight">
-                        <span className="text-zinc-200">{rp.rawPoints}</span>
-                        {kind === "class" && rp.participationPoints > 0 && (
-                          <span className="text-[9px] text-emerald-400">+{rp.participationPoints}</span>
-                        )}
-                        {rp.penaltyPoints > 0 && (
-                          <span className="text-[9px] text-red-400">−{rp.penaltyPoints}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-zinc-700">—</span>
-                    )}
-                  </td>
-                ))}
-                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums align-top">{r.totalIncidents}</td>
-                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums align-top">{r.iRating ?? "—"}</td>
-                <td className="px-2 py-2 text-right font-bold text-orange-400 tabular-nums align-top">{total}</td>
+                <td className="px-2 py-1.5 text-right font-bold text-orange-400 tabular-nums">{seasonTotal}</td>
+                {r.roundPoints.map((rp) => {
+                  const cellTotal = kind === "combined" ? rp.combinedPoints : rp.classPoints;
+                  const dash = <span className="text-zinc-700">—</span>;
+                  return (
+                    <Fragment key={rp.roundId}>
+                      <td className="border-l border-zinc-800 px-1.5 py-1.5 text-right tabular-nums">
+                        {rp.hasResult ? <span className="font-semibold text-zinc-200">{cellTotal}</span> : dash}
+                      </td>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-zinc-300">
+                        {rp.hasResult && rp.rawPoints !== 0 ? rp.rawPoints : dash}
+                      </td>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-emerald-400">
+                        {rp.hasResult && rp.participationPoints !== 0 ? rp.participationPoints : dash}
+                      </td>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-red-400">
+                        {rp.hasResult && rp.penaltyPoints !== 0 ? `−${rp.penaltyPoints}` : dash}
+                      </td>
+                    </Fragment>
+                  );
+                })}
+                <td className="px-2 py-1.5 text-right text-zinc-400 tabular-nums">{r.totalIncidents}</td>
+                <td className="px-2 py-1.5 text-right text-zinc-400 tabular-nums">{r.iRating ?? "—"}</td>
               </tr>
             );
           })}

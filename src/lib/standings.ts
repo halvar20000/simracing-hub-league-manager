@@ -4,6 +4,7 @@ export interface RoundPoints {
   roundId: string;
   roundNumber: number;
   roundName: string;
+  roundDate: Date;
   rawPoints: number;
   participationPoints: number;
   penaltyPoints: number;
@@ -73,7 +74,7 @@ export async function computeDriverStandings(
     prisma.round.findMany({
       where: { seasonId },
       orderBy: { roundNumber: "asc" },
-      select: { id: true, roundNumber: true, name: true },
+      select: { id: true, roundNumber: true, name: true, startsAt: true },
     }),
   ]);
   void excludeFilter;
@@ -116,6 +117,7 @@ export async function computeDriverStandings(
           roundId: round.id,
           roundNumber: round.roundNumber,
           roundName: round.name,
+          roundDate: round.startsAt,
           rawPoints: 0,
           participationPoints: 0,
           penaltyPoints: 0,
@@ -131,6 +133,7 @@ export async function computeDriverStandings(
         roundId: round.id,
         roundNumber: round.roundNumber,
         roundName: round.name,
+        roundDate: round.startsAt,
         rawPoints: raw,
         participationPoints: part,
         penaltyPoints: pen,
