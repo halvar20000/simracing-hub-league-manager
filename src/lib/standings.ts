@@ -4,6 +4,9 @@ export interface RoundPoints {
   roundId: string;
   roundNumber: number;
   roundName: string;
+  rawPoints: number;
+  participationPoints: number;
+  penaltyPoints: number;
   combinedPoints: number;
   classPoints: number;
   hasResult: boolean;
@@ -113,23 +116,26 @@ export async function computeDriverStandings(
           roundId: round.id,
           roundNumber: round.roundNumber,
           roundName: round.name,
+          rawPoints: 0,
+          participationPoints: 0,
+          penaltyPoints: 0,
           combinedPoints: 0,
           classPoints: 0,
           hasResult: false,
         };
       }
-      const combined =
-        result.rawPointsAwarded - result.manualPenaltyPoints;
-      const cls =
-        result.rawPointsAwarded +
-        result.participationPointsAwarded -
-        result.manualPenaltyPoints;
+      const raw = result.rawPointsAwarded;
+      const part = result.participationPointsAwarded;
+      const pen = result.manualPenaltyPoints;
       return {
         roundId: round.id,
         roundNumber: round.roundNumber,
         roundName: round.name,
-        combinedPoints: combined,
-        classPoints: cls,
+        rawPoints: raw,
+        participationPoints: part,
+        penaltyPoints: pen,
+        combinedPoints: raw - pen,
+        classPoints: raw + part - pen,
         hasResult: true,
       };
     });

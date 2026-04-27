@@ -338,10 +338,12 @@ function RaceByRaceTable({
             {rounds.map((r) => (
               <th
                 key={r.roundId}
-                title={r.roundName}
-                className="bg-zinc-900 px-2 py-2 text-right"
+                className="bg-zinc-900 px-2 py-2 text-right whitespace-nowrap"
               >
-                R{r.roundNumber}
+                <div className="flex flex-col items-end leading-tight">
+                  <span className="text-[9px] text-zinc-500">R{r.roundNumber}</span>
+                  <span className="text-xs font-display">{r.roundName}</span>
+                </div>
               </th>
             ))}
             <th className="bg-zinc-900 px-2 py-2 text-right">Inc</th>
@@ -357,35 +359,36 @@ function RaceByRaceTable({
                 key={r.registrationId}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
-                <td className="sticky left-0 z-10 bg-zinc-950 px-3 py-2 font-medium">
+                <td className="sticky left-0 z-10 bg-zinc-950 px-3 py-2 font-medium align-top">
                   {idx + 1}
                 </td>
-                <td className="px-2 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
-                <td className="px-2 py-2 font-medium whitespace-nowrap">
+                <td className="px-2 py-2 text-zinc-500 align-top">{r.startNumber ?? "—"}</td>
+                <td className="px-2 py-2 font-medium whitespace-nowrap align-top">
                   {r.driverFirstName} {r.driverLastName}
                 </td>
-                {r.roundPoints.map((rp) => {
-                  const points =
-                    kind === "combined" ? rp.combinedPoints : rp.classPoints;
-                  return (
-                    <td key={rp.roundId} className="px-2 py-2 text-right tabular-nums">
-                      {rp.hasResult ? (
-                        <span className="text-zinc-300">{points}</span>
-                      ) : (
-                        <span className="text-zinc-700">—</span>
-                      )}
-                    </td>
-                  );
-                })}
-                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.totalIncidents}
-                </td>
-                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.iRating ?? "—"}
-                </td>
-                <td className="px-2 py-2 text-right font-bold text-orange-400 tabular-nums">
-                  {total}
-                </td>
+                {r.roundPoints.map((rp) => (
+                  <td
+                    key={rp.roundId}
+                    className="px-2 py-2 text-right tabular-nums align-top"
+                  >
+                    {rp.hasResult ? (
+                      <div className="flex flex-col items-end leading-tight">
+                        <span className="text-zinc-200">{rp.rawPoints}</span>
+                        {kind === "class" && rp.participationPoints > 0 && (
+                          <span className="text-[9px] text-emerald-400">+{rp.participationPoints}</span>
+                        )}
+                        {rp.penaltyPoints > 0 && (
+                          <span className="text-[9px] text-red-400">−{rp.penaltyPoints}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-zinc-700">—</span>
+                    )}
+                  </td>
+                ))}
+                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums align-top">{r.totalIncidents}</td>
+                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums align-top">{r.iRating ?? "—"}</td>
+                <td className="px-2 py-2 text-right font-bold text-orange-400 tabular-nums align-top">{total}</td>
               </tr>
             );
           })}
