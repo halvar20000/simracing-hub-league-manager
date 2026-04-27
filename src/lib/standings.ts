@@ -52,6 +52,7 @@ export async function computeDriverStandings(
         team: true,
         carClass: true,
         raceResults: { include: { round: true } },
+        penalties: { where: { type: "POINTS_DEDUCTION" } },
       },
     }),
     prisma.round.findMany({
@@ -71,6 +72,10 @@ export async function computeDriverStandings(
       participation += r.participationPointsAwarded;
       penalty += r.manualPenaltyPoints;
       totalIncidents += r.incidents;
+    }
+    // Add decision-driven point penalties on top of admin-entered ones
+    for (const p of reg.penalties) {
+      if (p.pointsValue != null) penalty += p.pointsValue;
     }
 
     const sortedNewestFirst = [...reg.raceResults].sort(

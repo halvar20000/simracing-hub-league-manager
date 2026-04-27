@@ -62,6 +62,12 @@ export default async function PublicSeasonDetail({
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          <Link
+              href={`/leagues/${slug}/seasons/${seasonId}/decisions`}
+              className="rounded border border-zinc-700 px-3 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            >
+              Decisions →
+            </Link>
           {hasResults && (
             <Link
               href={`/leagues/${slug}/seasons/${seasonId}/standings`}

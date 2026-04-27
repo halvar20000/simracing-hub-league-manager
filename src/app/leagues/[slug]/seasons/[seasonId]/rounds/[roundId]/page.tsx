@@ -31,6 +31,16 @@ export default async function PublicRoundResults({
         include: { team: true, carClass: true },
         orderBy: { fprPointsAwarded: "desc" },
       },
+      incidentReports: {
+        where: { decision: { publishedAt: { not: null } } },
+        include: {
+          decision: true,
+          involvedDrivers: {
+            where: { role: "ACCUSED" },
+            include: { registration: { include: { user: true } } },
+          },
+        },
+      },
     },
   });
 
@@ -203,6 +213,31 @@ export default async function PublicRoundResults({
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+      )}
+
+      {round.incidentReports.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold">Steward decisions for this round</h2>
+          <div className="space-y-2">
+            {round.incidentReports.map((ir) => {
+              const acc = ir.involvedDrivers
+                .map(
+                  (d) =>
+                    `#${d.registration.startNumber ?? "?"} ${d.registration.user.firstName ?? ""} ${d.registration.user.lastName ?? ""}`.trim()
+                )
+                .join(", ");
+              return (
+                <div key={ir.id} className="rounded border border-zinc-800 bg-zinc-900 p-3 text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-semibold">{ir.decision!.verdict.replace(/_/g, " ")}</span>
+                    {acc && <span className="text-xs text-zinc-400">{acc}</span>}
+                  </div>
+                  <p className="mt-1 text-zinc-300">{ir.decision!.publicSummary}</p>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
