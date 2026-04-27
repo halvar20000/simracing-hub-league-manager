@@ -42,8 +42,12 @@ export interface TeamStanding {
 
 export async function computeDriverStandings(
   prisma: PrismaClient,
-  seasonId: string
+  seasonId: string,
+  excludeRoundIds: string[] = []
 ): Promise<DriverStanding[]> {
+  const excludeFilter = excludeRoundIds.length > 0
+    ? { roundId: { notIn: excludeRoundIds } }
+    : {};
   const [registrations, rounds] = await Promise.all([
     prisma.registration.findMany({
       where: { seasonId, status: "APPROVED" },
@@ -51,8 +55,16 @@ export async function computeDriverStandings(
         user: true,
         team: true,
         carClass: true,
-        raceResults: { include: { round: true } },
-        penalties: { where: { type: "POINTS_DEDUCTION" } },
+        raceResults: {
+          where: excludeRoundIds.length > 0 ? { roundId: { notIn: excludeRoundIds } } : undefined,
+          include: { round: true },
+        },
+        penalties: {
+          where: {
+            type: "POINTS_DEDUCTION",
+            ...(excludeRoundIds.length > 0 ? { roundId: { notIn: excludeRoundIds } } : {}),
+          },
+        },
       },
     }),
     prisma.round.findMany({
@@ -61,6 +73,7 @@ export async function computeDriverStandings(
       select: { id: true, roundNumber: true, name: true },
     }),
   ]);
+  void excludeFilter;
 
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
