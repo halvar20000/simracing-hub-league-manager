@@ -21,10 +21,16 @@ export default async function AdminLayout({
           Dashboard
         </Link>
         <Link
-          href="/admin/leagues"
+          href="/admin/users"
           className="block rounded px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
         >
-          Leagues
+          Users
+        </Link>
+        <Link
+          href="/admin/teams"
+          className="block rounded px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          Teams
         </Link>
       </aside>
       <div>{children}</div>
