@@ -7,16 +7,21 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { recomputeRoundScoring } from "@/lib/scoring";
 import { parseTimeToMs } from "@/lib/time";
-import type { FinishStatus } from "@prisma/client";
+import type { FinishStatus, Registration } from "@prisma/client";
 
-interface IRacingRow {
+interface CsvRow {
   [key: string]: string | undefined;
 }
 
-function findHeader(
-  headers: string[],
-  variants: string[]
-): string | null {
+type Format = "iracing" | "irleaguemanager";
+
+interface FormatDetection {
+  headerIdx: number;
+  delimiter: string;
+  format: Format;
+}
+
+function findHeader(headers: string[], variants: string[]): string | null {
   const norm = (s: string) =>
     s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const headerNorm = headers.map(norm);
@@ -27,27 +32,87 @@ function findHeader(
   return null;
 }
 
-/**
- * iRacing hosted-session CSVs have 7 lines of metadata before the real
- * header row. Find the header line by looking for "Fin Pos" + "Cust ID".
- */
-function detectHeaderLineIndex(text: string): number {
+function detectFormat(text: string): FormatDetection {
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < Math.min(lines.length, 40); i++) {
     const line = lines[i].toLowerCase();
+
+    // iRacing hosted-session format
+    if (line.includes("fin pos") && line.includes("cust id")) {
+      return { headerIdx: i, delimiter: ",", format: "iracing" };
+    }
+
+    // iRLeagueManager: semicolon-delimited, has Position + Name + Race Points
     if (
-      (line.includes('"fin pos"') ||
-        line.includes("fin pos,") ||
-        line.includes('"finish pos"') ||
-        line.includes('"pos"')) &&
-      (line.includes('"cust id"') ||
-        line.includes("cust id,") ||
-        line.includes('"custid"'))
+      line.includes("position") &&
+      line.includes("name") &&
+      (line.includes("race points") || line.includes("total points"))
     ) {
-      return i;
+      const semicolons = (lines[i].match(/;/g) ?? []).length;
+      const commas = (lines[i].match(/,/g) ?? []).length;
+      return {
+        headerIdx: i,
+        delimiter: semicolons > commas ? ";" : ",",
+        format: "irleaguemanager",
+      };
     }
   }
-  return 0;
+  // Fallback — assume iRacing
+  return { headerIdx: 0, delimiter: ",", format: "iracing" };
+}
+
+function stripTrailingDigits(name: string): string {
+  return name.replace(/\d+$/, "").trim();
+}
+
+async function findRegistrationByName(
+  seasonId: string,
+  rawName: string
+): Promise<Registration | null> {
+  const name = rawName.trim();
+  if (!name) return null;
+
+  // 1. Exact (case-insensitive)
+  let reg = await prisma.registration.findFirst({
+    where: {
+      seasonId,
+      status: "APPROVED",
+      user: { name: { equals: name, mode: "insensitive" } },
+    },
+  });
+  if (reg) return reg;
+
+  // 2. Strip trailing digits (iRacing username collision suffix)
+  const stripped = stripTrailingDigits(name);
+  if (stripped !== name && stripped.length > 0) {
+    reg = await prisma.registration.findFirst({
+      where: {
+        seasonId,
+        status: "APPROVED",
+        user: { name: { equals: stripped, mode: "insensitive" } },
+      },
+    });
+    if (reg) return reg;
+  }
+
+  return null;
+}
+
+function statusFromIRacingOut(outReason: string): FinishStatus {
+  if (!outReason || outReason.toLowerCase() === "running") return "CLASSIFIED";
+  const lc = outReason.toLowerCase();
+  if (lc.includes("disq") || lc.includes("dsq")) return "DSQ";
+  if (lc.includes("dns") || lc.includes("did not start")) return "DNS";
+  return "DNF";
+}
+
+function statusFromLeagueManager(status: string): FinishStatus {
+  if (!status) return "CLASSIFIED";
+  const lc = status.toLowerCase();
+  if (lc.includes("disq")) return "DSQ";
+  if (lc.includes("dns") || lc.includes("did not start")) return "DNS";
+  if (lc.includes("running")) return "CLASSIFIED";
+  return "DNF";
 }
 
 export async function importResultsCsv(
@@ -66,15 +131,16 @@ export async function importResultsCsv(
   }
 
   const rawText = await file.text();
-  const headerIdx = detectHeaderLineIndex(rawText);
+  const detection = detectFormat(rawText);
   const csvText = rawText
     .split(/\r?\n/)
-    .slice(headerIdx)
+    .slice(detection.headerIdx)
     .join("\n");
 
-  const parsed = Papa.parse<IRacingRow>(csvText, {
+  const parsed = Papa.parse<CsvRow>(csvText, {
     header: true,
     skipEmptyLines: true,
+    delimiter: detection.delimiter,
   });
 
   if (!parsed.meta.fields || parsed.meta.fields.length === 0) {
@@ -84,6 +150,16 @@ export async function importResultsCsv(
   }
 
   const fields = parsed.meta.fields;
+
+  const colPos = findHeader(fields, [
+    "finpos",
+    "pos",
+    "position",
+    "finishposition",
+    "finishpos",
+    "finishingposition",
+  ]);
+  const colName = findHeader(fields, ["name", "drivername", "driver"]);
   const colCustID = findHeader(fields, [
     "custid",
     "customerid",
@@ -91,15 +167,8 @@ export async function importResultsCsv(
     "iracingmemberid",
     "irid",
   ]);
-  const colPos = findHeader(fields, [
-    "finpos",
-    "pos",
-    "finishposition",
-    "finishpos",
-    "position",
-    "finishingposition",
-  ]);
   const colLaps = findHeader(fields, [
+    "lapscompl",
     "lapscomp",
     "lapsdone",
     "laps",
@@ -114,8 +183,8 @@ export async function importResultsCsv(
   ]);
   const colBestTime = findHeader(fields, [
     "fastestlaptime",
-    "bestlaptime",
     "fastestlap",
+    "bestlaptime",
     "besttime",
     "bestlap",
   ]);
@@ -123,18 +192,21 @@ export async function importResultsCsv(
     "out",
     "reasonout",
     "dnfreason",
-    "status",
     "outcome",
   ]);
-  const colCarNum = findHeader(fields, ["car", "carnum", "carnumber"]);
+  const colStatus = findHeader(fields, ["status"]);
+  const colPenaltyPts = findHeader(fields, [
+    "penaltypoints",
+    "penalty",
+  ]);
 
-  if (!colCustID || !colPos) {
+  if (!colPos) {
     redirect(
-      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}/import?error=CSV+missing+required+columns+(Cust+ID+and+Fin+Pos+required)`
+      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}/import?error=CSV+missing+Position+column`
     );
   }
 
-  // Compute max laps for raceDistancePct (winner's lap count = 100%)
+  // Compute max laps for raceDistancePct
   let maxLaps = 0;
   if (colLaps) {
     for (const row of parsed.data) {
@@ -149,31 +221,51 @@ export async function importResultsCsv(
 
   for (let i = 0; i < parsed.data.length; i++) {
     const row = parsed.data[i];
-    const custIdRaw = String(row[colCustID] ?? "").trim();
-    if (!custIdRaw) {
-      skipped++;
-      errors.push({ row: i + 2, reason: "Cust ID is empty" });
-      continue;
-    }
-    const custId = custIdRaw.replace(/[^0-9]/g, "");
+    let reg: Registration | null = null;
 
-    const reg = await prisma.registration.findFirst({
-      where: {
-        seasonId,
-        status: "APPROVED",
-        user: { iracingMemberId: custId },
-      },
-    });
-
-    if (!reg) {
-      skipped++;
-      errors.push({
-        row: i + 2,
-        reason: `No approved registration for iRacing ID ${custId}`,
+    // --- Match the driver to a registration ---
+    if (detection.format === "iracing" && colCustID) {
+      const custId = String(row[colCustID] ?? "").trim().replace(/[^0-9]/g, "");
+      if (!custId) {
+        skipped++;
+        errors.push({ row: i + 2, reason: "Cust ID empty" });
+        continue;
+      }
+      reg = await prisma.registration.findFirst({
+        where: {
+          seasonId,
+          status: "APPROVED",
+          user: { iracingMemberId: custId },
+        },
       });
-      continue;
+      if (!reg) {
+        skipped++;
+        errors.push({
+          row: i + 2,
+          reason: `No approved registration for iRacing ID ${custId}`,
+        });
+        continue;
+      }
+    } else {
+      // iRLeagueManager — match by name
+      const name = String(row[colName ?? ""] ?? "").trim();
+      if (!name) {
+        skipped++;
+        errors.push({ row: i + 2, reason: "Name empty" });
+        continue;
+      }
+      reg = await findRegistrationByName(seasonId, name);
+      if (!reg) {
+        skipped++;
+        errors.push({
+          row: i + 2,
+          reason: `No approved registration matching name "${name}"`,
+        });
+        continue;
+      }
     }
 
+    // --- Build the result fields ---
     const finishPosition = parseInt(row[colPos] ?? "0", 10) || 0;
     const lapsCompleted = colLaps
       ? parseInt(row[colLaps] ?? "0", 10) || 0
@@ -189,16 +281,19 @@ export async function importResultsCsv(
     const incidents = colInc
       ? parseInt(row[colInc] ?? "0", 10) || 0
       : 0;
-    const outReason = colOut ? String(row[colOut] ?? "").trim() : "";
 
-    let finishStatus: FinishStatus = "CLASSIFIED";
-    if (outReason && outReason.toLowerCase() !== "running") {
-      const lc = outReason.toLowerCase();
-      if (lc.includes("disq") || lc.includes("dsq")) finishStatus = "DSQ";
-      else if (lc.includes("dns") || lc.includes("did not start"))
-        finishStatus = "DNS";
-      else finishStatus = "DNF";
+    let finishStatus: FinishStatus;
+    if (detection.format === "iracing" && colOut) {
+      finishStatus = statusFromIRacingOut(String(row[colOut] ?? ""));
+    } else if (colStatus) {
+      finishStatus = statusFromLeagueManager(String(row[colStatus] ?? ""));
+    } else {
+      finishStatus = "CLASSIFIED";
     }
+
+    const manualPenaltyPoints = colPenaltyPts
+      ? parseInt(row[colPenaltyPts] ?? "0", 10) || 0
+      : 0;
 
     await prisma.raceResult.upsert({
       where: {
@@ -214,6 +309,7 @@ export async function importResultsCsv(
         totalTimeMs,
         bestLapTimeMs,
         incidents,
+        manualPenaltyPoints,
       },
       update: {
         finishStatus,
@@ -223,6 +319,7 @@ export async function importResultsCsv(
         totalTimeMs,
         bestLapTimeMs,
         incidents,
+        manualPenaltyPoints,
       },
     });
     imported++;
