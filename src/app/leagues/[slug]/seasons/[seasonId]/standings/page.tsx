@@ -9,13 +9,18 @@ import {
 } from "@/lib/standings";
 
 type StandingsKind = "combined" | "class";
+type ViewMode = "list" | "races";
 
 export default async function StandingsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { slug, seasonId } = await params;
+  const { view: viewRaw } = await searchParams;
+  const view: ViewMode = viewRaw === "races" ? "races" : "list";
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
@@ -32,7 +37,6 @@ export default async function StandingsPage({
     computeTeamStandings(prisma, seasonId),
   ]);
 
-  // Combined: re-sort by combinedTotal (no participation)
   const combined = [...drivers].sort(
     (a, b) =>
       b.combinedTotal - a.combinedTotal ||
@@ -40,9 +44,10 @@ export default async function StandingsPage({
       (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
   );
 
-  // Pro/AM: filter and use existing classTotal sort from the library
   const proDrivers = drivers.filter((d) => d.proAmClass === "PRO");
   const amDrivers = drivers.filter((d) => d.proAmClass === "AM");
+
+  const baseHref = `/leagues/${slug}/seasons/${seasonId}/standings`;
 
   return (
     <div className="space-y-8">
@@ -61,6 +66,21 @@ export default async function StandingsPage({
           {season.proAmEnabled && " • Pro/Am"}
           {season.isMulticlass && " • Multiclass"}
         </p>
+
+        <div className="mt-4 inline-flex rounded border border-zinc-800 bg-zinc-900 p-1 text-xs">
+          <Link
+            href={baseHref}
+            className={`rounded px-3 py-1.5 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+          >
+            List view
+          </Link>
+          <Link
+            href={`${baseHref}?view=races`}
+            className={`rounded px-3 py-1.5 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+          >
+            Race by race
+          </Link>
+        </div>
       </div>
 
       <section>
@@ -68,12 +88,11 @@ export default async function StandingsPage({
         <p className="mb-3 text-xs text-zinc-500">
           Race points − penalties. Participation points are not included in this view.
         </p>
-        <DriversTable
-          rows={combined}
-          kind="combined"
-          showTeam
-          showClass={season.isMulticlass}
-        />
+        {view === "races" ? (
+          <RaceByRaceTable rows={combined} kind="combined" />
+        ) : (
+          <DriversTable rows={combined} kind="combined" showTeam showClass={season.isMulticlass} />
+        )}
       </section>
 
       {season.proAmEnabled && (
@@ -83,30 +102,41 @@ export default async function StandingsPage({
             <p className="mb-3 text-xs text-zinc-500">
               Race points + participation − penalties.
             </p>
-            <DriversTable rows={proDrivers} kind="class" showTeam />
+            {view === "races" ? (
+              <RaceByRaceTable rows={proDrivers} kind="class" />
+            ) : (
+              <DriversTable rows={proDrivers} kind="class" showTeam />
+            )}
           </section>
           <section>
             <h2 className="mb-1 text-lg font-semibold">Am</h2>
             <p className="mb-3 text-xs text-zinc-500">
               Race points + participation − penalties.
             </p>
-            <DriversTable rows={amDrivers} kind="class" showTeam />
+            {view === "races" ? (
+              <RaceByRaceTable rows={amDrivers} kind="class" />
+            ) : (
+              <DriversTable rows={amDrivers} kind="class" showTeam />
+            )}
           </section>
         </>
       )}
 
       {season.isMulticlass && season.carClasses.length > 0 && (
         <>
-          {season.carClasses.map((cc) => (
-            <section key={cc.id}>
-              <h2 className="mb-3 text-lg font-semibold">{cc.name}</h2>
-              <DriversTable
-                rows={drivers.filter((d) => d.carClassId === cc.id)}
-                kind="class"
-                showTeam
-              />
-            </section>
-          ))}
+          {season.carClasses.map((cc) => {
+            const rows = drivers.filter((d) => d.carClassId === cc.id);
+            return (
+              <section key={cc.id}>
+                <h2 className="mb-3 text-lg font-semibold">{cc.name}</h2>
+                {view === "races" ? (
+                  <RaceByRaceTable rows={rows} kind="class" />
+                ) : (
+                  <DriversTable rows={rows} kind="class" showTeam />
+                )}
+              </section>
+            );
+          })}
         </>
       )}
 
@@ -168,43 +198,110 @@ function DriversTable({
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
                 <td className="px-3 py-2 font-medium">{idx + 1}</td>
-                <td className="px-3 py-2 text-zinc-500">
-                  {r.startNumber ?? "—"}
-                </td>
+                <td className="px-3 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
                 <td className="px-3 py-2 font-medium">
                   {r.driverFirstName} {r.driverLastName}
                 </td>
                 {showTeam && (
-                  <td className="px-3 py-2 text-zinc-400">
-                    {r.teamName ?? "—"}
-                  </td>
+                  <td className="px-3 py-2 text-zinc-400">{r.teamName ?? "—"}</td>
                 )}
                 {showClass && (
-                  <td className="px-3 py-2 text-zinc-400">
-                    {r.carClassName ?? "—"}
-                  </td>
+                  <td className="px-3 py-2 text-zinc-400">{r.carClassName ?? "—"}</td>
                 )}
-                <td className="px-3 py-2 text-right text-zinc-400">
-                  {r.roundsCompleted}
-                </td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.totalIncidents}
-                </td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.iRating ?? "—"}
-                </td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.rawPoints}
-                </td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.participationPoints}
-                </td>
+                <td className="px-3 py-2 text-right text-zinc-400">{r.roundsCompleted}</td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">{r.totalIncidents}</td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">{r.iRating ?? "—"}</td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">{r.rawPoints}</td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">{r.participationPoints}</td>
                 <td className="px-3 py-2 text-right text-red-400 tabular-nums">
                   {r.manualPenalties > 0 ? `−${r.manualPenalties}` : 0}
                 </td>
-                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
-                  {total}
+                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">{total}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RaceByRaceTable({
+  rows,
+  kind,
+}: {
+  rows: DriverStanding[];
+  kind: StandingsKind;
+}) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-zinc-500">No standings to show yet.</p>;
+  }
+  // Use the first driver's roundPoints array as the column headers
+  const rounds = rows[0].roundPoints;
+
+  // For race-by-race, sort by total relevant to view kind (already partly sorted but ensure)
+  const sorted = [...rows].sort((a, b) => {
+    const at = kind === "combined" ? a.combinedTotal : a.classTotal;
+    const bt = kind === "combined" ? b.combinedTotal : b.classTotal;
+    return bt - at;
+  });
+
+  return (
+    <div className="overflow-x-auto rounded border border-zinc-800">
+      <table className="min-w-full text-xs">
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="sticky left-0 z-10 bg-zinc-900 px-3 py-2">Pos</th>
+            <th className="bg-zinc-900 px-2 py-2">#</th>
+            <th className="bg-zinc-900 px-2 py-2">Driver</th>
+            {rounds.map((r) => (
+              <th
+                key={r.roundId}
+                title={r.roundName}
+                className="bg-zinc-900 px-2 py-2 text-right"
+              >
+                R{r.roundNumber}
+              </th>
+            ))}
+            <th className="bg-zinc-900 px-2 py-2 text-right">Inc</th>
+            <th className="bg-zinc-900 px-2 py-2 text-right">iR</th>
+            <th className="bg-zinc-900 px-2 py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r, idx) => {
+            const total = kind === "combined" ? r.combinedTotal : r.classTotal;
+            return (
+              <tr
+                key={r.registrationId}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="sticky left-0 z-10 bg-zinc-950 px-3 py-2 font-medium">
+                  {idx + 1}
                 </td>
+                <td className="px-2 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
+                <td className="px-2 py-2 font-medium whitespace-nowrap">
+                  {r.driverFirstName} {r.driverLastName}
+                </td>
+                {r.roundPoints.map((rp) => {
+                  const points =
+                    kind === "combined" ? rp.combinedPoints : rp.classPoints;
+                  return (
+                    <td
+                      key={rp.roundId}
+                      className="px-2 py-2 text-right tabular-nums"
+                    >
+                      {rp.hasResult ? (
+                        <span className="text-zinc-300">{points}</span>
+                      ) : (
+                        <span className="text-zinc-700">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums">{r.totalIncidents}</td>
+                <td className="px-2 py-2 text-right text-zinc-400 tabular-nums">{r.iRating ?? "—"}</td>
+                <td className="px-2 py-2 text-right font-bold text-orange-400 tabular-nums">{total}</td>
               </tr>
             );
           })}
@@ -236,18 +333,12 @@ function TeamsTable({ rows }: { rows: TeamStanding[] }) {
             >
               <td className="px-3 py-2 font-medium">{idx + 1}</td>
               <td className="px-3 py-2 font-medium">{r.teamName}</td>
-              <td className="px-3 py-2 text-right text-zinc-400">
-                {r.driversCount}
-              </td>
-              <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                {r.scoringPoints}
-              </td>
+              <td className="px-3 py-2 text-right text-zinc-400">{r.driversCount}</td>
+              <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">{r.scoringPoints}</td>
               <td className="px-3 py-2 text-right text-emerald-400 tabular-nums">
                 {r.fprPoints > 0 ? `+${r.fprPoints}` : 0}
               </td>
-              <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
-                {r.totalPoints}
-              </td>
+              <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">{r.totalPoints}</td>
             </tr>
           ))}
         </tbody>

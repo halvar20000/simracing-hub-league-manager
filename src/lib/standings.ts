@@ -1,5 +1,14 @@
 import type { PrismaClient } from "@prisma/client";
 
+export interface RoundPoints {
+  roundId: string;
+  roundNumber: number;
+  roundName: string;
+  combinedPoints: number;
+  classPoints: number;
+  hasResult: boolean;
+}
+
 export interface DriverStanding {
   registrationId: string;
   startNumber: number | null;
@@ -13,13 +22,12 @@ export interface DriverStanding {
   rawPoints: number;
   participationPoints: number;
   manualPenalties: number;
-  /** raw - penalties (no participation) — used for Combined standings */
   combinedTotal: number;
-  /** raw + participation - penalties — used for Pro/Am class standings */
   classTotal: number;
   totalIncidents: number;
   iRating: number | null;
   roundsCompleted: number;
+  roundPoints: RoundPoints[];
 }
 
 export interface TeamStanding {
@@ -36,17 +44,22 @@ export async function computeDriverStandings(
   prisma: PrismaClient,
   seasonId: string
 ): Promise<DriverStanding[]> {
-  const registrations = await prisma.registration.findMany({
-    where: { seasonId, status: "APPROVED" },
-    include: {
-      user: true,
-      team: true,
-      carClass: true,
-      raceResults: {
-        include: { round: true },
+  const [registrations, rounds] = await Promise.all([
+    prisma.registration.findMany({
+      where: { seasonId, status: "APPROVED" },
+      include: {
+        user: true,
+        team: true,
+        carClass: true,
+        raceResults: { include: { round: true } },
       },
-    },
-  });
+    }),
+    prisma.round.findMany({
+      where: { seasonId },
+      orderBy: { roundNumber: "asc" },
+      select: { id: true, roundNumber: true, name: true },
+    }),
+  ]);
 
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
@@ -60,7 +73,6 @@ export async function computeDriverStandings(
       totalIncidents += r.incidents;
     }
 
-    // Latest iRating: pick from the highest-round result that has iRating set
     const sortedNewestFirst = [...reg.raceResults].sort(
       (a, b) => b.round.roundNumber - a.round.roundNumber
     );
@@ -71,6 +83,38 @@ export async function computeDriverStandings(
         break;
       }
     }
+
+    const resultsByRoundId = new Map(
+      reg.raceResults.map((r) => [r.roundId, r])
+    );
+
+    const roundPoints: RoundPoints[] = rounds.map((round) => {
+      const result = resultsByRoundId.get(round.id);
+      if (!result) {
+        return {
+          roundId: round.id,
+          roundNumber: round.roundNumber,
+          roundName: round.name,
+          combinedPoints: 0,
+          classPoints: 0,
+          hasResult: false,
+        };
+      }
+      const combined =
+        result.rawPointsAwarded - result.manualPenaltyPoints;
+      const cls =
+        result.rawPointsAwarded +
+        result.participationPointsAwarded -
+        result.manualPenaltyPoints;
+      return {
+        roundId: round.id,
+        roundNumber: round.roundNumber,
+        roundName: round.name,
+        combinedPoints: combined,
+        classPoints: cls,
+        hasResult: true,
+      };
+    });
 
     return {
       registrationId: reg.id,
@@ -90,10 +134,10 @@ export async function computeDriverStandings(
       totalIncidents,
       iRating,
       roundsCompleted: reg.raceResults.length,
+      roundPoints,
     };
   });
 
-  // Default sort by classTotal (used for Pro/AM). Combined view re-sorts.
   standings.sort(
     (a, b) =>
       b.classTotal - a.classTotal ||
@@ -111,7 +155,7 @@ export async function computeTeamStandings(
 ): Promise<TeamStanding[]> {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
-    include: { teams: true },
+    include: { teams: true, scoringSystem: true },
   });
   if (!season || season.teamScoringMode === "NONE") return [];
 
