@@ -258,6 +258,7 @@ model ScoringSystem {
   name                          String    @unique
   description                   String?
   pointsTable                   Json
+  classPointsTable              Json?
   participationPoints           Int       @default(0)
   participationMinDistancePct   Int       @default(75)
   bonusFastestLap               Int?
