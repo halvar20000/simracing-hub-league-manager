@@ -10,10 +10,15 @@ export interface DriverStanding {
   carClassId: string | null;
   carClassName: string | null;
   proAmClass: "PRO" | "AM" | null;
-  totalPoints: number;
   rawPoints: number;
   participationPoints: number;
   manualPenalties: number;
+  /** raw - penalties (no participation) — used for Combined standings */
+  combinedTotal: number;
+  /** raw + participation - penalties — used for Pro/Am class standings */
+  classTotal: number;
+  totalIncidents: number;
+  iRating: number | null;
   roundsCompleted: number;
 }
 
@@ -37,7 +42,9 @@ export async function computeDriverStandings(
       user: true,
       team: true,
       carClass: true,
-      raceResults: true,
+      raceResults: {
+        include: { round: true },
+      },
     },
   });
 
@@ -45,11 +52,26 @@ export async function computeDriverStandings(
     let raw = 0;
     let participation = 0;
     let penalty = 0;
+    let totalIncidents = 0;
     for (const r of reg.raceResults) {
       raw += r.rawPointsAwarded;
       participation += r.participationPointsAwarded;
       penalty += r.manualPenaltyPoints;
+      totalIncidents += r.incidents;
     }
+
+    // Latest iRating: pick from the highest-round result that has iRating set
+    const sortedNewestFirst = [...reg.raceResults].sort(
+      (a, b) => b.round.roundNumber - a.round.roundNumber
+    );
+    let iRating: number | null = null;
+    for (const r of sortedNewestFirst) {
+      if (r.iRating != null) {
+        iRating = r.iRating;
+        break;
+      }
+    }
+
     return {
       registrationId: reg.id,
       startNumber: reg.startNumber,
@@ -60,17 +82,21 @@ export async function computeDriverStandings(
       carClassId: reg.carClassId,
       carClassName: reg.carClass?.name ?? null,
       proAmClass: reg.proAmClass as "PRO" | "AM" | null,
-      totalPoints: raw + participation - penalty,
       rawPoints: raw,
       participationPoints: participation,
       manualPenalties: penalty,
+      combinedTotal: raw - penalty,
+      classTotal: raw + participation - penalty,
+      totalIncidents,
+      iRating,
       roundsCompleted: reg.raceResults.length,
     };
   });
 
+  // Default sort by classTotal (used for Pro/AM). Combined view re-sorts.
   standings.sort(
     (a, b) =>
-      b.totalPoints - a.totalPoints ||
+      b.classTotal - a.classTotal ||
       b.rawPoints - a.rawPoints ||
       b.roundsCompleted - a.roundsCompleted ||
       (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
@@ -98,15 +124,12 @@ export async function computeTeamStandings(
     where: { seasonId },
     include: {
       raceResults: {
-        include: {
-          registration: { select: { teamId: true } },
-        },
+        include: { registration: { select: { teamId: true } } },
       },
       fprAwards: true,
     },
   });
 
-  // Initialize team counters
   const teamMap = new Map<
     string,
     {
@@ -127,7 +150,6 @@ export async function computeTeamStandings(
   }
 
   for (const round of rounds) {
-    // Group results by team for this round
     const byTeam = new Map<string, number[]>();
     for (const r of round.raceResults) {
       const teamId = r.registration.teamId;
@@ -156,7 +178,6 @@ export async function computeTeamStandings(
     }
   }
 
-  // Count distinct drivers per team
   const regs = await prisma.registration.findMany({
     where: { seasonId, status: "APPROVED", teamId: { not: null } },
     select: { teamId: true, userId: true },

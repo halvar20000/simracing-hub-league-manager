@@ -8,6 +8,8 @@ import {
   type TeamStanding,
 } from "@/lib/standings";
 
+type StandingsKind = "combined" | "class";
+
 export default async function StandingsPage({
   params,
 }: {
@@ -30,6 +32,15 @@ export default async function StandingsPage({
     computeTeamStandings(prisma, seasonId),
   ]);
 
+  // Combined: re-sort by combinedTotal (no participation)
+  const combined = [...drivers].sort(
+    (a, b) =>
+      b.combinedTotal - a.combinedTotal ||
+      b.rawPoints - a.rawPoints ||
+      (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
+  );
+
+  // Pro/AM: filter and use existing classTotal sort from the library
   const proDrivers = drivers.filter((d) => d.proAmClass === "PRO");
   const amDrivers = drivers.filter((d) => d.proAmClass === "AM");
 
@@ -42,7 +53,7 @@ export default async function StandingsPage({
         >
           ← {season.league.name} {season.name}
         </Link>
-        <h1 className="mt-2 text-3xl font-bold">
+        <h1 className="mt-2 font-display text-3xl font-bold">
           Standings — {season.name} {season.year}
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
@@ -53,9 +64,13 @@ export default async function StandingsPage({
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Driver Championship</h2>
+        <h2 className="mb-1 text-lg font-semibold">Combined Driver Championship</h2>
+        <p className="mb-3 text-xs text-zinc-500">
+          Race points − penalties. Participation points are not included in this view.
+        </p>
         <DriversTable
-          rows={drivers}
+          rows={combined}
+          kind="combined"
           showTeam
           showClass={season.isMulticlass}
         />
@@ -64,12 +79,18 @@ export default async function StandingsPage({
       {season.proAmEnabled && (
         <>
           <section>
-            <h2 className="mb-3 text-lg font-semibold">Pro</h2>
-            <DriversTable rows={proDrivers} showTeam />
+            <h2 className="mb-1 text-lg font-semibold">Pro</h2>
+            <p className="mb-3 text-xs text-zinc-500">
+              Race points + participation − penalties.
+            </p>
+            <DriversTable rows={proDrivers} kind="class" showTeam />
           </section>
           <section>
-            <h2 className="mb-3 text-lg font-semibold">Am</h2>
-            <DriversTable rows={amDrivers} showTeam />
+            <h2 className="mb-1 text-lg font-semibold">Am</h2>
+            <p className="mb-3 text-xs text-zinc-500">
+              Race points + participation − penalties.
+            </p>
+            <DriversTable rows={amDrivers} kind="class" showTeam />
           </section>
         </>
       )}
@@ -81,6 +102,7 @@ export default async function StandingsPage({
               <h2 className="mb-3 text-lg font-semibold">{cc.name}</h2>
               <DriversTable
                 rows={drivers.filter((d) => d.carClassId === cc.id)}
+                kind="class"
                 showTeam
               />
             </section>
@@ -106,17 +128,17 @@ export default async function StandingsPage({
 
 function DriversTable({
   rows,
+  kind,
   showTeam,
   showClass,
 }: {
   rows: DriverStanding[];
+  kind: StandingsKind;
   showTeam?: boolean;
   showClass?: boolean;
 }) {
   if (rows.length === 0) {
-    return (
-      <p className="text-sm text-zinc-500">No standings to show yet.</p>
-    );
+    return <p className="text-sm text-zinc-500">No standings to show yet.</p>;
   }
   return (
     <div className="overflow-hidden rounded border border-zinc-800">
@@ -129,6 +151,8 @@ function DriversTable({
             {showTeam && <th className="px-3 py-2">Team</th>}
             {showClass && <th className="px-3 py-2">Class</th>}
             <th className="px-3 py-2 text-right">Rounds</th>
+            <th className="px-3 py-2 text-right">Inc</th>
+            <th className="px-3 py-2 text-right">iR</th>
             <th className="px-3 py-2 text-right">Raw</th>
             <th className="px-3 py-2 text-right">Part.</th>
             <th className="px-3 py-2 text-right">Pen.</th>
@@ -136,45 +160,54 @@ function DriversTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, idx) => (
-            <tr
-              key={r.registrationId}
-              className="border-t border-zinc-800 hover:bg-zinc-900"
-            >
-              <td className="px-3 py-2 font-medium">{idx + 1}</td>
-              <td className="px-3 py-2 text-zinc-500">
-                {r.startNumber ?? "—"}
-              </td>
-              <td className="px-3 py-2 font-medium">
-                {r.driverFirstName} {r.driverLastName}
-              </td>
-              {showTeam && (
-                <td className="px-3 py-2 text-zinc-400">
-                  {r.teamName ?? "—"}
+          {rows.map((r, idx) => {
+            const total = kind === "combined" ? r.combinedTotal : r.classTotal;
+            return (
+              <tr
+                key={r.registrationId}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="px-3 py-2 font-medium">{idx + 1}</td>
+                <td className="px-3 py-2 text-zinc-500">
+                  {r.startNumber ?? "—"}
                 </td>
-              )}
-              {showClass && (
-                <td className="px-3 py-2 text-zinc-400">
-                  {r.carClassName ?? "—"}
+                <td className="px-3 py-2 font-medium">
+                  {r.driverFirstName} {r.driverLastName}
                 </td>
-              )}
-              <td className="px-3 py-2 text-right text-zinc-400">
-                {r.roundsCompleted}
-              </td>
-              <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                {r.rawPoints}
-              </td>
-              <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                {r.participationPoints}
-              </td>
-              <td className="px-3 py-2 text-right text-red-400 tabular-nums">
-                {r.manualPenalties > 0 ? `−${r.manualPenalties}` : 0}
-              </td>
-              <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
-                {r.totalPoints}
-              </td>
-            </tr>
-          ))}
+                {showTeam && (
+                  <td className="px-3 py-2 text-zinc-400">
+                    {r.teamName ?? "—"}
+                  </td>
+                )}
+                {showClass && (
+                  <td className="px-3 py-2 text-zinc-400">
+                    {r.carClassName ?? "—"}
+                  </td>
+                )}
+                <td className="px-3 py-2 text-right text-zinc-400">
+                  {r.roundsCompleted}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {r.totalIncidents}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {r.iRating ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {r.rawPoints}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {r.participationPoints}
+                </td>
+                <td className="px-3 py-2 text-right text-red-400 tabular-nums">
+                  {r.manualPenalties > 0 ? `−${r.manualPenalties}` : 0}
+                </td>
+                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
+                  {total}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

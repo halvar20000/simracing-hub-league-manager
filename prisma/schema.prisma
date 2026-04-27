@@ -239,6 +239,7 @@ model RaceResult {
   totalTimeMs                 Int?
   bestLapTimeMs               Int?
   incidents                   Int           @default(0)
+  iRating                     Int?
   finishStatus                FinishStatus  @default(CLASSIFIED)
 
   rawPointsAwarded            Int           @default(0)

@@ -195,6 +195,7 @@ export async function importResultsCsv(
     "outcome",
   ]);
   const colStatus = findHeader(fields, ["status"]);
+  const colIRating = findHeader(fields, ["irating", "ir"]);
   const colPenaltyPts = findHeader(fields, [
     "penaltypoints",
     "penalty",
@@ -291,6 +292,12 @@ export async function importResultsCsv(
       finishStatus = "CLASSIFIED";
     }
 
+    let iRating: number | null = null;
+    if (colIRating) {
+      const v = parseInt(row[colIRating] ?? "", 10);
+      if (!Number.isNaN(v)) iRating = v;
+    }
+
     const manualPenaltyPoints = colPenaltyPts
       ? parseInt(row[colPenaltyPts] ?? "0", 10) || 0
       : 0;
@@ -310,6 +317,7 @@ export async function importResultsCsv(
         bestLapTimeMs,
         incidents,
         manualPenaltyPoints,
+        iRating,
       },
       update: {
         finishStatus,
@@ -320,6 +328,7 @@ export async function importResultsCsv(
         bestLapTimeMs,
         incidents,
         manualPenaltyPoints,
+        iRating,
       },
     });
     imported++;
