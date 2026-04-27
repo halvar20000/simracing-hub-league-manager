@@ -24,7 +24,7 @@ export default async function PublicLeagueDetail({
   if (!league) notFound();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Link
         href="/leagues"
         className="text-xs text-zinc-400 hover:text-zinc-200"
@@ -32,24 +32,24 @@ export default async function PublicLeagueDetail({
         ← All leagues
       </Link>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {league.logoUrl && (
           <img
             src={league.logoUrl}
             alt={league.name}
-            className="h-8 w-8 shrink-0 object-contain"
+            className="h-[15px] w-[15px] shrink-0 object-contain"
           />
         )}
-        <h1 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+        <h1 className="font-display text-lg font-bold tracking-tight sm:text-xl">
           {league.name}
         </h1>
       </div>
       {league.description && (
-        <p className="text-sm text-zinc-400">{league.description}</p>
+        <p className="text-xs text-zinc-400">{league.description}</p>
       )}
 
       <section>
-        <h2 className="mb-2 font-display text-sm font-semibold uppercase tracking-wider text-zinc-400">
+        <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
           Seasons
         </h2>
         <div className="grid gap-2 md:grid-cols-2">
@@ -57,10 +57,10 @@ export default async function PublicLeagueDetail({
             <Link
               key={s.id}
               href={`/leagues/${league.slug}/seasons/${s.id}`}
-              className="block rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
+              className="block rounded border border-zinc-800 bg-zinc-900/40 p-3 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
             >
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-display text-base font-semibold tracking-wide">
+                <h3 className="font-display text-sm font-semibold tracking-wide">
                   {s.name} {s.year}
                 </h3>
                 <span className="tag tag-zinc">

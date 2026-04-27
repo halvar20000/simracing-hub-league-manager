@@ -16,21 +16,16 @@ export default async function Nav() {
 
   return (
     <nav className="border-b border-zinc-800 bg-[#0a0a0f]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
-        <Link href="/" className="flex items-center gap-3 group">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2.5">
+        <Link href="/" className="flex items-center gap-2 group">
           <img
             src="/logos/site-logo.svg"
             alt="Simracing-Hub"
-            className="h-9 w-9"
+            className="h-6 w-6"
           />
-          <div className="leading-tight">
-            <div className="font-display text-base font-bold tracking-wide group-hover:text-[#ff6b35] transition-colors">
-              SIMRACING-HUB
-            </div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-              League Manager
-            </div>
-          </div>
+          <span className="font-display text-sm font-bold tracking-wide group-hover:text-[#ff6b35] transition-colors">
+            SIMRACING-HUB
+          </span>
         </Link>
         <div className="flex items-center gap-1 text-sm">
           <NavLink href="/leagues">Leagues</NavLink>
@@ -51,7 +46,7 @@ export default async function Nav() {
               >
                 <button
                   type="submit"
-                  className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
                 >
                   Sign out
                 </button>
@@ -65,9 +60,9 @@ export default async function Nav() {
               >
                 <button
                   type="submit"
-                  className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500"
+                  className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium hover:bg-indigo-500"
                 >
-                  Sign in with Discord
+                  Sign in
                 </button>
               </form>
             )}
@@ -88,7 +83,7 @@ function NavLink({
   return (
     <Link
       href={href}
-      className="rounded px-3 py-1.5 text-zinc-300 hover:bg-zinc-900 hover:text-[#ff6b35] transition-colors"
+      className="rounded px-2.5 py-1 text-zinc-300 hover:bg-zinc-900 hover:text-[#ff6b35] transition-colors"
     >
       {children}
     </Link>

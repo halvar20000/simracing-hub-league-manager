@@ -32,7 +32,7 @@ export default async function PublicSeasonDetail({
   const hasResults = season.rounds.some((r) => r._count.raceResults > 0);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Link
         href={`/leagues/${slug}`}
         className="text-xs text-zinc-400 hover:text-zinc-200"
@@ -40,31 +40,31 @@ export default async function PublicSeasonDetail({
         ← {season.league.name}
       </Link>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
           {season.league.logoUrl && (
             <img
               src={season.league.logoUrl}
               alt={season.league.name}
-              className="h-8 w-8 shrink-0 object-contain"
+              className="h-[15px] w-[15px] shrink-0 object-contain"
             />
           )}
           <div>
-            <h1 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+            <h1 className="font-display text-lg font-bold tracking-tight sm:text-xl">
               {season.name} {season.year}
             </h1>
-            <p className="text-xs text-zinc-400">
+            <p className="text-[10px] text-zinc-400">
               {season.scoringSystem.name} • {season.status.replace("_", " ")}
               {season.isMulticlass && " • Multiclass"}
               {season.proAmEnabled && " • Pro/Am"}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {hasResults && (
             <Link
               href={`/leagues/${slug}/seasons/${seasonId}/standings`}
-              className="rounded border border-[#ff6b35] px-3 py-1.5 text-sm font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"
+              className="rounded border border-[#ff6b35] px-3 py-1 text-xs font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"
             >
               Standings →
             </Link>
@@ -72,7 +72,7 @@ export default async function PublicSeasonDetail({
           {registrationOpen && (
             <Link
               href={`/leagues/${slug}/seasons/${seasonId}/register`}
-              className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-[#ff8550]"
+              className="rounded bg-[#ff6b35] px-3 py-1 text-xs font-medium text-zinc-950 hover:bg-[#ff8550]"
             >
               Register →
             </Link>
@@ -81,10 +81,10 @@ export default async function PublicSeasonDetail({
       </div>
 
       <section>
-        <h2 className="mb-2 font-display text-sm font-semibold uppercase tracking-wider text-zinc-400">
+        <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
           Race calendar
         </h2>
-        <div className="overflow-hidden rounded-lg border border-zinc-800">
+        <div className="overflow-hidden rounded border border-zinc-800">
           <table className="w-full text-sm">
             <thead className="bg-zinc-900 text-left text-zinc-400">
               <tr>
@@ -150,13 +150,13 @@ export default async function PublicSeasonDetail({
       </section>
 
       <section>
-        <h2 className="mb-2 font-display text-sm font-semibold uppercase tracking-wider text-zinc-400">
+        <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
           Roster ({season.registrations.length} approved)
         </h2>
         {season.registrations.length === 0 ? (
           <p className="text-sm text-zinc-500">No approved drivers yet.</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-zinc-800">
+          <div className="overflow-hidden rounded border border-zinc-800">
             <table className="w-full text-sm">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
