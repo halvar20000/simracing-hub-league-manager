@@ -5,11 +5,12 @@ export interface RoundPoints {
   roundNumber: number;
   roundName: string;
   roundDate: Date;
-  rawPoints: number;
+  rawPoints: number;          // overall-position race points
+  classRawPoints: number;     // class-position race points (within Pro or AM)
   participationPoints: number;
   penaltyPoints: number;
-  combinedPoints: number;
-  classPoints: number;
+  combinedPoints: number;     // = rawPoints - penalty
+  classPoints: number;        // = classRawPoints + participation - penalty
   hasResult: boolean;
 }
 
@@ -24,6 +25,7 @@ export interface DriverStanding {
   carClassName: string | null;
   proAmClass: "PRO" | "AM" | null;
   rawPoints: number;
+  classRawPoints: number;
   participationPoints: number;
   manualPenalties: number;
   combinedTotal: number;
@@ -49,9 +51,16 @@ export async function computeDriverStandings(
   seasonId: string,
   excludeRoundIds: string[] = []
 ): Promise<DriverStanding[]> {
-  const excludeFilter = excludeRoundIds.length > 0
-    ? { roundId: { notIn: excludeRoundIds } }
-    : {};
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { scoringSystem: true },
+  });
+  const pointsTable = (season?.scoringSystem?.pointsTable ?? {}) as Record<
+    string,
+    number
+  >;
+  const proAmEnabled = !!season?.proAmEnabled;
+
   const [registrations, rounds] = await Promise.all([
     prisma.registration.findMany({
       where: { seasonId, status: "APPROVED" },
@@ -60,13 +69,18 @@ export async function computeDriverStandings(
         team: true,
         carClass: true,
         raceResults: {
-          where: excludeRoundIds.length > 0 ? { roundId: { notIn: excludeRoundIds } } : undefined,
+          where:
+            excludeRoundIds.length > 0
+              ? { roundId: { notIn: excludeRoundIds } }
+              : undefined,
           include: { round: true },
         },
         penalties: {
           where: {
             type: "POINTS_DEDUCTION",
-            ...(excludeRoundIds.length > 0 ? { roundId: { notIn: excludeRoundIds } } : {}),
+            ...(excludeRoundIds.length > 0
+              ? { roundId: { notIn: excludeRoundIds } }
+              : {}),
           },
         },
       },
@@ -77,20 +91,71 @@ export async function computeDriverStandings(
       select: { id: true, roundNumber: true, name: true, startsAt: true },
     }),
   ]);
-  void excludeFilter;
+
+  // Compute "class position" per result (rank within Pro or AM only)
+  const classPositionByResult = new Map<string, number>();
+  if (proAmEnabled) {
+    const roundsWithResults = await prisma.round.findMany({
+      where: {
+        seasonId,
+        ...(excludeRoundIds.length > 0
+          ? { id: { notIn: excludeRoundIds } }
+          : {}),
+      },
+      include: {
+        raceResults: {
+          include: {
+            registration: { select: { proAmClass: true } },
+          },
+        },
+      },
+    });
+
+    for (const round of roundsWithResults) {
+      const classified = round.raceResults
+        .filter((r) => r.finishStatus === "CLASSIFIED")
+        .sort((a, b) => a.finishPosition - b.finishPosition);
+
+      let proRank = 0;
+      let amRank = 0;
+      for (const r of classified) {
+        const cls = r.registration.proAmClass;
+        if (cls === "PRO") {
+          proRank++;
+          classPositionByResult.set(r.id, proRank);
+        } else if (cls === "AM") {
+          amRank++;
+          classPositionByResult.set(r.id, amRank);
+        }
+      }
+    }
+  }
 
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
+    let classRaw = 0;
     let participation = 0;
     let penalty = 0;
     let totalIncidents = 0;
+
     for (const r of reg.raceResults) {
       raw += r.rawPointsAwarded;
       participation += r.participationPointsAwarded;
       penalty += r.manualPenaltyPoints;
       totalIncidents += r.incidents;
+
+      if (proAmEnabled) {
+        const classPos = classPositionByResult.get(r.id);
+        if (classPos != null) {
+          classRaw += pointsTable[String(classPos)] ?? 0;
+        } else {
+          classRaw += r.rawPointsAwarded;
+        }
+      } else {
+        classRaw += r.rawPointsAwarded;
+      }
     }
-    // Add decision-driven point penalties on top of admin-entered ones
+
     for (const p of reg.penalties) {
       if (p.pointsValue != null) penalty += p.pointsValue;
     }
@@ -109,7 +174,6 @@ export async function computeDriverStandings(
     const resultsByRoundId = new Map(
       reg.raceResults.map((r) => [r.roundId, r])
     );
-
     const roundPoints: RoundPoints[] = rounds.map((round) => {
       const result = resultsByRoundId.get(round.id);
       if (!result) {
@@ -119,6 +183,7 @@ export async function computeDriverStandings(
           roundName: round.name,
           roundDate: round.startsAt,
           rawPoints: 0,
+          classRawPoints: 0,
           participationPoints: 0,
           penaltyPoints: 0,
           combinedPoints: 0,
@@ -126,19 +191,27 @@ export async function computeDriverStandings(
           hasResult: false,
         };
       }
-      const raw = result.rawPointsAwarded;
-      const part = result.participationPointsAwarded;
-      const pen = result.manualPenaltyPoints;
+      const rRaw = result.rawPointsAwarded;
+      const rPart = result.participationPointsAwarded;
+      const rPen = result.manualPenaltyPoints;
+      let rClassRaw = rRaw;
+      if (proAmEnabled) {
+        const classPos = classPositionByResult.get(result.id);
+        if (classPos != null) {
+          rClassRaw = pointsTable[String(classPos)] ?? 0;
+        }
+      }
       return {
         roundId: round.id,
         roundNumber: round.roundNumber,
         roundName: round.name,
         roundDate: round.startsAt,
-        rawPoints: raw,
-        participationPoints: part,
-        penaltyPoints: pen,
-        combinedPoints: raw - pen,
-        classPoints: raw + part - pen,
+        rawPoints: rRaw,
+        classRawPoints: rClassRaw,
+        participationPoints: rPart,
+        penaltyPoints: rPen,
+        combinedPoints: rRaw - rPen,
+        classPoints: rClassRaw + rPart - rPen,
         hasResult: true,
       };
     });
@@ -154,10 +227,11 @@ export async function computeDriverStandings(
       carClassName: reg.carClass?.name ?? null,
       proAmClass: reg.proAmClass as "PRO" | "AM" | null,
       rawPoints: raw,
+      classRawPoints: classRaw,
       participationPoints: participation,
       manualPenalties: penalty,
       combinedTotal: raw - penalty,
-      classTotal: raw + participation - penalty,
+      classTotal: classRaw + participation - penalty,
       totalIncidents,
       iRating,
       roundsCompleted: reg.raceResults.length,
@@ -168,7 +242,7 @@ export async function computeDriverStandings(
   standings.sort(
     (a, b) =>
       b.classTotal - a.classTotal ||
-      b.rawPoints - a.rawPoints ||
+      b.classRawPoints - a.classRawPoints ||
       b.roundsCompleted - a.roundsCompleted ||
       (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
   );
@@ -210,7 +284,6 @@ export async function computeTeamStandings(
       driverIds: Set<string>;
     }
   >();
-
   for (const t of season.teams) {
     teamMap.set(t.id, {
       team: { id: t.id, name: t.name },
@@ -232,7 +305,6 @@ export async function computeTeamStandings(
       if (!byTeam.has(teamId)) byTeam.set(teamId, []);
       byTeam.get(teamId)!.push(points);
     }
-
     for (const [teamId, pointsList] of byTeam) {
       const sorted = [...pointsList].sort((a, b) => b - a);
       const taken = Number.isFinite(bestN)
@@ -242,7 +314,6 @@ export async function computeTeamStandings(
       const t = teamMap.get(teamId);
       if (t) t.scoringPoints += sum;
     }
-
     for (const award of round.fprAwards) {
       const t = teamMap.get(award.teamId);
       if (t) t.fprPoints += award.fprPointsAwarded;

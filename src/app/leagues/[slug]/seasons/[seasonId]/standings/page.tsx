@@ -272,7 +272,13 @@ function DriversTable({
             const positionDelta = prevPos != null ? prevPos - (idx + 1) : null;
             const incDelta = prev ? r.totalIncidents - prev.totalIncidents : null;
             const penDelta = prev ? r.manualPenalties - prev.manualPenalties : null;
-            const rawDelta = prev ? r.rawPoints - prev.rawPoints : null;
+            const rawForView = kind === "combined" ? r.rawPoints : r.classRawPoints;
+            const prevRawForView = prev
+              ? kind === "combined"
+                ? prev.rawPoints
+                : prev.classRawPoints
+              : null;
+            const rawDelta = prevRawForView != null ? rawForView - prevRawForView : null;
             const totalDelta = prev
               ? (kind === "combined" ? r.combinedTotal : r.classTotal) -
                 (kind === "combined" ? prev.combinedTotal : prev.classTotal)
@@ -298,7 +304,7 @@ function DriversTable({
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
                   {r.iRating ?? "—"}
                 </td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={r.rawPoints} delta={rawDelta} /></td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={rawForView} delta={rawDelta} /></td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
                   {r.participationPoints}
                 </td>
@@ -396,7 +402,9 @@ function RaceByRaceTable({
                         {rp.hasResult ? <span className="font-semibold text-zinc-200">{cellTotal}</span> : dash}
                       </td>
                       <td className="px-1.5 py-1.5 text-right tabular-nums text-zinc-300">
-                        {rp.hasResult && rp.rawPoints !== 0 ? rp.rawPoints : dash}
+                        {rp.hasResult && (kind === "combined" ? rp.rawPoints : rp.classRawPoints) !== 0
+                          ? (kind === "combined" ? rp.rawPoints : rp.classRawPoints)
+                          : dash}
                       </td>
                       <td className="px-1.5 py-1.5 text-right tabular-nums text-emerald-400">
                         {rp.hasResult && rp.participationPoints !== 0 ? rp.participationPoints : dash}
