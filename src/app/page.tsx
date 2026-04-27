@@ -82,7 +82,7 @@ export default async function Home() {
                 href={`/leagues/${league.slug}`}
                 className="group flex flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
               >
-                <div className="flex h-40 items-center justify-center bg-gradient-to-br from-zinc-900 to-black p-6">
+                <div className="flex h-28 items-center justify-center bg-gradient-to-br from-zinc-900 to-black p-4">
                   {league.logoUrl ? (
                     <img
                       src={league.logoUrl}
