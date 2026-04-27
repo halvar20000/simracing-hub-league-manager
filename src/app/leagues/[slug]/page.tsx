@@ -24,52 +24,50 @@ export default async function PublicLeagueDetail({
   if (!league) notFound();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Link
         href="/leagues"
-        className="text-sm text-zinc-400 hover:text-zinc-200"
+        className="text-xs text-zinc-400 hover:text-zinc-200"
       >
         ← All leagues
       </Link>
 
-      {/* Compact corner header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {league.logoUrl && (
           <img
             src={league.logoUrl}
             alt={league.name}
-            className="h-12 w-12 shrink-0 object-contain sm:h-14 sm:w-14"
+            className="h-8 w-8 shrink-0 object-contain"
           />
         )}
-        <div>
-          <span className="tag tag-orange">CAS Community</span>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
-            {league.name}
-          </h1>
-          {league.description && (
-            <p className="mt-1 text-sm text-zinc-400">{league.description}</p>
-          )}
-        </div>
+        <h1 className="font-display text-xl font-bold tracking-tight sm:text-2xl">
+          {league.name}
+        </h1>
       </div>
+      {league.description && (
+        <p className="text-sm text-zinc-400">{league.description}</p>
+      )}
 
       <section>
-        <h2 className="mb-3 font-display text-lg font-bold">Seasons</h2>
-        <div className="grid gap-3 md:grid-cols-2">
+        <h2 className="mb-2 font-display text-sm font-semibold uppercase tracking-wider text-zinc-400">
+          Seasons
+        </h2>
+        <div className="grid gap-2 md:grid-cols-2">
           {league.seasons.map((s) => (
             <Link
               key={s.id}
               href={`/leagues/${league.slug}/seasons/${s.id}`}
-              className="block rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
+              className="block rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
             >
-              <div className="flex items-center justify-between">
-                <h3 className="font-display text-lg font-semibold tracking-wide">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-display text-base font-semibold tracking-wide">
                   {s.name} {s.year}
                 </h3>
                 <span className="tag tag-zinc">
                   {s.status.replace("_", " ")}
                 </span>
               </div>
-              <p className="mt-2 text-sm text-zinc-400">
+              <p className="mt-1 text-xs text-zinc-400">
                 {s.scoringSystem.name} • {s._count.rounds} round
                 {s._count.rounds === 1 ? "" : "s"} • {s._count.registrations}{" "}
                 driver{s._count.registrations === 1 ? "" : "s"}

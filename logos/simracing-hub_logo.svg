@@ -93,5 +93,5 @@
   <rect x="150" y="105" width="220" height="2" rx="1" fill="url(#tg3)" opacity="0.3"/>
 
   <!-- Tagline -->
-  <text x="150" y="128" font-family="'Inter', sans-serif" font-weight="400" font-size="11" fill="#555" letter-spacing="3">DAILY SIM RACING NEWS</text>
+  <text x="150" y="128" font-family="'Inter', sans-serif" font-weight="400" font-size="11" fill="#555" letter-spacing="3">League Manager</text>
 </svg>
