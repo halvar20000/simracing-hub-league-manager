@@ -51,11 +51,12 @@ function isRaceSession(sessionTypeOrName: string | undefined): boolean {
   return true; // race / heat / etc.
 }
 
-export async function pullResultsFromIRLM(
-  leagueSlug: string,
-  seasonId: string,
-  roundId: string
-) {
+export async function pullResultsFromIRLM(formData: FormData) {
+  const leagueSlug = String(formData.get("leagueSlug") ?? "");
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!leagueSlug || !seasonId || !roundId) return;
+
   const admin = await requireAdmin();
 
   const round = await prisma.round.findUnique({

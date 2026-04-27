@@ -64,7 +64,10 @@ export default async function AdminRoundResults({
           </div>
           <div className="flex gap-2">
             {round.irlmEventId && round.season.irlmLeagueName && (
-              <form action={pullResultsFromIRLM.bind(null, slug, seasonId, roundId)}>
+              <form action={pullResultsFromIRLM}>
+                <input type="hidden" name="leagueSlug" value={slug} />
+                <input type="hidden" name="seasonId" value={seasonId} />
+                <input type="hidden" name="roundId" value={roundId} />
                 <button
                   type="submit"
                   className="rounded border border-emerald-600 bg-emerald-950/40 px-3 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-900"
