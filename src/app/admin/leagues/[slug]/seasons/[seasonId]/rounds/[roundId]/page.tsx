@@ -172,6 +172,8 @@ function ResultRow({
       totalTimeMs: number | null;
       bestLapTimeMs: number | null;
       incidents: number;
+      startPosition: number | null;
+      qualifyingTimeMs: number | null;
       finishStatus: string;
       rawPointsAwarded: number;
       participationPointsAwarded: number;
@@ -240,6 +242,14 @@ function ResultRow({
           max={999}
         />
         <Field
+          label="Grid"
+          name="startPosition"
+          type="number"
+          defaultValue={result?.startPosition != null ? String(result.startPosition) : ""}
+          min={0}
+          max={999}
+        />
+        <Field
           label="Laps"
           name="lapsCompleted"
           type="number"
@@ -273,6 +283,13 @@ function ResultRow({
           name="bestLapTime"
           type="text"
           defaultValue={formatMsToTime(result?.bestLapTimeMs)}
+          placeholder="1:53.456"
+        />
+        <Field
+          label="Quali"
+          name="qualifyingTime"
+          type="text"
+          defaultValue={formatMsToTime(result?.qualifyingTimeMs)}
           placeholder="1:53.456"
         />
         <Field

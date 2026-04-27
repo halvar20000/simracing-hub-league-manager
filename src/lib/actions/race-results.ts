@@ -39,6 +39,13 @@ export async function upsertRaceResult(
   const bestLapTimeMs = parseTimeToMs(
     String(formData.get("bestLapTime") ?? "")
   );
+  const startPositionRaw = String(formData.get("startPosition") ?? "").trim();
+  const startPosition = startPositionRaw
+    ? parseInt(startPositionRaw, 10) || null
+    : null;
+  const qualifyingTimeMs = parseTimeToMs(
+    String(formData.get("qualifyingTime") ?? "")
+  );
   const incidentsRaw = String(formData.get("incidents") ?? "0");
   const incidents = parseInt(incidentsRaw, 10) || 0;
   const manualPenaltyPointsRaw = String(
@@ -56,6 +63,8 @@ export async function upsertRaceResult(
     raceDistancePct,
     totalTimeMs,
     bestLapTimeMs,
+    startPosition,
+    qualifyingTimeMs,
     incidents,
     manualPenaltyPoints,
     manualPenaltyReason,
