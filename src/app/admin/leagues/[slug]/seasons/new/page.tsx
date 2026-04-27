@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +11,7 @@ export default async function NewSeasonPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireAdmin();
   const { slug } = await params;
   const { error } = await searchParams;
 

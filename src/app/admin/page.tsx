@@ -1,7 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { requireSteward } from "@/lib/auth-helpers";
+import { formatDateTime } from "@/lib/date";
 
 export default async function AdminDashboard() {
+  const me = await requireSteward();
+
+  if (me.role === "STEWARD") {
+    return <StewardDashboard />;
+  }
+  return <FullAdminDashboard />;
+}
+
+async function FullAdminDashboard() {
   const [
     leagues,
     leagueCount,
@@ -44,11 +55,7 @@ export default async function AdminDashboard() {
         <Stat label="Rounds" value={roundCount} />
         <Stat label="Users" value={userCount} href="/admin/users" />
         <Stat label="Teams" value={teamCount} href="/admin/teams" />
-        <Stat
-          label="Pending"
-          value={pending}
-          highlight={pending > 0}
-        />
+        <Stat label="Pending" value={pending} highlight={pending > 0} />
       </div>
 
       <div className="flex flex-wrap gap-2 text-sm">
@@ -119,6 +126,99 @@ export default async function AdminDashboard() {
   );
 }
 
+async function StewardDashboard() {
+  const reports = await prisma.incidentReport.findMany({
+    include: {
+      round: { include: { season: { include: { league: true } } } },
+      reporterUser: true,
+      involvedDrivers: {
+        include: { registration: { include: { user: true } } },
+      },
+      decision: true,
+    },
+    orderBy: [{ status: "asc" }, { submittedAt: "asc" }],
+  });
+
+  const open = reports.filter(
+    (r) => r.status === "SUBMITTED" || r.status === "UNDER_REVIEW"
+  );
+  const decided = reports.filter((r) => r.status === "DECIDED");
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Steward Dashboard</h1>
+      <p className="text-sm text-zinc-400">
+        You can review and decide on incident reports.
+      </p>
+
+      <div className="grid grid-cols-3 gap-3">
+        <Stat label="Open" value={open.length} highlight={open.length > 0} />
+        <Stat label="Decided" value={decided.length} />
+        <Stat label="Total" value={reports.length} />
+      </div>
+
+      <section>
+        <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+          Open reports
+        </h2>
+        {open.length === 0 ? (
+          <p className="text-sm text-zinc-500">No open reports.</p>
+        ) : (
+          <div className="overflow-hidden rounded border border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-900 text-left text-zinc-400">
+                <tr>
+                  <th className="px-3 py-2">Submitted</th>
+                  <th className="px-3 py-2">League</th>
+                  <th className="px-3 py-2">Round</th>
+                  <th className="px-3 py-2">Reporter</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {open.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-t border-zinc-800 hover:bg-zinc-900"
+                  >
+                    <td className="px-3 py-2 text-xs text-zinc-400">
+                      {formatDateTime(r.submittedAt)}
+                    </td>
+                    <td className="px-3 py-2 text-zinc-400">
+                      {r.round.season.league.name}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="text-zinc-500">
+                        R{r.round.roundNumber}
+                      </span>{" "}
+                      {r.round.name}
+                    </td>
+                    <td className="px-3 py-2">
+                      {r.reporterUser.firstName} {r.reporterUser.lastName}
+                    </td>
+                    <td className="px-3 py-2">
+                      <StatusBadge status={r.status} />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Link
+                        href={`/admin/leagues/${r.round.season.league.slug}/seasons/${r.round.seasonId}/reports/${r.id}`}
+                        className="text-[#ff6b35] hover:underline"
+                      >
+                        Open →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -143,4 +243,20 @@ function Stat({
     </div>
   );
   return href ? <Link href={href}>{content}</Link> : content;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    SUBMITTED: "bg-amber-900 text-amber-200",
+    UNDER_REVIEW: "bg-blue-900 text-blue-200",
+    DECIDED: "bg-emerald-900 text-emerald-200",
+    DISMISSED: "bg-zinc-800 text-zinc-400",
+  };
+  return (
+    <span
+      className={`inline-block rounded px-2 py-0.5 text-xs ${styles[status] ?? ""}`}
+    >
+      {status.replace("_", " ")}
+    </span>
+  );
 }

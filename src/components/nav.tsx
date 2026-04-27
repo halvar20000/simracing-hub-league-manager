@@ -11,7 +11,7 @@ export default async function Nav() {
       where: { id: session.user.id },
       select: { role: true },
     });
-    isAdmin = user?.role === "ADMIN";
+    isAdmin = user?.role === "ADMIN" || user?.role === "STEWARD";
   }
 
   return (

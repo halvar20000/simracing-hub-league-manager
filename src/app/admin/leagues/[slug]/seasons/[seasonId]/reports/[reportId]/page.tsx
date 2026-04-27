@@ -1,3 +1,4 @@
+import { requireSteward } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,7 @@ export default async function AdminReportDetail({
   params: Promise<{ slug: string; seasonId: string; reportId: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireSteward();
   const { slug, seasonId, reportId } = await params;
   const { error } = await searchParams;
 

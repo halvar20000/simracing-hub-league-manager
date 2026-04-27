@@ -409,6 +409,7 @@ model Penalty {
 
 enum Role {
   ADMIN
+  STEWARD
   DRIVER
 }
 

@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,7 @@ export default async function EditRegistrationPage({
     registrationId: string;
   }>;
 }) {
+  await requireAdmin();
   const { slug, seasonId, registrationId } = await params;
 
   const [registration, teams, classes] = await Promise.all([

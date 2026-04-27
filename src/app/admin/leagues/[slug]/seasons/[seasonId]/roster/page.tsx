@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +12,7 @@ export default async function RosterPage({
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
 }) {
+  await requireAdmin();
   const { slug, seasonId } = await params;
   const season = await prisma.season.findUnique({
     where: { id: seasonId },

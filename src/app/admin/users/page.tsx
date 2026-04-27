@@ -1,12 +1,12 @@
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDateTime } from "@/lib/date";
-import {
-  promoteUserToAdmin,
-  demoteUserToDriver,
-} from "@/lib/actions/admin-users";
+import { setUserRole } from "@/lib/actions/admin-users";
+import type { Role } from "@prisma/client";
 
 export default async function AdminUsers() {
+  await requireAdmin();
   const session = await auth();
   const myId = session?.user?.id;
 
@@ -20,7 +20,8 @@ export default async function AdminUsers() {
         <h1 className="text-2xl font-bold">Users</h1>
         <p className="mt-1 text-sm text-zinc-400">
           {users.length} total — {users.filter((u) => u.role === "ADMIN").length}{" "}
-          admin, {users.filter((u) => u.role === "DRIVER").length} driver
+          admin, {users.filter((u) => u.role === "STEWARD").length} steward,{" "}
+          {users.filter((u) => u.role === "DRIVER").length} driver
         </p>
       </div>
 
@@ -33,7 +34,7 @@ export default async function AdminUsers() {
               <th className="px-3 py-2">iRacing ID</th>
               <th className="px-3 py-2">Role</th>
               <th className="px-3 py-2">Joined</th>
-              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2 text-right">Set role</th>
             </tr>
           </thead>
           <tbody>
@@ -52,30 +53,14 @@ export default async function AdminUsers() {
                 <td className="px-3 py-2">
                   <RoleBadge role={u.role} />
                 </td>
-                <td className="px-3 py-2 text-zinc-500 text-xs">
+                <td className="px-3 py-2 text-xs text-zinc-500">
                   {formatDateTime(u.createdAt)}
                 </td>
                 <td className="px-3 py-2 text-right">
                   {u.id === myId ? (
                     <span className="text-xs text-zinc-500">(you)</span>
-                  ) : u.role === "ADMIN" ? (
-                    <form action={demoteUserToDriver.bind(null, u.id)}>
-                      <button
-                        type="submit"
-                        className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
-                      >
-                        Make Driver
-                      </button>
-                    </form>
                   ) : (
-                    <form action={promoteUserToAdmin.bind(null, u.id)}>
-                      <button
-                        type="submit"
-                        className="rounded bg-orange-500 px-2 py-1 text-xs font-medium text-zinc-950 hover:bg-orange-400"
-                      >
-                        Promote to Admin
-                      </button>
-                    </form>
+                    <RoleSelector currentRole={u.role} userId={u.id} />
                   )}
                 </td>
               </tr>
@@ -87,9 +72,38 @@ export default async function AdminUsers() {
   );
 }
 
-function RoleBadge({ role }: { role: string }) {
+function RoleSelector({
+  currentRole,
+  userId,
+}: {
+  currentRole: Role;
+  userId: string;
+}) {
+  return (
+    <div className="flex justify-end gap-1">
+      {(["ADMIN", "STEWARD", "DRIVER"] as Role[]).map((role) => (
+        <form key={role} action={setUserRole.bind(null, userId, role)}>
+          <button
+            type="submit"
+            disabled={currentRole === role}
+            className={`rounded px-2 py-1 text-xs ${
+              currentRole === role
+                ? "cursor-default bg-zinc-800 text-zinc-500"
+                : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            }`}
+          >
+            {role.charAt(0) + role.slice(1).toLowerCase()}
+          </button>
+        </form>
+      ))}
+    </div>
+  );
+}
+
+function RoleBadge({ role }: { role: Role }) {
   const styles: Record<string, string> = {
     ADMIN: "bg-orange-900 text-orange-200",
+    STEWARD: "bg-blue-900 text-blue-200",
     DRIVER: "bg-zinc-800 text-zinc-400",
   };
   return (

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-helpers";
+import { requireSteward } from "@/lib/auth-helpers";
 import type { IncidentStatus, Verdict } from "@prisma/client";
 
 export async function setReportStatus(
@@ -12,7 +12,7 @@ export async function setReportStatus(
   reportId: string,
   status: IncidentStatus
 ) {
-  await requireAdmin();
+  await requireSteward();
   await prisma.incidentReport.update({
     where: { id: reportId },
     data: { status },
@@ -29,7 +29,7 @@ export async function submitDecision(
   reportId: string,
   formData: FormData
 ) {
-  const admin = await requireAdmin();
+  const admin = await requireSteward();
 
   const verdict = String(formData.get("verdict") ?? "NO_ACTION") as Verdict;
   const publicSummary = String(formData.get("publicSummary") ?? "").trim();
@@ -144,7 +144,7 @@ export async function deleteDecision(
   seasonId: string,
   reportId: string
 ) {
-  await requireAdmin();
+  await requireSteward();
   const decision = await prisma.incidentDecision.findUnique({
     where: { incidentReportId: reportId },
   });

@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,7 @@ export default async function AdminRoundResults({
   params: Promise<{ slug: string; seasonId: string; roundId: string }>;
   searchParams: Promise<{ imported?: string; skipped?: string }>;
 }) {
+  await requireAdmin();
   const { slug, seasonId, roundId } = await params;
   const { imported, skipped } = await searchParams;
 

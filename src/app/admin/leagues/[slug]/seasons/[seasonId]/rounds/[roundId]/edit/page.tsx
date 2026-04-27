@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -16,6 +17,7 @@ export default async function EditRoundPage({
 }: {
   params: Promise<{ slug: string; seasonId: string; roundId: string }>;
 }) {
+  await requireAdmin();
   const { slug, seasonId, roundId } = await params;
   const round = await prisma.round.findUnique({
     where: { id: roundId },

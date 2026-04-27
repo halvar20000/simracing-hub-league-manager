@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,7 @@ export default async function EditTeamPage({
 }: {
   params: Promise<{ slug: string; seasonId: string; teamId: string }>;
 }) {
+  await requireAdmin();
   const { slug, seasonId, teamId } = await params;
 
   const team = await prisma.team.findUnique({

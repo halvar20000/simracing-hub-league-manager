@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { createLeague } from "@/lib/actions/leagues";
 
@@ -6,6 +7,7 @@ export default async function NewLeaguePage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireAdmin();
   const { error } = await searchParams;
 
   return (

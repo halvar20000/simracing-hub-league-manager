@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -7,6 +8,7 @@ export default async function AdminLeagueDetail({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  await requireAdmin();
   const { slug } = await params;
   const league = await prisma.league.findUnique({
     where: { slug },

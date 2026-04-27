@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,7 @@ export default async function EditClassPage({
 }: {
   params: Promise<{ slug: string; seasonId: string; classId: string }>;
 }) {
+  await requireAdmin();
   const { slug, seasonId, classId } = await params;
 
   const carClass = await prisma.carClass.findUnique({

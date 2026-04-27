@@ -12,11 +12,8 @@ export async function requireAuth() {
 
 export async function requireAdmin() {
   const session = await auth();
-  if (!session?.user?.id) {
-    redirect("/api/auth/signin");
-  }
+  if (!session?.user?.id) redirect("/api/auth/signin");
 
-  // Re-fetch from DB so we always have the current role
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: {
@@ -30,6 +27,32 @@ export async function requireAdmin() {
   });
 
   if (!user || user.role !== "ADMIN") {
+    redirect("/");
+  }
+
+  return user;
+}
+
+/**
+ * Allows STEWARD or ADMIN access (used for incident reports / decisions).
+ */
+export async function requireSteward() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/api/auth/signin");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      firstName: true,
+      lastName: true,
+    },
+  });
+
+  if (!user || (user.role !== "ADMIN" && user.role !== "STEWARD")) {
     redirect("/");
   }
 

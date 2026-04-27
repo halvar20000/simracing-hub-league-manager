@@ -1,7 +1,9 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminTeams() {
+  await requireAdmin();
   const teams = await prisma.team.findMany({
     include: {
       season: { include: { league: true } },

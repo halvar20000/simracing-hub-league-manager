@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +12,7 @@ export default async function ImportCsvPage({
   params: Promise<{ slug: string; seasonId: string; roundId: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  await requireAdmin();
   const { slug, seasonId, roundId } = await params;
   const { error } = await searchParams;
 
