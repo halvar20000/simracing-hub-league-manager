@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { fetchEventResults, type IRLMResultRow } from "@/lib/irlm";
+import {
+  fetchEventResults,
+  fetchLeagueMembers,
+  type IRLMResultRow,
+} from "@/lib/irlm";
 import { recomputeRoundScoring } from "@/lib/scoring";
 import type { FinishStatus } from "@prisma/client";
 
@@ -54,20 +58,33 @@ async function importRow(
   seasonId: string,
   roundId: string,
   row: IRLMResultRow,
-  maxLaps: number
+  maxLaps: number,
+  memberMap: Map<number, string>
 ): Promise<{ ok: boolean; reason?: string }> {
-  const memberId = String(row.memberId ?? "").trim();
-  if (!memberId) return { ok: false, reason: "no memberId" };
+  const irlmInternalId = Number(row.memberId);
+  if (!irlmInternalId || Number.isNaN(irlmInternalId)) {
+    return { ok: false, reason: "no memberId on row" };
+  }
+  const iracingCustId = memberMap.get(irlmInternalId);
+  if (!iracingCustId) {
+    return {
+      ok: false,
+      reason: `iRLM memberId ${irlmInternalId} not in /Members lookup`,
+    };
+  }
 
   const reg = await prisma.registration.findFirst({
     where: {
       seasonId,
       status: "APPROVED",
-      user: { iracingMemberId: memberId },
+      user: { iracingMemberId: iracingCustId },
     },
   });
   if (!reg) {
-    return { ok: false, reason: `no approved registration for ${memberId}` };
+    return {
+      ok: false,
+      reason: `no approved registration for iRacingId ${iracingCustId}`,
+    };
   }
 
   const finishStatus = statusFromIRLM(row.status);
@@ -134,10 +151,21 @@ export async function pullResultsFromIRLM(formData: FormData): Promise<void> {
   }
 
   let eventResults;
+  let memberMap: Map<number, string>;
   try {
-    eventResults = await fetchEventResults(
-      round.season.irlmLeagueName,
-      round.irlmEventId
+    const [results, members] = await Promise.all([
+      fetchEventResults(round.season.irlmLeagueName, round.irlmEventId),
+      fetchLeagueMembers(round.season.irlmLeagueName),
+    ]);
+    eventResults = results;
+    memberMap = new Map<number, string>();
+    for (const m of members) {
+      const id = Number(m.memberId);
+      const cust = String(m.iRacingId ?? "").trim();
+      if (id && cust) memberMap.set(id, cust);
+    }
+    console.log(
+      `[IRLM] fetched ${eventResults.length} eventResults, ${members.length} members`
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "iRLM fetch failed";
@@ -162,7 +190,13 @@ export async function pullResultsFromIRLM(formData: FormData): Promise<void> {
         if (l > maxLaps) maxLaps = l;
       }
       for (const row of rows) {
-        const result = await importRow(seasonId, roundId, row, maxLaps);
+        const result = await importRow(
+          seasonId,
+          roundId,
+          row,
+          maxLaps,
+          memberMap
+        );
         if (result.ok) {
           imported++;
         } else {

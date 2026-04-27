@@ -135,3 +135,20 @@ export async function fetchEvents(
 > {
   return irlmFetch(`/${leagueName}/Schedules/${scheduleId}/Events?includeDetails=true`);
 }
+
+export interface IRLMMember {
+  memberId: number;
+  iRacingId: string;
+  firstname: string;
+  lastname: string;
+  teamName?: string;
+  discordId?: string;
+}
+
+export async function fetchLeagueMembers(
+  leagueName: string
+): Promise<IRLMMember[]> {
+  const data = await irlmFetch<unknown>(`/${leagueName}/Members`);
+  return Array.isArray(data) ? (data as IRLMMember[]) : [];
+}
+
