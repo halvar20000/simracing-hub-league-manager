@@ -97,7 +97,7 @@ export default async function PublicRoundResults({
       <div className="flex items-baseline justify-between">
         <div>
           <h1 className="text-2xl font-bold">
-            R{round.roundNumber} · {round.trackName ?? "Round"}
+            R{round.roundNumber}
           </h1>
           <p className="text-sm text-zinc-400">
             {formatDateTime(round.startsAt)}
