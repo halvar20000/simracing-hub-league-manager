@@ -45,21 +45,13 @@ function durationToMs(d: string | null | undefined): number | null {
   return Math.round(total * 1000);
 }
 
-function isRaceSession(sessionTypeOrName: string | undefined): boolean {
-  if (!sessionTypeOrName) return true;
-  const lc = sessionTypeOrName.toLowerCase();
-  if (lc.includes("qualif") || lc.includes("practice") || lc.includes("warmup")) {
-    return false;
-  }
-  return true;
-}
-
 async function importRow(
   seasonId: string,
   roundId: string,
   row: IRLMResultRow,
   maxLaps: number,
-  memberMap: Map<number, string>
+  memberMap: Map<number, string>,
+  raceNumber: number
 ): Promise<{ ok: boolean; reason?: string }> {
   const irlmInternalId = Number(row.memberId);
   if (!irlmInternalId || Number.isNaN(irlmInternalId)) {
@@ -107,7 +99,13 @@ async function importRow(
       : null;
 
   await prisma.raceResult.upsert({
-    where: { roundId_registrationId_raceNumber: { roundId, registrationId: reg.id , raceNumber } },
+    where: {
+      roundId_registrationId_raceNumber: {
+        roundId,
+        registrationId: reg.id,
+        raceNumber,
+      },
+    },
     create: {
       roundId,
       registrationId: reg.id,
@@ -189,15 +187,31 @@ export async function pullResultsFromIRLM(formData: FormData): Promise<void> {
   let skipped = 0;
   const errors: { memberId: string; reason: string }[] = [];
 
-  // iRLM returns multiple EventResults (Combined, Pro, Am, Team).
-  // We use only the first one — the COMBINED scoring — which has true
-  // overall positions 1..N. Per-class views filter+renumber on render.
+  // iRLM returns multiple EventResults (per-tab views: Combined / Pro / Am / Team).
+  // We only walk the first (driver Combined). For multi-race rounds (e.g. SFL),
+  // its sessionResults contain "Race 1", "Race 2", and "Combined" — we pick
+  // the per-race sessions and skip iRLM's own Combined.
   const combinedEventResult = eventResults[0];
   for (const eventResult of combinedEventResult ? [combinedEventResult] : []) {
     for (const session of eventResult.sessionResults ?? []) {
-      if (!isRaceSession(session.sessionType ?? session.sessionName)) {
+      const sessionLabel = String(
+        session.sessionName ?? session.sessionType ?? ""
+      ).toLowerCase();
+      if (
+        sessionLabel.includes("qualif") ||
+        sessionLabel.includes("practice") ||
+        sessionLabel.includes("warmup")
+      ) {
         continue;
       }
+      // Skip iRLM's own Combined session — we compute combined ourselves.
+      if (sessionLabel.includes("combined")) continue;
+
+      // Map "Race 1" / "Race 2" / etc -> raceNumber. A bare "Race" defaults to 1.
+      let raceNumber = 1;
+      const raceMatch = sessionLabel.match(/race\s*(\d+)/);
+      if (raceMatch) raceNumber = parseInt(raceMatch[1], 10);
+
       const rows = session.resultRows ?? [];
       let maxLaps = 0;
       for (const row of rows) {
@@ -210,7 +224,8 @@ export async function pullResultsFromIRLM(formData: FormData): Promise<void> {
           roundId,
           row,
           maxLaps,
-          memberMap
+          memberMap,
+          raceNumber
         );
         if (result.ok) {
           imported++;
