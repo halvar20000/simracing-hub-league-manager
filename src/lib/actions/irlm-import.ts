@@ -107,7 +107,7 @@ async function importRow(
       : null;
 
   await prisma.raceResult.upsert({
-    where: { roundId_registrationId: { roundId, registrationId: reg.id } },
+    where: { roundId_registrationId_raceNumber: { roundId, registrationId: reg.id , raceNumber: 1 } },
     create: {
       roundId,
       registrationId: reg.id,

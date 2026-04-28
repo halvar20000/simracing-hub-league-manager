@@ -304,7 +304,7 @@ export async function importResultsCsv(
 
     await prisma.raceResult.upsert({
       where: {
-        roundId_registrationId: { roundId, registrationId: reg.id },
+        roundId_registrationId_raceNumber: { roundId, registrationId: reg.id , raceNumber: 1 },
       },
       create: {
         roundId,

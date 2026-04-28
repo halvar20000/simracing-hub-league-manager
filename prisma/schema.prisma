@@ -255,9 +255,10 @@ model RaceResult {
   createdAt                   DateTime      @default(now())
   updatedAt                   DateTime      @updatedAt
 
-  @@unique([roundId, registrationId])
+  @@unique([roundId, registrationId, raceNumber])
   qualifyingTimeMs Int?
   startPosition    Int?
+  raceNumber       Int       @default(1)
 }
 
 model ScoringSystem {
@@ -278,6 +279,8 @@ model ScoringSystem {
 
   seasons                       Season[]
   participationInCombined Boolean   @default(true)
+  racesPerRound                 Int       @default(1)
+  pointsTableRace2              Json?
 }
 
 model FPRAward {
