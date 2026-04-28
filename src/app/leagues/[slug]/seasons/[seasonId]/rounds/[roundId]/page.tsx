@@ -56,7 +56,7 @@ export default async function PublicRoundResults({
   type Group = {
     classId: string;
     className: string;
-    proAmClass: string | null;
+    shortCode: string | null;
     displayOrder: number;
     rows: Row[];
   };
@@ -69,7 +69,7 @@ export default async function PublicRoundResults({
       g = {
         classId: key,
         className: cc?.name ?? "Unclassified",
-        proAmClass: (cc?.proAmClass as string | undefined) ?? null,
+        shortCode: cc?.shortCode ?? null,
         displayOrder: cc?.displayOrder ?? 999,
         rows: [],
       };
@@ -79,7 +79,7 @@ export default async function PublicRoundResults({
   }
   const groups = [...groupMap.values()].sort((a, b) => {
     const orderOf = (g: Group) =>
-      g.proAmClass === "PRO" ? 0 : g.proAmClass === "AM" ? 1 : 2 + g.displayOrder;
+      g.shortCode === "PRO" ? 0 : g.shortCode === "AM" ? 1 : 2 + g.displayOrder;
     return orderOf(a) - orderOf(b);
   });
   for (const g of groups) {
