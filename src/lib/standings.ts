@@ -221,7 +221,7 @@ export async function computeDriverStandings(
     });
 
     // --- Drop worst N rounds (per ScoringSystem.dropWorstNRounds) ---
-    const dropN = season.scoringSystem.dropWorstNRounds ?? 0;
+    const dropN = season?.scoringSystem.dropWorstNRounds ?? 0;
     if (dropN > 0) {
       const eligible = roundPoints.filter((rp) => rp.hasResult);
       if (eligible.length > dropN) {
