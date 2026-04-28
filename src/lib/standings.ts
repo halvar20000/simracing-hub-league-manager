@@ -237,7 +237,7 @@ export async function computeDriverStandings(
             raw -= rp.rawPoints;
             classRaw -= rp.classRawPoints;
             participation -= rp.participationPoints;
-            penalty -= rp.penaltyPoints;
+            // penalty stays — penalties always count, even when the round is dropped
           }
         }
       }

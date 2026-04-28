@@ -433,7 +433,7 @@ function RaceByRaceTable({
                       <td className={`px-1.5 py-1.5 text-right tabular-nums text-emerald-400${rp.dropped ? " line-through opacity-60" : ""}`}>
                         {rp.hasResult && rp.participationPoints !== 0 ? rp.participationPoints : dash}
                       </td>
-                      <td className={`px-1.5 py-1.5 text-right tabular-nums text-red-400${rp.dropped ? " line-through opacity-60" : ""}`}>
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-red-400">
                         {rp.hasResult && rp.penaltyPoints !== 0 ? `−${rp.penaltyPoints}` : dash}
                       </td>
                     </Fragment>
