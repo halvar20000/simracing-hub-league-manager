@@ -309,8 +309,13 @@ function DriversTable({
               >
                 <td className="px-3 py-2 font-medium tabular-nums"><PosCell pos={idx + 1} delta={positionDelta} /></td>
                 <td className="px-3 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
-                <td className="px-3 py-2 font-medium">
+                <td className={`px-3 py-2 font-medium ${r.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                   {r.driverFirstName} {r.driverLastName}
+                  {r.excludedAt && (
+                    <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                      Excluded
+                    </span>
+                  )}
                 </td>
                 {showTeam && (
                   <td className="px-3 py-2 text-zinc-400">{r.teamName ?? "—"}</td>

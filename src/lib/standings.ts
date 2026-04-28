@@ -32,6 +32,7 @@ export interface DriverStanding {
   classTotal: number;
   totalIncidents: number;
   iRating: number | null;
+  excludedAt: Date | null;
   roundsCompleted: number;
   roundPoints: RoundPoints[];
 }
@@ -234,6 +235,7 @@ export async function computeDriverStandings(
       classTotal: classRaw + participation - penalty,
       totalIncidents,
       iRating,
+      excludedAt: reg.excludedAt ?? null,
       roundsCompleted: reg.raceResults.length,
       roundPoints,
     };

@@ -198,6 +198,7 @@ function ResultRow({
     user: { firstName: string | null; lastName: string | null };
     team: { name: string } | null;
     carClass: { name: string; shortCode: string } | null;
+      excludedAt: Date | null;
     raceResults: Array<{
       id: string;
       finishPosition: number;
@@ -234,11 +235,16 @@ function ResultRow({
     >
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <span className="font-semibold">
+          <span className={`font-semibold ${reg.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
             {reg.startNumber != null && (
-              <span className="mr-2 text-zinc-500">#{reg.startNumber}</span>
+              <span className="mr-2 text-zinc-500 no-underline">#{reg.startNumber}</span>
             )}
             {reg.user.firstName} {reg.user.lastName}
+            {reg.excludedAt && (
+              <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                Excluded
+              </span>
+            )}
           </span>
           <span className="ml-3 text-xs text-zinc-500">
             {reg.team?.name ?? "Independent"}

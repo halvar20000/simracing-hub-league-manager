@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { recomputeRoundScoring } from "@/lib/scoring";
-
 async function main() {
   const rounds = await prisma.round.findMany({
     where: { raceResults: { some: {} } },
@@ -9,9 +8,7 @@ async function main() {
   });
   for (const r of rounds) {
     await recomputeRoundScoring(prisma, r.id);
-    console.log(
-      `Recomputed ${r.season.league.slug} ${r.season.name} R${r.roundNumber}`
-    );
+    console.log(`Recomputed ${r.season.league.slug} ${r.season.name} R${r.roundNumber}`);
   }
 }
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

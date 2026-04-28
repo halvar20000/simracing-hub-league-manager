@@ -272,6 +272,7 @@ function ResultsTable({
       user: { firstName: string | null; lastName: string | null };
       team: { name: string } | null;
       carClass: { name: string } | null;
+      excludedAt: Date | null;
     };
   }>;
   isMulticlass: boolean;
@@ -331,9 +332,14 @@ function ResultsTable({
                 <td className="px-3 py-2 text-zinc-500">
                   {r.registration.startNumber ?? "—"}
                 </td>
-                <td className="px-3 py-2">
+                <td className={`px-3 py-2 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                   {r.registration.user.firstName}{" "}
                   {r.registration.user.lastName}
+                  {r.registration.excludedAt && (
+                    <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                      Excluded
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-zinc-400">
                   {r.registration.team?.name ?? "—"}
@@ -454,9 +460,14 @@ function TeamView({
                         {r.registration.carClass?.name ?? "—"}
                       </td>
                     )}
-                    <td className="px-3 py-1.5">
+                    <td className={`px-3 py-1.5 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                       {r.registration.user.firstName}{" "}
                       {r.registration.user.lastName}
+                      {r.registration.excludedAt && (
+                        <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                          Excluded
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 text-right text-zinc-400">
                       {r.incidents}
