@@ -128,8 +128,13 @@ export default async function PublicRoundResults({
     <div className="space-y-6">
       <div className="flex items-baseline justify-between">
         <div>
-          <h1 className="text-2xl font-bold">R{round.roundNumber}</h1>
+          <h1 className="text-2xl font-bold">
+            R{round.roundNumber} — {round.name}
+          </h1>
           <p className="text-sm text-zinc-400">
+            {round.track}
+            {round.trackConfig ? ` (${round.trackConfig})` : ""}
+            {" • "}
             {formatDateTime(round.startsAt)}
             {isMulticlass && " • Multiclass"}
           </p>
