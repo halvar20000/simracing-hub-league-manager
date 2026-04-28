@@ -397,6 +397,7 @@ function TeamView({
       registration: {
         user: { firstName: string | null; lastName: string | null };
         carClass: { name: string } | null;
+        excludedAt: Date | null;
       };
     }>;
     topNTotal: number;
