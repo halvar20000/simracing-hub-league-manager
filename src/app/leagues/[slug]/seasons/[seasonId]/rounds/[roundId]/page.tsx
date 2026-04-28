@@ -36,11 +36,7 @@ export default async function PublicRoundResults({
         ],
       },
       fprAwards: {
-        include: {
-          registration: {
-            include: { team: true, carClass: true, user: true },
-          },
-        },
+        include: { team: true, carClass: true, user: true },
       },
     },
   });
@@ -189,12 +185,12 @@ export default async function PublicRoundResults({
                 {round.fprAwards.map((a) => (
                   <tr key={a.id} className="border-t border-zinc-800">
                     <td className="px-3 py-2">
-                      {a.registration.user.firstName}{" "}
-                      {a.registration.user.lastName}
+                      {a.user?.firstName}{" "}
+                      {a.user?.lastName}
                     </td>
                     {isMulticlass && (
                       <td className="px-3 py-2 text-zinc-400">
-                        {a.registration.carClass?.name ?? "—"}
+                        {a.carClass?.name ?? "—"}
                       </td>
                     )}
                     <td className="px-3 py-2 text-right font-semibold text-orange-400">
