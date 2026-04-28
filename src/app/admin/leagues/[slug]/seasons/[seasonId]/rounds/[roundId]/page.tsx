@@ -12,11 +12,17 @@ export default async function AdminRoundResults({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string; roundId: string }>;
-  searchParams: Promise<{ imported?: string; skipped?: string }>;
+  searchParams: Promise<{ imported?: string; skipped?: string; cls?: string }>;
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
-  const { imported, skipped } = await searchParams;
+  const { imported, skipped, cls: clsRaw } = await searchParams;
+  type Cls = "combined" | "pro" | "am" | "team";
+  const cls: Cls =
+    clsRaw === "pro" ? "pro" :
+    clsRaw === "am" ? "am" :
+    clsRaw === "team" ? "team" : "combined";
+  const baseHref = `/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
@@ -118,6 +124,38 @@ export default async function AdminRoundResults({
         </p>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-zinc-500">View:</span>
+        <Link
+          href={baseHref}
+          className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+        >
+          Combined
+        </Link>
+        {round.season.isMulticlass && (
+          <>
+            <Link
+              href={`${baseHref}?cls=pro`}
+              className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+            >
+              Pro
+            </Link>
+            <Link
+              href={`${baseHref}?cls=am`}
+              className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+            >
+              Am
+            </Link>
+          </>
+        )}
+        <Link
+          href={`${baseHref}?cls=team`}
+          className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+        >
+          Team
+        </Link>
+      </div>
+
       <section>
         <h2 className="mb-3 text-lg font-semibold">
           Results — {registrations.length} approved driver
@@ -130,18 +168,14 @@ export default async function AdminRoundResults({
             first.
           </p>
         ) : (
-          <div className="space-y-3">
-            {registrations.map((reg) => (
-              <ResultRow
-                key={reg.id}
-                slug={slug}
-                seasonId={seasonId}
-                roundId={roundId}
-                reg={reg}
-                isMulticlass={round.season.isMulticlass}
-              />
-            ))}
-          </div>
+          <AdminRegList
+            registrations={registrations}
+            cls={cls}
+            slug={slug}
+            seasonId={seasonId}
+            roundId={roundId}
+            isMulticlass={round.season.isMulticlass}
+          />
         )}
       </section>
     </div>
@@ -371,5 +405,101 @@ function Field({
         />
       )}
     </label>
+  );
+}
+
+function AdminRegList({
+  registrations,
+  cls,
+  slug,
+  seasonId,
+  roundId,
+  isMulticlass,
+}: {
+  registrations: Array<Parameters<typeof ResultRow>[0]["reg"]>;
+  cls: "combined" | "pro" | "am" | "team";
+  slug: string;
+  seasonId: string;
+  roundId: string;
+  isMulticlass: boolean;
+}) {
+  // Class filter
+  let filtered = registrations;
+  if (cls === "pro") {
+    filtered = registrations.filter(
+      (r) => r.carClass?.shortCode === "PRO"
+    );
+  } else if (cls === "am") {
+    filtered = registrations.filter(
+      (r) => r.carClass?.shortCode === "AM"
+    );
+  }
+
+  if (cls !== "team") {
+    if (filtered.length === 0) {
+      return (
+        <p className="text-sm text-zinc-500">No drivers in this view.</p>
+      );
+    }
+    return (
+      <div className="space-y-3">
+        {filtered.map((reg) => (
+          <ResultRow
+            key={reg.id}
+            slug={slug}
+            seasonId={seasonId}
+            roundId={roundId}
+            reg={reg}
+            isMulticlass={isMulticlass}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Team view: group by team name, expandable per team
+  const byTeam = new Map<
+    string,
+    typeof registrations
+  >();
+  for (const reg of registrations) {
+    const key = reg.team?.name ?? "Independent";
+    const arr = byTeam.get(key);
+    if (arr) arr.push(reg);
+    else byTeam.set(key, [reg]);
+  }
+  const groups = [...byTeam.entries()].sort((a, b) =>
+    a[0].localeCompare(b[0])
+  );
+
+  return (
+    <div className="space-y-3">
+      {groups.map(([teamName, regs]) => (
+        <details
+          key={teamName}
+          className="overflow-hidden rounded border border-zinc-800"
+          open={cls === "team"}
+        >
+          <summary className="flex cursor-pointer items-center gap-3 bg-zinc-900 px-3 py-2 hover:bg-zinc-800">
+            <span className="flex-1 font-medium">{teamName}</span>
+            <span className="text-xs text-zinc-500">
+              {regs.length} {regs.length === 1 ? "driver" : "drivers"}
+            </span>
+          </summary>
+          <div className="space-y-3 p-3">
+            {regs.map((reg) => (
+              <ResultRow
+                key={reg.id}
+                slug={slug}
+                seasonId={seasonId}
+                roundId={roundId}
+                reg={reg}
+                isMulticlass={isMulticlass}
+              />
+            ))}
+          </div>
+        </details>
+      ))}
+    </div>
   );
 }
