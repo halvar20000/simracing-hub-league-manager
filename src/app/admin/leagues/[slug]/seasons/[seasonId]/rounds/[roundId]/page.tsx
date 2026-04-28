@@ -197,7 +197,7 @@ function ResultRow({
     startNumber: number | null;
     user: { firstName: string | null; lastName: string | null };
     team: { name: string } | null;
-    carClass: { name: string } | null;
+    carClass: { name: string; shortCode: string } | null;
     raceResults: Array<{
       id: string;
       finishPosition: number;
