@@ -226,6 +226,7 @@ model Registration {
   updatedAt       DateTime            @updatedAt
 
   @@unique([seasonId, userId])
+  excludedAt      DateTime?
 }
 
 model RaceResult {
