@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { recomputeRoundScoring } from "@/lib/scoring";
@@ -57,7 +58,10 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
     data: {
       description,
       pointsTable,
-      classPointsTable: classPointsTable === null ? null : classPointsTable,
+      classPointsTable:
+        classPointsTable === null
+          ? Prisma.DbNull
+          : classPointsTable,
       participationPoints,
       participationMinDistancePct,
       bonusFastestLap,
