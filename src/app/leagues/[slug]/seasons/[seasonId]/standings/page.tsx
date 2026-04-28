@@ -18,11 +18,18 @@ export default async function StandingsPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; cls?: string }>;
 }) {
   const { slug, seasonId } = await params;
-  const { view: viewRaw } = await searchParams;
+  const { view: viewRaw, cls: clsRaw } = await searchParams;
   const view: ViewMode = viewRaw === "races" ? "races" : "list";
+  type Cls = "combined" | "pro" | "am" | "team";
+  const cls: Cls =
+    clsRaw === "pro" ? "pro" :
+    clsRaw === "am" ? "am" :
+    clsRaw === "team" ? "team" : "combined";
+  const viewSuffix = view === "races" ? "&view=races" : "";
+  const viewQuery  = view === "races" ? "?view=races" : "";
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
@@ -104,9 +111,20 @@ export default async function StandingsPage({
             Race by race
           </Link>
         </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-zinc-500">Audience:</span>
+          <Link href={`${baseHref}${viewQuery}`} className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Combined</Link>
+          {season.isMulticlass && (<>
+            <Link href={`${baseHref}?cls=pro${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Pro</Link>
+            <Link href={`${baseHref}?cls=am${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Am</Link>
+          </>)}
+          <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Team</Link>
+        </div>
       </div>
 
-      <section>
+      {cls === "combined" && (
+        <section>
         <h2 className="mb-1 text-lg font-semibold">Combined Driver Championship</h2>
         <p className="mb-3 text-xs text-zinc-500">
           Race points − penalties. Participation points are not included in this view.
@@ -123,29 +141,30 @@ export default async function StandingsPage({
           />
         )}
       </section>
-
-      {season.proAmEnabled && (
-        <>
-          <section>
-            <h2 className="mb-1 text-lg font-semibold">Pro</h2>
-            {view === "races" ? (
-              <RaceByRaceTable rows={proDrivers} kind="class" />
-            ) : (
-              <DriversTable rows={proDrivers} previousRows={previousPro} kind="class" showTeam />
-            )}
-          </section>
-          <section>
-            <h2 className="mb-1 text-lg font-semibold">Am</h2>
-            {view === "races" ? (
-              <RaceByRaceTable rows={amDrivers} kind="class" />
-            ) : (
-              <DriversTable rows={amDrivers} previousRows={previousAm} kind="class" showTeam />
-            )}
-          </section>
-        </>
       )}
 
-      {season.isMulticlass && season.carClasses.length > 0 &&
+      {cls === "pro" && proDrivers.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold">Pro</h2>
+          {view === "races" ? (
+            <RaceByRaceTable rows={proDrivers} kind="class" />
+          ) : (
+            <DriversTable rows={proDrivers} previousRows={previousPro} kind="class" showTeam />
+          )}
+        </section>
+      )}
+      {cls === "am" && amDrivers.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold">Am</h2>
+          {view === "races" ? (
+            <RaceByRaceTable rows={amDrivers} kind="class" />
+          ) : (
+            <DriversTable rows={amDrivers} previousRows={previousAm} kind="class" showTeam />
+          )}
+        </section>
+      )}
+
+      {cls === "combined" && season.isMulticlass && season.carClasses.length > 0 &&
         season.carClasses.map((cc) => {
           const rows = drivers.filter((d) => d.carClassId === cc.id);
           const previousRows = previousDrivers?.filter((d) => d.carClassId === cc.id) ?? null;
@@ -161,7 +180,7 @@ export default async function StandingsPage({
           );
         })}
 
-      {teams.length > 0 && (
+      {cls === "team" && teams.length > 0 && (
         <section>
           <h2 className="mb-1 text-lg font-semibold">Team Championship</h2>
           <p className="mb-3 text-xs text-zinc-500">
