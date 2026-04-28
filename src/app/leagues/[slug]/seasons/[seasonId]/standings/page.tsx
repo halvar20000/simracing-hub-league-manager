@@ -422,18 +422,18 @@ function RaceByRaceTable({
                   const dash = <span className="text-zinc-700">—</span>;
                   return (
                     <Fragment key={rp.roundId}>
-                      <td className="border-l border-zinc-800 px-1.5 py-1.5 text-right tabular-nums">
+                      <td className={`border-l border-zinc-800 px-1.5 py-1.5 text-right tabular-nums${rp.dropped ? " line-through opacity-60" : ""}`}>
                         {rp.hasResult ? <span className="font-semibold text-zinc-200">{cellTotal}</span> : dash}
                       </td>
-                      <td className="px-1.5 py-1.5 text-right tabular-nums text-zinc-300">
+                      <td className={`px-1.5 py-1.5 text-right tabular-nums text-zinc-300${rp.dropped ? " line-through opacity-60" : ""}`}>
                         {rp.hasResult && (kind === "combined" ? rp.rawPoints : rp.classRawPoints) !== 0
                           ? (kind === "combined" ? rp.rawPoints : rp.classRawPoints)
                           : dash}
                       </td>
-                      <td className="px-1.5 py-1.5 text-right tabular-nums text-emerald-400">
+                      <td className={`px-1.5 py-1.5 text-right tabular-nums text-emerald-400${rp.dropped ? " line-through opacity-60" : ""}`}>
                         {rp.hasResult && rp.participationPoints !== 0 ? rp.participationPoints : dash}
                       </td>
-                      <td className="px-1.5 py-1.5 text-right tabular-nums text-red-400">
+                      <td className={`px-1.5 py-1.5 text-right tabular-nums text-red-400${rp.dropped ? " line-through opacity-60" : ""}`}>
                         {rp.hasResult && rp.penaltyPoints !== 0 ? `−${rp.penaltyPoints}` : dash}
                       </td>
                     </Fragment>

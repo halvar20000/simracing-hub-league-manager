@@ -12,6 +12,7 @@ export interface RoundPoints {
   combinedPoints: number;     // = rawPoints + participation - penalty
   classPoints: number;        // = classRawPoints + participation - penalty
   hasResult: boolean;
+  dropped: boolean;          // true when this round is one of the worst-N drop weeks
 }
 
 export interface DriverStanding {
@@ -190,6 +191,7 @@ export async function computeDriverStandings(
           combinedPoints: 0,
           classPoints: 0,
           hasResult: false,
+          dropped: false,
         };
       }
       const rRaw = result.rawPointsAwarded;
@@ -214,8 +216,32 @@ export async function computeDriverStandings(
         combinedPoints: rRaw + rPart - rPen,
         classPoints: rClassRaw + rPart - rPen,
         hasResult: true,
+        dropped: false,
       };
     });
+
+    // --- Drop worst N rounds (per ScoringSystem.dropWorstNRounds) ---
+    const dropN = season.scoringSystem.dropWorstNRounds ?? 0;
+    if (dropN > 0) {
+      const eligible = roundPoints.filter((rp) => rp.hasResult);
+      if (eligible.length > dropN) {
+        const sorted = [...eligible].sort(
+          (a, b) => a.combinedPoints - b.combinedPoints
+        );
+        const droppedIds = new Set(
+          sorted.slice(0, dropN).map((rp) => rp.roundId)
+        );
+        for (const rp of roundPoints) {
+          if (droppedIds.has(rp.roundId)) {
+            rp.dropped = true;
+            raw -= rp.rawPoints;
+            classRaw -= rp.classRawPoints;
+            participation -= rp.participationPoints;
+            penalty -= rp.penaltyPoints;
+          }
+        }
+      }
+    }
 
     return {
       registrationId: reg.id,
