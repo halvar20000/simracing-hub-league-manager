@@ -9,7 +9,7 @@ export interface RoundPoints {
   classRawPoints: number;     // class-position race points (within Pro or AM)
   participationPoints: number;
   penaltyPoints: number;
-  combinedPoints: number;     // = rawPoints - penalty
+  combinedPoints: number;     // = rawPoints + participation - penalty
   classPoints: number;        // = classRawPoints + participation - penalty
   hasResult: boolean;
 }
@@ -210,7 +210,7 @@ export async function computeDriverStandings(
         classRawPoints: rClassRaw,
         participationPoints: rPart,
         penaltyPoints: rPen,
-        combinedPoints: rRaw - rPen,
+        combinedPoints: rRaw + rPart - rPen,
         classPoints: rClassRaw + rPart - rPen,
         hasResult: true,
       };
@@ -230,7 +230,7 @@ export async function computeDriverStandings(
       classRawPoints: classRaw,
       participationPoints: participation,
       manualPenalties: penalty,
-      combinedTotal: raw - penalty,
+      combinedTotal: raw + participation - penalty,
       classTotal: classRaw + participation - penalty,
       totalIncidents,
       iRating,
