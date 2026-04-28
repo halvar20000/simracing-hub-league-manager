@@ -47,6 +47,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const bonusPole = readIntOrNull(formData.get("bonusPole"));
   const bonusMostLapsLed = readIntOrNull(formData.get("bonusMostLapsLed"));
   const dropWorstNRounds = readIntOrNull(formData.get("dropWorstNRounds"));
+  const participationInCombined = formData.get("participationInCombined") === "on";
 
   const pointsTable = readPointsTable(formData, "pos", 30);
   const classPointsTableObj = readPointsTable(formData, "classPos", 30);
@@ -68,6 +69,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       bonusPole,
       bonusMostLapsLed,
       dropWorstNRounds,
+      participationInCombined,
     },
   });
 

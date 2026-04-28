@@ -90,6 +90,18 @@ export default async function EditScoringSystem({
               max={100}
             />
           </div>
+          <label className="mt-4 flex items-center gap-2 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              name="participationInCombined"
+              defaultChecked={ss.participationInCombined}
+              className="h-4 w-4"
+            />
+            Include participation points in <strong>combined</strong> standings
+            <span className="ml-2 text-xs text-zinc-500">
+              (Class and Team scoring always include participation)
+            </span>
+          </label>
         </Section>
 
         <Section title="Bonuses">

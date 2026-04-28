@@ -277,6 +277,7 @@ model ScoringSystem {
   fprMode                       FprMode   @default(ALL_TEAMS_TIERED)
 
   seasons                       Season[]
+  participationInCombined Boolean   @default(true)
 }
 
 model FPRAward {

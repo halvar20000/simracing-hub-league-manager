@@ -9,7 +9,7 @@ export interface RoundPoints {
   classRawPoints: number;     // class-position race points (within Pro or AM)
   participationPoints: number;
   penaltyPoints: number;
-  combinedPoints: number;     // = rawPoints + participation - penalty
+  combinedPoints: number;     // = rawPoints + (participation if enabled) - penalty
   classPoints: number;        // = classRawPoints + participation - penalty
   hasResult: boolean;
   dropped: boolean;          // true when this round is one of the worst-N drop weeks
@@ -133,6 +133,8 @@ export async function computeDriverStandings(
     }
   }
 
+  const includeParticipationInCombined =
+    season?.scoringSystem.participationInCombined ?? true;
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
     let classRaw = 0;
@@ -213,7 +215,7 @@ export async function computeDriverStandings(
         classRawPoints: rClassRaw,
         participationPoints: rPart,
         penaltyPoints: rPen,
-        combinedPoints: rRaw + rPart - rPen,
+        combinedPoints: rRaw + (includeParticipationInCombined ? rPart : 0) - rPen,
         classPoints: rClassRaw + rPart - rPen,
         hasResult: true,
         dropped: false,
@@ -263,7 +265,7 @@ export async function computeDriverStandings(
       classRawPoints: classRaw,
       participationPoints: participation,
       manualPenalties: penalty,
-      combinedTotal: raw + participation - penalty,
+      combinedTotal: raw + (includeParticipationInCombined ? participation : 0) - penalty,
       classTotal: classRaw + participation - penalty,
       totalIncidents,
       iRating,
