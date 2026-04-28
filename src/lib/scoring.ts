@@ -1,7 +1,6 @@
 import type {
   PrismaClient,
   FinishStatus,
-  ScoringSystem,
 } from "@prisma/client";
 
 export interface PointsTable {
@@ -44,6 +43,12 @@ export function calculateParticipationPoints(
 
 /**
  * Recompute the points for a single race result and persist the new values.
+ * Picks the correct points table based on raceNumber (race 1 uses
+ * pointsTable; race 2 uses pointsTableRace2 if set, falling back to pointsTable).
+ *
+ * Note: participationPointsAwarded is NOT set here — it's awarded once per
+ * (round, registration) by recomputeRoundScoring to avoid double-counting
+ * across multi-race rounds.
  */
 export async function recomputeResultPoints(
   prisma: PrismaClient,
@@ -60,27 +65,72 @@ export async function recomputeResultPoints(
   if (!result) return;
 
   const scoring = result.round.season.scoringSystem;
-  const pointsTable = scoring.pointsTable as PointsTable;
+  const pointsTable =
+    result.raceNumber > 1 && scoring.pointsTableRace2
+      ? (scoring.pointsTableRace2 as PointsTable)
+      : (scoring.pointsTable as PointsTable);
 
   const raw = calculateRawPoints(
     result.finishPosition,
     result.finishStatus,
     pointsTable
   );
-  const participation = calculateParticipationPoints(
-    result.raceDistancePct,
-    result.finishStatus,
-    scoring.participationPoints,
-    scoring.participationMinDistancePct
-  );
 
   await prisma.raceResult.update({
     where: { id: resultId },
     data: {
       rawPointsAwarded: raw,
-      participationPointsAwarded: participation,
+      // participationPointsAwarded is set by recomputeRoundScoring (per-round)
     },
   });
+}
+
+/**
+ * Award participation per (round, registration) — once per round, not per race.
+ * Sets participationPointsAwarded on the lowest-raceNumber result that earned
+ * the participation; zeroes it on the others. This works correctly for both
+ * single-race and multi-race rounds.
+ */
+async function recomputeParticipationForRound(
+  prisma: PrismaClient,
+  roundId: string
+): Promise<void> {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      season: { include: { scoringSystem: true } },
+      raceResults: true,
+    },
+  });
+  if (!round) return;
+  const scoring = round.season.scoringSystem;
+
+  // Group results by registrationId
+  const byReg = new Map<string, typeof round.raceResults>();
+  for (const r of round.raceResults) {
+    const list = byReg.get(r.registrationId) ?? [];
+    list.push(r);
+    byReg.set(r.registrationId, list);
+  }
+
+  for (const list of byReg.values()) {
+    const earned = list.some(
+      (r) =>
+        r.finishStatus !== "DNS" &&
+        r.raceDistancePct >= scoring.participationMinDistancePct
+    );
+    const sorted = [...list].sort((a, b) => a.raceNumber - b.raceNumber);
+    for (let i = 0; i < sorted.length; i++) {
+      const target =
+        earned && i === 0 ? scoring.participationPoints : 0;
+      if (sorted[i].participationPointsAwarded !== target) {
+        await prisma.raceResult.update({
+          where: { id: sorted[i].id },
+          data: { participationPointsAwarded: target },
+        });
+      }
+    }
+  }
 }
 
 /**
@@ -106,7 +156,6 @@ export async function recomputeRoundFPR(
   });
   if (!round) return;
 
-  // Wipe existing FPR awards for this round
   await prisma.fPRAward.deleteMany({ where: { roundId } });
 
   const scoring = round.season.scoringSystem;
@@ -116,27 +165,20 @@ export async function recomputeRoundFPR(
   if (tiers.length === 0) return;
   const sortedTiers = [...tiers].sort((a, b) => a.max - b.max);
 
-  // Sum incidents per (team, class)
-  type Bucket = {
-    teamId: string;
-    carClassId: string | null;
-    incidents: number;
-  };
+  type Bucket = { teamId: string; carClassId: string | null; incidents: number };
   const buckets = new Map<string, Bucket>();
 
+  // Sum incidents by (team, class) — incidents accumulate across all races
   for (const r of round.raceResults) {
     const teamId = r.registration.teamId;
-    if (!teamId) continue; // Independent drivers don't contribute
+    if (!teamId) continue;
     const carClassId = round.season.isMulticlass
       ? r.registration.carClassId
       : null;
     const key = `${teamId}|${carClassId ?? ""}`;
     const cur = buckets.get(key);
-    if (cur) {
-      cur.incidents += r.incidents;
-    } else {
-      buckets.set(key, { teamId, carClassId, incidents: r.incidents });
-    }
+    if (cur) cur.incidents += r.incidents;
+    else buckets.set(key, { teamId, carClassId, incidents: r.incidents });
   }
 
   if (scoring.fprMode === "ALL_TEAMS_TIERED") {
@@ -154,7 +196,6 @@ export async function recomputeRoundFPR(
       });
     }
   } else if (scoring.fprMode === "LOWEST_TEAM_ONLY") {
-    // Group by class, pick lowest-incident team per class
     const byClass = new Map<string, Bucket[]>();
     for (const b of buckets.values()) {
       const k = b.carClassId ?? "";
@@ -180,7 +221,8 @@ export async function recomputeRoundFPR(
 }
 
 /**
- * Recompute everything for a round: per-result points + FPR awards.
+ * Recompute everything for a round: per-result raw points + per-round
+ * participation + FPR.
  */
 export async function recomputeRoundScoring(
   prisma: PrismaClient,
@@ -193,5 +235,6 @@ export async function recomputeRoundScoring(
   for (const r of results) {
     await recomputeResultPoints(prisma, r.id);
   }
+  await recomputeParticipationForRound(prisma, roundId);
   await recomputeRoundFPR(prisma, roundId);
 }
