@@ -35,9 +35,7 @@ export default async function PublicRoundResults({
           { finishPosition: "asc" },
         ],
       },
-      fprAwards: {
-        include: { team: true, carClass: true, user: true },
-      },
+      fprAwards: { include: { team: true, carClass: true } },
     },
   });
   if (!round || round.season.league.slug !== slug || round.seasonId !== seasonId) {
@@ -176,25 +174,26 @@ export default async function PublicRoundResults({
             <table className="w-full text-sm">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
-                  <th className="px-3 py-2">Driver</th>
+                  <th className="px-3 py-2">Team</th>
                   {isMulticlass && <th className="px-3 py-2">Class</th>}
-                  <th className="px-3 py-2 text-right">FPR</th>
+                  <th className="px-3 py-2 text-right">Team incidents</th>
+                  <th className="px-3 py-2 text-right">FPR pts</th>
                 </tr>
               </thead>
               <tbody>
                 {round.fprAwards.map((a) => (
                   <tr key={a.id} className="border-t border-zinc-800">
-                    <td className="px-3 py-2">
-                      {a.user?.firstName}{" "}
-                      {a.user?.lastName}
-                    </td>
+                    <td className="px-3 py-2 font-medium">{a.team.name}</td>
                     {isMulticlass && (
                       <td className="px-3 py-2 text-zinc-400">
                         {a.carClass?.name ?? "—"}
                       </td>
                     )}
-                    <td className="px-3 py-2 text-right font-semibold text-orange-400">
-                      {a.fprPoints}
+                    <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                      {a.teamIncidentTotal}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold text-orange-400 tabular-nums">
+                      {a.fprPointsAwarded}
                     </td>
                   </tr>
                 ))}
