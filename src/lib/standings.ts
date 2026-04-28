@@ -221,24 +221,30 @@ export async function computeDriverStandings(
     });
 
     // --- Drop worst N rounds (per ScoringSystem.dropWorstNRounds) ---
+    // Priority: missed rounds (no result) first, then lowest combinedPoints.
+    // Penalties are NEVER dropped — they always count.
     const dropN = season?.scoringSystem.dropWorstNRounds ?? 0;
-    if (dropN > 0) {
-      const eligible = roundPoints.filter((rp) => rp.hasResult);
-      if (eligible.length > dropN) {
-        const sorted = [...eligible].sort(
-          (a, b) => a.combinedPoints - b.combinedPoints
-        );
-        const droppedIds = new Set(
-          sorted.slice(0, dropN).map((rp) => rp.roundId)
-        );
-        for (const rp of roundPoints) {
-          if (droppedIds.has(rp.roundId)) {
-            rp.dropped = true;
+    if (dropN > 0 && roundPoints.length > 0) {
+      const sorted = [...roundPoints].sort((a, b) => {
+        if (a.hasResult !== b.hasResult) {
+          // false (no result) < true (has result), so missed rounds sort first
+          return Number(a.hasResult) - Number(b.hasResult);
+        }
+        return a.combinedPoints - b.combinedPoints;
+      });
+      const droppedIds = new Set(
+        sorted.slice(0, dropN).map((rp) => rp.roundId)
+      );
+      for (const rp of roundPoints) {
+        if (droppedIds.has(rp.roundId)) {
+          rp.dropped = true;
+          if (rp.hasResult) {
             raw -= rp.rawPoints;
             classRaw -= rp.classRawPoints;
             participation -= rp.participationPoints;
             // penalty stays — penalties always count, even when the round is dropped
           }
+          // Missed rounds contribute 0, so nothing to subtract.
         }
       }
     }
