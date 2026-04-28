@@ -5,8 +5,8 @@ import { formatMsToTime } from "@/lib/time";
 import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
 
-type Cls = "combined" | "pro" | "am" | "team";
-const TEAM_BEST_N = 2; // top N drivers count toward a team's round total
+type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2";
+const TEAM_BEST_N = 2;
 
 function ptsOf(r: {
   rawPointsAwarded: number;
@@ -39,28 +39,24 @@ export default async function PublicRoundResults({
 }) {
   const { slug, seasonId, roundId } = await params;
   const { cls: clsRaw } = await searchParams;
-  const cls: Cls =
-    clsRaw === "pro"
-      ? "pro"
-      : clsRaw === "am"
-        ? "am"
-        : clsRaw === "team"
-          ? "team"
-          : "combined";
 
   await auth();
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
-      season: { include: { league: true } },
+      season: { include: { league: true, scoringSystem: true } },
       raceResults: {
         include: {
           registration: {
             include: { user: true, team: true, carClass: true },
           },
         },
-        orderBy: [{ finishStatus: "asc" }, { finishPosition: "asc" }],
+        orderBy: [
+          { raceNumber: "asc" },
+          { finishStatus: "asc" },
+          { finishPosition: "asc" },
+        ],
       },
       fprAwards: { include: { team: true, carClass: true } },
     },
@@ -73,11 +69,73 @@ export default async function PublicRoundResults({
     notFound();
   }
 
-  const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const isMulticlass = round.season.isMulticlass;
+  const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
+  const isMultiRace = racesPerRound > 1;
 
-  // Filtered datasets
+  const cls: Cls =
+    clsRaw === "pro"
+      ? "pro"
+      : clsRaw === "am"
+        ? "am"
+        : clsRaw === "team"
+          ? "team"
+          : clsRaw === "race1"
+            ? "race1"
+            : clsRaw === "race2"
+              ? "race2"
+              : "combined";
+
+  const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
+
+  // For multi-race rounds, the per-race row sets
+  const race1Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 1));
+  const race2Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 2));
+
+  // Aggregate per driver for the Combined / Team views (works for both
+  // single-race and multi-race rounds).
+  type Agg = {
+    registrationId: string;
+    rows: typeof allRows;
+    raceResultsByNumber: Map<number, (typeof allRows)[number]>;
+    racePoints: number;            // sum of rawPointsAwarded
+    participationPoints: number;
+    penaltyPoints: number;
+    totalPoints: number;
+    incidents: number;
+  };
+  const aggMap = new Map<string, Agg>();
+  for (const r of allRows) {
+    let a = aggMap.get(r.registrationId);
+    if (!a) {
+      a = {
+        registrationId: r.registrationId,
+        rows: [],
+        raceResultsByNumber: new Map(),
+        racePoints: 0,
+        participationPoints: 0,
+        penaltyPoints: 0,
+        totalPoints: 0,
+        incidents: 0,
+      };
+      aggMap.set(r.registrationId, a);
+    }
+    a.rows.push(r);
+    a.raceResultsByNumber.set(r.raceNumber, r);
+    a.racePoints += r.rawPointsAwarded;
+    a.participationPoints += r.participationPointsAwarded;
+    a.penaltyPoints += r.manualPenaltyPoints;
+    a.incidents += r.incidents;
+  }
+  for (const a of aggMap.values()) {
+    a.totalPoints = a.racePoints + a.participationPoints - a.penaltyPoints;
+  }
+  const aggRows = [...aggMap.values()].sort(
+    (a, b) => b.totalPoints - a.totalPoints
+  );
+
+  // Pro / Am views still operate on per-race-result rows
   const proRows = sortByFinish(
     allRows.filter((r) => r.registration.carClass?.shortCode === "PRO")
   );
@@ -85,27 +143,29 @@ export default async function PublicRoundResults({
     allRows.filter((r) => r.registration.carClass?.shortCode === "AM")
   );
 
-  // Team groupings
+  // Team groupings (aggregated across all the team's drivers, multi-race aware)
   type TeamRow = {
     teamName: string;
-    drivers: typeof allRows;
+    drivers: Agg[];
     topNTotal: number;
     bestFinish: number | null;
   };
-  const byTeam = new Map<string, typeof allRows>();
-  for (const r of allRows) {
-    const key = r.registration.team?.name ?? "Independent";
+  const byTeam = new Map<string, Agg[]>();
+  for (const a of aggRows) {
+    // Use the lowest-raceNumber row for team / class info
+    const sample = a.rows[0];
+    const key = sample.registration.team?.name ?? "Independent";
     const arr = byTeam.get(key);
-    if (arr) arr.push(r);
-    else byTeam.set(key, [r]);
+    if (arr) arr.push(a);
+    else byTeam.set(key, [a]);
   }
   const teamRows: TeamRow[] = [...byTeam.entries()]
     .map(([teamName, drivers]) => {
-      const byPts = [...drivers].sort((a, b) => ptsOf(b) - ptsOf(a));
+      const byPts = [...drivers].sort((a, b) => b.totalPoints - a.totalPoints);
       const topN = byPts.slice(0, TEAM_BEST_N);
-      const topNTotal = topN.reduce((sum, r) => sum + ptsOf(r), 0);
-      const classifieds = drivers.filter(
-        (r) => r.finishStatus === "CLASSIFIED"
+      const topNTotal = topN.reduce((s, d) => s + d.totalPoints, 0);
+      const classifieds = drivers.flatMap((d) =>
+        d.rows.filter((r) => r.finishStatus === "CLASSIFIED")
       );
       const bestFinish =
         classifieds.length > 0
@@ -115,10 +175,13 @@ export default async function PublicRoundResults({
     })
     .sort((a, b) => b.topNTotal - a.topNTotal);
 
-  // Combined-view winner for gap calc
-  const combinedWinner = allRows.find(
-    (r) => r.finishStatus === "CLASSIFIED" && r.finishPosition === 1
-  );
+  // Combined-view "winner" (overall leader) for gap calc — only meaningful
+  // for single-race rounds today
+  const combinedWinner = !isMultiRace
+    ? allRows.find(
+        (r) => r.finishStatus === "CLASSIFIED" && r.finishPosition === 1
+      )
+    : null;
 
   const pillBase = "rounded px-3 py-1.5 transition-colors";
   const pillOn = "bg-[#ff6b35] text-zinc-950";
@@ -137,6 +200,7 @@ export default async function PublicRoundResults({
             {" • "}
             {formatDateTime(round.startsAt)}
             {isMulticlass && " • Multiclass"}
+            {isMultiRace && ` • ${racesPerRound} races per round`}
           </p>
         </div>
         <Link
@@ -155,6 +219,22 @@ export default async function PublicRoundResults({
         >
           Combined
         </Link>
+        {isMultiRace && (
+          <>
+            <Link
+              href={`${baseHref}?cls=race1`}
+              className={`${pillBase} ${cls === "race1" ? pillOn : pillOff}`}
+            >
+              Race 1
+            </Link>
+            <Link
+              href={`${baseHref}?cls=race2`}
+              className={`${pillBase} ${cls === "race2" ? pillOn : pillOff}`}
+            >
+              Race 2
+            </Link>
+          </>
+        )}
         {isMulticlass && (
           <>
             <Link
@@ -186,7 +266,25 @@ export default async function PublicRoundResults({
             No results entered yet for this round.
           </p>
         ) : cls === "team" ? (
-          <TeamView teams={teamRows} isMulticlass={isMulticlass} />
+          <TeamView
+            teams={teamRows}
+            isMulticlass={isMulticlass}
+            isMultiRace={isMultiRace}
+          />
+        ) : cls === "race1" ? (
+          <ResultsTable
+            rows={race1Rows}
+            isMulticlass={isMulticlass}
+            renumberWithinGroup={false}
+            heading="Race 1"
+          />
+        ) : cls === "race2" ? (
+          <ResultsTable
+            rows={race2Rows}
+            isMulticlass={isMulticlass}
+            renumberWithinGroup={false}
+            heading="Race 2"
+          />
         ) : cls === "pro" ? (
           <ResultsTable
             rows={proRows}
@@ -198,6 +296,12 @@ export default async function PublicRoundResults({
             rows={amRows}
             isMulticlass={false}
             renumberWithinGroup
+          />
+        ) : isMultiRace ? (
+          <CombinedMultiRaceTable
+            rows={aggRows}
+            isMulticlass={isMulticlass}
+            racesPerRound={racesPerRound}
           />
         ) : (
           <ResultsTable
@@ -248,36 +352,41 @@ export default async function PublicRoundResults({
   );
 }
 
+type Row = {
+  id: string;
+  raceNumber: number;
+  finishStatus: string;
+  finishPosition: number;
+  startPosition: number | null;
+  qualifyingTimeMs: number | null;
+  bestLapTimeMs: number | null;
+  totalTimeMs: number | null;
+  lapsCompleted: number;
+  incidents: number;
+  rawPointsAwarded: number;
+  participationPointsAwarded: number;
+  manualPenaltyPoints: number;
+  registration: {
+    startNumber: number | null;
+    user: { firstName: string | null; lastName: string | null };
+    team: { name: string } | null;
+    carClass: { name: string } | null;
+    excludedAt: Date | null;
+  };
+};
+
 function ResultsTable({
   rows,
   isMulticlass,
   renumberWithinGroup,
   winnerTotalTimeMs = null,
+  heading = null,
 }: {
-  rows: Array<{
-    id: string;
-    finishStatus: string;
-    finishPosition: number;
-    startPosition: number | null;
-    qualifyingTimeMs: number | null;
-    bestLapTimeMs: number | null;
-    totalTimeMs: number | null;
-    lapsCompleted: number;
-    incidents: number;
-    rawPointsAwarded: number;
-    participationPointsAwarded: number;
-    manualPenaltyPoints: number;
-    registration: {
-      startNumber: number | null;
-      user: { firstName: string | null; lastName: string | null };
-      team: { name: string } | null;
-      carClass: { name: string } | null;
-      excludedAt: Date | null;
-    };
-  }>;
+  rows: Row[];
   isMulticlass: boolean;
   renumberWithinGroup: boolean;
   winnerTotalTimeMs?: number | null;
+  heading?: string | null;
 }) {
   const groupWinnerTotalTimeMs = renumberWithinGroup
     ? rows.find(
@@ -287,6 +396,11 @@ function ResultsTable({
   let classifiedCount = 0;
   return (
     <div className="overflow-hidden rounded border border-zinc-800">
+      {heading && (
+        <div className="bg-zinc-900 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-300">
+          {heading}
+        </div>
+      )}
       <table className="w-full text-sm">
         <thead className="bg-zinc-900 text-left text-zinc-400">
           <tr>
@@ -332,7 +446,9 @@ function ResultsTable({
                 <td className="px-3 py-2 text-zinc-500">
                   {r.registration.startNumber ?? "—"}
                 </td>
-                <td className={`px-3 py-2 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
+                <td
+                  className={`px-3 py-2 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                >
                   {r.registration.user.firstName}{" "}
                   {r.registration.user.lastName}
                   {r.registration.excludedAt && (
@@ -380,36 +496,151 @@ function ResultsTable({
   );
 }
 
+type Agg = {
+  registrationId: string;
+  rows: Row[];
+  raceResultsByNumber: Map<number, Row>;
+  racePoints: number;
+  participationPoints: number;
+  penaltyPoints: number;
+  totalPoints: number;
+  incidents: number;
+};
+
+function CombinedMultiRaceTable({
+  rows,
+  isMulticlass,
+  racesPerRound,
+}: {
+  rows: Agg[];
+  isMulticlass: boolean;
+  racesPerRound: number;
+}) {
+  const raceNumbers = Array.from({ length: racesPerRound }, (_, i) => i + 1);
+  return (
+    <div className="overflow-x-auto rounded border border-zinc-800">
+      <table className="w-full text-sm">
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="px-3 py-2">Pos</th>
+            <th className="px-3 py-2">#</th>
+            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2">Team</th>
+            {isMulticlass && <th className="px-3 py-2">Class</th>}
+            {raceNumbers.map((n) => (
+              <th key={n} className="px-3 py-2 text-right">
+                R{n} pos
+              </th>
+            ))}
+            {raceNumbers.map((n) => (
+              <th key={`p${n}`} className="px-3 py-2 text-right">
+                R{n} pts
+              </th>
+            ))}
+            <th className="px-3 py-2 text-right">Bonus</th>
+            <th className="px-3 py-2 text-right">Pen</th>
+            <th className="px-3 py-2 text-right">Inc</th>
+            <th className="px-3 py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((a, idx) => {
+            const sample = a.rows[0];
+            return (
+              <tr
+                key={a.registrationId}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="px-3 py-2 font-medium">{idx + 1}</td>
+                <td className="px-3 py-2 text-zinc-500">
+                  {sample.registration.startNumber ?? "—"}
+                </td>
+                <td
+                  className={`px-3 py-2 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                >
+                  {sample.registration.user.firstName}{" "}
+                  {sample.registration.user.lastName}
+                  {sample.registration.excludedAt && (
+                    <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                      Excluded
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-zinc-400">
+                  {sample.registration.team?.name ?? "—"}
+                </td>
+                {isMulticlass && (
+                  <td className="px-3 py-2 text-zinc-400">
+                    {sample.registration.carClass?.name ?? "—"}
+                  </td>
+                )}
+                {raceNumbers.map((n) => {
+                  const r = a.raceResultsByNumber.get(n);
+                  return (
+                    <td
+                      key={n}
+                      className="px-3 py-2 text-right text-zinc-400 tabular-nums"
+                    >
+                      {r
+                        ? r.finishStatus === "CLASSIFIED"
+                          ? r.finishPosition
+                          : r.finishStatus
+                        : "—"}
+                    </td>
+                  );
+                })}
+                {raceNumbers.map((n) => {
+                  const r = a.raceResultsByNumber.get(n);
+                  return (
+                    <td
+                      key={`p${n}`}
+                      className="px-3 py-2 text-right text-zinc-300 tabular-nums"
+                    >
+                      {r ? r.rawPointsAwarded : 0}
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-2 text-right text-emerald-400 tabular-nums">
+                  {a.participationPoints || ""}
+                </td>
+                <td className="px-3 py-2 text-right text-red-400 tabular-nums">
+                  {a.penaltyPoints ? `−${a.penaltyPoints}` : ""}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {a.incidents}
+                </td>
+                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
+                  {a.totalPoints}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function TeamView({
   teams,
   isMulticlass,
+  isMultiRace,
 }: {
-  teams: Array<{
+  teams: {
     teamName: string;
-    drivers: Array<{
-      id: string;
-      finishStatus: string;
-      finishPosition: number;
-      incidents: number;
-      rawPointsAwarded: number;
-      participationPointsAwarded: number;
-      manualPenaltyPoints: number;
-      registration: {
-        user: { firstName: string | null; lastName: string | null };
-        carClass: { name: string } | null;
-        excludedAt: Date | null;
-      };
-    }>;
+    drivers: Agg[];
     topNTotal: number;
     bestFinish: number | null;
-  }>;
+  }[];
   isMulticlass: boolean;
+  isMultiRace: boolean;
 }) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-zinc-500">
-        Team total = sum of the top {TEAM_BEST_N} drivers&apos; points for
-        this round. Click a team to expand its drivers.
+        Team total = sum of the top {TEAM_BEST_N} drivers&apos; round totals
+        {isMultiRace && " (race 1 + race 2 + bonus − penalty)"}.
+        Click a team to expand its drivers.
       </p>
       {teams.map((team, i) => (
         <details
@@ -435,46 +666,55 @@ function TeamView({
           <table className="w-full text-sm">
             <thead className="bg-zinc-950 text-left text-xs text-zinc-500">
               <tr>
-                <th className="px-3 py-1.5">Pos</th>
-                {isMulticlass && <th className="px-3 py-1.5">Class</th>}
                 <th className="px-3 py-1.5">Driver</th>
+                {isMulticlass && <th className="px-3 py-1.5">Class</th>}
                 <th className="px-3 py-1.5 text-right">Inc</th>
-                <th className="px-3 py-1.5 text-right">Pts</th>
-                <th className="px-3 py-1.5 text-right">
-                  In top {TEAM_BEST_N}
-                </th>
+                <th className="px-3 py-1.5 text-right">Race pts</th>
+                <th className="px-3 py-1.5 text-right">Bonus</th>
+                <th className="px-3 py-1.5 text-right">Pen</th>
+                <th className="px-3 py-1.5 text-right">Total</th>
+                <th className="px-3 py-1.5 text-right">In top {TEAM_BEST_N}</th>
               </tr>
             </thead>
             <tbody>
-              {team.drivers.map((r, idx) => {
-                const pts = ptsOf(r);
+              {team.drivers.map((a, idx) => {
+                const sample = a.rows[0];
                 const inTopN = idx < TEAM_BEST_N;
                 return (
-                  <tr key={r.id} className="border-t border-zinc-800">
-                    <td className="px-3 py-1.5">
-                      {r.finishStatus === "CLASSIFIED"
-                        ? r.finishPosition
-                        : r.finishStatus}
-                    </td>
-                    {isMulticlass && (
-                      <td className="px-3 py-1.5 text-zinc-400">
-                        {r.registration.carClass?.name ?? "—"}
-                      </td>
-                    )}
-                    <td className={`px-3 py-1.5 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
-                      {r.registration.user.firstName}{" "}
-                      {r.registration.user.lastName}
-                      {r.registration.excludedAt && (
+                  <tr
+                    key={a.registrationId}
+                    className="border-t border-zinc-800"
+                  >
+                    <td
+                      className={`px-3 py-1.5 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                    >
+                      {sample.registration.user.firstName}{" "}
+                      {sample.registration.user.lastName}
+                      {sample.registration.excludedAt && (
                         <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                           Excluded
                         </span>
                       )}
                     </td>
+                    {isMulticlass && (
+                      <td className="px-3 py-1.5 text-zinc-400">
+                        {sample.registration.carClass?.name ?? "—"}
+                      </td>
+                    )}
                     <td className="px-3 py-1.5 text-right text-zinc-400">
-                      {r.incidents}
+                      {a.incidents}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-zinc-300 tabular-nums">
+                      {a.racePoints}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-emerald-400 tabular-nums">
+                      {a.participationPoints || ""}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-red-400 tabular-nums">
+                      {a.penaltyPoints ? `−${a.penaltyPoints}` : ""}
                     </td>
                     <td className="px-3 py-1.5 text-right font-semibold text-orange-400 tabular-nums">
-                      {pts}
+                      {a.totalPoints}
                     </td>
                     <td className="px-3 py-1.5 text-right">
                       {inTopN ? (
