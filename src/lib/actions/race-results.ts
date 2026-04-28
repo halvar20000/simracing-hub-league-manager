@@ -72,7 +72,7 @@ export async function upsertRaceResult(
   };
 
   await prisma.raceResult.upsert({
-    where: { roundId_registrationId: { roundId, registrationId } },
+    where: { roundId_registrationId_raceNumber: { roundId, registrationId, raceNumber: 1 } },
     create: { roundId, registrationId, ...data },
     update: data,
   });
