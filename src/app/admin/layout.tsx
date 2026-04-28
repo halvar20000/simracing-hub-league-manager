@@ -35,6 +35,12 @@ export default async function AdminLayout({
             >
               Teams
             </Link>
+            <Link
+              href="/admin/scoring-systems"
+              className="block rounded px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              Scoring systems
+            </Link>
           </>
         )}
       </aside>

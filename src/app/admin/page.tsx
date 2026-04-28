@@ -72,6 +72,12 @@ async function FullAdminDashboard() {
           Teams
         </Link>
         <Link
+          href="/admin/scoring-systems"
+          className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800"
+        >
+          Scoring systems
+        </Link>
+        <Link
           href="/admin/leagues/new"
           className="rounded bg-orange-500 px-3 py-1.5 font-medium text-zinc-950 hover:bg-orange-400"
         >
