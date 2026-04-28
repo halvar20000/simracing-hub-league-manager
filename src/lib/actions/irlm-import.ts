@@ -188,7 +188,11 @@ export async function pullResultsFromIRLM(formData: FormData): Promise<void> {
   let skipped = 0;
   const errors: { memberId: string; reason: string }[] = [];
 
-  for (const eventResult of eventResults) {
+  // iRLM returns multiple EventResults (Combined, Pro, Am, Team).
+  // We use only the first one — the COMBINED scoring — which has true
+  // overall positions 1..N. Per-class views filter+renumber on render.
+  const combinedEventResult = eventResults[0];
+  for (const eventResult of combinedEventResult ? [combinedEventResult] : []) {
     for (const session of eventResult.sessionResults ?? []) {
       if (!isRaceSession(session.sessionType ?? session.sessionName)) {
         continue;
