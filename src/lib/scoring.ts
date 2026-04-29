@@ -141,6 +141,45 @@ async function recomputeParticipationForRound(
 }
 
 /**
+ * If a driver has a DSQ status on any RaceResult of a round, zero out their
+ * race + participation points across ALL their RaceResults in that round
+ * (round forfeit rule).
+ */
+async function recomputeDsqForfeitForRound(
+  prisma: PrismaClient,
+  roundId: string
+): Promise<void> {
+  const results = await prisma.raceResult.findMany({
+    where: { roundId },
+    select: {
+      id: true,
+      registrationId: true,
+      finishStatus: true,
+      rawPointsAwarded: true,
+      participationPointsAwarded: true,
+    },
+  });
+  const byReg = new Map<string, typeof results>();
+  for (const r of results) {
+    const list = byReg.get(r.registrationId) ?? [];
+    list.push(r);
+    byReg.set(r.registrationId, list);
+  }
+  for (const list of byReg.values()) {
+    const dsq = list.some((r) => r.finishStatus === "DSQ");
+    if (!dsq) continue;
+    for (const r of list) {
+      if (r.rawPointsAwarded !== 0 || r.participationPointsAwarded !== 0) {
+        await prisma.raceResult.update({
+          where: { id: r.id },
+          data: { rawPointsAwarded: 0, participationPointsAwarded: 0 },
+        });
+      }
+    }
+  }
+}
+
+/**
  * Recompute Fair Play Rating awards for a round based on the scoring system.
  * Wipes existing awards and creates new ones.
  */
@@ -243,5 +282,6 @@ export async function recomputeRoundScoring(
     await recomputeResultPoints(prisma, r.id);
   }
   await recomputeParticipationForRound(prisma, roundId);
+  await recomputeDsqForfeitForRound(prisma, roundId);
   await recomputeRoundFPR(prisma, roundId);
 }
