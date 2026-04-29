@@ -23,6 +23,11 @@ export default async function Nav() {
             alt="Simracing-Hub League Manager"
             className="h-12 w-auto"
           />
+          <img
+            src="/logos/cas-community.webp"
+            alt="CAS Racing Community"
+            className="h-12 w-auto"
+          />
         </Link>
         <div className="flex items-center gap-1 text-sm">
           <NavLink href="/leagues">Leagues</NavLink>
