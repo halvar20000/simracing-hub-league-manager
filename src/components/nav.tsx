@@ -17,7 +17,7 @@ export default async function Nav() {
   return (
     <nav className="border-b border-zinc-800 bg-[#0a0a0f]/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2.5">
-        <Link href="/" className="block">
+        <Link href="/" className="flex items-center gap-3">
           <img
             src="/logos/site-logo.svg"
             alt="Simracing-Hub League Manager"
