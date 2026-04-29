@@ -48,7 +48,6 @@ export default async function PublicLeaguesList() {
                 <div className="truncate text-[9px] text-zinc-500">
                   {league._count.seasons} season
                   {league._count.seasons === 1 ? "" : "s"}
-                  {activeSeason && ` • ${activeSeason.year}`}
                 </div>
               </div>
             </Link>
