@@ -213,6 +213,7 @@ function ResultRow({
       rawPointsAwarded: number;
       participationPointsAwarded: number;
       manualPenaltyPoints: number;
+      correctionPoints: number;
       manualPenaltyReason: string | null;
       notes: string | null;
     }>;
@@ -338,6 +339,13 @@ function ResultRow({
           type="number"
           defaultValue={String(result?.manualPenaltyPoints ?? 0)}
           min={0}
+        />
+        <Field
+          label="Correction"
+          name="correctionPoints"
+          type="number"
+          defaultValue={String(result?.correctionPoints ?? 0)}
+          placeholder="+/- adjust"
         />
         <Field
           label="Penalty reason"

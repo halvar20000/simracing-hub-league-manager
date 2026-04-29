@@ -52,6 +52,10 @@ export async function upsertRaceResult(
     formData.get("manualPenaltyPoints") ?? "0"
   );
   const manualPenaltyPoints = parseInt(manualPenaltyPointsRaw, 10) || 0;
+  const correctionPointsRaw = String(
+    formData.get("correctionPoints") ?? "0"
+  );
+  const correctionPoints = parseInt(correctionPointsRaw, 10) || 0;
   const manualPenaltyReason =
     String(formData.get("manualPenaltyReason") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
@@ -67,6 +71,7 @@ export async function upsertRaceResult(
     qualifyingTimeMs,
     incidents,
     manualPenaltyPoints,
+    correctionPoints,
     manualPenaltyReason,
     notes,
   };

@@ -9,6 +9,7 @@ export interface RoundPoints {
   classRawPoints: number;     // class-position race points (within Pro or AM)
   participationPoints: number;
   penaltyPoints: number;
+  correctionPoints: number;
   combinedPoints: number;     // = rawPoints + (participation if enabled) - penalty
   classPoints: number;        // = classRawPoints + participation - penalty
   hasResult: boolean;
@@ -140,12 +141,14 @@ export async function computeDriverStandings(
     let classRaw = 0;
     let participation = 0;
     let penalty = 0;
+    let correction = 0;
     let totalIncidents = 0;
 
     for (const r of reg.raceResults) {
       raw += r.rawPointsAwarded;
       participation += r.participationPointsAwarded;
       penalty += r.manualPenaltyPoints;
+      correction += r.correctionPoints;
       totalIncidents += r.incidents;
 
       if (proAmEnabled) {
@@ -190,6 +193,7 @@ export async function computeDriverStandings(
           classRawPoints: 0,
           participationPoints: 0,
           penaltyPoints: 0,
+          correctionPoints: 0,
           combinedPoints: 0,
           classPoints: 0,
           hasResult: false,
@@ -215,8 +219,9 @@ export async function computeDriverStandings(
         classRawPoints: rClassRaw,
         participationPoints: rPart,
         penaltyPoints: rPen,
-        combinedPoints: rRaw + (includeParticipationInCombined ? rPart : 0) - rPen,
-        classPoints: rClassRaw + rPart - rPen,
+        correctionPoints: rCorrection,
+        combinedPoints: rRaw + (includeParticipationInCombined ? rPart : 0) - rPen + rCorrection,
+        classPoints: rClassRaw + rPart - rPen + rCorrection,
         hasResult: true,
         dropped: false,
       };
@@ -265,8 +270,8 @@ export async function computeDriverStandings(
       classRawPoints: classRaw,
       participationPoints: participation,
       manualPenalties: penalty,
-      combinedTotal: raw + (includeParticipationInCombined ? participation : 0) - penalty,
-      classTotal: classRaw + participation - penalty,
+      combinedTotal: raw + (includeParticipationInCombined ? participation : 0) - penalty + correction,
+      classTotal: classRaw + participation - penalty + correction,
       totalIncidents,
       iRating,
       excludedAt: reg.excludedAt ?? null,

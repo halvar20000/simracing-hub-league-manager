@@ -259,6 +259,7 @@ model RaceResult {
   qualifyingTimeMs Int?
   startPosition    Int?
   raceNumber       Int       @default(1)
+  correctionPoints Int       @default(0)
 }
 
 model ScoringSystem {
