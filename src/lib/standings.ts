@@ -206,10 +206,7 @@ export async function computeDriverStandings(
       let rClassRaw = rRaw;
       if (proAmEnabled) {
         const classPos = classPositionByResult.get(result.id);
-      const rCorrection = results.reduce(
-        (sum, r) => sum + r.correctionPoints,
-        0
-      );
+      const rCorrection = result.correctionPoints;
         if (classPos != null) {
           rClassRaw = pointsTable[String(classPos)] ?? 0;
         }
