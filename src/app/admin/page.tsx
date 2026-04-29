@@ -115,7 +115,6 @@ async function FullAdminDashboard() {
                   <div className="truncate text-[10px] text-zinc-500">
                     {league._count.seasons} season
                     {league._count.seasons === 1 ? "" : "s"}
-                    {activeSeason && ` • ${activeSeason.year}`}
                   </div>
                 </div>
               </Link>
