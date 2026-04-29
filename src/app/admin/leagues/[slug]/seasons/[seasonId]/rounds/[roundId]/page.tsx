@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { upsertRaceResult } from "@/lib/actions/race-results";
 import { formatMsToTime } from "@/lib/time";
 import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
+import { PullFromIRLMButton } from "@/components/PullFromIRLMButton";
 import { formatDateTime } from "@/lib/date";
 
 export default async function AdminRoundResults({
@@ -74,12 +75,7 @@ export default async function AdminRoundResults({
                 <input type="hidden" name="leagueSlug" value={slug} />
                 <input type="hidden" name="seasonId" value={seasonId} />
                 <input type="hidden" name="roundId" value={roundId} />
-                <button
-                  type="submit"
-                  className="rounded border border-emerald-600 bg-emerald-950/40 px-3 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-900"
-                >
-                  Pull from iRLM
-                </button>
+                <PullFromIRLMButton />
               </form>
             )}
             <Link
