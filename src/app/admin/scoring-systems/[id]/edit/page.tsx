@@ -89,6 +89,14 @@ export default async function EditScoringSystem({
               min={0}
               max={100}
             />
+            <Field
+              label="Min distance % to earn race position points"
+              name="racePointsMinDistancePct"
+              type="number"
+              defaultValue={String(ss.racePointsMinDistancePct)}
+              min={0}
+              max={100}
+            />
           </div>
           <label className="mt-4 flex items-center gap-2 text-sm text-zinc-200">
             <input

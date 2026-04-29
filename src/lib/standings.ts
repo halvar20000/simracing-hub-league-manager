@@ -115,8 +115,16 @@ export async function computeDriverStandings(
     });
 
     for (const round of roundsWithResults) {
+      // Include any driver who'd earn position points (above the
+      // racePointsMinDistancePct threshold and not DSQ/DNS).
+      const minPct = season?.scoringSystem.racePointsMinDistancePct ?? 50;
       const classified = round.raceResults
-        .filter((r) => r.finishStatus === "CLASSIFIED")
+        .filter(
+          (r) =>
+            r.finishStatus !== "DSQ" &&
+            r.finishStatus !== "DNS" &&
+            r.raceDistancePct >= minPct
+        )
         .sort((a, b) => a.finishPosition - b.finishPosition);
 
       let proRank = 0;

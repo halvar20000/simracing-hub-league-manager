@@ -19,9 +19,14 @@ export interface FPRTier {
 export function calculateRawPoints(
   finishPosition: number,
   finishStatus: FinishStatus,
+  raceDistancePct: number,
+  racePointsMinDistancePct: number,
   pointsTable: PointsTable
 ): number {
-  if (finishStatus !== "CLASSIFIED") return 0;
+  // DSQ and DNS never score.
+  if (finishStatus === "DSQ" || finishStatus === "DNS") return 0;
+  // Below the distance threshold: no position points.
+  if (raceDistancePct < racePointsMinDistancePct) return 0;
   if (finishPosition < 1) return 0;
   return pointsTable[String(finishPosition)] ?? 0;
 }
@@ -73,6 +78,8 @@ export async function recomputeResultPoints(
   const raw = calculateRawPoints(
     result.finishPosition,
     result.finishStatus,
+    result.raceDistancePct,
+    scoring.racePointsMinDistancePct,
     pointsTable
   );
 

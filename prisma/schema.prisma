@@ -270,6 +270,7 @@ model ScoringSystem {
   classPointsTable              Json?
   participationPoints           Int       @default(0)
   participationMinDistancePct   Int       @default(75)
+  racePointsMinDistancePct      Int       @default(50)
   bonusFastestLap               Int?
   bonusPole                     Int?
   bonusMostLapsLed              Int?

@@ -43,6 +43,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
     readIntOrNull(formData.get("participationPoints")) ?? 0;
   const participationMinDistancePct =
     readIntOrNull(formData.get("participationMinDistancePct")) ?? 75;
+  const racePointsMinDistancePct =
+    readIntOrNull(formData.get("racePointsMinDistancePct")) ?? 50;
   const bonusFastestLap = readIntOrNull(formData.get("bonusFastestLap"));
   const bonusPole = readIntOrNull(formData.get("bonusPole"));
   const bonusMostLapsLed = readIntOrNull(formData.get("bonusMostLapsLed"));
@@ -65,6 +67,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
           : classPointsTable,
       participationPoints,
       participationMinDistancePct,
+      racePointsMinDistancePct,
       bonusFastestLap,
       bonusPole,
       bonusMostLapsLed,
