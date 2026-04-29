@@ -186,12 +186,15 @@ export async function computeDriverStandings(
       }
     }
 
-    const resultsByRoundId = new Map(
-      reg.raceResults.map((r) => [r.roundId, r])
-    );
+    const resultsByRoundId = new Map<string, typeof reg.raceResults>();
+    for (const r of reg.raceResults) {
+      const list = resultsByRoundId.get(r.roundId) ?? [];
+      list.push(r);
+      resultsByRoundId.set(r.roundId, list);
+    }
     const roundPoints: RoundPoints[] = rounds.map((round) => {
-      const result = resultsByRoundId.get(round.id);
-      if (!result) {
+      const results = resultsByRoundId.get(round.id) ?? [];
+      if (results.length === 0) {
         return {
           roundId: round.id,
           roundNumber: round.roundNumber,
@@ -208,15 +211,26 @@ export async function computeDriverStandings(
           dropped: false,
         };
       }
-      const rRaw = result.rawPointsAwarded;
-      const rPart = result.participationPointsAwarded;
-      const rPen = result.manualPenaltyPoints;
-      const rCorrection = result.correctionPoints;
+      const rRaw = results.reduce((sum, r) => sum + r.rawPointsAwarded, 0);
+      const rPart = results.reduce(
+        (sum, r) => sum + r.participationPointsAwarded,
+        0
+      );
+      const rPen = results.reduce((sum, r) => sum + r.manualPenaltyPoints, 0);
+      const rCorrection = results.reduce(
+        (sum, r) => sum + r.correctionPoints,
+        0
+      );
       let rClassRaw = rRaw;
       if (proAmEnabled) {
-        const classPos = classPositionByResult.get(result.id);
-        if (classPos != null) {
-          rClassRaw = pointsTable[String(classPos)] ?? 0;
+        rClassRaw = 0;
+        for (const r of results) {
+          const classPos = classPositionByResult.get(r.id);
+          if (classPos != null) {
+            rClassRaw += pointsTable[String(classPos)] ?? 0;
+          } else {
+            rClassRaw += r.rawPointsAwarded;
+          }
         }
       }
       return {
