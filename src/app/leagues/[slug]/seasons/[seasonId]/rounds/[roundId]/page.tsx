@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
 import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
+import { RoundPodium } from "@/components/RoundPodium";
 
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2";
 const TEAM_BEST_N = 2;
@@ -187,6 +188,27 @@ export default async function PublicRoundResults({
   const pillOn = "bg-[#ff6b35] text-zinc-950";
   const pillOff = "text-zinc-300 hover:text-zinc-100";
 
+  // Top 3 podium for the Combined view. Filter to drivers who have at least
+  // one CLASSIFIED race; sort is already done by aggRows (totalPoints desc).
+  const podium = aggRows
+    .filter((a) => a.rows.some((r) => r.finishStatus === "CLASSIFIED"))
+    .slice(0, 3)
+    .map((a, i) => {
+      const sample = a.rows[0];
+      return {
+        rank: i + 1,
+        firstName: sample.registration.user.firstName,
+        lastName: sample.registration.user.lastName,
+        startNumber: sample.registration.startNumber,
+        teamName: sample.registration.team?.name ?? null,
+        carClassName: sample.registration.carClass?.name ?? null,
+        totalPoints: a.totalPoints,
+        raceBreakdown: [...a.rows]
+          .sort((x, y) => x.raceNumber - y.raceNumber)
+          .map((r) => ({ raceNumber: r.raceNumber, finishPosition: r.finishPosition })),
+      };
+    });
+
   return (
     <div className="space-y-6">
       <div className="flex items-baseline justify-between">
@@ -258,6 +280,14 @@ export default async function PublicRoundResults({
           Team
         </Link>
       </div>
+
+      {cls === "combined" && podium.length > 0 && (
+        <RoundPodium
+          drivers={podium}
+          isMultiRace={isMultiRace}
+          isMulticlass={isMulticlass}
+        />
+      )}
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Race results</h2>
