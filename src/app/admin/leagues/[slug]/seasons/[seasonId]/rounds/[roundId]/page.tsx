@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { upsertRaceResult } from "@/lib/actions/race-results";
 import { formatMsToTime } from "@/lib/time";
+import { CountryFlag } from "@/components/CountryFlag";
 import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
 import { PullFromIRLMButton } from "@/components/PullFromIRLMButton";
 import { formatDateTime } from "@/lib/date";
@@ -191,7 +192,7 @@ function ResultRow({
   reg: {
     id: string;
     startNumber: number | null;
-    user: { firstName: string | null; lastName: string | null };
+    user: { firstName: string | null; lastName: string | null; countryCode: string | null };
     team: { name: string } | null;
     carClass: { name: string; shortCode: string } | null;
       excludedAt: Date | null;
@@ -236,7 +237,7 @@ function ResultRow({
             {reg.startNumber != null && (
               <span className="mr-2 text-zinc-500 no-underline">#{reg.startNumber}</span>
             )}
-            {reg.user.firstName} {reg.user.lastName}
+            <CountryFlag code={reg.user.countryCode} />{reg.user.firstName} {reg.user.lastName}
             {reg.excludedAt && (
               <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                 Excluded

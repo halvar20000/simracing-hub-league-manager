@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { CountryFlag } from "@/components/CountryFlag";
 
 export default async function AdminTeams() {
   await requireAdmin();
@@ -84,6 +85,7 @@ export default async function AdminTeams() {
                         className="border-t border-zinc-800"
                       >
                         <td className="px-3 py-1.5">
+                          <CountryFlag code={reg.user.countryCode} />
                           {reg.user.firstName} {reg.user.lastName}
                         </td>
                         <td className="px-3 py-1.5 text-zinc-500 tabular-nums">

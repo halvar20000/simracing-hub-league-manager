@@ -1,10 +1,12 @@
 import React from "react";
+import { CountryFlag } from "./CountryFlag";
 
 type PodiumDriver = {
   rank: number; // 1, 2, 3
   firstName: string | null;
   lastName: string | null;
   startNumber: number | null;
+  countryCode: string | null;
   teamName: string | null;
   carClassName: string | null;
   totalPoints: number;
@@ -77,6 +79,7 @@ function PodiumCard({
           {driver.startNumber != null && (
             <span className={`mr-1.5 ${accent}`}>#{driver.startNumber}</span>
           )}
+          <CountryFlag code={driver.countryCode} />
           {name || "—"}
         </div>
         <div className="mt-0.5 text-xs text-zinc-400">

@@ -5,6 +5,7 @@ import { formatDateTime } from "@/lib/date";
 import { computeDriverStandings } from "@/lib/standings";
 import { EmptyState, CalendarIcon, UsersIcon } from "@/components/EmptyState";
 import { SeasonHero } from "@/components/SeasonHero";
+import { CountryFlag } from "@/components/CountryFlag";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -243,6 +244,7 @@ export default async function PublicSeasonDetail({
                       {r.startNumber ?? "—"}
                     </td>
                     <td className="px-3 py-2 font-medium">
+                      <CountryFlag code={r.user.countryCode} />
                       {r.user.firstName} {r.user.lastName}
                     </td>
                     <td className="px-3 py-2 text-zinc-400">

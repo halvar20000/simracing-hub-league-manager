@@ -574,6 +574,7 @@ function ResultsTable({
                 <td
                   className={`px-3 py-2 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
+                  <CountryFlag code={r.registration.user.countryCode} />
                   {r.registration.user.firstName}{" "}
                   {r.registration.user.lastName}
                   {r.registration.excludedAt && (
@@ -683,6 +684,7 @@ function CombinedMultiRaceTable({
                 <td
                   className={`px-3 py-2 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
+                  <CountryFlag code={sample.registration.user.countryCode} />
                   {sample.registration.user.firstName}{" "}
                   {sample.registration.user.lastName}
                   {sample.registration.excludedAt && (
@@ -813,6 +815,7 @@ function TeamView({
                     <td
                       className={`px-3 py-1.5 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                     >
+                      <CountryFlag code={sample.registration.user.countryCode} />
                       {sample.registration.user.firstName}{" "}
                       {sample.registration.user.lastName}
                       {sample.registration.excludedAt && (
