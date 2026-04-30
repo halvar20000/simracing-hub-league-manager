@@ -412,7 +412,7 @@ type Row = {
   manualPenaltyPoints: number;
   registration: {
     startNumber: number | null;
-    user: { firstName: string | null; lastName: string | null };
+    user: { firstName: string | null; lastName: string | null; countryCode: string | null };
     team: { name: string } | null;
     carClass: { name: string } | null;
     excludedAt: Date | null;
