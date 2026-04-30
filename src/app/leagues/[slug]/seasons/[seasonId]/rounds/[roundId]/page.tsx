@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
 import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
+import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
 
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2";
@@ -292,9 +293,11 @@ export default async function PublicRoundResults({
       <section>
         <h2 className="mb-3 text-lg font-semibold">Race results</h2>
         {allRows.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            No results entered yet for this round.
-          </p>
+          <EmptyState
+            icon={<FlagIcon />}
+            title="No results entered yet"
+            description="Once race results are imported, they will appear here."
+          />
         ) : cls === "team" ? (
           <TeamView
             teams={teamRows}

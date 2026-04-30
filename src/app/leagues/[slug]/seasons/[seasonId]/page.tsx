@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
 import { computeDriverStandings } from "@/lib/standings";
+import { EmptyState, CalendarIcon, UsersIcon } from "@/components/EmptyState";
 import { SeasonHero } from "@/components/SeasonHero";
 
 export default async function PublicSeasonDetail({
@@ -163,8 +164,12 @@ export default async function PublicSeasonDetail({
               ))}
               {season.rounds.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-4 text-center text-zinc-500">
-                    No rounds scheduled yet.
+                  <td colSpan={6} className="p-0">
+                    <EmptyState
+                      icon={<CalendarIcon />}
+                      title="No rounds scheduled yet"
+                      description="Rounds will appear once the schedule is published."
+                    />
                   </td>
                 </tr>
               )}
@@ -178,7 +183,11 @@ export default async function PublicSeasonDetail({
           Roster ({season.registrations.length} approved)
         </h2>
         {season.registrations.length === 0 ? (
-          <p className="text-sm text-zinc-500">No approved drivers yet.</p>
+          <EmptyState
+            icon={<UsersIcon />}
+            title="No approved drivers yet"
+            description="Drivers who register and are approved will show up here."
+          />
         ) : (
           <div className="overflow-hidden rounded border border-zinc-800">
             <table className="w-full text-sm">

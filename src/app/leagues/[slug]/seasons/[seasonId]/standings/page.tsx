@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/date";
 import { CountryFlag } from "@/components/CountryFlag";
+import { EmptyState, ChartIcon } from "@/components/EmptyState";
 import { IRatingChip } from "@/components/IRatingChip";
 import {
   computeDriverStandings,
@@ -256,7 +257,7 @@ function DriversTable({
   showClass?: boolean;
 }) {
   if (rows.length === 0) {
-    return <p className="text-sm text-zinc-500">No standings to show yet.</p>;
+    return <EmptyState icon={<ChartIcon />} title="No standings to show yet" description="Standings will appear after the first round results are imported." />;
   }
 
   const previousMap = new Map(
@@ -353,7 +354,7 @@ function RaceByRaceTable({
   kind: StandingsKind;
 }) {
   if (rows.length === 0) {
-    return <p className="text-sm text-zinc-500">No standings to show yet.</p>;
+    return <EmptyState icon={<ChartIcon />} title="No standings to show yet" description="Standings will appear after the first round results are imported." />;
   }
   const rounds = rows[0].roundPoints;
   const sorted = [...rows].sort((a, b) => {
@@ -373,9 +374,9 @@ function RaceByRaceTable({
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
       <table className="min-w-full text-[11px]">
-        <thead className="bg-zinc-900 text-zinc-400">
+        <thead className="sticky top-0 z-30 bg-zinc-900 text-zinc-400">
           <tr>
-            <th rowSpan={2} className="sticky left-0 z-10 bg-zinc-900 px-2 py-2 text-left">Pos</th>
+            <th rowSpan={2} className="sticky left-0 top-0 z-40 bg-zinc-900 px-2 py-2 text-left">Pos</th>
             <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left">#</th>
             <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left">Driver</th>
             <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">Total</th>
