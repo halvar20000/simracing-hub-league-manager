@@ -281,6 +281,7 @@ export default async function PublicRoundResults({
         rank: i + 1,
         firstName: sample.registration.user.firstName,
         lastName: sample.registration.user.lastName,
+        countryCode: sample.registration.user.countryCode ?? null,
         startNumber: sample.registration.startNumber,
         teamName: sample.registration.team?.name ?? null,
         carClassName: sample.registration.carClass?.name ?? null,
