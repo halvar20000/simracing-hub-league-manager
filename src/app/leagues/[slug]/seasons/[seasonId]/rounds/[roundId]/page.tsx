@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
+import { CountryFlag } from "@/components/CountryFlag";
 import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
 import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
 
-type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2";
+type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali";
 const TEAM_BEST_N = 2;
 
 function ptsOf(r: {
@@ -86,7 +87,9 @@ export default async function PublicRoundResults({
             ? "race1"
             : clsRaw === "race2"
               ? "race2"
-              : "combined";
+              : clsRaw === "quali"
+                ? "quali"
+                : "combined";
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
@@ -242,6 +245,12 @@ export default async function PublicRoundResults({
         >
           Combined
         </Link>
+        <Link
+          href={`${baseHref}?cls=quali`}
+          className={`${pillBase} ${cls === "quali" ? pillOn : pillOff}`}
+        >
+          Quali
+        </Link>
         {isMultiRace && (
           <>
             <Link
@@ -298,6 +307,8 @@ export default async function PublicRoundResults({
             title="No results entered yet"
             description="Once race results are imported, they will appear here."
           />
+        ) : cls === "quali" ? (
+          <QualifyingTable rows={aggRows} isMulticlass={isMulticlass} />
         ) : cls === "team" ? (
           <TeamView
             teams={teamRows}
@@ -763,6 +774,120 @@ function TeamView({
           </table>
         </details>
       ))}
+    </div>
+  );
+}
+
+function QualifyingTable({
+  rows,
+  isMulticlass,
+}: {
+  rows: Agg[];
+  isMulticlass: boolean;
+}) {
+  // For each driver, take the smallest non-null qualifyingTimeMs across
+  // their RaceResult rows (in multi-race rounds R1 and R2 carry the same
+  // value; for single-race it's just the one row).
+  const drivers = rows
+    .map((a) => {
+      const sample = a.rows[0];
+      let bestQuali: number | null = null;
+      for (const r of a.rows) {
+        if (
+          r.qualifyingTimeMs != null &&
+          (bestQuali == null || r.qualifyingTimeMs < bestQuali)
+        ) {
+          bestQuali = r.qualifyingTimeMs;
+        }
+      }
+      return {
+        registrationId: a.registrationId,
+        firstName: sample.registration.user.firstName,
+        lastName: sample.registration.user.lastName,
+        countryCode: sample.registration.user.countryCode ?? null,
+        startNumber: sample.registration.startNumber,
+        teamName: sample.registration.team?.name ?? null,
+        carClassName: sample.registration.carClass?.name ?? null,
+        qualifyingTimeMs: bestQuali,
+        excludedAt: sample.registration.excludedAt,
+      };
+    })
+    .sort((a, b) => {
+      const at = a.qualifyingTimeMs ?? Number.POSITIVE_INFINITY;
+      const bt = b.qualifyingTimeMs ?? Number.POSITIVE_INFINITY;
+      return at - bt;
+    });
+
+  if (drivers.length === 0) {
+    return null;
+  }
+  const pole = drivers[0]?.qualifyingTimeMs ?? null;
+
+  return (
+    <div className="overflow-hidden rounded border border-zinc-800">
+      <table className="w-full text-sm">
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="px-3 py-2">Pos</th>
+            <th className="px-3 py-2">#</th>
+            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2">Team</th>
+            {isMulticlass && <th className="px-3 py-2">Class</th>}
+            <th className="px-3 py-2 text-right">Quali time</th>
+            <th className="px-3 py-2 text-right">Gap to pole</th>
+          </tr>
+        </thead>
+        <tbody>
+          {drivers.map((d, i) => {
+            const gap =
+              pole != null && d.qualifyingTimeMs != null
+                ? d.qualifyingTimeMs - pole
+                : null;
+            return (
+              <tr
+                key={d.registrationId}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="px-3 py-2 font-medium">
+                  {d.qualifyingTimeMs != null ? i + 1 : "—"}
+                </td>
+                <td className="px-3 py-2 text-zinc-500">
+                  {d.startNumber ?? "—"}
+                </td>
+                <td
+                  className={`px-3 py-2 ${d.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                >
+                  <CountryFlag code={d.countryCode} />
+                  {d.firstName} {d.lastName}
+                  {d.excludedAt && (
+                    <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                      Excluded
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-zinc-400">
+                  {d.teamName ?? "—"}
+                </td>
+                {isMulticlass && (
+                  <td className="px-3 py-2 text-zinc-400">
+                    {d.carClassName ?? "—"}
+                  </td>
+                )}
+                <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
+                  {formatMsToTime(d.qualifyingTimeMs) || "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">
+                  {gap != null && gap > 0
+                    ? "+" + formatMsToTime(gap)
+                    : gap === 0
+                      ? "pole"
+                      : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
