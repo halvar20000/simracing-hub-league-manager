@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { DeleteLeagueButton } from "@/components/DeleteLeagueButton";
 
 export default async function AdminLeagueDetail({
   params,
@@ -125,7 +126,22 @@ export default async function AdminLeagueDetail({
           </table>
         </div>
       </section>
-    </div>
+    
+
+      <section className="mt-12 rounded border border-red-800/60 bg-red-950/30 p-5">
+        <h2 className="text-lg font-semibold text-red-200">Danger zone</h2>
+        <p className="mt-1 text-sm text-red-200/70">
+          Delete this entire league — useful for cleaning up test data.
+        </p>
+        <div className="mt-4">
+          <DeleteLeagueButton
+            leagueId={league.id}
+            leagueName={league.name}
+            seasonCount={league.seasons.length}
+          />
+        </div>
+      </section>
+</div>
   );
 }
 
