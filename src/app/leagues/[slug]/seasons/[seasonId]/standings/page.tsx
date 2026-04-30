@@ -312,7 +312,7 @@ function DriversTable({
                 <td className="px-3 py-2 font-medium tabular-nums"><PosCell pos={idx + 1} delta={positionDelta} /></td>
                 <td className="px-3 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
                 <td className={`px-3 py-2 font-medium ${r.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
-                  {r.driverFirstName} {r.driverLastName}
+                  <CountryFlag code={r.countryCode} />{r.driverFirstName} {r.driverLastName}
                   {r.excludedAt && (
                     <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                       Excluded
@@ -416,7 +416,7 @@ function RaceByRaceTable({
                 <td className="sticky left-0 z-10 bg-zinc-950 px-2 py-1.5 font-medium">{idx + 1}</td>
                 <td className="px-2 py-1.5 text-zinc-500">{r.startNumber ?? "—"}</td>
                 <td className="px-2 py-1.5 font-medium whitespace-nowrap">
-                  {r.driverFirstName} {r.driverLastName}
+                  <CountryFlag code={r.countryCode} />{r.driverFirstName} {r.driverLastName}
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-orange-400 tabular-nums">{seasonTotal}</td>
                 {r.roundPoints.map((rp) => {
