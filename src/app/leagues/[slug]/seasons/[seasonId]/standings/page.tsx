@@ -16,6 +16,30 @@ import {
 type StandingsKind = "combined" | "class";
 type ViewMode = "list" | "races";
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; seasonId: string }>;
+}): Promise<Metadata> {
+  const { slug, seasonId } = await params;
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { league: true },
+  });
+  if (!season || season.league.slug !== slug) {
+    return { title: "Standings not found" };
+  }
+  const title = `Standings — ${season.league.name} ${season.name} ${season.year}`;
+  const description = `Live driver and team standings for ${season.name} ${season.year}.`;
+  const image = season.league.logoUrl ?? "/logos/cas-community.webp";
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website", images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
+  };
+}
+
 export default async function StandingsPage({
   params,
   searchParams,

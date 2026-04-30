@@ -5,6 +5,38 @@ import { formatDateTime } from "@/lib/date";
 import { computeDriverStandings } from "@/lib/standings";
 import { EmptyState, CalendarIcon, UsersIcon } from "@/components/EmptyState";
 import { SeasonHero } from "@/components/SeasonHero";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; seasonId: string }>;
+}): Promise<Metadata> {
+  const { slug, seasonId } = await params;
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { league: true },
+  });
+  if (!season || season.league.slug !== slug) {
+    return { title: "Season not found" };
+  }
+  const title = `${season.league.name} — ${season.name} ${season.year}`;
+  const description = season.scheduleImageUrl
+    ? `Race calendar, standings, and results for ${season.name} ${season.year}.`
+    : `Standings and results for ${season.name} ${season.year}.`;
+  const image = season.scheduleImageUrl ?? season.league.logoUrl ?? "/logos/cas-community.webp";
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      images: [image],
+    },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
+  };
+}
 
 export default async function PublicSeasonDetail({
   params,

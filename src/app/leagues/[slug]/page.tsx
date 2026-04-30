@@ -4,6 +4,26 @@ import { prisma } from "@/lib/prisma";
 import { computeDriverStandings } from "@/lib/standings";
 import { CountryFlag } from "@/components/CountryFlag";
 import { NextRaceHero } from "@/components/NextRaceHero";
+import type { Metadata } from "next";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const league = await prisma.league.findUnique({ where: { slug } });
+  if (!league) return { title: "League not found" };
+  const title = league.name;
+  const description = league.description ?? `Standings, schedules, and results for ${league.name}.`;
+  const image = league.logoUrl ?? "/logos/cas-community.webp";
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website", images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
+  };
+}
 
 export default async function PublicLeagueDetail({
   params,

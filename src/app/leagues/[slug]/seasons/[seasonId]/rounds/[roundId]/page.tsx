@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
 import { CountryFlag } from "@/components/CountryFlag";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
+import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
 import { EmptyState, FlagIcon } from "@/components/EmptyState";
@@ -31,6 +33,82 @@ function sortByFinish<R extends { finishStatus: string; finishPosition: number }
     }
     return a.finishPosition - b.finishPosition;
   });
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; seasonId: string; roundId: string }>;
+}): Promise<Metadata> {
+  const { slug, seasonId, roundId } = await params;
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      season: { include: { league: true } },
+      raceResults: {
+        include: { registration: { include: { user: true } } },
+      },
+    },
+  });
+  if (
+    !round ||
+    round.season.league.slug !== slug ||
+    round.seasonId !== seasonId
+  ) {
+    return { title: "Round not found" };
+  }
+
+  // Compute top 3 by aggregated round total (handles multi-race)
+  type Agg = {
+    name: string;
+    total: number;
+    classified: boolean;
+  };
+  const m = new Map<string, Agg>();
+  for (const r of round.raceResults) {
+    const name = (
+      `${r.registration.user.firstName ?? ""} ${r.registration.user.lastName ?? ""}`
+    ).trim();
+    let a = m.get(r.registrationId);
+    if (!a) {
+      a = { name, total: 0, classified: false };
+      m.set(r.registrationId, a);
+    }
+    a.total +=
+      r.rawPointsAwarded +
+      r.participationPointsAwarded -
+      r.manualPenaltyPoints +
+      (r.correctionPoints ?? 0);
+    if (r.finishStatus === "CLASSIFIED") a.classified = true;
+  }
+  const top3 = [...m.values()]
+    .filter((a) => a.classified)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3);
+
+  const title = `${round.season.league.name} R${round.roundNumber} — ${round.track}`;
+  const description =
+    top3.length === 3
+      ? `🥇 ${top3[0].name} · 🥈 ${top3[1].name} · 🥉 ${top3[2].name}`
+      : `${round.name} · ${round.season.name} ${round.season.year}`;
+  const image = round.season.league.logoUrl ?? "/logos/cas-community.webp";
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "article",
+      images: [image],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [image],
+    },
+  };
 }
 
 export default async function PublicRoundResults({
@@ -229,12 +307,15 @@ export default async function PublicRoundResults({
             {isMultiRace && ` • ${racesPerRound} races per round`}
           </p>
         </div>
-        <Link
-          href={`/leagues/${slug}/seasons/${seasonId}`}
-          className="text-sm text-zinc-400 hover:text-zinc-100"
-        >
-          ← Season
-        </Link>
+        <div className="flex items-center gap-2">
+          <CopyLinkButton />
+          <Link
+            href={`/leagues/${slug}/seasons/${seasonId}`}
+            className="text-sm text-zinc-400 hover:text-zinc-100"
+          >
+            ← Season
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
