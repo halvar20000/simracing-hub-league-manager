@@ -21,6 +21,7 @@ export interface DriverStanding {
   startNumber: number | null;
   driverFirstName: string | null;
   driverLastName: string | null;
+  countryCode: string | null;
   teamId: string | null;
   teamName: string | null;
   carClassId: string | null;
@@ -284,6 +285,7 @@ export async function computeDriverStandings(
       startNumber: reg.startNumber,
       driverFirstName: reg.user.firstName,
       driverLastName: reg.user.lastName,
+      countryCode: reg.user.countryCode,
       teamId: reg.teamId,
       teamName: reg.team?.name ?? null,
       carClassId: reg.carClassId,

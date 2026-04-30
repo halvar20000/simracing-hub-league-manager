@@ -85,6 +85,7 @@ export interface IRLMResultRow {
   newIrating?: number | null;
   oldIrating?: number | null;
   completedPct?: number;
+  countryCode?: string;
 }
 
 export interface IRLMSessionResult {

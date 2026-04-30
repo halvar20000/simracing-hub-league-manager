@@ -3,6 +3,8 @@ import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/date";
+import { CountryFlag } from "@/components/CountryFlag";
+import { IRatingChip } from "@/components/IRatingChip";
 import {
   computeDriverStandings,
   computeTeamStandings,
@@ -325,8 +327,8 @@ function DriversTable({
                 )}
                 <td className="px-3 py-2 text-right text-zinc-400">{r.roundsCompleted}</td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={r.totalIncidents} delta={incDelta} lowerIsBetter /></td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.iRating ?? "—"}
+                <td className="px-3 py-2 text-right">
+                  <IRatingChip value={r.iRating} />
                 </td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={rawForView} delta={rawDelta} /></td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">

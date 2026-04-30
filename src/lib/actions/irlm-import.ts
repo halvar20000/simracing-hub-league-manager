@@ -79,6 +79,20 @@ async function importRow(
     };
   }
 
+  // If iRLM gave us a country code and our user doesn't have one (or it
+  // differs), persist it. Best-effort — failures don't break the import.
+  const cc = String(row.countryCode ?? "").trim().toUpperCase();
+  if (cc.length === 2) {
+    try {
+      await prisma.user.update({
+        where: { id: reg.userId },
+        data: { countryCode: cc },
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
   const finishStatus = statusFromIRLM(row.status);
   const finishPosition = Math.round(Number(row.finishPosition ?? 0));
   const lapsCompleted = Math.round(Number(row.completedLaps ?? 0));
