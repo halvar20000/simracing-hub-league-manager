@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import type { SeasonStatus, TeamScoringMode } from "@prisma/client";
+import { getTemplate } from "@/lib/league-templates";
 
 export async function createSeason(leagueSlug: string, formData: FormData) {
   await requireAdmin();
@@ -16,7 +17,8 @@ export async function createSeason(leagueSlug: string, formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const year = parseInt(String(formData.get("year") ?? "0"), 10);
-  const scoringSystemId = String(formData.get("scoringSystemId") ?? "");
+  let scoringSystemId = String(formData.get("scoringSystemId") ?? "").trim();
+  const templateId = String(formData.get("template") ?? "").trim() || null;
   const isMulticlass = formData.get("isMulticlass") === "on";
   const proAmEnabled = formData.get("proAmEnabled") === "on";
   const teamScoringMode = String(
@@ -28,10 +30,44 @@ export async function createSeason(leagueSlug: string, formData: FormData) {
       ? parseInt(teamScoringBestNRaw, 10)
       : null;
 
+  // If a template is chosen and no existing scoring system was selected,
+  // auto-create a new ScoringSystem from the template defaults.
+  if (!scoringSystemId && templateId) {
+    const tpl = getTemplate(templateId);
+    if (!tpl) {
+      redirect(
+        `/admin/leagues/${leagueSlug}/seasons/new?error=Unknown+template`
+      );
+    }
+    const t = tpl!;
+    // Distinguish the auto-created system per league/season name so admins
+    // can find it later.
+    const ssName = `${t.scoringSystem.name} – ${league.name}${name ? " / " + name : ""}`;
+    const ss = await prisma.scoringSystem.create({
+      data: {
+        name: ssName,
+        racesPerRound: t.scoringSystem.racesPerRound,
+        pointsTable: t.scoringSystem.pointsTable,
+        pointsTableRace2: t.scoringSystem.pointsTableRace2 ?? undefined,
+        participationPoints: t.scoringSystem.participationPoints,
+        participationInCombined: t.scoringSystem.participationInCombined,
+        racePointsMinDistancePct: t.scoringSystem.racePointsMinDistancePct,
+        participationMinDistancePct: t.scoringSystem.participationMinDistancePct,
+        bonusPole: t.scoringSystem.bonusPole,
+        bonusFastestLap: t.scoringSystem.bonusFastestLap,
+        bonusMostLapsLed: t.scoringSystem.bonusMostLapsLed,
+        dropWorstNRounds: t.scoringSystem.dropWorstNRounds,
+      },
+    });
+    scoringSystemId = ss.id;
+  }
+
   if (!name || !year || !scoringSystemId) {
-    redirect(
-      `/admin/leagues/${leagueSlug}/seasons/new?error=Name%2C+year+and+scoring+system+are+required`
-    );
+    const params = new URLSearchParams({
+      error: "Name, year and scoring system are required",
+    });
+    if (templateId) params.set("template", templateId);
+    redirect(`/admin/leagues/${leagueSlug}/seasons/new?${params.toString()}`);
   }
 
   const created = await prisma.season.create({
