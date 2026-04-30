@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
+import { computeDriverStandings } from "@/lib/standings";
+import { SeasonHero } from "@/components/SeasonHero";
 
 export default async function PublicSeasonDetail({
   params,
@@ -25,12 +27,47 @@ export default async function PublicSeasonDetail({
       },
     },
   });
-
   if (!season || season.league.slug !== slug) notFound();
 
   const registrationOpen =
     season.status === "OPEN_REGISTRATION" || season.status === "ACTIVE";
   const hasResults = season.rounds.some((r) => r._count.raceResults > 0);
+  const completedRounds = season.rounds.filter((r) => r.status === "COMPLETED").length;
+  const totalRounds = season.rounds.length;
+
+  // Next round = first round whose startsAt is in the future, or first
+  // non-completed round if all are in the past
+  const now = Date.now();
+  const futureRounds = [...season.rounds]
+    .filter((r) => r.startsAt.getTime() > now)
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  const nextRound = futureRounds[0] ?? null;
+
+  // Current leader = top of computeDriverStandings, if any results exist
+  let currentLeader: {
+    firstName: string | null;
+    lastName: string | null;
+    startNumber: number | null;
+    teamName: string | null;
+    points: number;
+  } | null = null;
+  if (hasResults) {
+    try {
+      const standings = await computeDriverStandings(prisma, seasonId);
+      const top = standings[0];
+      if (top) {
+        currentLeader = {
+          firstName: top.driverFirstName,
+          lastName: top.driverLastName,
+          startNumber: top.startNumber,
+          teamName: top.teamName,
+          points: top.combinedTotal,
+        };
+      }
+    } catch {
+      currentLeader = null;
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -41,72 +78,34 @@ export default async function PublicSeasonDetail({
         ← {season.league.name}
       </Link>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          {season.league.logoUrl && (
-            <img
-              src={season.league.logoUrl}
-              alt={season.league.name}
-              className="h-9 w-9 shrink-0 object-contain"
-            />
-          )}
-          <div>
-            <h1 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-              {season.name} {season.year}
-            </h1>
-            <p className="text-[10px] text-zinc-400">
-              {season.scoringSystem.name} • {season.status.replace("_", " ")}
-              {season.isMulticlass && " • Multiclass"}
-              {season.proAmEnabled && " • Pro/Am"}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Link
-              href={`/leagues/${slug}/seasons/${seasonId}/decisions`}
-              className="rounded border border-zinc-700 px-3 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
-            >
-              Decisions →
-            </Link>
-          {hasResults && (
-            <Link
-              href={`/leagues/${slug}/seasons/${seasonId}/standings`}
-              className="rounded border border-[#ff6b35] px-3 py-1 text-xs font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"
-            >
-              Standings →
-            </Link>
-          )}
-          {registrationOpen && (
-            <Link
-              href={`/leagues/${slug}/seasons/${seasonId}/register`}
-              className="rounded bg-[#ff6b35] px-3 py-1 text-xs font-medium text-zinc-950 hover:bg-[#ff8550]"
-            >
-              Register →
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {season.scheduleImageUrl && (
-        <section>
-          <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-            Schedule
-          </h2>
-          <a
-            href={season.scheduleImageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block max-w-2xl"
-            title="Open full-size in new tab"
-          >
-            <img
-              src={season.scheduleImageUrl}
-              alt={`${season.name} schedule`}
-              className="w-full rounded border border-zinc-800 transition-opacity hover:opacity-90"
-            />
-          </a>
-        </section>
-      )}
+      <SeasonHero
+        slug={slug}
+        seasonId={seasonId}
+        leagueLogoUrl={season.league.logoUrl}
+        leagueName={season.league.name}
+        seasonName={season.name}
+        seasonYear={season.year}
+        scoringSystemName={season.scoringSystem.name}
+        status={season.status}
+        isMulticlass={season.isMulticlass}
+        proAmEnabled={season.proAmEnabled}
+        scheduleImageUrl={season.scheduleImageUrl}
+        totalRounds={totalRounds}
+        completedRounds={completedRounds}
+        currentLeader={currentLeader}
+        nextRound={
+          nextRound
+            ? {
+                name: nextRound.name,
+                track: nextRound.track,
+                trackConfig: nextRound.trackConfig,
+                startsAtIso: nextRound.startsAt.toISOString(),
+              }
+            : null
+        }
+        registrationOpen={registrationOpen}
+        hasResults={hasResults}
+      />
 
       <section>
         <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
@@ -164,10 +163,7 @@ export default async function PublicSeasonDetail({
               ))}
               {season.rounds.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-3 py-4 text-center text-zinc-500"
-                  >
+                  <td colSpan={6} className="px-3 py-4 text-center text-zinc-500">
                     No rounds scheduled yet.
                   </td>
                 </tr>
