@@ -52,6 +52,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const protestWindowHours = readIntOrNull(formData.get("protestWindowHours"));
   const protestCooldownHours = readIntOrNull(formData.get("protestCooldownHours"));
   const participationInCombined = formData.get("participationInCombined") === "on";
+  const deferPenaltyPoints = formData.get("deferPenaltyPoints") === "on";
 
   const pointsTable = readPointsTable(formData, "pos", 30);
   const classPointsTableObj = readPointsTable(formData, "classPos", 30);
@@ -77,6 +78,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       protestWindowHours,
       protestCooldownHours,
       participationInCombined,
+      deferPenaltyPoints,
     },
   });
 

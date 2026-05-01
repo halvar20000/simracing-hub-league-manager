@@ -166,6 +166,29 @@ export default async function EditScoringSystem({
           </p>
         </Section>
 
+        <Section title="Penalty points application">
+          <label className="flex items-start gap-3 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              name="deferPenaltyPoints"
+              defaultChecked={ss.deferPenaltyPoints}
+              className="mt-0.5 h-4 w-4 accent-orange-500"
+            />
+            <span>
+              <span className="font-medium">
+                Defer penalty points to end of season
+              </span>
+              <span className="ml-1 block text-xs text-zinc-500">
+                When checked, points-deduction penalties accumulate in a
+                Penalty Pool and only hit the standings once an admin releases
+                them at season end (with optional forgiveness for clean racing).
+                When unchecked, penalties are subtracted from standings
+                immediately as decisions are published.
+              </span>
+            </span>
+          </label>
+        </Section>
+
         <Section title="Drop weeks">
           <Field
             label="Drop worst N rounds (blank = no drop)"

@@ -286,6 +286,7 @@ model ScoringSystem {
   pointsTableRace2              Json?
   protestWindowHours          Int?
   protestCooldownHours       Int?
+  deferPenaltyPoints       Boolean @default(false)
 }
 
 model FPRAward {
@@ -419,6 +420,11 @@ model Penalty {
   appliedAt                   DateTime            @default(now())
 
   createdAt                   DateTime            @default(now())
+  category        PenaltyCategory?
+  releasedAt      DateTime?
+  forgivenPoints  Int                @default(0)
+  forgivenAt      DateTime?
+  forgivenReason  String?
 }
 
 // ==========================================
@@ -525,4 +531,17 @@ enum RaceSession {
   RACE
   RACE_1
   RACE_2
+}
+
+
+enum PenaltyCategory {
+  AVOIDABLE_CONTACT
+  CAUSING_COLLISION
+  BLOCKING
+  TRACK_LIMITS
+  JUMP_START
+  IGNORING_BLUE_FLAGS
+  UNSPORTSMANLIKE
+  CHAT_MISCONDUCT
+  OTHER
 }

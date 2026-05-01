@@ -86,6 +86,12 @@ export async function computeDriverStandings(
               ? { roundId: { notIn: excludeRoundIds } }
               : {}),
           },
+          select: {
+            pointsValue: true,
+            forgivenPoints: true,
+            releasedAt: true,
+            roundId: true,
+          },
         },
       },
     }),
@@ -145,6 +151,7 @@ export async function computeDriverStandings(
 
   const includeParticipationInCombined =
     season?.scoringSystem.participationInCombined ?? true;
+  const defersPenalties = !!season?.scoringSystem?.deferPenaltyPoints;
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
     let classRaw = 0;
@@ -173,7 +180,11 @@ export async function computeDriverStandings(
     }
 
     for (const p of reg.penalties) {
-      if (p.pointsValue != null) penalty += p.pointsValue;
+      if (p.pointsValue == null) continue;
+      // Deferred systems: only released penalties hit the standings.
+      if (defersPenalties && p.releasedAt == null) continue;
+      const effective = Math.max(0, p.pointsValue - (p.forgivenPoints ?? 0));
+      penalty += effective;
     }
 
     const sortedNewestFirst = [...reg.raceResults].sort(

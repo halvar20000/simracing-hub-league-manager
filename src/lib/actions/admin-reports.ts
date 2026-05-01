@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSteward } from "@/lib/auth-helpers";
-import type { IncidentStatus, Verdict } from "@prisma/client";
+import type { IncidentStatus, Verdict, PenaltyCategory } from "@prisma/client";
 
 export async function setReportStatus(
   leagueSlug: string,
@@ -54,6 +54,10 @@ export async function submitDecision(
   const reason = (
     String(formData.get("penaltyReason") ?? "").trim() || publicSummary
   );
+  const penaltyCategoryRaw = String(formData.get("penaltyCategory") ?? "").trim();
+  const penaltyCategory = penaltyCategoryRaw
+    ? (penaltyCategoryRaw as PenaltyCategory)
+    : null;
 
   if (!publicSummary) {
     redirect(
@@ -124,6 +128,7 @@ export async function submitDecision(
         timePenaltySeconds: verdict === "TIME_PENALTY" ? timePenaltySeconds : null,
         gridPositions: verdict === "GRID_PENALTY_NEXT_ROUND" ? gridPositions : null,
         reason,
+        category: penaltyCategory,
       },
     });
   }

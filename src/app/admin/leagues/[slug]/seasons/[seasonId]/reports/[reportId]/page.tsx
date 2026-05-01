@@ -9,6 +9,19 @@ import {
   deleteDecision,
 } from "@/lib/actions/admin-reports";
 
+const CATEGORIES = [
+  { value: "", label: "—" },
+  { value: "AVOIDABLE_CONTACT", label: "Avoidable contact" },
+  { value: "CAUSING_COLLISION", label: "Causing a collision" },
+  { value: "BLOCKING", label: "Blocking" },
+  { value: "TRACK_LIMITS", label: "Track limits" },
+  { value: "JUMP_START", label: "Jump start" },
+  { value: "IGNORING_BLUE_FLAGS", label: "Ignoring blue flags" },
+  { value: "UNSPORTSMANLIKE", label: "Unsportsmanlike conduct" },
+  { value: "CHAT_MISCONDUCT", label: "Chat misconduct" },
+  { value: "OTHER", label: "Other" },
+];
+
 const VERDICTS = [
   { value: "NO_ACTION", label: "No action" },
   { value: "WARNING", label: "Warning" },
@@ -201,6 +214,25 @@ export default async function AdminReportDetail({
               ))}
             </select>
           </label>
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">Penalty category</span>
+            <select
+              name="penaltyCategory"
+              defaultValue={(report.decision?.penalties?.[0]?.category as string | null | undefined) ?? ""}
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c.value || "none"} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-zinc-500">
+              Used for analytics and the penalty pool. Points are still set
+              by the value field below.
+            </span>
+          </label>
+
 
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">
