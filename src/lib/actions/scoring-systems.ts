@@ -66,6 +66,14 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const deferPenaltyPoints = formData.get("deferPenaltyPoints") === "on";
 
   const pointsTable = readPointsTable(formData, "pos", 30);
+  const pointsTableRace2Raw = readPointsTable(formData, "posR2", 30);
+  const pointsTableRace2 =
+    Object.keys(pointsTableRace2Raw).length > 0 ? pointsTableRace2Raw : null;
+  const racesPerRoundRaw = formData.get("racesPerRound");
+  const racesPerRound =
+    racesPerRoundRaw == null || String(racesPerRoundRaw).trim() === ""
+      ? 1
+      : Math.max(1, Math.min(4, parseInt(String(racesPerRoundRaw), 10) || 1));
   const classPointsTableObj = readPointsTable(formData, "classPos", 30);
   const classPointsTable =
     Object.keys(classPointsTableObj).length > 0 ? classPointsTableObj : null;
@@ -91,6 +99,9 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       participationInCombined,
       deferPenaltyPoints,
       categoryPointsTable,
+      racesPerRound,
+      pointsTableRace2:
+        pointsTableRace2 === null ? Prisma.DbNull : pointsTableRace2,
     },
   });
 

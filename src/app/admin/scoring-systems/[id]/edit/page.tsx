@@ -22,6 +22,8 @@ export default async function EditScoringSystem({
   if (!ss) notFound();
 
   const points = (ss.pointsTable as Record<string, number>) ?? {};
+  const pointsRace2 = (ss.pointsTableRace2 as Record<string, number> | null) ?? {};
+  const hasRace2 = Object.keys(pointsRace2).length > 0;
   const categoryPoints = readCategoryPoints(ss.categoryPointsTable);
   const classPoints = (ss.classPointsTable as Record<string, number> | null) ?? {};
   const hasClass = Object.keys(classPoints).length > 0;
@@ -62,8 +64,29 @@ export default async function EditScoringSystem({
             placeholder="(no pts)"
           />
           <p className="mt-2 text-xs text-zinc-500">
-            Leave a position blank if it should award 0 points.
+            Used for race 1 in single-race rounds, and for race 1 of multi-race rounds.
           </p>
+        </Section>
+
+        <Section title="Multi-race weekends">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Field
+              label="Races per round"
+              name="racesPerRound"
+              type="number"
+              defaultValue={String(ss.racesPerRound ?? 1)}
+              min={1}
+              max={4}
+            />
+          </div>
+          <p className="mt-3 mb-2 text-xs text-zinc-500">
+            Race 2 points table {hasRace2 ? "(in use)" : "(empty — race 2 will fall back to the overall table if blank)"}
+          </p>
+          <PointsGrid
+            prefix="posR2"
+            values={pointsRace2}
+            placeholder="(no pts)"
+          />
         </Section>
 
         <Section title={hasClass ? "Class points table (Pro/Am)" : "Class points table (currently empty — fill to enable separate per-class scoring)"}>
