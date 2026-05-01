@@ -16,7 +16,7 @@ export default async function NewReportPicker() {
       season: {
         include: {
           league: true,
-          scoringSystem: { select: { protestWindowHours: true } },
+          scoringSystem: { select: { protestCooldownHours: true, protestWindowHours: true } },
           rounds: {
             orderBy: { roundNumber: "asc" },
             select: {
@@ -77,16 +77,20 @@ export default async function NewReportPicker() {
                   {reg.season.rounds.map((r) => {
                     const w = protestWindowState({
                       raceStartsAt: r.startsAt,
+                      protestCooldownHours:
+                        reg.season.scoringSystem.protestCooldownHours,
                       protestWindowHours:
                         reg.season.scoringSystem.protestWindowHours,
                     });
                     const closed = w.status === "CLOSED";
+                    const cooldown = w.status === "COOLDOWN";
+                    const blocked = closed || cooldown;
                     return (
                       <li key={r.id}>
                         <Link
                           href={`/leagues/${reg.season.league.slug}/seasons/${reg.season.id}/rounds/${r.id}/report`}
                           className={`flex items-center justify-between gap-3 px-2 py-2 text-sm hover:bg-zinc-900 ${
-                            closed ? "opacity-60" : ""
+                            blocked ? "opacity-60" : ""
                           }`}
                         >
                           <span className="flex items-center gap-3">
@@ -104,6 +108,11 @@ export default async function NewReportPicker() {
                             <span className="text-xs text-zinc-500">
                               {formatDateTime(r.startsAt)}
                             </span>
+                            {cooldown && w.minutesUntilOpen != null && (
+                              <span className="rounded bg-amber-900/40 px-2 py-0.5 text-xs text-amber-200">
+                                opens in {formatCountdown(w.minutesUntilOpen)}
+                              </span>
+                            )}
                             {w.status === "OPEN" && w.minutesRemaining != null && (
                               <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-200">
                                 closes in {formatCountdown(w.minutesRemaining)}

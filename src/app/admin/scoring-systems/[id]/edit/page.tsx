@@ -139,18 +139,30 @@ export default async function EditScoringSystem({
         </Section>
 
         <Section title="Reporting window">
-          <Field
-            label="Protest window after race start (hours, blank = no limit)"
-            name="protestWindowHours"
-            type="number"
-            defaultValue={ss.protestWindowHours != null ? String(ss.protestWindowHours) : ""}
-            min={1}
-            max={720}
-            placeholder="e.g. 24, 48, 72"
-          />
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Field
+              label="Cool-down after race start (hours, blank = open immediately)"
+              name="protestCooldownHours"
+              type="number"
+              defaultValue={ss.protestCooldownHours != null ? String(ss.protestCooldownHours) : ""}
+              min={0}
+              max={720}
+              placeholder="e.g. 12"
+            />
+            <Field
+              label="Window length once open (hours, blank = no limit)"
+              name="protestWindowHours"
+              type="number"
+              defaultValue={ss.protestWindowHours != null ? String(ss.protestWindowHours) : ""}
+              min={1}
+              max={720}
+              placeholder="e.g. 48"
+            />
+          </div>
           <p className="mt-2 text-xs text-zinc-500">
-            Drivers can file an incident report from race start until this many
-            hours later. Stewards/admins can always file (override).
+            Timeline after race start: <strong>cool-down</strong> (no reports) →
+            <strong> window opens</strong> → <strong>window closes</strong>.
+            Stewards/admins can always file (override).
           </p>
         </Section>
 

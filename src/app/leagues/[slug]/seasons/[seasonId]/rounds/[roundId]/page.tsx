@@ -315,6 +315,7 @@ export default async function PublicRoundResults({
             href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
             window={protestWindowState({
               raceStartsAt: round.startsAt,
+              protestCooldownHours: round.season.scoringSystem.protestCooldownHours,
               protestWindowHours: round.season.scoringSystem.protestWindowHours,
             })}
           />
@@ -993,6 +994,16 @@ function ReportButton({
   href: string;
   window: ReturnType<typeof protestWindowState>;
 }) {
+  if (w.status === "COOLDOWN" && w.minutesUntilOpen != null) {
+    return (
+      <span
+        title={w.opensAt ? `Window opens at ${w.opensAt.toLocaleString()}` : "Cool-down"}
+        className="cursor-not-allowed rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-400"
+      >
+        Reporting opens in {formatCountdown(w.minutesUntilOpen)}
+      </span>
+    );
+  }
   if (w.status === "CLOSED") {
     return (
       <span

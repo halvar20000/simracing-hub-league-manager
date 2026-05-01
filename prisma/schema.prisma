@@ -285,6 +285,7 @@ model ScoringSystem {
   racesPerRound                 Int       @default(1)
   pointsTableRace2              Json?
   protestWindowHours          Int?
+  protestCooldownHours       Int?
 }
 
 model FPRAward {

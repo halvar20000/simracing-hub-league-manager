@@ -36,9 +36,12 @@ export default async function FileReportPage({
   const isSteward = me?.role === "ADMIN" || me?.role === "STEWARD";
   const windowState = protestWindowState({
     raceStartsAt: round.startsAt,
+    protestCooldownHours: round.season.scoringSystem.protestCooldownHours,
     protestWindowHours: round.season.scoringSystem.protestWindowHours,
   });
   const windowClosed = windowState.status === "CLOSED";
+  const windowCooldown = windowState.status === "COOLDOWN";
+  const windowBlocked = windowClosed || windowCooldown;
 
   const reporterReg = await prisma.registration.findFirst({
     where: {
@@ -116,6 +119,18 @@ export default async function FileReportPage({
               (at {windowState.closesAt.toLocaleString()})
             </span>
           )}
+        </div>
+      )}
+      {windowCooldown && windowState.minutesUntilOpen != null && (
+        <div className="rounded border border-zinc-700 bg-zinc-900 p-3 text-sm text-zinc-300">
+          The reporting window opens in{" "}
+          <strong>{formatCountdown(windowState.minutesUntilOpen)}</strong>
+          {windowState.opensAt && (
+            <span className="ml-1 text-xs text-zinc-500">
+              (at {windowState.opensAt.toLocaleString()})
+            </span>
+          )}.
+          {isSteward && " As a steward you can still file a report now."}
         </div>
       )}
       {windowClosed && (
@@ -210,7 +225,7 @@ export default async function FileReportPage({
         <div className="flex gap-2">
           <button
             type="submit"
-            disabled={windowClosed && !isSteward}
+            disabled={windowBlocked && !isSteward}
             className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Submit report

@@ -40,12 +40,20 @@ export async function createIncidentReport(
   const isSteward = me?.role === "ADMIN" || me?.role === "STEWARD";
   const window = protestWindowState({
     raceStartsAt: round.startsAt,
+    protestCooldownHours: round.season.scoringSystem.protestCooldownHours,
     protestWindowHours: round.season.scoringSystem.protestWindowHours,
   });
-  if (window.status === "CLOSED" && !isSteward) {
-    redirect(
-      `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=Reporting+window+is+closed`
-    );
+  if (!isSteward) {
+    if (window.status === "COOLDOWN") {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=Reporting+window+has+not+opened+yet`
+      );
+    }
+    if (window.status === "CLOSED") {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=Reporting+window+is+closed`
+      );
+    }
   }
 
   const lapNumberRaw = String(formData.get("lapNumber") ?? "").trim();
