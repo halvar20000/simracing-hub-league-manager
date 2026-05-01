@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSteward } from "@/lib/auth-helpers";
 import { formatDateTime } from "@/lib/date";
@@ -7,7 +8,7 @@ export default async function AdminDashboard() {
   const me = await requireSteward();
 
   if (me.role === "STEWARD") {
-    return <StewardDashboard />;
+    redirect("/admin/stewards");
   }
   return <FullAdminDashboard />;
 }
@@ -76,6 +77,12 @@ async function FullAdminDashboard() {
           className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800"
         >
           Scoring systems
+        </Link>
+        <Link
+          href="/admin/stewards"
+          className="rounded border border-amber-700 bg-amber-950/30 px-3 py-1.5 font-medium text-amber-200 hover:bg-amber-900/40"
+        >
+          Stewards Dashboard
         </Link>
         <Link
           href="/admin/leagues/new"

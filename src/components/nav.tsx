@@ -50,7 +50,7 @@ export default async function Nav() {
             </>
           )}
           {isAdmin && (
-            <NavLink href="/admin">
+            <NavLink href="/admin/stewards">
               Admin
               {pendingReports > 0 && (
                 <span className="ml-1 inline-block min-w-[1.25rem] rounded-full bg-orange-500 px-1.5 text-center text-[10px] font-bold leading-5 text-zinc-950">

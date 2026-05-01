@@ -21,6 +21,12 @@ export default async function AdminLayout({
         >
           Dashboard
         </Link>
+        <Link
+          href="/admin/stewards"
+          className="block rounded px-3 py-2 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          Stewards
+        </Link>
         {isAdmin && (
           <>
             <Link
