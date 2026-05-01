@@ -11,7 +11,7 @@ export default async function AdminReportsQueue({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
-  searchParams: Promise<{ pulled?: string; seen?: string; skippedDecided?: string; skippedNoMember?: string; existed?: string; rounds?: string; error?: string }>;
+  searchParams: Promise<{ pulled?: string; pulledReviews?: string; pulledProtests?: string; seen?: string; seenReviews?: string; seenProtests?: string; skippedDecided?: string; skippedNoMember?: string; existed?: string; rounds?: string; error?: string }>;
 }) {
   const sp = await searchParams;
   await requireSteward();
@@ -62,7 +62,7 @@ export default async function AdminReportsQueue({
               <input type="hidden" name="leagueSlug" value={slug} />
               <input type="hidden" name="seasonId" value={seasonId} />
               <SubmitWithSpinner
-                label="Pull open reports from iRLM"
+                label="Pull from iRLM (reviews + protests)"
                 pendingLabel="Pulling from iRLM…"
                 className="rounded border border-emerald-600 bg-emerald-950/40 px-3 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-900"
               />
@@ -74,9 +74,14 @@ export default async function AdminReportsQueue({
         )}
         {sp.pulled != null && (
           <div className="mb-3 rounded border border-emerald-800 bg-emerald-950/40 p-3 text-xs text-emerald-200 space-y-0.5">
-            <p>Imported <strong>{sp.pulled}</strong> open report{sp.pulled === "1" ? "" : "s"} from iRLM (across {sp.rounds} round{sp.rounds === "1" ? "" : "s"}).</p>
+            <p>
+              Imported <strong>{sp.pulled}</strong> from iRLM —
+              {sp.pulledReviews ?? "?"} review{sp.pulledReviews === "1" ? "" : "s"}
+              + {sp.pulledProtests ?? "?"} protest{sp.pulledProtests === "1" ? "" : "s"}
+              (across {sp.rounds} round{sp.rounds === "1" ? "" : "s"}).
+            </p>
             <p className="text-emerald-300/80">
-              Saw {sp.seen} review{sp.seen === "1" ? "" : "s"} in total ·
+              Saw {sp.seen} total ({sp.seenReviews ?? "?"} reviews + {sp.seenProtests ?? "?"} protests) ·
               skipped {sp.skippedDecided} already decided ·
               skipped {sp.skippedNoMember} with no roster match ·
               {sp.existed} already imported.

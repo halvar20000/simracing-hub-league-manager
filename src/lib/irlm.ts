@@ -201,3 +201,32 @@ export async function fetchEventReviews(
   const data = await irlmFetch<unknown>(`/${leagueName}/Events/${eventId}/Reviews`);
   return Array.isArray(data) ? (data as IRLMReview[]) : [];
 }
+
+
+export interface IRLMProtestMember {
+  memberId: number;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface IRLMProtest {
+  protestId: number;
+  eventId?: number;
+  sessionId?: number;
+  sessionNr?: number;
+  sessionName?: string;
+  author?: IRLMProtestMember;
+  fullDescription?: string;
+  onLap?: string | null;
+  corner?: string | null;
+  involvedMembers?: IRLMProtestMember[];
+}
+
+/** Fetch all open protests for an iRLM event. */
+export async function fetchEventProtests(
+  leagueName: string,
+  eventId: number
+): Promise<IRLMProtest[]> {
+  const data = await irlmFetch<unknown>(`/${leagueName}/Events/${eventId}/Protests`);
+  return Array.isArray(data) ? (data as IRLMProtest[]) : [];
+}

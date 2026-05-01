@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSteward } from "@/lib/auth-helpers";
-import { fetchEventReviews, fetchLeagueMembers, type IRLMReview } from "@/lib/irlm";
+import { fetchEventReviews, fetchEventProtests, fetchLeagueMembers, type IRLMReview, type IRLMProtest } from "@/lib/irlm";
 
 interface PullSummary {
   rounds: number;
@@ -13,6 +13,10 @@ interface PullSummary {
   reviewsSkippedDecided: number;
   reviewsSkippedNoMember: number;
   reviewsAlreadyExisted: number;
+  protestsSeen: number;
+  protestsImported: number;
+  protestsSkippedNoMember: number;
+  protestsAlreadyExisted: number;
 }
 
 export async function pullReviewsFromIRLM(formData: FormData): Promise<void> {
@@ -60,6 +64,10 @@ export async function pullReviewsFromIRLM(formData: FormData): Promise<void> {
     reviewsSkippedDecided: 0,
     reviewsSkippedNoMember: 0,
     reviewsAlreadyExisted: 0,
+    protestsSeen: 0,
+    protestsImported: 0,
+    protestsSkippedNoMember: 0,
+    protestsAlreadyExisted: 0,
   };
 
   for (const round of season.rounds) {
@@ -164,17 +172,122 @@ export async function pullReviewsFromIRLM(formData: FormData): Promise<void> {
 
       summary.reviewsImported += 1;
     }
+
+    // ---------- PROTESTS ----------
+    let protests: IRLMProtest[] = [];
+    try {
+      protests = await fetchEventProtests(season.irlmLeagueName!, round.irlmEventId);
+    } catch (e) {
+      console.error("[iRLM Protests]", round.name, e);
+    }
+    summary.protestsSeen += protests.length;
+
+    for (const pr of protests) {
+      const existing = await prisma.incidentReport.findFirst({
+        where: { irlmProtestId: pr.protestId },
+      });
+      if (existing) {
+        summary.protestsAlreadyExisted += 1;
+        continue;
+      }
+
+      // Reporter from author.memberId
+      const authorMemberId = pr.author?.memberId;
+      const authorCust = authorMemberId != null ? memberToCust.get(authorMemberId) : undefined;
+      let reporterReg: { id: string; userId: string } | null = null;
+      if (authorCust) {
+        const reg = await prisma.registration.findFirst({
+          where: { seasonId, status: "APPROVED", user: { iracingMemberId: authorCust } },
+          select: { id: true, userId: true },
+        });
+        if (reg) reporterReg = reg;
+      }
+      if (!reporterReg) {
+        summary.protestsSkippedNoMember += 1;
+        continue;
+      }
+
+      // Accused from involvedMembers
+      const involved = Array.isArray(pr.involvedMembers) ? pr.involvedMembers : [];
+      const accusedRegs: { regId: string; userId: string }[] = [];
+      for (const m of involved) {
+        const cust = memberToCust.get(m.memberId);
+        if (!cust) continue;
+        const reg = await prisma.registration.findFirst({
+          where: { seasonId, status: "APPROVED", user: { iracingMemberId: cust } },
+          select: { id: true, userId: true },
+        });
+        if (reg) accusedRegs.push({ regId: reg.id, userId: reg.userId });
+      }
+
+      const descParts: string[] = [];
+      if (pr.fullDescription) descParts.push(pr.fullDescription.trim());
+      const meta: string[] = [];
+      const authorName = pr.author ? `${pr.author.firstName ?? ""} ${pr.author.lastName ?? ""}`.trim() : null;
+      if (authorName) meta.push(`Protest by ${authorName}`);
+      if (pr.sessionName) meta.push(`Session: ${pr.sessionName}`);
+      meta.push(`iRLM protest #${pr.protestId}`);
+      descParts.push("\n— " + meta.join(" • "));
+
+      const lapNumber = pr.onLap ? parseInt(String(pr.onLap), 10) : null;
+      const corner = (pr.corner ?? "").trim() || null;
+
+      const created = await prisma.incidentReport.create({
+        data: {
+          roundId: round.id,
+          reporterUserId: reporterReg.userId,
+          reporterRegistrationId: reporterReg.id,
+          lapNumber: Number.isFinite(lapNumber) ? lapNumber : null,
+          turnOrSector: corner,
+          description: descParts.filter(Boolean).join("\n"),
+          status: "SUBMITTED",
+          submittedAt: new Date(),
+          outsideRaceIncident: false,
+          irlmProtestId: pr.protestId,
+        },
+      });
+
+      // Reporter as REPORTER
+      await prisma.incidentReportInvolvedDriver
+        .create({
+          data: {
+            incidentReportId: created.id,
+            registrationId: reporterReg.id,
+            role: "REPORTER",
+          },
+        })
+        .catch(() => { /* dup */ });
+      // Involved as ACCUSED
+      for (const a of accusedRegs) {
+        if (a.regId === reporterReg.id) continue;
+        await prisma.incidentReportInvolvedDriver
+          .create({
+            data: {
+              incidentReportId: created.id,
+              registrationId: a.regId,
+              role: "ACCUSED",
+            },
+          })
+          .catch(() => { /* dup */ });
+      }
+
+      summary.protestsImported += 1;
+    }
   }
 
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
   revalidatePath(`/admin/stewards`);
 
   const params = new URLSearchParams({
-    pulled: String(summary.reviewsImported),
-    seen: String(summary.reviewsSeen),
+    pulled: String(summary.reviewsImported + summary.protestsImported),
+    pulledReviews: String(summary.reviewsImported),
+    pulledProtests: String(summary.protestsImported),
+    seen: String(summary.reviewsSeen + summary.protestsSeen),
+    seenReviews: String(summary.reviewsSeen),
+    seenProtests: String(summary.protestsSeen),
     skippedDecided: String(summary.reviewsSkippedDecided),
-    skippedNoMember: String(summary.reviewsSkippedNoMember),
-    existed: String(summary.reviewsAlreadyExisted),
+    skippedNoMember: String(summary.reviewsSkippedNoMember + summary.protestsSkippedNoMember),
+    existed: String(summary.reviewsAlreadyExisted + summary.protestsAlreadyExisted),
     rounds: String(summary.rounds),
   });
   redirect(
