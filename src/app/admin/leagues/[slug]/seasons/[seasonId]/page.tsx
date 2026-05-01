@@ -41,6 +41,13 @@ export default async function AdminSeasonDetail({
   const reportNewCount = await prisma.incidentReport.count({
     where: { round: { seasonId }, status: "SUBMITTED" },
   });
+  const pendingPenaltyCount = await prisma.penalty.count({
+    where: {
+      type: "POINTS_DEDUCTION",
+      releasedAt: null,
+      round: { seasonId },
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -110,6 +117,17 @@ export default async function AdminSeasonDetail({
             </span>
           )}
           )
+        </Link>
+        <Link
+          href={`/admin/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
+          className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+        >
+          Penalty pool
+          {pendingPenaltyCount > 0 && (
+            <span className="ml-1.5 inline-block min-w-[1.25rem] rounded-full bg-amber-500 px-1.5 text-center text-[10px] font-bold leading-5 text-zinc-950">
+              {pendingPenaltyCount}
+            </span>
+          )}
         </Link>
         <Link
           href={`/admin/leagues/${slug}/seasons/${seasonId}/classes`}
