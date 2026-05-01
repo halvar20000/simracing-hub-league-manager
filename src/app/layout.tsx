@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com"
   ),
-  title: "Simracing-Hub League Manager — CAS iRacing Community",
+  title: "CLS — CAS League Scoring",
   description:
     "League management for the CAS iRacing community. Six championships, live standings, Fair Play Rating, race-by-race results.",
 };
