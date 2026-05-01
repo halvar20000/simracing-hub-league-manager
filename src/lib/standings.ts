@@ -620,6 +620,13 @@ export async function computeTeamClassStandings(
   });
   if (!season) return [];
   const pointsTable = (season.scoringSystem.pointsTable ?? {}) as Record<string, number>;
+  const participationPointsAward = season.scoringSystem.participationPoints ?? 0;
+  const participationMinPct = season.scoringSystem.participationMinDistancePct ?? 75;
+  const teamFprEnabled = !!season.scoringSystem.driverFprEnabled;
+  const teamFprTiers = teamFprEnabled
+    ? readDriverFprTiers(season.scoringSystem.driverFprTiers)
+    : [];
+  const teamFprMinDistance = season.scoringSystem.driverFprMinDistancePct ?? 90;
 
   const results = await prisma.teamResult.findMany({
     where: { round: { seasonId } },
@@ -667,10 +674,22 @@ export async function computeTeamClassStandings(
       r.classPosition != null ? pointsTable[String(r.classPosition)] ?? 0 : 0;
     const stored = r.rawPointsAwarded ?? 0;
     const racePts = stored > 0 ? stored : basePts;
-    const participation = r.participationPointsAwarded ?? 0;
+
+    // --- team participation + fpr (computed) ---
+    const participationStored = r.participationPointsAwarded ?? 0;
+    let participation = participationStored;
+    if (participation === 0 && (r.raceDistancePct ?? 0) >= participationMinPct) {
+      participation = participationPointsAward;
+    }
+
+    let fprPoints = 0;
+    if (teamFprEnabled && (r.raceDistancePct ?? 0) >= teamFprMinDistance) {
+      fprPoints = fprPointsForIncidents(r.totalIncidents ?? 0, teamFprTiers);
+    }
+
     const correction = r.correctionPoints ?? 0;
     const penalty = r.manualPenaltyPoints ?? 0;
-    const pts = racePts + participation + correction - penalty;
+    const pts = racePts + participation + correction - penalty + fprPoints;
     t.total += pts;
     t.incidents += r.totalIncidents;
     t.rounds.push({
