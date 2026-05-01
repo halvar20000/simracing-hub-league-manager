@@ -65,6 +65,21 @@ export default async function PublicSeasonDetail({
 
   const teamClasses = await computeTeamClassStandings(prisma, seasonId);
   const isTeamEventSeason = teamClasses.length > 0;
+  const classLeaders = isTeamEventSeason
+    ? teamClasses
+        .map((g) => {
+          const top = g.teams[0];
+          return top
+            ? {
+                shortCode: g.carClassShortCode,
+                className: g.carClassName,
+                teamName: top.teamName,
+                points: top.totalPoints,
+              }
+            : null;
+        })
+        .filter((x): x is { shortCode: string; className: string; teamName: string; points: number } => x != null)
+    : null;
 
   const registrationOpen =
     season.status === "OPEN_REGISTRATION" || season.status === "ACTIVE";
@@ -129,7 +144,8 @@ export default async function PublicSeasonDetail({
         scheduleImageUrl={season.scheduleImageUrl}
         totalRounds={totalRounds}
         completedRounds={completedRounds}
-        currentLeader={currentLeader}
+        currentLeader={isTeamEventSeason ? null : currentLeader}
+        classLeaders={classLeaders}
         nextRound={
           nextRound
             ? {

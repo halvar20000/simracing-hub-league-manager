@@ -32,6 +32,12 @@ export type SeasonHeroProps = {
   } | null;
   registrationOpen: boolean;
   hasResults: boolean;
+  classLeaders?: Array<{
+    shortCode: string;
+    className: string;
+    teamName: string;
+    points: number;
+  }> | null;
 };
 
 function formatCountdown(targetMs: number): string {
@@ -130,12 +136,26 @@ export function SeasonHero(p: SeasonHeroProps) {
             </div>
           </div>
 
-          {/* Current Leader */}
+          {/* Class Leaders (team event) — falls back to driver leader otherwise */}
           <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/60 p-3 backdrop-blur-sm">
             <div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
-              Current Leader
+              {p.classLeaders && p.classLeaders.length > 0 ? "Class Leaders" : "Current Leader"}
             </div>
-            {p.currentLeader && leaderName ? (
+            {p.classLeaders && p.classLeaders.length > 0 ? (
+              <ul className="mt-1 space-y-1">
+                {p.classLeaders.map((cl) => (
+                  <li key={cl.shortCode} className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-zinc-300">
+                        {cl.shortCode}
+                      </span>
+                      <span className="font-medium text-zinc-100 truncate">{cl.teamName}</span>
+                    </span>
+                    <span className="text-xs text-zinc-400 tabular-nums">{cl.points} pts</span>
+                  </li>
+                ))}
+              </ul>
+            ) : p.currentLeader && leaderName ? (
               <>
                 <div className="mt-1 font-display text-base font-bold text-zinc-100">
                   {p.currentLeader.startNumber != null && (
