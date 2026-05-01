@@ -140,7 +140,7 @@ export async function importIracingJson(
     where: { seasonId, status: "APPROVED" },
     include: { user: true },
   });
-  const memberMap = new Map<number, { regId: string; userId: string; currentCountry: string | null; currentCarId: string | null }>();
+  const memberMap = new Map<number, { regId: string; userId: string; currentCountry: string | null; currentCarId: string | null; currentStartNumber: number | null }>();
   for (const reg of registrations) {
     const raw = reg.user.iracingMemberId;
     if (!raw) continue;
@@ -151,6 +151,7 @@ export async function importIracingJson(
       userId: reg.userId,
       currentCountry: reg.user.countryCode,
       currentCarId: reg.carId,
+      currentStartNumber: reg.startNumber,
     });
   }
 
@@ -191,6 +192,19 @@ export async function importIracingJson(
           data: { countryCode: d.countryCode },
         });
         reg.currentCountry = d.countryCode;
+      }
+
+      // Update startNumber from livery.car_number when present + numeric.
+      const carNumStr = (d as { carNumber?: string | null }).carNumber;
+      if (carNumStr) {
+        const n = parseInt(carNumStr, 10);
+        if (Number.isFinite(n) && n !== reg.currentStartNumber) {
+          await prisma.registration.update({
+            where: { id: reg.regId },
+            data: { startNumber: n },
+          });
+          reg.currentStartNumber = n;
+        }
       }
 
       const distancePct =

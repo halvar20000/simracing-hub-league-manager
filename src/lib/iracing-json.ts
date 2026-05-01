@@ -24,6 +24,7 @@ export interface ParsedDriver {
   carClassShortName: string | null;
   carIracingId: number | null;
   carName: string | null;
+  carNumber: string | null;
   reasonOut: string;
   finishStatus: "CLASSIFIED" | "DNF" | "DNS" | "DSQ";
 }
@@ -105,6 +106,7 @@ function buildSession(
           typeof r.car_class_short_name === "string" ? r.car_class_short_name : null,
         carIracingId: typeof r.car_id === "number" ? r.car_id : null,
         carName: typeof r.car_name === "string" ? r.car_name : null,
+        carNumber: typeof r.livery?.car_number === "string" ? r.livery.car_number : null,
         reasonOut: String(r.reason_out ?? "Running"),
         finishStatus: mapReasonOut(r.reason_out),
       };
