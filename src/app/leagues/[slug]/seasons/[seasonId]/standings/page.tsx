@@ -147,7 +147,7 @@ export default async function StandingsPage({
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-zinc-500">Audience:</span>
           <Link href={`${baseHref}${viewQuery}`} className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Combined</Link>
-          {season.isMulticlass && (<>
+          {season.proAmEnabled && (<>
             <Link href={`${baseHref}?cls=pro${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Pro</Link>
             <Link href={`${baseHref}?cls=am${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Am</Link>
           </>)}
