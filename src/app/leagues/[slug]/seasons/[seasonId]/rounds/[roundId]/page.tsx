@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
 import { CountryFlag } from "@/components/CountryFlag";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
+import { protestWindowState, formatCountdown } from "@/lib/protest-window";
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
@@ -310,12 +311,13 @@ export default async function PublicRoundResults({
         </div>
         <div className="flex items-center gap-2">
           <CopyLinkButton />
-          <Link
+          <ReportButton
             href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
-            className="rounded border border-orange-500/60 bg-orange-500/10 px-3 py-1.5 text-sm font-medium text-orange-200 hover:bg-orange-500/20"
-          >
-            ⚑ Report incident
-          </Link>
+            window={protestWindowState({
+              raceStartsAt: round.startsAt,
+              protestWindowHours: round.season.scoringSystem.protestWindowHours,
+            })}
+          />
           <Link
             href={`/leagues/${slug}/seasons/${seasonId}`}
             className="text-sm text-zinc-400 hover:text-zinc-100"
@@ -980,5 +982,46 @@ function QualifyingTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+
+function ReportButton({
+  href,
+  window: w,
+}: {
+  href: string;
+  window: ReturnType<typeof protestWindowState>;
+}) {
+  if (w.status === "CLOSED") {
+    return (
+      <span
+        title={w.closesAt ? `Window closed at ${w.closesAt.toLocaleString()}` : "Closed"}
+        className="cursor-not-allowed rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-500"
+      >
+        Reporting closed
+      </span>
+    );
+  }
+  if (w.status === "OPEN" && w.minutesRemaining != null) {
+    return (
+      <a
+        href={href}
+        className="rounded border border-orange-500/60 bg-orange-500/10 px-3 py-1.5 text-sm font-medium text-orange-200 hover:bg-orange-500/20"
+      >
+        ⚑ Report incident
+        <span className="ml-1 text-xs text-orange-300/80">
+          · closes in {formatCountdown(w.minutesRemaining)}
+        </span>
+      </a>
+    );
+  }
+  return (
+    <a
+      href={href}
+      className="rounded border border-orange-500/60 bg-orange-500/10 px-3 py-1.5 text-sm font-medium text-orange-200 hover:bg-orange-500/20"
+    >
+      ⚑ Report incident
+    </a>
   );
 }

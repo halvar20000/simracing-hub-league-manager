@@ -138,6 +138,22 @@ export default async function EditScoringSystem({
           </div>
         </Section>
 
+        <Section title="Reporting window">
+          <Field
+            label="Protest window after race start (hours, blank = no limit)"
+            name="protestWindowHours"
+            type="number"
+            defaultValue={ss.protestWindowHours != null ? String(ss.protestWindowHours) : ""}
+            min={1}
+            max={720}
+            placeholder="e.g. 24, 48, 72"
+          />
+          <p className="mt-2 text-xs text-zinc-500">
+            Drivers can file an incident report from race start until this many
+            hours later. Stewards/admins can always file (override).
+          </p>
+        </Section>
+
         <Section title="Drop weeks">
           <Field
             label="Drop worst N rounds (blank = no drop)"

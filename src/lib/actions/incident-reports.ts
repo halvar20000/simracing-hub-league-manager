@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-helpers";
 import type { EvidenceKind } from "@prisma/client";
+import { protestWindowState } from "@/lib/protest-window";
 
 export async function createIncidentReport(
   leagueSlug: string,
@@ -25,9 +26,26 @@ export async function createIncidentReport(
 
   const round = await prisma.round.findFirst({
     where: { id: roundId, seasonId },
+    include: { season: { include: { scoringSystem: true } } },
   });
   if (!round) {
     redirect(`/leagues/${leagueSlug}/seasons/${seasonId}`);
+  }
+
+  // Reporting window check — admins/stewards bypass.
+  const me = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { role: true },
+  });
+  const isSteward = me?.role === "ADMIN" || me?.role === "STEWARD";
+  const window = protestWindowState({
+    raceStartsAt: round.startsAt,
+    protestWindowHours: round.season.scoringSystem.protestWindowHours,
+  });
+  if (window.status === "CLOSED" && !isSteward) {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=Reporting+window+is+closed`
+    );
   }
 
   const lapNumberRaw = String(formData.get("lapNumber") ?? "").trim();

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { createIncidentReport } from "@/lib/actions/incident-reports";
 import { InvolvedDriversPicker } from "@/components/InvolvedDriversPicker";
+import { protestWindowState, formatCountdown } from "@/lib/protest-window";
 
 export default async function FileReportPage({
   params,
@@ -24,9 +25,20 @@ export default async function FileReportPage({
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
-    include: { season: { include: { league: true } } },
+    include: { season: { include: { league: true, scoringSystem: true } } },
   });
   if (!round || round.season.league.slug !== slug) notFound();
+
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  const isSteward = me?.role === "ADMIN" || me?.role === "STEWARD";
+  const windowState = protestWindowState({
+    raceStartsAt: round.startsAt,
+    protestWindowHours: round.season.scoringSystem.protestWindowHours,
+  });
+  const windowClosed = windowState.status === "CLOSED";
 
   const reporterReg = await prisma.registration.findFirst({
     where: {
@@ -95,6 +107,26 @@ export default async function FileReportPage({
           Round {round.roundNumber} — {round.name}
         </p>
       </div>
+
+      {windowState.status === "OPEN" && windowState.minutesRemaining != null && (
+        <div className="rounded border border-orange-700/60 bg-orange-950/30 p-3 text-sm text-orange-200">
+          Reporting window closes in <strong>{formatCountdown(windowState.minutesRemaining)}</strong>
+          {windowState.closesAt && (
+            <span className="ml-1 text-xs text-orange-300/70">
+              (at {windowState.closesAt.toLocaleString()})
+            </span>
+          )}
+        </div>
+      )}
+      {windowClosed && (
+        <div className="rounded border border-zinc-700 bg-zinc-900 p-3 text-sm text-zinc-300">
+          The reporting window for this round closed on{" "}
+          {windowState.closesAt?.toLocaleString()}.
+          {isSteward
+            ? " As a steward you can still file a report for the record."
+            : " Please contact a steward if you have a late report."}
+        </div>
+      )}
 
       {error && (
         <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
@@ -178,7 +210,8 @@ export default async function FileReportPage({
         <div className="flex gap-2">
           <button
             type="submit"
-            className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550]"
+            disabled={windowClosed && !isSteward}
+            className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Submit report
           </button>
