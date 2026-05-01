@@ -342,6 +342,9 @@ model IncidentReport {
 
   createdAt                   DateTime        @default(now())
   updatedAt                   DateTime        @updatedAt
+  session             RaceSession?
+  replayTimestamp     String?
+  outsideRaceIncident Boolean @default(false)
 }
 
 model IncidentReportInvolvedDriver {
@@ -514,4 +517,12 @@ enum PenaltyType {
   POINTS_DEDUCTION
   GRID_PENALTY
   WARNING
+}
+
+
+enum RaceSession {
+  QUALIFYING
+  RACE
+  RACE_1
+  RACE_2
 }

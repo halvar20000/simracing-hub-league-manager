@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-helpers";
-import type { EvidenceKind } from "@prisma/client";
+import type { EvidenceKind, RaceSession } from "@prisma/client";
 import { protestWindowState } from "@/lib/protest-window";
 
 export async function createIncidentReport(
@@ -69,7 +69,17 @@ export async function createIncidentReport(
     .map((v) => String(v).trim())
     .filter(Boolean);
   const evidenceLinksRaw = String(formData.get("evidenceLinks") ?? "").trim();
+  const outsideRaceIncident = formData.get("outsideRaceIncident") === "on";
+  const sessionRaw = String(formData.get("session") ?? "").trim();
+  const sessionValue = sessionRaw ? (sessionRaw as RaceSession) : null;
+  const replayTimestamp =
+    String(formData.get("replayTimestamp") ?? "").trim() || null;
 
+  if (!outsideRaceIncident && (!sessionValue || !replayTimestamp)) {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}/report?error=Session+and+replay+timestamp+are+required`
+    );
+  }
   if (!description) {
     redirect(
       `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}/report?error=Description+is+required`
@@ -84,6 +94,9 @@ export async function createIncidentReport(
       lapNumber,
       turnOrSector,
       description,
+      session: sessionValue,
+      replayTimestamp,
+      outsideRaceIncident,
       status: "SUBMITTED",
       submittedAt: new Date(),
     },

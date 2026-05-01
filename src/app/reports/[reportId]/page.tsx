@@ -60,7 +60,19 @@ export default async function ReportDetail({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+        <Field
+          label="Session"
+          value={
+            report.outsideRaceIncident
+              ? "Outside race"
+              : sessionLabel(report.session)
+          }
+        />
+        <Field
+          label="Replay timestamp"
+          value={report.replayTimestamp ?? "—"}
+        />
         <Field label="Lap" value={report.lapNumber?.toString() ?? "—"} />
         <Field label="Turn / sector" value={report.turnOrSector ?? "—"} />
       </div>
@@ -170,4 +182,16 @@ function StatusBadge({ status }: { status: string }) {
       {status.replace("_", " ")}
     </span>
   );
+}
+
+
+function sessionLabel(s: string | null | undefined): string {
+  if (!s) return "—";
+  switch (s) {
+    case "QUALIFYING": return "Qualifying";
+    case "RACE":       return "Race";
+    case "RACE_1":     return "Heat 1 / Race 1";
+    case "RACE_2":     return "Feature / Race 2";
+    default:           return s;
+  }
 }

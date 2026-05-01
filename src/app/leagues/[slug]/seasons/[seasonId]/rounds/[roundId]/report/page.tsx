@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createIncidentReport } from "@/lib/actions/incident-reports";
 import { InvolvedDriversPicker } from "@/components/InvolvedDriversPicker";
 import { protestWindowState, formatCountdown } from "@/lib/protest-window";
+import { SessionAndTimestampFields } from "@/components/SessionAndTimestampFields";
 
 export default async function FileReportPage({
   params,
@@ -42,6 +43,19 @@ export default async function FileReportPage({
   const windowClosed = windowState.status === "CLOSED";
   const windowCooldown = windowState.status === "COOLDOWN";
   const windowBlocked = windowClosed || windowCooldown;
+
+  const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
+  const sessionOptions =
+    racesPerRound > 1
+      ? [
+          { value: "QUALIFYING", label: "Qualifying" },
+          { value: "RACE_1", label: "Heat 1 / Race 1" },
+          { value: "RACE_2", label: "Feature / Race 2" },
+        ]
+      : [
+          { value: "QUALIFYING", label: "Qualifying" },
+          { value: "RACE", label: "Race" },
+        ];
 
   const reporterReg = await prisma.registration.findFirst({
     where: {
@@ -160,6 +174,8 @@ export default async function FileReportPage({
       </div>
 
       <form action={action} className="space-y-4">
+        <SessionAndTimestampFields sessionOptions={sessionOptions} />
+
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">
