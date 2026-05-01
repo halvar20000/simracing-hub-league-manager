@@ -8,6 +8,7 @@ import {
   unreleasePenalty,
   releaseAllPending,
 } from "@/lib/actions/penalty-pool";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 const CATEGORY_LABEL: Record<string, string> = {
   AVOIDABLE_CONTACT: "Avoidable contact",
@@ -135,12 +136,11 @@ export default async function PenaltyPoolPage({
 
       {season.scoringSystem.deferPenaltyPoints && totals.pending > 0 && (
         <form action={releaseAll}>
-          <button
-            type="submit"
+          <SubmitWithSpinner
+            label={`Release all ${totals.pending} pending points to standings`}
+            pendingLabel="Releasing penalties…"
             className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600"
-          >
-            Release all {totals.pending} pending points to standings
-          </button>
+          />
           <span className="ml-2 text-xs text-zinc-500">
             (Use after end-of-season review)
           </span>

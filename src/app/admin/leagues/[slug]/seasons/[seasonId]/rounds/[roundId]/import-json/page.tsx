@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { importIracingJson } from "@/lib/actions/iracing-json-import";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 interface Props {
   params: Promise<{ slug: string; seasonId: string; roundId: string }>;
@@ -136,12 +137,11 @@ export default async function ImportIracingJsonPage({
         </details>
 
         <div className="flex justify-end">
-          <button
-            type="submit"
+          <SubmitWithSpinner
+            label="Import & replace"
+            pendingLabel="Importing JSON…"
             className="rounded bg-orange-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-400"
-          >
-            Import & replace
-          </button>
+          />
         </div>
       </form>
     </div>

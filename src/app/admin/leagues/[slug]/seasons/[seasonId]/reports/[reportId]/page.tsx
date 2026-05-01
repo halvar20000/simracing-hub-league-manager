@@ -9,6 +9,7 @@ import {
   setReportStatus,
   deleteDecision,
 } from "@/lib/actions/admin-reports";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 const VERDICTS = [
   { value: "NO_ACTION", label: "No action" },

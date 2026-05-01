@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateScoringSystem } from "@/lib/actions/scoring-systems";
 import { readCategoryPoints, PENALTY_LEVELS, PENALTY_LEVEL_LABEL } from "@/lib/penalty-categories";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 const MAX_POS = 30;
 
@@ -260,12 +261,11 @@ export default async function EditScoringSystem({
           >
             Cancel
           </Link>
-          <button
-            type="submit"
+          <SubmitWithSpinner
+            label="Save (recomputes seasons)"
+            pendingLabel="Saving + recomputing…"
             className="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-          >
-            Save (recomputes seasons)
-          </button>
+          />
         </div>
       </form>
     </div>
