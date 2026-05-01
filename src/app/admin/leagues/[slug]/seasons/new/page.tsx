@@ -26,46 +26,47 @@ export default async function NewSeasonPage({ params, searchParams }: Props) {
   // ---------- Step 1: Template picker ----------
   if (!tpl) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        <nav className="text-sm text-gray-500 mb-4">
-          <Link href="/admin/leagues" className="hover:underline">
-            Leagues
-          </Link>{" "}
-          /{" "}
+      <div className="space-y-6 max-w-5xl">
+        <nav className="text-sm text-zinc-500">
           <Link
             href={`/admin/leagues/${slug}`}
-            className="hover:underline"
+            className="hover:text-zinc-200"
           >
-            {league.name}
-          </Link>{" "}
-          / New season
+            ← {league.name}
+          </Link>
+          <span className="mx-2">/</span>
+          New season
         </nav>
 
-        <h1 className="text-2xl font-bold mb-2">New season for {league.name}</h1>
-        <p className="text-gray-600 mb-8">
-          Pick a template that matches the format of this season. The matching
-          scoring system will be created automatically — you can still adjust
-          everything afterwards.
-        </p>
+        <div>
+          <h1 className="text-2xl font-bold">New season for {league.name}</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Pick a template that matches the format of this season. The matching
+            scoring system will be created automatically — you can still adjust
+            everything afterwards.
+          </p>
+        </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {SEASON_TEMPLATES.map((t) => (
             <Link
               key={t.id}
               href={`/admin/leagues/${slug}/seasons/new?template=${t.id}`}
-              className="block rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow transition p-5 bg-white"
+              className="block rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 transition hover:border-orange-500/60 hover:bg-zinc-900"
             >
-              <div className="text-xs uppercase tracking-wide text-blue-600 font-semibold mb-1">
+              <div className="text-xs font-semibold uppercase tracking-wide text-orange-400">
                 {t.id === "sprint" && "2 races / round"}
                 {t.id === "endurance" && "1 race / round"}
                 {t.id === "endurance-pro-am" && "Pro / Am"}
                 {t.id === "team-endurance" && "Team event"}
               </div>
-              <h2 className="text-lg font-semibold">{t.label}</h2>
-              <p className="text-sm text-gray-600 mt-1">{t.tagline}</p>
-              <p className="text-sm text-gray-700 mt-3">{t.description}</p>
+              <h2 className="mt-1 text-lg font-semibold text-zinc-100">
+                {t.label}
+              </h2>
+              <p className="mt-1 text-sm text-zinc-400">{t.tagline}</p>
+              <p className="mt-3 text-sm text-zinc-300">{t.description}</p>
               {t.examples.length > 0 && (
-                <p className="text-xs text-gray-500 mt-3">
+                <p className="mt-3 text-xs text-zinc-500">
                   Used by: {t.examples.join(", ")}
                 </p>
               )}
@@ -73,11 +74,11 @@ export default async function NewSeasonPage({ params, searchParams }: Props) {
           ))}
         </div>
 
-        <div className="mt-8 text-sm text-gray-500">
+        <div className="text-sm text-zinc-500">
           Want to start from a custom configuration?{" "}
           <Link
             href={`/admin/leagues/${slug}/seasons/new?template=custom`}
-            className="text-blue-600 hover:underline"
+            className="text-orange-400 hover:underline"
           >
             Use a manual setup instead.
           </Link>
@@ -87,8 +88,6 @@ export default async function NewSeasonPage({ params, searchParams }: Props) {
   }
 
   // ---------- Step 2: Pre-filled form (template chosen) ----------
-  // Pull existing scoring systems so the admin can override the auto-created
-  // one if they want to reuse a system from a previous season.
   const scoringSystems = await prisma.scoringSystem.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true },
@@ -100,84 +99,68 @@ export default async function NewSeasonPage({ params, searchParams }: Props) {
   const defaultYear = new Date().getFullYear();
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <nav className="text-sm text-gray-500 mb-4">
-        <Link href="/admin/leagues" className="hover:underline">
-          Leagues
-        </Link>{" "}
-        /{" "}
+    <div className="space-y-6 max-w-3xl">
+      <nav className="text-sm text-zinc-500">
         <Link
           href={`/admin/leagues/${slug}`}
-          className="hover:underline"
+          className="hover:text-zinc-200"
         >
-          {league.name}
-        </Link>{" "}
-        /{" "}
+          ← {league.name}
+        </Link>
+        <span className="mx-2">/</span>
         <Link
           href={`/admin/leagues/${slug}/seasons/new`}
-          className="hover:underline"
+          className="hover:text-zinc-200"
         >
           New season
-        </Link>{" "}
-        / {labelFor}
+        </Link>
+        <span className="mx-2">/</span>
+        {labelFor}
       </nav>
 
-      <h1 className="text-2xl font-bold mb-2">
-        New season — {labelFor}
-      </h1>
-      {!isCustom && (
-        <p className="text-gray-600 mb-6">{tpl.description}</p>
-      )}
+      <div>
+        <h1 className="text-2xl font-bold">New season — {labelFor}</h1>
+        {!isCustom && (
+          <p className="mt-2 text-sm text-zinc-400">{tpl.description}</p>
+        )}
+      </div>
 
       {sp.error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
           {sp.error}
         </div>
       )}
 
-      <form action={action} className="space-y-5 bg-white rounded-lg border border-gray-200 p-6">
+      <form
+        action={action}
+        className="space-y-5 rounded-lg border border-zinc-800 bg-zinc-900/40 p-6"
+      >
         {!isCustom && <input type="hidden" name="template" value={tpl.id} />}
 
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="name">
-            Season name
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            required
-            placeholder='e.g. "Season 5", "Spring 2026"'
-            className="w-full border border-gray-300 rounded px-3 py-2"
-          />
-        </div>
+        <Field
+          label="Season name"
+          name="name"
+          required
+          placeholder='e.g. "Season 5", "Spring 2026"'
+        />
 
-        <div>
-          <label className="block text-sm font-medium mb-1" htmlFor="year">
-            Year
-          </label>
-          <input
-            id="year"
-            name="year"
-            type="number"
-            required
-            defaultValue={defaultYear}
-            className="w-full border border-gray-300 rounded px-3 py-2"
-          />
-        </div>
+        <Field
+          label="Year"
+          name="year"
+          type="number"
+          required
+          defaultValue={String(defaultYear)}
+        />
 
-        <div>
-          <label
-            className="block text-sm font-medium mb-1"
-            htmlFor="scoringSystemId"
-          >
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">
             Scoring system
-          </label>
+          </span>
           <select
             id="scoringSystemId"
             name="scoringSystemId"
-            className="w-full border border-gray-300 rounded px-3 py-2"
             defaultValue=""
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
           >
             {!isCustom ? (
               <option value="">
@@ -195,79 +178,73 @@ export default async function NewSeasonPage({ params, searchParams }: Props) {
             ))}
           </select>
           {!isCustom && (
-            <p className="text-xs text-gray-500 mt-1">
+            <span className="mt-1 block text-xs text-zinc-500">
               Leave the first option selected to create a new scoring system
               with the template defaults. You can adjust it afterwards under
               Admin → Scoring systems.
-            </p>
+            </span>
           )}
-        </div>
+        </label>
 
-        <fieldset className="border border-gray-200 rounded p-4 space-y-3">
-          <legend className="text-sm font-semibold px-2">Season options</legend>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="isMulticlass"
-              defaultChecked={!isCustom && tpl.isMulticlass}
-            />
-            Multi-class season
-          </label>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="proAmEnabled"
-              defaultChecked={!isCustom && tpl.proAmEnabled}
-            />
-            Pro / Am sub-classification
-          </label>
-
-          <div>
-            <label
-              className="block text-sm font-medium mb-1"
-              htmlFor="teamScoringMode"
-            >
-              Team scoring
+        <fieldset className="rounded border border-zinc-800 p-4">
+          <legend className="px-2 text-sm font-semibold text-zinc-300">
+            Season options
+          </legend>
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm text-zinc-200">
+              <input
+                type="checkbox"
+                name="isMulticlass"
+                defaultChecked={!isCustom && tpl.isMulticlass}
+                className="h-4 w-4 accent-orange-500"
+              />
+              Multi-class season
             </label>
-            <select
-              id="teamScoringMode"
-              name="teamScoringMode"
-              defaultValue={isCustom ? "NONE" : tpl.teamScoringMode}
-              className="w-full border border-gray-300 rounded px-3 py-2"
-            >
-              <option value="NONE">None (drivers championship only)</option>
-              <option value="SUM_ALL">Sum of all drivers per round</option>
-              <option value="SUM_BEST_N">Sum of best N drivers per round</option>
-            </select>
-          </div>
 
-          <div>
-            <label
-              className="block text-sm font-medium mb-1"
-              htmlFor="teamScoringBestN"
-            >
-              Team scoring: best N (only if mode is "best N")
+            <label className="flex items-center gap-2 text-sm text-zinc-200">
+              <input
+                type="checkbox"
+                name="proAmEnabled"
+                defaultChecked={!isCustom && tpl.proAmEnabled}
+                className="h-4 w-4 accent-orange-500"
+              />
+              Pro / Am sub-classification
             </label>
-            <input
-              id="teamScoringBestN"
+
+            <label className="block">
+              <span className="mb-1 block text-sm text-zinc-300">
+                Team scoring
+              </span>
+              <select
+                name="teamScoringMode"
+                defaultValue={isCustom ? "NONE" : tpl.teamScoringMode}
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
+              >
+                <option value="NONE">None (drivers championship only)</option>
+                <option value="SUM_ALL">Sum of all drivers per round</option>
+                <option value="SUM_BEST_N">
+                  Sum of best N drivers per round
+                </option>
+              </select>
+            </label>
+
+            <Field
+              label="Team scoring: best N (only if mode is 'best N')"
               name="teamScoringBestN"
               type="number"
               min={1}
               defaultValue={
                 !isCustom && tpl.teamScoringBestN !== null
-                  ? tpl.teamScoringBestN
+                  ? String(tpl.teamScoringBestN)
                   : ""
               }
-              className="w-full border border-gray-300 rounded px-3 py-2"
             />
           </div>
         </fieldset>
 
         {!isCustom && (
-          <div className="text-xs text-gray-500 bg-gray-50 rounded p-3 border border-gray-200">
-            <strong className="text-gray-700">Template defaults:</strong>{" "}
+          <div className="rounded border border-zinc-800 bg-zinc-900 p-3 text-xs text-zinc-400">
+            <strong className="text-zinc-200">Template defaults:</strong>{" "}
             {tpl.scoringSystem.racesPerRound} race
             {tpl.scoringSystem.racesPerRound > 1 ? "s" : ""}/round, points{" "}
             {tpl.scoringSystem.pointsTable.slice(0, 5).join("-")}…, drop{" "}
@@ -277,21 +254,54 @@ export default async function NewSeasonPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <button
             type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded"
+            className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
           >
             Create season
           </button>
           <Link
             href={`/admin/leagues/${slug}/seasons/new`}
-            className="text-gray-600 hover:text-gray-900 px-4 py-2"
+            className="rounded border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
           >
             ← Pick another template
           </Link>
         </div>
       </form>
     </div>
+  );
+}
+
+function Field({
+  label,
+  name,
+  type = "text",
+  required,
+  placeholder,
+  defaultValue,
+  min,
+}: {
+  label: string;
+  name: string;
+  type?: "text" | "number";
+  required?: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+  min?: number;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm text-zinc-300">{label}</span>
+      <input
+        name={name}
+        type={type}
+        required={required}
+        placeholder={placeholder}
+        defaultValue={defaultValue}
+        min={min}
+        className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
+      />
+    </label>
   );
 }
