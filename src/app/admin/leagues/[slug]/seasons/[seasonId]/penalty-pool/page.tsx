@@ -217,7 +217,11 @@ export default async function PenaltyPoolPage({
                             <div className="text-xs text-zinc-500">{p.round.name}</div>
                           </td>
                           <td className="px-2 py-2 text-xs text-zinc-300">
-                            {p.category ? CATEGORY_LABEL[p.category] ?? p.category : "—"}
+                            {p.categoryLevel != null
+                              ? `Cat ${p.categoryLevel}`
+                              : p.category
+                                ? CATEGORY_LABEL[p.category] ?? p.category
+                                : "—"}
                           </td>
                           <td className="px-2 py-2 text-xs text-zinc-400">
                             {p.reason}

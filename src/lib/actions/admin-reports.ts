@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSteward } from "@/lib/auth-helpers";
+import { pointsForLevel } from "@/lib/penalty-categories";
 import type { IncidentStatus, Verdict, PenaltyCategory } from "@prisma/client";
 
 export async function setReportStatus(
@@ -39,8 +40,8 @@ export async function submitDecision(
 
   const accusedRegistrationId =
     String(formData.get("accusedRegistrationId") ?? "").trim() || null;
-  const pointsValueRaw = String(formData.get("pointsValue") ?? "").trim();
-  const pointsValue = pointsValueRaw ? Math.abs(parseInt(pointsValueRaw, 10) || 0) : 0;
+  let pointsValueRaw = String(formData.get("pointsValue") ?? "").trim();
+  let pointsValue = pointsValueRaw ? Math.abs(parseInt(pointsValueRaw, 10) || 0) : 0;
   const timePenaltySecondsRaw = String(
     formData.get("timePenaltySeconds") ?? ""
   ).trim();
@@ -59,6 +60,10 @@ export async function submitDecision(
     ? (penaltyCategoryRaw as PenaltyCategory)
     : null;
 
+  const categoryLevelRaw = String(formData.get("categoryLevel") ?? "").trim();
+  const categoryLevel =
+    categoryLevelRaw === "" ? null : parseInt(categoryLevelRaw, 10);
+
   if (!publicSummary) {
     redirect(
       `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports/${reportId}?error=Public+summary+is+required`
@@ -67,8 +72,16 @@ export async function submitDecision(
 
   const report = await prisma.incidentReport.findUnique({
     where: { id: reportId },
-    include: { round: true },
+    include: {
+      round: { include: { season: { include: { scoringSystem: true } } } },
+    },
   });
+  const scoringSystemForCat =
+    report?.round.season.scoringSystem ?? null;
+  const categoryDerivedPoints = pointsForLevel(scoringSystemForCat, categoryLevel);
+  if (categoryLevel != null) {
+    pointsValue = categoryDerivedPoints;
+  }
   if (!report) {
     redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
   }
@@ -129,6 +142,7 @@ export async function submitDecision(
         gridPositions: verdict === "GRID_PENALTY_NEXT_ROUND" ? gridPositions : null,
         reason,
         category: penaltyCategory,
+        categoryLevel,
       },
     });
   }

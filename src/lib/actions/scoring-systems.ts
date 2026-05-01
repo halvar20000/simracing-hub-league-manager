@@ -15,6 +15,16 @@ function readIntOrNull(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function readCategoryPointsFromForm(formData: FormData): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const lv of [0, 1, 2, 3]) {
+    const v = formData.get(`categoryPoints_${lv}`);
+    const n = v == null || String(v).trim() === "" ? 0 : parseInt(String(v), 10);
+    out[String(lv)] = Number.isFinite(n) && n >= 0 ? n : 0;
+  }
+  return out;
+}
+
 function readPointsTable(
   formData: FormData,
   prefix: string,
@@ -49,6 +59,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const bonusPole = readIntOrNull(formData.get("bonusPole"));
   const bonusMostLapsLed = readIntOrNull(formData.get("bonusMostLapsLed"));
   const dropWorstNRounds = readIntOrNull(formData.get("dropWorstNRounds"));
+  const categoryPointsTable = readCategoryPointsFromForm(formData);
   const protestWindowHours = readIntOrNull(formData.get("protestWindowHours"));
   const protestCooldownHours = readIntOrNull(formData.get("protestCooldownHours"));
   const participationInCombined = formData.get("participationInCombined") === "on";
@@ -79,6 +90,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       protestCooldownHours,
       participationInCombined,
       deferPenaltyPoints,
+      categoryPointsTable,
     },
   });
 

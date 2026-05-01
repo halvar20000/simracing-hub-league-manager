@@ -3,24 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
+import { readCategoryPoints, PENALTY_LEVELS, PENALTY_LEVEL_LABEL } from "@/lib/penalty-categories";
 import {
   submitDecision,
   setReportStatus,
   deleteDecision,
 } from "@/lib/actions/admin-reports";
-
-const CATEGORIES = [
-  { value: "", label: "—" },
-  { value: "AVOIDABLE_CONTACT", label: "Avoidable contact" },
-  { value: "CAUSING_COLLISION", label: "Causing a collision" },
-  { value: "BLOCKING", label: "Blocking" },
-  { value: "TRACK_LIMITS", label: "Track limits" },
-  { value: "JUMP_START", label: "Jump start" },
-  { value: "IGNORING_BLUE_FLAGS", label: "Ignoring blue flags" },
-  { value: "UNSPORTSMANLIKE", label: "Unsportsmanlike conduct" },
-  { value: "CHAT_MISCONDUCT", label: "Chat misconduct" },
-  { value: "OTHER", label: "Other" },
-];
 
 const VERDICTS = [
   { value: "NO_ACTION", label: "No action" },
@@ -46,7 +34,7 @@ export default async function AdminReportDetail({
   const report = await prisma.incidentReport.findUnique({
     where: { id: reportId },
     include: {
-      round: { include: { season: { include: { league: true } } } },
+      round: { include: { season: { include: { league: true, scoringSystem: true } } } },
       reporterUser: true,
       involvedDrivers: {
         include: { registration: { include: { user: true } } },
@@ -59,6 +47,10 @@ export default async function AdminReportDetail({
 
   const accusedDrivers = report.involvedDrivers.filter(
     (d) => d.role === "ACCUSED"
+  );
+
+  const categoryPointsTable = readCategoryPoints(
+    report.round.season.scoringSystem.categoryPointsTable
   );
 
   const submit = submitDecision.bind(null, slug, seasonId, reportId);
@@ -217,19 +209,24 @@ export default async function AdminReportDetail({
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">Penalty category</span>
             <select
-              name="penaltyCategory"
-              defaultValue={(report.decision?.penalties?.[0]?.category as string | null | undefined) ?? ""}
+              name="categoryLevel"
+              defaultValue={
+                report.decision?.penalties?.[0]?.categoryLevel != null
+                  ? String(report.decision.penalties[0].categoryLevel)
+                  : ""
+              }
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             >
-              {CATEGORIES.map((c) => (
-                <option key={c.value || "none"} value={c.value}>
-                  {c.label}
+              <option value="">— (no category)</option>
+              {PENALTY_LEVELS.map((lv) => (
+                <option key={lv} value={String(lv)}>
+                  {PENALTY_LEVEL_LABEL[lv]} — {categoryPointsTable[String(lv)] ?? 0} pts
                 </option>
               ))}
             </select>
             <span className="mt-1 block text-xs text-zinc-500">
-              Used for analytics and the penalty pool. Points are still set
-              by the value field below.
+              When the verdict is "Points deduction", the category determines
+              how many points are removed (per this scoring system's table).
             </span>
           </label>
 

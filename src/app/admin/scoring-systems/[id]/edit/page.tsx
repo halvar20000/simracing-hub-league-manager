@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateScoringSystem } from "@/lib/actions/scoring-systems";
+import { readCategoryPoints, PENALTY_LEVELS, PENALTY_LEVEL_LABEL } from "@/lib/penalty-categories";
 
 const MAX_POS = 30;
 
@@ -21,6 +22,7 @@ export default async function EditScoringSystem({
   if (!ss) notFound();
 
   const points = (ss.pointsTable as Record<string, number>) ?? {};
+  const categoryPoints = readCategoryPoints(ss.categoryPointsTable);
   const classPoints = (ss.classPointsTable as Record<string, number> | null) ?? {};
   const hasClass = Object.keys(classPoints).length > 0;
 
@@ -164,6 +166,28 @@ export default async function EditScoringSystem({
             <strong> window opens</strong> → <strong>window closes</strong>.
             Stewards/admins can always file (override).
           </p>
+        </Section>
+
+        <Section title="Penalty categories">
+          <p className="mb-3 text-xs text-zinc-500">
+            CAS Community penalty levels. Points entered here are used the
+            moment a steward picks a category on a decision. Changing these
+            later does NOT alter past decisions (each penalty stores the
+            points it was created with).
+          </p>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {PENALTY_LEVELS.map((lv) => (
+              <Field
+                key={lv}
+                label={PENALTY_LEVEL_LABEL[lv]}
+                name={`categoryPoints_${lv}`}
+                type="number"
+                defaultValue={String(categoryPoints[String(lv)] ?? 0)}
+                min={0}
+                max={50}
+              />
+            ))}
+          </div>
         </Section>
 
         <Section title="Penalty points application">
