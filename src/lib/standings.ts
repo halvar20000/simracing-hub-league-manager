@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 
 export interface RoundPoints {
   roundId: string;
@@ -152,6 +153,10 @@ export async function computeDriverStandings(
   const includeParticipationInCombined =
     season?.scoringSystem.participationInCombined ?? true;
   const defersPenalties = !!season?.scoringSystem?.deferPenaltyPoints;
+  const driverFprEnabled = !!season?.scoringSystem?.driverFprEnabled;
+  const driverFprTiers = driverFprEnabled
+    ? readDriverFprTiers(season?.scoringSystem?.driverFprTiers)
+    : [];
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
     let classRaw = 0;
@@ -159,6 +164,7 @@ export async function computeDriverStandings(
     let penalty = 0;
     let correction = 0;
     let totalIncidents = 0;
+    let fprTotal = 0;
 
     for (const r of reg.raceResults) {
       raw += r.rawPointsAwarded;
@@ -206,6 +212,13 @@ export async function computeDriverStandings(
     }
     const roundPoints: RoundPoints[] = rounds.map((round) => {
       const results = resultsByRoundId.get(round.id) ?? [];
+      const roundIncidents = results.reduce((sum, r) => sum + (r.incidents ?? 0), 0);
+      // Per-round driver FPR — based on TOTAL incidents in the round.
+      const roundFpr = driverFprEnabled
+        ? fprPointsForIncidents(roundIncidents, driverFprTiers)
+        : 0;
+      if (results.length > 0) fprTotal += roundFpr;
+
       if (results.length === 0) {
         return {
           roundId: round.id,
@@ -254,6 +267,7 @@ export async function computeDriverStandings(
         classRawPoints: rClassRaw,
         participationPoints: rPart,
         penaltyPoints: rPen,
+        fprPoints: roundFpr,
         correctionPoints: rCorrection,
         combinedPoints: rRaw + (includeParticipationInCombined ? rPart : 0) - rPen + rCorrection,
         classPoints: rClassRaw + rPart - rPen + rCorrection,
@@ -306,8 +320,9 @@ export async function computeDriverStandings(
       classRawPoints: classRaw,
       participationPoints: participation,
       manualPenalties: penalty,
-      combinedTotal: raw + (includeParticipationInCombined ? participation : 0) - penalty + correction,
-      classTotal: classRaw + participation - penalty + correction,
+      fprPoints: fprTotal,
+      combinedTotal: raw + (includeParticipationInCombined ? participation : 0) - penalty + correction + fprTotal,
+      classTotal: classRaw + participation - penalty + correction + fprTotal,
       totalIncidents,
       iRating,
       excludedAt: reg.excludedAt ?? null,

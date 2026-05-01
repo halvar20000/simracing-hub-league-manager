@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateScoringSystem } from "@/lib/actions/scoring-systems";
 import { readCategoryPoints, PENALTY_LEVELS, PENALTY_LEVEL_LABEL } from "@/lib/penalty-categories";
+import { readDriverFprTiers, DEFAULT_DRIVER_FPR_TIERS } from "@/lib/driver-fpr";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 const MAX_POS = 30;
@@ -26,6 +27,7 @@ export default async function EditScoringSystem({
   const pointsRace2 = (ss.pointsTableRace2 as Record<string, number> | null) ?? {};
   const hasRace2 = Object.keys(pointsRace2).length > 0;
   const categoryPoints = readCategoryPoints(ss.categoryPointsTable);
+  const driverFprTiers = readDriverFprTiers(ss.driverFprTiers);
   const classPoints = (ss.classPointsTable as Record<string, number> | null) ?? {};
   const hasClass = Object.keys(classPoints).length > 0;
 
@@ -235,6 +237,54 @@ export default async function EditScoringSystem({
               </span>
             </span>
           </label>
+        </Section>
+
+        <Section title="Driver Fair Play Rating (incident-based)">
+          <label className="flex items-start gap-3 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              name="driverFprEnabled"
+              defaultChecked={ss.driverFprEnabled}
+              className="mt-0.5 h-4 w-4 accent-orange-500"
+            />
+            <span>
+              <span className="font-medium">Enable driver FPR</span>
+              <span className="ml-1 block text-xs text-zinc-500">
+                Awards FPR points to each driver per round based on the total
+                incidents across all races in that round. Added to combined
+                + class totals.
+              </span>
+            </span>
+          </label>
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+                  Tier {i + 1}
+                </div>
+                <Field
+                  label="Up to N incidents"
+                  name={`fprTier${i}MaxInc`}
+                  type="number"
+                  defaultValue={String(driverFprTiers[i]?.maxInc ?? DEFAULT_DRIVER_FPR_TIERS[i]?.maxInc ?? 0)}
+                  min={0}
+                  max={50}
+                />
+                <Field
+                  label="FPR points"
+                  name={`fprTier${i}Points`}
+                  type="number"
+                  defaultValue={String(driverFprTiers[i]?.points ?? DEFAULT_DRIVER_FPR_TIERS[i]?.points ?? 0)}
+                  min={0}
+                  max={20}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            Drivers with more incidents than the highest tier earn 0 FPR.
+            Default for CAS Combined Cup: 0–2 inc → 3, 3–5 inc → 2, 6–7 inc → 1.
+          </p>
         </Section>
 
         <Section title="Drop weeks">

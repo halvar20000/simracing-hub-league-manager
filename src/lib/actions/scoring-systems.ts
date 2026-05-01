@@ -60,6 +60,13 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const bonusMostLapsLed = readIntOrNull(formData.get("bonusMostLapsLed"));
   const dropWorstNRounds = readIntOrNull(formData.get("dropWorstNRounds"));
   const categoryPointsTable = readCategoryPointsFromForm(formData);
+  const driverFprEnabled = formData.get("driverFprEnabled") === "on";
+  const driverFprTiers: { maxInc: number; points: number }[] = [];
+  for (let i = 0; i < 3; i++) {
+    const m = readIntOrNull(formData.get(`fprTier${i}MaxInc`));
+    const pt = readIntOrNull(formData.get(`fprTier${i}Points`));
+    if (m != null && pt != null) driverFprTiers.push({ maxInc: m, points: pt });
+  }
   const protestWindowHours = readIntOrNull(formData.get("protestWindowHours"));
   const protestCooldownHours = readIntOrNull(formData.get("protestCooldownHours"));
   const participationInCombined = formData.get("participationInCombined") === "on";
@@ -99,6 +106,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       participationInCombined,
       deferPenaltyPoints,
       categoryPointsTable,
+      driverFprEnabled,
+      driverFprTiers: driverFprTiers.length > 0 ? driverFprTiers : Prisma.DbNull,
       racesPerRound,
       pointsTableRace2:
         pointsTableRace2 === null ? Prisma.DbNull : pointsTableRace2,

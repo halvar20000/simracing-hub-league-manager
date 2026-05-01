@@ -291,6 +291,8 @@ model ScoringSystem {
   protestCooldownHours       Int?
   deferPenaltyPoints       Boolean @default(false)
   categoryPointsTable      Json?
+  driverFprEnabled         Boolean @default(false)
+  driverFprTiers           Json?
 }
 
 model FPRAward {
