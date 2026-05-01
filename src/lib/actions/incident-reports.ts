@@ -38,6 +38,10 @@ export async function createIncidentReport(
   const involvedNumbersRaw = String(
     formData.get("involvedStartNumbers") ?? ""
   ).trim();
+  const involvedRegistrationIds = formData
+    .getAll("involvedRegistrationIds")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
   const evidenceLinksRaw = String(formData.get("evidenceLinks") ?? "").trim();
 
   if (!description) {
@@ -67,6 +71,26 @@ export async function createIncidentReport(
       role: "REPORTER",
     },
   });
+
+  // Tag drivers selected via the picker (preferred)
+  for (const regId of involvedRegistrationIds) {
+    if (regId === reporterReg.id) continue;
+    const reg = await prisma.registration.findFirst({
+      where: { id: regId, seasonId, status: "APPROVED" },
+    });
+    if (!reg) continue;
+    await prisma.incidentReportInvolvedDriver
+      .create({
+        data: {
+          incidentReportId: report.id,
+          registrationId: reg.id,
+          role: "ACCUSED",
+        },
+      })
+      .catch(() => {
+        /* duplicate */
+      });
+  }
 
   // Parse involved start numbers → match to season's roster → tag as ACCUSED
   if (involvedNumbersRaw) {
@@ -137,7 +161,7 @@ export async function withdrawIncidentReport(reportId: string) {
   }
   await prisma.incidentReport.update({
     where: { id: reportId },
-    data: { status: "DISMISSED" },
+    data: { status: "WITHDRAWN" },
   });
   revalidatePath("/reports");
   redirect("/reports");

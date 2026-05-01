@@ -28,19 +28,12 @@ export default async function MyReports({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-bold">My Reports</h1>
-        <details className="text-sm text-zinc-400">
-          <summary className="cursor-pointer hover:text-zinc-200">
-            How do I file a new report?
-          </summary>
-          <p className="mt-2 max-w-md text-zinc-400">
-            Open the round you want to report against (Leagues → season →
-            round) and click the orange{" "}
-            <span className="font-semibold text-orange-200">
-              ⚑ Report incident
-            </span>{" "}
-            button next to the share icon.
-          </p>
-        </details>
+        <a
+          href="/reports/new"
+          className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550]"
+        >
+          + New report
+        </a>
       </div>
 
       {success && (
@@ -112,6 +105,7 @@ function StatusBadge({ status }: { status: string }) {
     UNDER_REVIEW: "bg-blue-900 text-blue-200",
     DECIDED: "bg-emerald-900 text-emerald-200",
     DISMISSED: "bg-zinc-800 text-zinc-400",
+    WITHDRAWN: "bg-zinc-800 text-zinc-500",
   };
   return (
     <span

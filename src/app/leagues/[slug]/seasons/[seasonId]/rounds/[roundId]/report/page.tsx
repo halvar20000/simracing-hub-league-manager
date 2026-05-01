@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { createIncidentReport } from "@/lib/actions/incident-reports";
+import { InvolvedDriversPicker } from "@/components/InvolvedDriversPicker";
 
 export default async function FileReportPage({
   params,
@@ -35,6 +36,28 @@ export default async function FileReportPage({
     },
     include: { user: true },
   });
+
+  // Roster of approved drivers for the picker
+  const roster = await prisma.registration.findMany({
+    where: { seasonId, status: "APPROVED" },
+    include: {
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+          countryCode: true,
+        },
+      },
+    },
+    orderBy: [{ startNumber: "asc" }],
+  });
+  const driverChoices = roster.map((r) => ({
+    registrationId: r.id,
+    startNumber: r.startNumber,
+    firstName: r.user.firstName,
+    lastName: r.user.lastName,
+    countryCode: r.user.countryCode,
+  }));
   if (!reporterReg) {
     return (
       <div className="space-y-3">
@@ -117,21 +140,15 @@ export default async function FileReportPage({
           </label>
         </div>
 
-        <label className="block">
+        <div>
           <span className="mb-1 block text-sm text-zinc-300">
-            Other driver(s) by start number
+            Other driver(s) involved
           </span>
-          <input
-            name="involvedStartNumbers"
-            type="text"
-            placeholder="e.g. 26, 89"
-            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+          <InvolvedDriversPicker
+            drivers={driverChoices}
+            excludeRegistrationId={reporterReg.id}
           />
-          <span className="mt-1 block text-xs text-zinc-500">
-            Comma-separated. The system matches each number to a driver in the
-            roster. You are automatically included as the reporter.
-          </span>
-        </label>
+        </div>
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">

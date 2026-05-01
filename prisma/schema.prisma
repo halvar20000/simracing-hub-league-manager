@@ -474,6 +474,7 @@ enum IncidentStatus {
   UNDER_REVIEW
   DECIDED
   DISMISSED
+  WITHDRAWN
 }
 
 enum ParticipantRole {

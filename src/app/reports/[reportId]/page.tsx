@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
+import { StatusTimeline } from "@/components/StatusTimeline";
 
 export default async function ReportDetail({
   params,
@@ -53,8 +54,9 @@ export default async function ReportDetail({
           {report.round.season.league.name} • Round {report.round.roundNumber}{" "}
           {report.round.name} • Filed {formatDateTime(report.submittedAt)}
         </p>
-        <div className="mt-2">
+        <div className="mt-3 space-y-2">
           <StatusBadge status={report.status} />
+          <StatusTimeline status={report.status as any} />
         </div>
       </div>
 
@@ -159,6 +161,7 @@ function StatusBadge({ status }: { status: string }) {
     UNDER_REVIEW: "bg-blue-900 text-blue-200",
     DECIDED: "bg-emerald-900 text-emerald-200",
     DISMISSED: "bg-zinc-800 text-zinc-400",
+    WITHDRAWN: "bg-zinc-800 text-zinc-500",
   };
   return (
     <span

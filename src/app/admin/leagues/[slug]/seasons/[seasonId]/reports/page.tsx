@@ -38,6 +38,7 @@ export default async function AdminReportsQueue({
     review: reports.filter((r) => r.status === "UNDER_REVIEW").length,
     decided: reports.filter((r) => r.status === "DECIDED").length,
     dismissed: reports.filter((r) => r.status === "DISMISSED").length,
+    withdrawn: reports.filter((r) => r.status === "WITHDRAWN").length,
   };
 
   return (
@@ -52,7 +53,7 @@ export default async function AdminReportsQueue({
         <h1 className="mt-2 text-2xl font-bold">Incident Reports</h1>
         <p className="mt-1 text-sm text-zinc-400">
           {reports.length} total — {counts.submitted} new, {counts.review}{" "}
-          under review, {counts.decided} decided, {counts.dismissed} dismissed
+          under review, {counts.decided} decided, {counts.dismissed} dismissed, {counts.withdrawn} withdrawn
         </p>
       </div>
 
@@ -133,6 +134,7 @@ function StatusBadge({ status }: { status: string }) {
     UNDER_REVIEW: "bg-blue-900 text-blue-200",
     DECIDED: "bg-emerald-900 text-emerald-200",
     DISMISSED: "bg-zinc-800 text-zinc-400",
+    WITHDRAWN: "bg-zinc-800 text-zinc-500",
   };
   return (
     <span

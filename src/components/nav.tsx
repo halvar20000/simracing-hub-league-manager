@@ -6,12 +6,18 @@ export default async function Nav() {
   const session = await auth();
 
   let isAdmin = false;
+  let pendingReports = 0;
   if (session?.user?.id) {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     });
     isAdmin = user?.role === "ADMIN" || user?.role === "STEWARD";
+    if (isAdmin) {
+      pendingReports = await prisma.incidentReport.count({
+        where: { status: "SUBMITTED" },
+      });
+    }
   }
 
   return (
@@ -43,7 +49,16 @@ export default async function Nav() {
               <NavLink href="/profile">Profile</NavLink>
             </>
           )}
-          {isAdmin && <NavLink href="/admin">Admin</NavLink>}
+          {isAdmin && (
+            <NavLink href="/admin">
+              Admin
+              {pendingReports > 0 && (
+                <span className="ml-1 inline-block min-w-[1.25rem] rounded-full bg-orange-500 px-1.5 text-center text-[10px] font-bold leading-5 text-zinc-950">
+                  {pendingReports}
+                </span>
+              )}
+            </NavLink>
+          )}
           <div className="ml-2">
             {session?.user ? (
               <form
