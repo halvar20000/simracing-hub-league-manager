@@ -146,6 +146,7 @@ model CarClass {
 
   @@unique([seasonId, shortCode])
   iracingCarClassId Int?
+  iracingCarClassIds Int[]     @default([])
 }
 
 model Car {
