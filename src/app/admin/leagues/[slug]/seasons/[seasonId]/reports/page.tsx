@@ -3,12 +3,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
+import { pullReviewsFromIRLM } from "@/lib/actions/irlm-reviews-import";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 export default async function AdminReportsQueue({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
+  searchParams: Promise<{ pulled?: string; seen?: string; skippedDecided?: string; skippedNoMember?: string; existed?: string; rounds?: string; error?: string }>;
 }) {
+  const sp = await searchParams;
   await requireSteward();
   const { slug, seasonId } = await params;
 
@@ -50,7 +55,34 @@ export default async function AdminReportsQueue({
         >
           ← {season.name} {season.year}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">Incident Reports</h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 className="mt-2 text-2xl font-bold">Incident Reports</h1>
+          {season.irlmLeagueName && (
+            <form action={pullReviewsFromIRLM}>
+              <input type="hidden" name="leagueSlug" value={slug} />
+              <input type="hidden" name="seasonId" value={seasonId} />
+              <SubmitWithSpinner
+                label="Pull open reports from iRLM"
+                pendingLabel="Pulling from iRLM…"
+                className="rounded border border-emerald-600 bg-emerald-950/40 px-3 py-1.5 text-sm font-medium text-emerald-300 hover:bg-emerald-900"
+              />
+            </form>
+          )}
+        </div>
+        {sp.error && (
+          <div className="mb-3 rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">{sp.error}</div>
+        )}
+        {sp.pulled != null && (
+          <div className="mb-3 rounded border border-emerald-800 bg-emerald-950/40 p-3 text-xs text-emerald-200 space-y-0.5">
+            <p>Imported <strong>{sp.pulled}</strong> open report{sp.pulled === "1" ? "" : "s"} from iRLM (across {sp.rounds} round{sp.rounds === "1" ? "" : "s"}).</p>
+            <p className="text-emerald-300/80">
+              Saw {sp.seen} review{sp.seen === "1" ? "" : "s"} in total ·
+              skipped {sp.skippedDecided} already decided ·
+              skipped {sp.skippedNoMember} with no roster match ·
+              {sp.existed} already imported.
+            </p>
+          </div>
+        )}
         <p className="mt-1 text-sm text-zinc-400">
           {reports.length} total — {counts.submitted} new, {counts.review}{" "}
           under review, {counts.decided} decided, {counts.dismissed} dismissed, {counts.withdrawn} withdrawn

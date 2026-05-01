@@ -153,3 +153,51 @@ export async function fetchLeagueMembers(
   return Array.isArray(data) ? (data as IRLMMember[]) : [];
 }
 
+
+
+export interface IRLMReviewMember {
+  memberId: number;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface IRLMReviewVote {
+  id?: number;
+  voteCategoryId?: number;
+  voteCategoryText?: string;
+  description?: string;
+  memberAtFault?: IRLMReviewMember;
+}
+
+export interface IRLMReview {
+  reviewId: number;
+  leagueId?: number;
+  seasonId?: number;
+  eventId?: number;
+  sessionId?: number;
+  sessionName?: string;
+  sessionNr?: number;
+  authorName?: string;
+  createdOn?: string;
+  lastModifiedOn?: string;
+  fullDescription?: string;
+  onLap?: string | null;
+  corner?: string | null;
+  timeStamp?: string | null;
+  incidentNr?: string | null;
+  incidentKind?: string | null;
+  involvedMembers?: IRLMReviewMember[];
+  involvedTeams?: { teamId?: number; name?: string }[];
+  resultText?: string;
+  voteResults?: IRLMReviewVote[];
+  reviewComments?: { id?: number; text?: string }[];
+}
+
+/** Fetch all reviews for an iRLM event. */
+export async function fetchEventReviews(
+  leagueName: string,
+  eventId: number
+): Promise<IRLMReview[]> {
+  const data = await irlmFetch<unknown>(`/${leagueName}/Events/${eventId}/Reviews`);
+  return Array.isArray(data) ? (data as IRLMReview[]) : [];
+}
