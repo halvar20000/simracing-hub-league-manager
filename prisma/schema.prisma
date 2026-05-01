@@ -156,6 +156,7 @@ model Car {
   iracingCarId  Int?
 
   registrations Registration[]
+  raceResults   RaceResult[]
 }
 
 model Team {
@@ -261,6 +262,8 @@ model RaceResult {
   startPosition    Int?
   raceNumber       Int       @default(1)
   correctionPoints Int       @default(0)
+  carId            String?
+  car              Car?     @relation(fields: [carId], references: [id])
 }
 
 model ScoringSystem {

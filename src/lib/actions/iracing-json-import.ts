@@ -11,6 +11,50 @@ import {
   type ParsedEvent,
 } from "@/lib/iracing-json";
 
+// CAR LOOKUP — resolve a season's Car for an iRacing car_id.
+// Auto-creates Car (and a default CarClass if the season has none).
+async function resolveCarId(
+  seasonId: string,
+  iracingCarId: number,
+  carName: string,
+  carClassShortName: string | null
+): Promise<string | null> {
+  if (!iracingCarId || !Number.isFinite(iracingCarId)) return null;
+
+  const existing = await prisma.car.findFirst({
+    where: { seasonId, iracingCarId },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  // Need a CarClass for the new Car. Use season's first, or auto-create.
+  let carClass = await prisma.carClass.findFirst({
+    where: { seasonId },
+    orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" } as never],
+  });
+  if (!carClass) {
+    const shortCode = (carClassShortName ?? "ALL").slice(0, 8).toUpperCase();
+    carClass = await prisma.carClass.create({
+      data: {
+        seasonId,
+        name: carClassShortName ?? "All Cars",
+        shortCode,
+      },
+    });
+  }
+
+  const created = await prisma.car.create({
+    data: {
+      seasonId,
+      carClassId: carClass.id,
+      name: carName || `iRacing #${iracingCarId}`,
+      iracingCarId,
+    },
+  });
+  return created.id;
+}
+
+
 interface UnmatchedDriver {
   custId: number;
   displayName: string;
@@ -76,7 +120,7 @@ export async function importIracingJson(
     where: { seasonId, status: "APPROVED" },
     include: { user: true },
   });
-  const memberMap = new Map<number, { regId: string; userId: string; currentCountry: string | null }>();
+  const memberMap = new Map<number, { regId: string; userId: string; currentCountry: string | null; currentCarId: string | null }>();
   for (const reg of registrations) {
     const raw = reg.user.iracingMemberId;
     if (!raw) continue;
@@ -86,6 +130,7 @@ export async function importIracingJson(
       regId: reg.id,
       userId: reg.userId,
       currentCountry: reg.user.countryCode,
+      currentCarId: reg.carId,
     });
   }
 
@@ -133,6 +178,13 @@ export async function importIracingJson(
           ? Math.min(100, Math.floor((d.lapsComplete / session.maxLaps) * 100))
           : 0;
 
+      const resolvedCarId = await resolveCarId(
+        seasonId,
+        d.carIracingId ?? 0,
+        d.carName ?? "",
+        d.carClassShortName
+      );
+
       await prisma.raceResult.create({
         data: {
           roundId,
@@ -147,8 +199,18 @@ export async function importIracingJson(
           iRating: d.iRating,
           incidents: d.incidents,
           finishStatus: d.finishStatus,
+          carId: resolvedCarId,
         },
       });
+
+      // Keep the registration's "current car" in sync with latest result.
+      if (resolvedCarId && resolvedCarId !== reg.currentCarId) {
+        await prisma.registration.update({
+          where: { id: reg.regId },
+          data: { carId: resolvedCarId },
+        });
+        reg.currentCarId = resolvedCarId;
+      }
       totalCreated++;
     }
   }

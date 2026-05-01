@@ -426,3 +426,131 @@ export async function computeTeamStandings(
 
   return standings;
 }
+
+
+// ============================================================================
+// CAR STANDINGS
+// Drivers grouped by the car they drove. Drivers who switched cars during the
+// season appear under each car they used, with the points they actually
+// scored while in that car.
+// ============================================================================
+
+export interface CarStandingDriver {
+  registrationId: string;
+  driverFirstName: string | null;
+  driverLastName: string | null;
+  countryCode: string | null;
+  startNumber: number | null;
+  teamName: string | null;
+  rawPoints: number;
+  participationPoints: number;
+  manualPenalties: number;
+  correctionPoints: number;
+  combinedTotal: number;
+  roundsCompleted: number;
+}
+
+export interface CarStanding {
+  carId: string;
+  carName: string;
+  carClassShortCode: string | null;
+  drivers: CarStandingDriver[];
+  totalPoints: number;
+}
+
+export async function computeCarStandings(
+  prisma: PrismaClient,
+  seasonId: string
+): Promise<CarStanding[]> {
+  const results = await prisma.raceResult.findMany({
+    where: { round: { seasonId }, carId: { not: null } },
+    include: {
+      car: { include: { carClass: { select: { shortCode: true } } } },
+      registration: {
+        include: {
+          user: { select: { firstName: true, lastName: true, countryCode: true } },
+          team: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  type Bucket = {
+    raw: number; participation: number; manual: number; correction: number;
+    rounds: Set<string>;
+    firstName: string | null; lastName: string | null;
+    countryCode: string | null; startNumber: number | null;
+    teamName: string | null;
+  };
+
+  // Map<carId, { name, classShort, drivers: Map<regId, Bucket> }>
+  const byCar = new Map<string, {
+    name: string;
+    classShort: string | null;
+    drivers: Map<string, Bucket>;
+  }>();
+
+  for (const r of results) {
+    if (!r.carId || !r.car) continue;
+    let car = byCar.get(r.carId);
+    if (!car) {
+      byCar.set(r.carId, car = {
+        name: r.car.name,
+        classShort: r.car.carClass?.shortCode ?? null,
+        drivers: new Map(),
+      });
+    }
+    let b = car.drivers.get(r.registrationId);
+    if (!b) {
+      b = {
+        raw: 0, participation: 0, manual: 0, correction: 0,
+        rounds: new Set(),
+        firstName: r.registration.user.firstName,
+        lastName: r.registration.user.lastName,
+        countryCode: r.registration.user.countryCode,
+        startNumber: r.registration.startNumber,
+        teamName: r.registration.team?.name ?? null,
+      };
+      car.drivers.set(r.registrationId, b);
+    }
+    b.raw += r.rawPointsAwarded;
+    b.participation += r.participationPointsAwarded;
+    b.manual += r.manualPenaltyPoints;
+    b.correction += r.correctionPoints;
+    b.rounds.add(r.roundId);
+  }
+
+  const out: CarStanding[] = [];
+  for (const [carId, car] of byCar.entries()) {
+    const drivers: CarStandingDriver[] = [];
+    let totalPoints = 0;
+    for (const [regId, b] of car.drivers.entries()) {
+      const total = b.raw + b.participation - b.manual + b.correction;
+      totalPoints += total;
+      drivers.push({
+        registrationId: regId,
+        driverFirstName: b.firstName,
+        driverLastName: b.lastName,
+        countryCode: b.countryCode,
+        startNumber: b.startNumber,
+        teamName: b.teamName,
+        rawPoints: b.raw,
+        participationPoints: b.participation,
+        manualPenalties: b.manual,
+        correctionPoints: b.correction,
+        combinedTotal: total,
+        roundsCompleted: b.rounds.size,
+      });
+    }
+    drivers.sort((a, b) => b.combinedTotal - a.combinedTotal);
+    out.push({
+      carId,
+      carName: car.name,
+      carClassShortCode: car.classShort,
+      drivers,
+      totalPoints,
+    });
+  }
+  out.sort((a, b) => b.totalPoints - a.totalPoints);
+  return out;
+}

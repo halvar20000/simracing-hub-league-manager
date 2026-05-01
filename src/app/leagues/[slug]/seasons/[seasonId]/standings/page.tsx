@@ -10,8 +10,10 @@ import { IRatingChip } from "@/components/IRatingChip";
 import {
   computeDriverStandings,
   computeTeamStandings,
+  computeCarStandings,
   type DriverStanding,
   type TeamStanding,
+  type CarStanding,
 } from "@/lib/standings";
 
 type StandingsKind = "combined" | "class";
@@ -51,11 +53,12 @@ export default async function StandingsPage({
   const { slug, seasonId } = await params;
   const { view: viewRaw, cls: clsRaw } = await searchParams;
   const view: ViewMode = viewRaw === "races" ? "races" : "list";
-  type Cls = "combined" | "pro" | "am" | "team";
+  type Cls = "combined" | "pro" | "am" | "team" | "car";
   const cls: Cls =
     clsRaw === "pro" ? "pro" :
     clsRaw === "am" ? "am" :
-    clsRaw === "team" ? "team" : "combined";
+    clsRaw === "team" ? "team" :
+    clsRaw === "car" ? "car" : "combined";
   const viewSuffix = view === "races" ? "&view=races" : "";
   const viewQuery  = view === "races" ? "?view=races" : "";
 
@@ -76,12 +79,13 @@ export default async function StandingsPage({
     select: { id: true, roundNumber: true, name: true },
   });
 
-  const [drivers, previousDrivers, teams] = await Promise.all([
+  const [drivers, previousDrivers, teams, cars] = await Promise.all([
     computeDriverStandings(prisma, seasonId),
     latestRound
       ? computeDriverStandings(prisma, seasonId, [latestRound.id])
       : Promise.resolve(null as DriverStanding[] | null),
     computeTeamStandings(prisma, seasonId),
+  computeCarStandings(prisma, seasonId),
   ]);
 
   const sortByCombined = (a: DriverStanding, b: DriverStanding) =>
@@ -148,6 +152,7 @@ export default async function StandingsPage({
             <Link href={`${baseHref}?cls=am${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Am</Link>
           </>)}
           <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Team</Link>
+          <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>By Car</Link>
         </div>
       </div>
 
@@ -208,6 +213,79 @@ export default async function StandingsPage({
           );
         })}
 
+
+      {cls === "car" && (
+        <section className="space-y-4">
+          {cars.length === 0 ? (
+            <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+              No car-tagged race results yet. Cars are auto-detected when you
+              import an iRacing JSON file.
+            </p>
+          ) : (
+            cars.map((car) => (
+              <details
+                key={car.carId}
+                open
+                className="rounded border border-zinc-800 bg-zinc-900/50"
+              >
+                <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-900">
+                  <span className="flex items-center gap-3">
+                    {car.carClassShortCode && (
+                      <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+                        {car.carClassShortCode}
+                      </span>
+                    )}
+                    <span className="font-display text-base font-semibold">
+                      {car.carName}
+                    </span>
+                    <span className="text-xs text-zinc-500">
+                      ({car.drivers.length} driver{car.drivers.length === 1 ? "" : "s"})
+                    </span>
+                  </span>
+                </summary>
+                <div className="border-t border-zinc-800">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+                      <tr>
+                        <th className="px-3 py-2 w-10">Pos</th>
+                        <th className="px-3 py-2">Driver</th>
+                        <th className="px-3 py-2">Team</th>
+                        <th className="px-3 py-2 text-right">Rounds</th>
+                        <th className="px-3 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {car.drivers.map((d, i) => (
+                        <tr key={d.registrationId} className="border-t border-zinc-800">
+                          <td className="px-3 py-2 font-medium">{i + 1}</td>
+                          <td className="px-3 py-2">
+                            <span className="inline-flex items-center gap-2">
+                              <CountryFlag code={d.countryCode} />
+                              {d.startNumber != null && (
+                                <span className="text-xs text-zinc-500">
+                                  #{d.startNumber}
+                                </span>
+                              )}
+                              <span>
+                                {d.driverFirstName} {d.driverLastName}
+                              </span>
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-zinc-400">{d.teamName ?? "—"}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{d.roundsCompleted}</td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                            {d.combinedTotal}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            ))
+          )}
+        </section>
+      )}
       {cls === "team" && teams.length > 0 && (
         <section>
           <h2 className="mb-1 text-lg font-semibold">Team Championship</h2>
