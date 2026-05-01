@@ -663,7 +663,14 @@ export async function computeTeamClassStandings(
       t = { teamName: r.team.name, total: 0, incidents: 0, rounds: [] };
       b.teams.set(r.team.id, t);
     }
-    const pts = r.classPosition != null ? (pointsTable[String(r.classPosition)] ?? 0) : 0;
+    const basePts =
+      r.classPosition != null ? pointsTable[String(r.classPosition)] ?? 0 : 0;
+    const stored = r.rawPointsAwarded ?? 0;
+    const racePts = stored > 0 ? stored : basePts;
+    const participation = r.participationPointsAwarded ?? 0;
+    const correction = r.correctionPoints ?? 0;
+    const penalty = r.manualPenaltyPoints ?? 0;
+    const pts = racePts + participation + correction - penalty;
     t.total += pts;
     t.incidents += r.totalIncidents;
     t.rounds.push({

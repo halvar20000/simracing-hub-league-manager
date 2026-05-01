@@ -153,26 +153,6 @@ export default async function PublicRoundResults({
 
   const isMulticlass = round.season.isMulticlass;
   const proAmEnabled = round.season.proAmEnabled;
-  const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
-  const isMultiRace = racesPerRound > 1;
-
-  const cls: Cls =
-    clsRaw === "pro"
-      ? "pro"
-      : clsRaw === "am"
-        ? "am"
-        : clsRaw === "team"
-          ? "team"
-          : clsRaw === "race1"
-            ? "race1"
-            : clsRaw === "race2"
-              ? "race2"
-              : clsRaw === "quali"
-                ? "quali"
-                : clsRaw === "car" ? "car" : clsRaw === "teams" ? "teams" : "combined";
-
-  const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
-  const allRows = round.raceResults;
   const teamResultsForRound = await prisma.teamResult.findMany({
     where: { roundId: round.id },
     include: {
@@ -191,6 +171,25 @@ export default async function PublicRoundResults({
     orderBy: [{ classPosition: "asc" }, { finishPosition: "asc" }],
   });
   const hasTeamData = teamResultsForRound.length > 0;
+  const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
+  const isMultiRace = racesPerRound > 1;
+  const cls: Cls =
+    clsRaw === "pro"
+      ? "pro"
+      : clsRaw === "am"
+        ? "am"
+        : clsRaw === "team"
+          ? "team"
+          : clsRaw === "race1"
+            ? "race1"
+            : clsRaw === "race2"
+              ? "race2"
+              : clsRaw === "quali"
+                ? "quali"
+                : clsRaw === "car" ? "car" : clsRaw === "teams" ? "teams" : "combined";
+
+  const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
+  const allRows = round.raceResults;
 
   // For multi-race rounds, the per-race row sets
   const race1Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 1));
@@ -349,12 +348,14 @@ export default async function PublicRoundResults({
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-zinc-500">View:</span>
+        {!hasTeamData && (
         <Link
           href={baseHref}
           className={`${pillBase} ${cls === "combined" ? pillOn : pillOff}`}
         >
           Combined
         </Link>
+        )}
         <Link
           href={`${baseHref}?cls=quali`}
           className={`${pillBase} ${cls === "quali" ? pillOn : pillOff}`}

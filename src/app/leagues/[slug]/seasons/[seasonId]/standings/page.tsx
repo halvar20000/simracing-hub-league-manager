@@ -56,6 +56,8 @@ export default async function StandingsPage({
   const { view: viewRaw, cls: clsRaw } = await searchParams;
   const view: ViewMode = viewRaw === "races" ? "races" : "list";
   type Cls = "combined" | "pro" | "am" | "team" | "car";
+  // IEC: collapse all tabs to team view (no driver/per-car views).
+  const clsForTeamEvent = (raw: string | undefined): Cls => "team";
   const cls: Cls =
     clsRaw === "pro" ? "pro" :
     clsRaw === "am" ? "am" :
@@ -90,6 +92,8 @@ export default async function StandingsPage({
   computeCarStandings(prisma, seasonId),
   computeTeamClassStandings(prisma, seasonId),
   ]);
+
+  const isTeamEventSeason = teamClasses.length > 0;
 
   const sortByCombined = (a: DriverStanding, b: DriverStanding) =>
     b.combinedTotal - a.combinedTotal ||
@@ -159,7 +163,7 @@ export default async function StandingsPage({
         </div>
       </div>
 
-      {cls === "combined" && (
+      {!isTeamEventSeason && cls === "combined" && (
         <section>
         <h2 className="mb-1 text-lg font-semibold">Combined Driver Championship</h2>
         <p className="mb-3 text-xs text-zinc-500">
@@ -179,7 +183,7 @@ export default async function StandingsPage({
       </section>
       )}
 
-      {cls === "pro" && proDrivers.length > 0 && (
+      {!isTeamEventSeason && cls === "pro" && proDrivers.length > 0 && (
         <section>
           <h2 className="mb-1 text-lg font-semibold">Pro</h2>
           {view === "races" ? (
@@ -189,7 +193,7 @@ export default async function StandingsPage({
           )}
         </section>
       )}
-      {cls === "am" && amDrivers.length > 0 && (
+      {!isTeamEventSeason && cls === "am" && amDrivers.length > 0 && (
         <section>
           <h2 className="mb-1 text-lg font-semibold">Am</h2>
           {view === "races" ? (
@@ -200,7 +204,7 @@ export default async function StandingsPage({
         </section>
       )}
 
-      {cls === "combined" && season.isMulticlass && season.carClasses.length > 0 &&
+      {!isTeamEventSeason && cls === "combined" && season.isMulticlass && season.carClasses.length > 0 &&
         season.carClasses.map((cc) => {
           const carsInClass = cars.filter(
             (c) => (c.carClassShortCode ?? "").toUpperCase() === cc.shortCode.toUpperCase()
@@ -290,7 +294,7 @@ export default async function StandingsPage({
         })}
 
 
-      {cls === "car" && (
+      {!isTeamEventSeason && cls === "car" && (
         <section className="space-y-4">
           {cars.length === 0 ? (
             <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
@@ -362,13 +366,20 @@ export default async function StandingsPage({
           )}
         </section>
       )}
-      {cls === "team" && teamClasses.length > 0 && (
+      {(cls === "team" || isTeamEventSeason) && teamClasses.length > 0 && (
         <section className="space-y-4">
-          <div>
-            <h2 className="mb-1 text-lg font-semibold">Team Championship</h2>
-            <p className="mb-2 text-xs text-zinc-500">
-              Endurance / team event — points awarded by class position. One championship per car class.
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="mb-1 text-lg font-semibold">Team Championship</h2>
+              <p className="text-xs text-zinc-500">
+                Endurance / team event — points by class position + bonuses. One championship per car class.
+              </p>
+            </div>
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-zinc-500">View:</span>
+              <Link href={baseHref + (isTeamEventSeason ? "" : "?cls=team")} className={`rounded px-2.5 py-1 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>List</Link>
+              <Link href={baseHref + "?view=races" + (isTeamEventSeason ? "" : "&cls=team")} className={`rounded px-2.5 py-1 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Race by race</Link>
+            </div>
           </div>
           {teamClasses.map((g) => (
             <details
@@ -387,34 +398,7 @@ export default async function StandingsPage({
                   </span>
                 </span>
               </summary>
-              <div className="border-t border-zinc-800">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
-                    <tr>
-                      <th className="px-3 py-2 w-10">Pos</th>
-                      <th className="px-3 py-2">Team</th>
-                      <th className="px-3 py-2 text-right">Best</th>
-                      <th className="px-3 py-2 text-right">Rounds</th>
-                      <th className="px-3 py-2 text-right">Incidents</th>
-                      <th className="px-3 py-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.teams.map((t, i) => (
-                      <tr key={t.teamId} className="border-t border-zinc-800">
-                        <td className="px-3 py-2 font-medium">{i + 1}</td>
-                        <td className="px-3 py-2 font-medium">{t.teamName}</td>
-                        <td className="px-3 py-2 text-right text-zinc-300">
-                          {t.bestClassFinish != null ? "P" + t.bestClassFinish : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{t.roundsCompleted}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-zinc-400">{t.totalIncidents}</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{t.totalPoints}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TeamClassTable group={g} view={view} />
             </details>
           ))}
         </section>
@@ -716,6 +700,100 @@ function TeamsTable({ rows }: { rows: TeamStanding[] }) {
               </td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+
+function TeamClassTable({
+  group,
+  view,
+}: {
+  group: TeamClassGroup;
+  view: "list" | "races";
+}) {
+  if (view === "list") {
+    return (
+      <div className="border-t border-zinc-800">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+            <tr>
+              <th className="px-3 py-2 w-10">Pos</th>
+              <th className="px-3 py-2">Team</th>
+              <th className="px-3 py-2 text-right">Best</th>
+              <th className="px-3 py-2 text-right">Rounds</th>
+              <th className="px-3 py-2 text-right">Incidents</th>
+              <th className="px-3 py-2 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {group.teams.map((t, i) => (
+              <tr key={t.teamId} className="border-t border-zinc-800">
+                <td className="px-3 py-2 font-medium">{i + 1}</td>
+                <td className="px-3 py-2 font-medium">{t.teamName}</td>
+                <td className="px-3 py-2 text-right text-zinc-300">
+                  {t.bestClassFinish != null ? "P" + t.bestClassFinish : "—"}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">{t.roundsCompleted}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-zinc-400">{t.totalIncidents}</td>
+                <td className="px-3 py-2 text-right font-semibold tabular-nums">{t.totalPoints}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // Race by race
+  const allRoundsMap = new Map<string, { number: number; name: string }>();
+  for (const t of group.teams) for (const r of t.rounds) {
+    allRoundsMap.set(r.roundId, { number: r.roundNumber, name: r.roundName });
+  }
+  const roundsList = [...allRoundsMap.entries()]
+    .map(([id, v]) => ({ roundId: id, ...v }))
+    .sort((a, b) => a.number - b.number);
+
+  return (
+    <div className="border-t border-zinc-800 overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+          <tr>
+            <th className="px-3 py-2 sticky left-0 bg-zinc-900/50 z-10 w-10">Pos</th>
+            <th className="px-3 py-2 sticky left-10 bg-zinc-900/50 z-10">Team</th>
+            {roundsList.map((r) => (
+              <th key={r.roundId} className="px-3 py-2 text-center min-w-[3.5rem]" title={r.name}>
+                R{r.number}
+              </th>
+            ))}
+            <th className="px-3 py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {group.teams.map((t, i) => {
+            const byRound = new Map(t.rounds.map((r) => [r.roundId, r]));
+            return (
+              <tr key={t.teamId} className="border-t border-zinc-800">
+                <td className="px-3 py-2 font-medium sticky left-0 bg-zinc-900/30 z-10">{i + 1}</td>
+                <td className="px-3 py-2 font-medium sticky left-10 bg-zinc-900/30 z-10">{t.teamName}</td>
+                {roundsList.map((r) => {
+                  const cell = byRound.get(r.roundId);
+                  if (!cell) return <td key={r.roundId} className="px-3 py-2 text-center text-zinc-600">—</td>;
+                  return (
+                    <td key={r.roundId} className="px-3 py-2 text-center">
+                      <div className="text-xs text-zinc-500">
+                        {cell.classPosition != null ? "P" + cell.classPosition : cell.finishStatus}
+                      </div>
+                      <div className="font-semibold tabular-nums">{cell.points}</div>
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-2 text-right font-semibold tabular-nums">{t.totalPoints}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
