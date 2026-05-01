@@ -311,6 +311,12 @@ export default async function PublicRoundResults({
         <div className="flex items-center gap-2">
           <CopyLinkButton />
           <Link
+            href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
+            className="rounded border border-orange-500/60 bg-orange-500/10 px-3 py-1.5 text-sm font-medium text-orange-200 hover:bg-orange-500/20"
+          >
+            ⚑ Report incident
+          </Link>
+          <Link
             href={`/leagues/${slug}/seasons/${seasonId}`}
             className="text-sm text-zinc-400 hover:text-zinc-100"
           >
