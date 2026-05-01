@@ -30,7 +30,7 @@ async function resolveCarId(
   // Need a CarClass for the new Car. Use season's first, or auto-create.
   let carClass = await prisma.carClass.findFirst({
     where: { seasonId },
-    orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" } as never],
+    orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
   });
   if (!carClass) {
     const shortCode = (carClassShortName ?? "ALL").slice(0, 8).toUpperCase();
