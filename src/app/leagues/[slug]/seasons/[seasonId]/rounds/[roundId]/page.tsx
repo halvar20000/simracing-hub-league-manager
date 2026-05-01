@@ -11,7 +11,7 @@ import { formatDateTime } from "@/lib/date";
 import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
 
-type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car";
+type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams";
 const TEAM_BEST_N = 2;
 
 function ptsOf(r: {
@@ -169,10 +169,28 @@ export default async function PublicRoundResults({
               ? "race2"
               : clsRaw === "quali"
                 ? "quali"
-                : clsRaw === "car" ? "car" : "combined";
+                : clsRaw === "car" ? "car" : clsRaw === "teams" ? "teams" : "combined";
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
+  const teamResultsForRound = await prisma.teamResult.findMany({
+    where: { roundId: round.id },
+    include: {
+      team: { select: { id: true, name: true } },
+      carClass: { select: { id: true, name: true, shortCode: true, displayOrder: true } },
+      participations: {
+        include: {
+          registration: {
+            include: {
+              user: { select: { firstName: true, lastName: true, countryCode: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: [{ classPosition: "asc" }, { finishPosition: "asc" }],
+  });
+  const hasTeamData = teamResultsForRound.length > 0;
 
   // For multi-race rounds, the per-race row sets
   const race1Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 1));
@@ -387,6 +405,14 @@ export default async function PublicRoundResults({
         >
           By Car
         </Link>
+        {hasTeamData && (
+          <Link
+            href={`${baseHref}?cls=teams`}
+            className={`${pillBase} ${cls === "teams" ? pillOn : pillOff}`}
+          >
+            Teams
+          </Link>
+        )}
       </div>
 
       {cls === "combined" && podium.length > 0 && (
@@ -1204,6 +1230,122 @@ function ByCarSection({
           </details>
         );
       })}
+    </section>
+  );
+}
+
+
+interface RoundTeamRow {
+  id: string;
+  finishPosition: number;
+  classPosition: number | null;
+  lapsCompleted: number;
+  totalIncidents: number;
+  finishStatus: string;
+  team: { id: string; name: string };
+  carClass: { id: string; name: string; shortCode: string; displayOrder: number } | null;
+  participations: Array<{
+    id: string;
+    lapsCompleted: number;
+    lapsLed: number;
+    incidents: number;
+    iRating: number | null;
+    finishStatus: string;
+    registration: {
+      user: {
+        firstName: string | null;
+        lastName: string | null;
+        countryCode: string | null;
+      };
+    };
+  }>;
+}
+
+function flagFor(code: string | null | undefined): string {
+  if (!code || code.length !== 2) return "";
+  const cps = [...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65);
+  return String.fromCodePoint(...cps);
+}
+
+function RoundTeamSection({ teamResults }: { teamResults: RoundTeamRow[] }) {
+  // Group by carClassId
+  const byClass = new Map<string, { name: string; short: string; order: number; rows: RoundTeamRow[] }>();
+  for (const r of teamResults) {
+    const cid = r.carClass?.id ?? "__none__";
+    if (!byClass.has(cid)) {
+      byClass.set(cid, {
+        name: r.carClass?.name ?? "Unassigned",
+        short: r.carClass?.shortCode ?? "—",
+        order: r.carClass?.displayOrder ?? 999,
+        rows: [],
+      });
+    }
+    byClass.get(cid)!.rows.push(r);
+  }
+  const groups = [...byClass.entries()].sort(([, a], [, b]) => a.order - b.order || a.name.localeCompare(b.name));
+
+  return (
+    <section className="space-y-4">
+      {groups.map(([cid, g]) => (
+        <details
+          key={cid}
+          open
+          className="rounded border border-zinc-800 bg-zinc-900/50"
+        >
+          <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-900">
+            <span className="flex items-center gap-3">
+              <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+                {g.short}
+              </span>
+              <span className="font-display text-base font-semibold">{g.name}</span>
+              <span className="text-xs text-zinc-500">
+                ({g.rows.length} team{g.rows.length === 1 ? "" : "s"})
+              </span>
+            </span>
+          </summary>
+          <div className="divide-y divide-zinc-800 border-t border-zinc-800">
+            {g.rows.map((r) => (
+              <div key={r.id} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs font-bold text-zinc-200">
+                      {r.classPosition != null ? "P" + r.classPosition : "—"}
+                    </span>
+                    <span className="text-xs text-zinc-500">
+                      Overall P{r.finishPosition}
+                    </span>
+                    <span className="font-display text-base font-semibold">{r.team.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-zinc-400">{r.lapsCompleted} laps</span>
+                    <span className="text-zinc-400">{r.totalIncidents} inc</span>
+                    {r.finishStatus !== "CLASSIFIED" && (
+                      <span className="rounded bg-red-900/40 px-2 py-0.5 text-red-200">
+                        {r.finishStatus}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {r.participations.length > 0 && (
+                  <div className="mt-2 ml-1 grid grid-cols-1 gap-1 sm:grid-cols-2 md:grid-cols-3">
+                    {r.participations.map((d) => (
+                      <div key={d.id} className="flex items-center gap-2 text-xs text-zinc-400">
+                        <span>{flagFor(d.registration.user.countryCode)}</span>
+                        <span className="text-zinc-200">
+                          {d.registration.user.firstName} {d.registration.user.lastName}
+                        </span>
+                        <span className="ml-auto text-zinc-500">
+                          {d.lapsCompleted}L · {d.incidents}x
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      ))}
     </section>
   );
 }

@@ -574,3 +574,142 @@ export async function computeCarStandings(
   out.sort((a, b) => b.totalPoints - a.totalPoints);
   return out;
 }
+
+
+// ============================================================================
+// TEAM CLASS STANDINGS (endurance / IEC)
+// Reads TeamResult rows directly. Each carClass is its own championship.
+// Points come from scoringSystem.pointsTable[classPosition].
+// ============================================================================
+
+export interface TeamClassRoundResult {
+  roundId: string;
+  roundNumber: number;
+  roundName: string;
+  finishPosition: number;
+  classPosition: number | null;
+  points: number;
+  totalIncidents: number;
+  finishStatus: string;
+}
+
+export interface TeamClassStanding {
+  teamId: string;
+  teamName: string;
+  totalPoints: number;
+  totalIncidents: number;
+  roundsCompleted: number;
+  bestClassFinish: number | null;
+  rounds: TeamClassRoundResult[];
+}
+
+export interface TeamClassGroup {
+  carClassId: string;
+  carClassName: string;
+  carClassShortCode: string;
+  teams: TeamClassStanding[];
+}
+
+export async function computeTeamClassStandings(
+  prisma: PrismaClient,
+  seasonId: string
+): Promise<TeamClassGroup[]> {
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { scoringSystem: true },
+  });
+  if (!season) return [];
+  const pointsTable = (season.scoringSystem.pointsTable ?? {}) as Record<string, number>;
+
+  const results = await prisma.teamResult.findMany({
+    where: { round: { seasonId } },
+    include: {
+      team: { select: { id: true, name: true } },
+      carClass: { select: { id: true, name: true, shortCode: true, displayOrder: true } },
+      round: { select: { id: true, roundNumber: true, name: true } },
+    },
+  });
+
+  // Group by carClassId → teamId → rounds
+  type Bucket = {
+    classId: string;
+    className: string;
+    classShort: string;
+    classOrder: number;
+    teams: Map<string, {
+      teamName: string;
+      total: number;
+      incidents: number;
+      rounds: TeamClassRoundResult[];
+    }>;
+  };
+  const byClass = new Map<string, Bucket>();
+  for (const r of results) {
+    if (!r.carClass) continue;
+    const cid = r.carClass.id;
+    let b = byClass.get(cid);
+    if (!b) {
+      b = {
+        classId: cid,
+        className: r.carClass.name,
+        classShort: r.carClass.shortCode,
+        classOrder: r.carClass.displayOrder ?? 0,
+        teams: new Map(),
+      };
+      byClass.set(cid, b);
+    }
+    let t = b.teams.get(r.team.id);
+    if (!t) {
+      t = { teamName: r.team.name, total: 0, incidents: 0, rounds: [] };
+      b.teams.set(r.team.id, t);
+    }
+    const pts = r.classPosition != null ? (pointsTable[String(r.classPosition)] ?? 0) : 0;
+    t.total += pts;
+    t.incidents += r.totalIncidents;
+    t.rounds.push({
+      roundId: r.round.id,
+      roundNumber: r.round.roundNumber,
+      roundName: r.round.name,
+      finishPosition: r.finishPosition,
+      classPosition: r.classPosition,
+      points: pts,
+      totalIncidents: r.totalIncidents,
+      finishStatus: r.finishStatus,
+    });
+  }
+
+  const out: TeamClassGroup[] = [];
+  for (const b of byClass.values()) {
+    const teams: TeamClassStanding[] = [];
+    for (const [teamId, t] of b.teams.entries()) {
+      const sorted = [...t.rounds].sort((a, b) => a.roundNumber - b.roundNumber);
+      const bestClassFinish = sorted
+        .map((r) => r.classPosition)
+        .filter((x): x is number => x != null)
+        .reduce<number | null>((m, x) => (m == null ? x : Math.min(m, x)), null);
+      teams.push({
+        teamId,
+        teamName: t.teamName,
+        totalPoints: t.total,
+        totalIncidents: t.incidents,
+        roundsCompleted: t.rounds.length,
+        bestClassFinish,
+        rounds: sorted,
+      });
+    }
+    teams.sort((a, b) => b.totalPoints - a.totalPoints || (a.bestClassFinish ?? 999) - (b.bestClassFinish ?? 999));
+    out.push({
+      carClassId: b.classId,
+      carClassName: b.className,
+      carClassShortCode: b.classShort,
+      teams,
+    });
+  }
+  out.sort((a, b) => {
+    // Order classes by their displayOrder via the original Bucket.
+    const aOrder = byClass.get(a.carClassId)?.classOrder ?? 0;
+    const bOrder = byClass.get(b.carClassId)?.classOrder ?? 0;
+    return aOrder - bOrder || a.carClassName.localeCompare(b.carClassName);
+  });
+  return out;
+}

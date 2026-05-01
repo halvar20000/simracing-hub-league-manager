@@ -11,9 +11,11 @@ import {
   computeDriverStandings,
   computeTeamStandings,
   computeCarStandings,
+  computeTeamClassStandings,
   type DriverStanding,
   type TeamStanding,
   type CarStanding,
+  type TeamClassGroup,
 } from "@/lib/standings";
 
 type StandingsKind = "combined" | "class";
@@ -79,13 +81,14 @@ export default async function StandingsPage({
     select: { id: true, roundNumber: true, name: true },
   });
 
-  const [drivers, previousDrivers, teams, cars] = await Promise.all([
+  const [drivers, previousDrivers, teams, cars, teamClasses] = await Promise.all([
     computeDriverStandings(prisma, seasonId),
     latestRound
       ? computeDriverStandings(prisma, seasonId, [latestRound.id])
       : Promise.resolve(null as DriverStanding[] | null),
     computeTeamStandings(prisma, seasonId),
   computeCarStandings(prisma, seasonId),
+  computeTeamClassStandings(prisma, seasonId),
   ]);
 
   const sortByCombined = (a: DriverStanding, b: DriverStanding) =>
@@ -359,7 +362,64 @@ export default async function StandingsPage({
           )}
         </section>
       )}
-      {cls === "team" && teams.length > 0 && (
+      {cls === "team" && teamClasses.length > 0 && (
+        <section className="space-y-4">
+          <div>
+            <h2 className="mb-1 text-lg font-semibold">Team Championship</h2>
+            <p className="mb-2 text-xs text-zinc-500">
+              Endurance / team event — points awarded by class position. One championship per car class.
+            </p>
+          </div>
+          {teamClasses.map((g) => (
+            <details
+              key={g.carClassId}
+              open
+              className="rounded border border-zinc-800 bg-zinc-900/50"
+            >
+              <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-900">
+                <span className="flex items-center gap-3">
+                  <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+                    {g.carClassShortCode}
+                  </span>
+                  <span className="font-display text-base font-semibold">{g.carClassName}</span>
+                  <span className="text-xs text-zinc-500">
+                    ({g.teams.length} team{g.teams.length === 1 ? "" : "s"})
+                  </span>
+                </span>
+              </summary>
+              <div className="border-t border-zinc-800">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+                    <tr>
+                      <th className="px-3 py-2 w-10">Pos</th>
+                      <th className="px-3 py-2">Team</th>
+                      <th className="px-3 py-2 text-right">Best</th>
+                      <th className="px-3 py-2 text-right">Rounds</th>
+                      <th className="px-3 py-2 text-right">Incidents</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.teams.map((t, i) => (
+                      <tr key={t.teamId} className="border-t border-zinc-800">
+                        <td className="px-3 py-2 font-medium">{i + 1}</td>
+                        <td className="px-3 py-2 font-medium">{t.teamName}</td>
+                        <td className="px-3 py-2 text-right text-zinc-300">
+                          {t.bestClassFinish != null ? "P" + t.bestClassFinish : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{t.roundsCompleted}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-zinc-400">{t.totalIncidents}</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{t.totalPoints}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ))}
+        </section>
+      )}
+      {cls === "team" && teamClasses.length === 0 && teams.length > 0 && (
         <section>
           <h2 className="mb-1 text-lg font-semibold">Team Championship</h2>
           <p className="mb-3 text-xs text-zinc-500">
