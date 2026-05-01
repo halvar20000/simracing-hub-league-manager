@@ -60,6 +60,9 @@ function mapReasonOut(reason: string | undefined): ParsedDriver["finishStatus"] 
   const r = (reason ?? "").toLowerCase();
   if (!r || r === "running" || r.includes("classified")) return "CLASSIFIED";
   if (r.includes("disqualif")) return "DSQ";
+  // Match IRLM behaviour: a disconnect is treated as DSQ so the
+  // DSQ-forfeit rule still applies in leagues that use it.
+  if (r.includes("disconnect")) return "DSQ";
   if (r.includes("did not start") || r === "dns") return "DNS";
   return "DNF";
 }
