@@ -11,7 +11,7 @@ import { formatDateTime } from "@/lib/date";
 import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
 
-type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali";
+type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car";
 const TEAM_BEST_N = 2;
 
 function ptsOf(r: {
@@ -152,6 +152,7 @@ export default async function PublicRoundResults({
   }
 
   const isMulticlass = round.season.isMulticlass;
+  const proAmEnabled = round.season.proAmEnabled;
   const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
   const isMultiRace = racesPerRound > 1;
 
@@ -168,7 +169,7 @@ export default async function PublicRoundResults({
               ? "race2"
               : clsRaw === "quali"
                 ? "quali"
-                : "combined";
+                : clsRaw === "car" ? "car" : "combined";
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
@@ -358,7 +359,7 @@ export default async function PublicRoundResults({
             </Link>
           </>
         )}
-        {isMulticlass && (
+        {proAmEnabled && (
           <>
             <Link
               href={`${baseHref}?cls=pro`}
@@ -379,6 +380,12 @@ export default async function PublicRoundResults({
           className={`${pillBase} ${cls === "team" ? pillOn : pillOff}`}
         >
           Team
+        </Link>
+        <Link
+          href={`${baseHref}?cls=car`}
+          className={`${pillBase} ${cls === "car" ? pillOn : pillOff}`}
+        >
+          By Car
         </Link>
       </div>
 
@@ -1034,5 +1041,169 @@ function ReportButton({
     >
       ⚑ Report incident
     </a>
+  );
+}
+
+
+interface ByCarRow {
+  registrationId: string;
+  raceNumber: number;
+  finishPosition: number;
+  finishStatus: string;
+  rawPointsAwarded: number;
+  participationPointsAwarded: number;
+  manualPenaltyPoints: number;
+  carId: string | null;
+  carName: string | null;
+  driverFirstName: string | null;
+  driverLastName: string | null;
+  countryCode: string | null;
+  startNumber: number | null;
+}
+
+function ByCarSection({
+  allRows,
+  isMultiRace,
+}: {
+  allRows: ByCarRow[];
+  isMultiRace: boolean;
+}) {
+  // Group results by carId. Drivers without a carId go into "Unassigned".
+  const byCar = new Map<string, { carName: string; rows: ByCarRow[] }>();
+  for (const r of allRows) {
+    const key = r.carId ?? "__none__";
+    const name = r.carName ?? "Unassigned";
+    if (!byCar.has(key)) byCar.set(key, { carName: name, rows: [] });
+    byCar.get(key)!.rows.push(r);
+  }
+  // Order cars alphabetically; "Unassigned" last.
+  const carEntries = [...byCar.entries()].sort(([ak, av], [bk, bv]) => {
+    if (ak === "__none__") return 1;
+    if (bk === "__none__") return -1;
+    return av.carName.localeCompare(bv.carName);
+  });
+
+  if (carEntries.length === 0) {
+    return (
+      <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+        No car-tagged results yet for this round. Re-import via iRacing JSON to
+        populate cars.
+      </p>
+    );
+  }
+
+  return (
+    <section className="space-y-4">
+      {carEntries.map(([key, { carName, rows }]) => {
+        // For each driver-in-this-car, show their finish in each race number.
+        const byDriver = new Map<string, ByCarRow[]>();
+        for (const r of rows) {
+          const list = byDriver.get(r.registrationId) ?? [];
+          list.push(r);
+          byDriver.set(r.registrationId, list);
+        }
+        // Pick the BEST finish across races for sorting.
+        const drivers = [...byDriver.entries()]
+          .map(([regId, rs]) => {
+            const best = Math.min(...rs.map((r) => r.finishPosition));
+            const points = rs.reduce(
+              (sum, r) =>
+                sum +
+                r.rawPointsAwarded +
+                r.participationPointsAwarded -
+                r.manualPenaltyPoints,
+              0
+            );
+            const head = rs[0];
+            return { regId, rs, best, points, head };
+          })
+          .sort((a, b) => b.points - a.points || a.best - b.best);
+
+        return (
+          <details
+            key={key}
+            open
+            className="rounded border border-zinc-800 bg-zinc-900/50"
+          >
+            <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-900">
+              <span className="font-display text-base font-semibold">
+                {carName}
+              </span>
+              <span className="text-xs text-zinc-500">
+                {drivers.length} driver{drivers.length === 1 ? "" : "s"}
+              </span>
+            </summary>
+            <div className="border-t border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+                  <tr>
+                    <th className="px-3 py-2 w-10">Pos</th>
+                    <th className="px-3 py-2">Driver</th>
+                    {isMultiRace ? (
+                      <>
+                        <th className="px-3 py-2 text-center">R1</th>
+                        <th className="px-3 py-2 text-center">R2</th>
+                      </>
+                    ) : (
+                      <th className="px-3 py-2 text-center">Finish</th>
+                    )}
+                    <th className="px-3 py-2 text-right">Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drivers.map((d, i) => {
+                    const r1 = d.rs.find((r) => r.raceNumber === 1);
+                    const r2 = d.rs.find((r) => r.raceNumber === 2);
+                    const fmt = (r: ByCarRow | undefined) =>
+                      !r
+                        ? "—"
+                        : r.finishStatus !== "CLASSIFIED"
+                          ? r.finishStatus
+                          : "P" + r.finishPosition;
+                    return (
+                      <tr
+                        key={d.regId}
+                        className="border-t border-zinc-800"
+                      >
+                        <td className="px-3 py-2 font-medium">{i + 1}</td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center gap-2">
+                            {d.head.startNumber != null && (
+                              <span className="text-xs text-zinc-500">
+                                #{d.head.startNumber}
+                              </span>
+                            )}
+                            <span>
+                              {d.head.driverFirstName} {d.head.driverLastName}
+                            </span>
+                          </span>
+                        </td>
+                        {isMultiRace ? (
+                          <>
+                            <td className="px-3 py-2 text-center text-zinc-300">
+                              {fmt(r1)}
+                            </td>
+                            <td className="px-3 py-2 text-center text-zinc-300">
+                              {fmt(r2)}
+                            </td>
+                          </>
+                        ) : (
+                          <td className="px-3 py-2 text-center text-zinc-300">
+                            {fmt(r1 ?? r2)}
+                          </td>
+                        )}
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {d.points}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        );
+      })}
+    </section>
   );
 }
