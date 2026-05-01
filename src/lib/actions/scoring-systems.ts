@@ -61,6 +61,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const dropWorstNRounds = readIntOrNull(formData.get("dropWorstNRounds"));
   const categoryPointsTable = readCategoryPointsFromForm(formData);
   const driverFprEnabled = formData.get("driverFprEnabled") === "on";
+  const driverFprMinDistancePct =
+    readIntOrNull(formData.get("driverFprMinDistancePct")) ?? 90;
   const driverFprTiers: { maxInc: number; points: number }[] = [];
   for (let i = 0; i < 3; i++) {
     const m = readIntOrNull(formData.get(`fprTier${i}MaxInc`));
@@ -107,6 +109,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       deferPenaltyPoints,
       categoryPointsTable,
       driverFprEnabled,
+      driverFprMinDistancePct,
       driverFprTiers: driverFprTiers.length > 0 ? driverFprTiers : Prisma.DbNull,
       racesPerRound,
       pointsTableRace2:

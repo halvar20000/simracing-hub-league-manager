@@ -281,9 +281,24 @@ export default async function EditScoringSystem({
               </div>
             ))}
           </div>
-          <p className="mt-2 text-xs text-zinc-500">
+          <div className="mt-4 max-w-xs">
+            <Field
+              label="Min race distance % to qualify for FPR"
+              name="driverFprMinDistancePct"
+              type="number"
+              defaultValue={String(ss.driverFprMinDistancePct ?? 90)}
+              min={0}
+              max={100}
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              For multi-race rounds, the driver must hit this threshold in
+              every race of the round to earn FPR.
+            </p>
+          </div>
+          <p className="mt-3 text-xs text-zinc-500">
             Drivers with more incidents than the highest tier earn 0 FPR.
             Default for CAS Combined Cup: 0–2 inc → 3, 3–5 inc → 2, 6–7 inc → 1.
+            Default min distance: 90%.
           </p>
         </Section>
 

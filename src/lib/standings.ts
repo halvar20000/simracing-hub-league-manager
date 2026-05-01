@@ -157,6 +157,7 @@ export async function computeDriverStandings(
   const driverFprTiers = driverFprEnabled
     ? readDriverFprTiers(season?.scoringSystem?.driverFprTiers)
     : [];
+  const driverFprMinDistance = season?.scoringSystem?.driverFprMinDistancePct ?? 90;
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
     let classRaw = 0;
@@ -214,7 +215,11 @@ export async function computeDriverStandings(
       const results = resultsByRoundId.get(round.id) ?? [];
       const roundIncidents = results.reduce((sum, r) => sum + (r.incidents ?? 0), 0);
       // Per-round driver FPR — based on TOTAL incidents in the round.
-      const roundFpr = driverFprEnabled
+      // Eligibility: every race in the round must hit the min-distance threshold.
+      const fprEligible = results.length > 0 && results.every(
+        (r) => (r.raceDistancePct ?? 0) >= driverFprMinDistance
+      );
+      const roundFpr = driverFprEnabled && fprEligible
         ? fprPointsForIncidents(roundIncidents, driverFprTiers)
         : 0;
       if (results.length > 0) fprTotal += roundFpr;

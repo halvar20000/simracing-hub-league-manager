@@ -293,6 +293,7 @@ model ScoringSystem {
   categoryPointsTable      Json?
   driverFprEnabled         Boolean @default(false)
   driverFprTiers           Json?
+  driverFprMinDistancePct  Int     @default(90)
 }
 
 model FPRAward {
