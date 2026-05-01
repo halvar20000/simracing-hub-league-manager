@@ -142,8 +142,10 @@ model CarClass {
   cars          Car[]
   registrations Registration[]
   fprAwards     FPRAward[]
+  teamResults   TeamResult[]
 
   @@unique([seasonId, shortCode])
+  iracingCarClassId Int?
 }
 
 model Car {
@@ -157,6 +159,7 @@ model Car {
 
   registrations Registration[]
   raceResults   RaceResult[]
+  teamResults   TeamResult[]
 }
 
 model Team {
@@ -168,9 +171,11 @@ model Team {
   logoUrl       String?
 
   registrations Registration[]
+  teamResults    TeamResult[]
   fprAwards     FPRAward[]
 
   @@unique([seasonId, name])
+  iracingTeamId Int?       @unique
 }
 
 model Round {
@@ -194,6 +199,7 @@ model Round {
   penalties               Penalty[]
 
   @@unique([seasonId, roundNumber])
+  teamResults     TeamResult[]
 }
 
 model Registration {
@@ -222,6 +228,7 @@ model Registration {
   raceResults             RaceResult[]
   reportedIncidents       IncidentReport[]                @relation("IncidentReporter")
   involvedInIncidents     IncidentReportInvolvedDriver[]
+  teamRoundDrivers   TeamRoundDriver[]
   penalties               Penalty[]
 
   createdAt       DateTime            @default(now())
@@ -552,4 +559,59 @@ enum PenaltyCategory {
   UNSPORTSMANLIKE
   CHAT_MISCONDUCT
   OTHER
+}
+
+
+model TeamResult {
+  id                         String        @id @default(cuid())
+  roundId                    String
+  round                      Round         @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  teamId                     String
+  team                       Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  raceNumber                 Int           @default(1)
+
+  finishPosition             Int
+  classPosition              Int?
+  lapsCompleted              Int           @default(0)
+  raceDistancePct            Int           @default(0)
+  totalTimeMs                Int?
+  bestLapTimeMs              Int?
+  totalIncidents             Int           @default(0)
+  finishStatus               FinishStatus  @default(CLASSIFIED)
+  startPosition              Int?
+
+  rawPointsAwarded           Int           @default(0)
+  participationPointsAwarded Int           @default(0)
+  manualPenaltyPoints        Int           @default(0)
+  correctionPoints           Int           @default(0)
+
+  carId                      String?
+  car                        Car?          @relation(fields: [carId], references: [id])
+  carClassId                 String?
+  carClass                   CarClass?     @relation(fields: [carClassId], references: [id])
+
+  participations             TeamRoundDriver[]
+
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+
+  @@unique([roundId, teamId, raceNumber])
+}
+
+model TeamRoundDriver {
+  id              String       @id @default(cuid())
+  teamResultId    String
+  teamResult      TeamResult   @relation(fields: [teamResultId], references: [id], onDelete: Cascade)
+  registrationId  String
+  registration    Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  lapsCompleted   Int          @default(0)
+  lapsLed         Int          @default(0)
+  bestLapTimeMs   Int?
+  averageLapMs    Int?
+  incidents       Int          @default(0)
+  iRating         Int?
+  finishStatus    FinishStatus @default(CLASSIFIED)
+
+  @@unique([teamResultId, registrationId])
 }
