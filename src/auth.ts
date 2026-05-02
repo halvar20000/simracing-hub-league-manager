@@ -15,6 +15,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Discord({
       authorization: { params: { scope: "identify email guilds", prompt: "consent" } },
+      allowDangerousEmailAccountLinking: true,
     }),
   ],
   session: { strategy: "database" },
