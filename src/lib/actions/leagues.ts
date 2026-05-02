@@ -38,13 +38,27 @@ export async function updateLeague(id: string, formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim() || null;
 
+  const webhookRaw = String(formData.get("discordRegistrationsWebhookUrl") ?? "").trim();
+  const discordRegistrationsWebhookUrl = webhookRaw || null;
+
+  const emailsRaw = String(formData.get("registrationNotifyEmails") ?? "");
+  const registrationNotifyEmails = emailsRaw
+    .split(/[\n,;]+/)
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && /@/.test(e));
+
   if (!name) {
     redirect(`/admin/leagues/${id}/edit?error=Name+is+required`);
   }
 
   const updated = await prisma.league.update({
     where: { id },
-    data: { name, description },
+    data: {
+      name,
+      description,
+      discordRegistrationsWebhookUrl,
+      registrationNotifyEmails,
+    },
   });
 
   revalidatePath("/admin/leagues");
