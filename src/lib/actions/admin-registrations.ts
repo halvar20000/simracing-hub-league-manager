@@ -90,3 +90,35 @@ export async function updateRegistration(
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}`);
   redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`);
 }
+
+const ADMIN_CHECK_FIELDS = new Set([
+  "startingFeePaid",
+  "iracingInvitationSent",
+  "iracingInvitationAccepted",
+]);
+
+const ADMIN_CHECK_VALUES = new Set(["PENDING", "YES", "NO"]);
+
+export async function updateRegistrationFlag(formData: FormData) {
+  await requireAdmin();
+  const registrationId = String(formData.get("registrationId") ?? "");
+  const field = String(formData.get("field") ?? "");
+  const value = String(formData.get("value") ?? "");
+
+  if (!registrationId) throw new Error("registrationId required");
+  if (!ADMIN_CHECK_FIELDS.has(field)) throw new Error("Invalid field");
+  if (!ADMIN_CHECK_VALUES.has(value)) throw new Error("Invalid value");
+
+  const reg = await prisma.registration.update({
+    where: { id: registrationId },
+    // The field name is whitelisted above; cast is necessary because the key
+    // is a runtime string here.
+    data: { [field]: value } as never,
+    include: { season: { include: { league: true } } },
+  });
+
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+}
+

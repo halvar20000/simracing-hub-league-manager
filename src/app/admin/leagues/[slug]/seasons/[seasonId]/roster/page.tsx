@@ -6,6 +6,7 @@ import {
   approveRegistration,
   rejectRegistration,
 } from "@/lib/actions/admin-registrations";
+import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 
 export default async function RosterPage({
   params,
@@ -26,6 +27,7 @@ export default async function RosterPage({
       user: true,
       team: true,
       carClass: true,
+      car: true,
     },
     orderBy: [{ status: "asc" }, { createdAt: "asc" }],
   });
@@ -64,8 +66,12 @@ export default async function RosterPage({
               <th className="px-4 py-3">#</th>
               <th className="px-4 py-3">Team</th>
               <th className="px-4 py-3">Class</th>
+              <th className="px-4 py-3">Car</th>
               <th className="px-4 py-3">Pro/Am</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Fee</th>
+              <th className="px-4 py-3">Invite</th>
+              <th className="px-4 py-3">Accepted</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -96,10 +102,34 @@ export default async function RosterPage({
                   {r.carClass?.name ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-zinc-400">
+                  {r.car?.name ?? "—"}
+                </td>
+                <td className="px-4 py-3 text-zinc-400">
                   {r.proAmClass ?? "—"}
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={r.status} />
+                </td>
+                <td className="px-4 py-3">
+                  <RegistrationFlagSelect
+                    registrationId={r.id}
+                    field="startingFeePaid"
+                    value={r.startingFeePaid}
+                  />
+                </td>
+                <td className="px-4 py-3">
+                  <RegistrationFlagSelect
+                    registrationId={r.id}
+                    field="iracingInvitationSent"
+                    value={r.iracingInvitationSent}
+                  />
+                </td>
+                <td className="px-4 py-3">
+                  <RegistrationFlagSelect
+                    registrationId={r.id}
+                    field="iracingInvitationAccepted"
+                    value={r.iracingInvitationAccepted}
+                  />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
@@ -138,7 +168,7 @@ export default async function RosterPage({
             {registrations.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={12}
                   className="px-4 py-6 text-center text-zinc-500"
                 >
                   No registrations yet.
