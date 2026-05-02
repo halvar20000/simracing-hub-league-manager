@@ -33,6 +33,9 @@ export default async function RegisterPage({
     prisma.carClass.findMany({
       where: { seasonId },
       orderBy: { displayOrder: "asc" },
+      include: {
+        cars: { orderBy: { displayOrder: "asc" } },
+      },
     }),
     prisma.registration.findUnique({
       where: { seasonId_userId: { seasonId, userId: session.user.id } },
@@ -92,6 +95,13 @@ export default async function RegisterPage({
     existing &&
     existing.status !== "WITHDRAWN" &&
     existing.status !== "REJECTED";
+
+  const hasCars = carClasses.some((cc) => cc.cars.length > 0);
+  const carLocked = !!existing?.carId && season.status === "ACTIVE";
+  const lockedCarId = carLocked ? existing?.carId ?? null : null;
+  const lockedCar = lockedCarId
+    ? carClasses.flatMap((cc) => cc.cars).find((c) => c.id === lockedCarId) ?? null
+    : null;
 
   return (
     <div className="max-w-xl space-y-6">
@@ -221,6 +231,59 @@ export default async function RegisterPage({
               Ask the admin to add car classes before registering.
             </div>
           ))}
+        {hasCars && (
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">
+              Car <span className="text-orange-400">*</span>
+            </span>
+            {carLocked ? (
+              <div className="space-y-1">
+                <input
+                  type="hidden"
+                  name="carId"
+                  value={existing?.carId ?? ""}
+                />
+                <div className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">
+                  {lockedCar?.name ?? "—"}
+                </div>
+                <span className="block text-xs text-amber-300">
+                  Locked — your car cannot be changed once the season is
+                  active.
+                </span>
+              </div>
+            ) : (
+              <select
+                name="carId"
+                required
+                defaultValue={existing?.carId ?? ""}
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">Select car…</option>
+                {season.isMulticlass
+                  ? carClasses
+                      .filter((cc) => cc.cars.length > 0)
+                      .map((cc) => (
+                        <optgroup key={cc.id} label={cc.name}>
+                          {cc.cars.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))
+                  : carClasses
+                      .flatMap((cc) => cc.cars)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+              </select>
+            )}
+          </label>
+        )}
+
+
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">

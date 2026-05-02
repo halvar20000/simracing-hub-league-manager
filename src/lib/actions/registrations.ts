@@ -54,6 +54,7 @@ export async function createRegistration(
     String(formData.get("teamId") ?? "").trim() || null;
   const newTeamName = String(formData.get("newTeamName") ?? "").trim();
   const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
+  const carId = String(formData.get("carId") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   // Resolve team:
@@ -80,6 +81,40 @@ export async function createRegistration(
     );
   }
 
+  // Validate car if provided; auto-resolve carClassId for non-multiclass seasons
+  let resolvedCarClassId: string | null = carClassId;
+  if (carId) {
+    const car = await prisma.car.findUnique({
+      where: { id: carId },
+      select: { seasonId: true, carClassId: true },
+    });
+    if (!car || car.seasonId !== seasonId) {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Invalid+car`
+      );
+    }
+    if (season.isMulticlass && carClassId && car.carClassId !== carClassId) {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+does+not+belong+to+selected+class`
+      );
+    }
+    if (!resolvedCarClassId) {
+      resolvedCarClassId = car.carClassId;
+    }
+  }
+
+  // If any class has cars defined, car selection is required
+  const classesWithCars = await prisma.carClass.findMany({
+    where: { seasonId, cars: { some: {} } },
+    select: { id: true },
+  });
+  if (classesWithCars.length > 0 && !carId) {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+is+required`
+    );
+  }
+
+
   const existing = await prisma.registration.findUnique({
     where: { seasonId_userId: { seasonId, userId: user.id } },
   });
@@ -90,6 +125,18 @@ export async function createRegistration(
     );
   }
 
+  if (
+    existing &&
+    existing.carId &&
+    season.status === "ACTIVE" &&
+    existing.carId !== carId
+  ) {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+is+locked+after+season+start`
+    );
+  }
+
+
   if (existing) {
     await prisma.registration.update({
       where: { id: existing.id },
@@ -97,7 +144,8 @@ export async function createRegistration(
         status: "PENDING",
         startNumber,
         teamId,
-        carClassId,
+        carClassId: resolvedCarClassId,
+        carId,
         notes,
         approvedById: null,
         approvedAt: null,
@@ -111,7 +159,8 @@ export async function createRegistration(
         status: "PENDING",
         startNumber,
         teamId,
-        carClassId,
+        carClassId: resolvedCarClassId,
+        carId,
         notes,
       },
     });
