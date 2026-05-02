@@ -6,6 +6,8 @@ import {
   addCarsBulk,
   deleteCar,
   updateCarIracingId,
+  addCarClass,
+  deleteCarClass,
 } from "@/lib/actions/cars";
 
 export default async function AdminSeasonCars({
@@ -50,10 +52,53 @@ export default async function AdminSeasonCars({
         </p>
       </div>
 
+            <section className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+        <h2 className="text-lg font-semibold">Add a car class</h2>
+        <form action={addCarClass} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="seasonId" value={seasonId} />
+          <div>
+            <label className="block text-xs text-zinc-400">Name</label>
+            <input
+              type="text"
+              name="name"
+              required
+              placeholder="GT4"
+              className="w-32 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400">Short code</label>
+            <input
+              type="text"
+              name="shortCode"
+              required
+              placeholder="GT4"
+              className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400">
+              iRacing class id(s) — optional, comma-separated
+            </label>
+            <input
+              type="text"
+              name="iracingCarClassIds"
+              placeholder="74, 84"
+              className="w-40 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
+          >
+            Add class
+          </button>
+        </form>
+      </section>
+
       {season.carClasses.length === 0 && (
-        <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-zinc-400">
-          This season has no car classes yet. Add at least one car class on the
-          season page before managing cars.
+        <p className="text-sm text-zinc-500">
+          No car classes yet for this season — add one above to get started.
         </p>
       )}
 
@@ -62,13 +107,24 @@ export default async function AdminSeasonCars({
           key={cc.id}
           className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-4"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">
               {cc.name}{" "}
               <span className="text-sm text-zinc-500">
                 ({cc._count.cars} car{cc._count.cars === 1 ? "" : "s"})
               </span>
             </h2>
+            {cc._count.cars === 0 && (
+              <form action={deleteCarClass}>
+                <input type="hidden" name="carClassId" value={cc.id} />
+                <button
+                  type="submit"
+                  className="rounded border border-red-900/40 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30"
+                >
+                  Delete class
+                </button>
+              </form>
+            )}
           </div>
 
           {cc.cars.length > 0 ? (

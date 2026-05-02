@@ -102,3 +102,81 @@ export async function updateCarIracingId(formData: FormData) {
     `/admin/leagues/${car.carClass.season.league.slug}/seasons/${car.carClass.seasonId}/cars`
   );
 }
+
+export async function addCarClass(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const shortCode = String(formData.get("shortCode") ?? "").trim();
+  const iracingIdsRaw = String(formData.get("iracingCarClassIds") ?? "").trim();
+
+  if (!seasonId) throw new Error("seasonId required");
+  if (!name) throw new Error("name required");
+  if (!shortCode) throw new Error("shortCode required");
+
+  const iracingCarClassIds = iracingIdsRaw
+    ? iracingIdsRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => /^\d+$/.test(s))
+        .map((s) => parseInt(s, 10))
+    : [];
+
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: {
+      league: true,
+      _count: { select: { carClasses: true } },
+    },
+  });
+  if (!season) throw new Error("Season not found");
+
+  await prisma.carClass.create({
+    data: {
+      seasonId,
+      name,
+      shortCode,
+      iracingCarClassIds,
+      displayOrder: season._count.carClasses,
+    },
+  });
+
+  revalidatePath(
+    `/admin/leagues/${season.league.slug}/seasons/${seasonId}/cars`
+  );
+}
+
+export async function deleteCarClass(formData: FormData) {
+  await requireAdmin();
+  const carClassId = String(formData.get("carClassId") ?? "");
+  if (!carClassId) throw new Error("carClassId required");
+
+  const cc = await prisma.carClass.findUnique({
+    where: { id: carClassId },
+    include: {
+      season: { include: { league: true } },
+      _count: {
+        select: {
+          cars: true,
+          registrations: true,
+          teamResults: true,
+        },
+      },
+    },
+  });
+  if (!cc) return;
+
+  // Refuse to delete a class that already has registrations / results.
+  if (cc._count.registrations > 0 || cc._count.teamResults > 0) {
+    throw new Error(
+      "Cannot delete a class that already has registrations or race results."
+    );
+  }
+
+  await prisma.carClass.delete({ where: { id: carClassId } });
+
+  revalidatePath(
+    `/admin/leagues/${cc.season.league.slug}/seasons/${cc.seasonId}/cars`
+  );
+}
+
