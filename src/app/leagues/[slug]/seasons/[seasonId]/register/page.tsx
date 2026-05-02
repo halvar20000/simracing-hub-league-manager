@@ -9,16 +9,15 @@ export default async function RegisterPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; t?: string }>;
 }) {
   const { slug, seasonId } = await params;
-  const { error } = await searchParams;
+  const { error, t } = await searchParams;
 
   const session = await auth();
   if (!session?.user?.id) {
-    redirect(
-      `/api/auth/signin?callbackUrl=/leagues/${slug}/seasons/${seasonId}/register`
-    );
+    const cbPath = `/leagues/${slug}/seasons/${seasonId}/register${t ? `?t=${encodeURIComponent(t)}` : ""}`;
+    redirect(`/api/auth/signin?callbackUrl=${encodeURIComponent(cbPath)}`);
   }
 
   const [season, user, teams, carClasses, existing] = await Promise.all([
@@ -41,6 +40,24 @@ export default async function RegisterPage({
   ]);
 
   if (!season || season.league.slug !== slug) notFound();
+
+  if (season.registrationToken && season.registrationToken !== t) {
+    return (
+      <div className="max-w-xl space-y-4">
+        <Link
+          href={`/leagues/${slug}/seasons/${seasonId}`}
+          className="text-sm text-zinc-400 hover:text-zinc-200"
+        >
+          ← Back to season
+        </Link>
+        <h1 className="text-2xl font-bold">Registration is link-protected</h1>
+        <p className="text-zinc-400">
+          This season requires a personal invitation link to register. Please
+          ask the league administrator for the registration link.
+        </p>
+      </div>
+    );
+  }
   if (!user) redirect("/api/auth/signin");
 
   if (!user.firstName || !user.lastName || !user.iracingMemberId) {
@@ -70,7 +87,7 @@ export default async function RegisterPage({
     );
   }
 
-  const create = createRegistration.bind(null, slug, seasonId);
+  const create = createRegistration.bind(null, slug, seasonId, t ?? "");
   const isUpdate =
     existing &&
     existing.status !== "WITHDRAWN" &&

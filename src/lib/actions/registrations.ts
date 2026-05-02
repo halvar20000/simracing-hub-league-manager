@@ -10,6 +10,7 @@ import { sendResendEmail } from "@/lib/resend-email";
 export async function createRegistration(
   leagueSlug: string,
   seasonId: string,
+  token: string,
   formData: FormData
 ) {
   const sessionUser = await requireAuth();
@@ -27,6 +28,13 @@ export async function createRegistration(
       `/leagues/${leagueSlug}/seasons/${seasonId}?error=Registration+is+not+open`
     );
   }
+
+  if (season.registrationToken && season.registrationToken !== token) {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}?error=Registration+is+link-protected`
+    );
+  }
+
 
   const user = await prisma.user.findUnique({
     where: { id: sessionUser.id },
