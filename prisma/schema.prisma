@@ -99,6 +99,7 @@ model League {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   discordRegistrationsWebhookUrl String?
+  registrationNotifyEmails      String[]  @default([])
 }
 
 model Season {
