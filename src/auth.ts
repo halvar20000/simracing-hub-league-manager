@@ -14,7 +14,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: [
     Discord({
-      authorization: { params: { scope: "identify guilds" } },
+      authorization: { params: { scope: "identify guilds", prompt: "consent" } },
     }),
   ],
   session: { strategy: "database" },
