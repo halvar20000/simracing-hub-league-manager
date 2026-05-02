@@ -71,6 +71,14 @@ export default async function AdminSeasonDetail({
             )}
             <div>
               <h1 className="text-2xl font-bold">{season.name}</h1>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link
+                  href={`/admin/leagues/${slug}/seasons/${seasonId}/cars`}
+                  className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700"
+                >
+                  Manage cars →
+                </Link>
+              </div>
               <p className="text-sm text-zinc-400">
                 {season.year} • {season.scoringSystem.name} •{" "}
                 {season.status.replace("_", " ")}

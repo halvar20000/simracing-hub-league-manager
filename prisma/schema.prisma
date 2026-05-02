@@ -153,19 +153,6 @@ model CarClass {
   iracingCarClassIds Int[]     @default([])
 }
 
-model Car {
-  id            String         @id @default(cuid())
-  seasonId      String
-  season        Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  carClassId    String
-  carClass      CarClass       @relation(fields: [carClassId], references: [id], onDelete: Cascade)
-  name          String
-  iracingCarId  Int?
-
-  registrations Registration[]
-  raceResults   RaceResult[]
-  teamResults   TeamResult[]
-}
 
 model Team {
   id            String         @id @default(cuid())
@@ -621,4 +608,30 @@ model TeamRoundDriver {
   finishStatus    FinishStatus @default(CLASSIFIED)
 
   @@unique([teamResultId, registrationId])
+}
+
+model Car {
+  id            String   @id @default(cuid())
+
+  seasonId      String
+  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  carClassId    String
+  carClass      CarClass @relation(fields: [carClassId], references: [id], onDelete: Cascade)
+
+  name          String
+  shortName     String?
+  iracingCarId  Int?
+  displayOrder  Int      @default(0)
+
+  registrations Registration[]
+  raceResults   RaceResult[]
+  teamResults   TeamResult[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@unique([carClassId, name])
+  @@index([carClassId])
+  @@index([seasonId])
 }
