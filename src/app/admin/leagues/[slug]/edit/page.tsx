@@ -49,6 +49,22 @@ export default async function EditLeaguePage({
         </label>
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
+            Email recipients for new registrations (one per line)
+          </span>
+          <textarea
+            name="registrationNotifyEmails"
+            rows={3}
+            defaultValue={(league.registrationNotifyEmails ?? []).join("\n")}
+            placeholder={"admin@example.com\nsteward@example.com"}
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            Sent via Resend. Requires RESEND_API_KEY in env. Leave blank to disable.
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">
             Discord webhook URL for registrations (optional)
           </span>
           <input
