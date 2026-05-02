@@ -160,7 +160,10 @@ export default async function AdminSeasonDetail({
         <h2 className="text-lg font-semibold">Registration link</h2>
         {(() => {
           const baseUrl =
-            process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "";
+            process.env.NEXT_PUBLIC_SITE_URL ||
+            process.env.NEXT_PUBLIC_BASE_URL ||
+            process.env.NEXTAUTH_URL ||
+            "https://league.simracing-hub.com";
           const path = `/leagues/${slug}/seasons/${season.id}/register`;
           const url = season.registrationToken
             ? `${baseUrl}${path}?t=${season.registrationToken}`
