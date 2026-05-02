@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
+import CopyTextButton from "@/components/CopyTextButton";
+import { regenerateRegistrationToken, clearRegistrationToken } from "@/lib/actions/seasons";
 
 export default async function AdminSeasonDetail({
   params,
@@ -144,6 +146,59 @@ export default async function AdminSeasonDetail({
           label="Multiclass"
           value={season.isMulticlass ? "Yes" : "No"}
         />
+      </section>
+
+      <section className="rounded border border-emerald-700/40 bg-emerald-900/10 p-4 space-y-3">
+        <h2 className="text-lg font-semibold">Registration link</h2>
+        {(() => {
+          const baseUrl =
+            process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "";
+          const path = `/leagues/${slug}/seasons/${season.id}/register`;
+          const url = season.registrationToken
+            ? `${baseUrl}${path}?t=${season.registrationToken}`
+            : `${baseUrl}${path}`;
+          return (
+            <div className="space-y-3">
+              {season.registrationToken ? (
+                <p className="text-sm text-emerald-300">
+                  Token-protected — only people with this exact link can register.
+                </p>
+              ) : (
+                <p className="text-sm text-amber-300">
+                  Open registration — anyone signed in can register without a token.
+                </p>
+              )}
+              <code className="block break-all rounded bg-zinc-900 border border-zinc-800 p-2 text-xs">
+                {url}
+              </code>
+              <div className="flex flex-wrap gap-2">
+                <CopyTextButton text={url} label="Copy registration link" />
+                <form action={regenerateRegistrationToken}>
+                  <input type="hidden" name="seasonId" value={season.id} />
+                  <button
+                    type="submit"
+                    className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700"
+                  >
+                    {season.registrationToken
+                      ? "Regenerate token"
+                      : "Generate token (link-only)"}
+                  </button>
+                </form>
+                {season.registrationToken && (
+                  <form action={clearRegistrationToken}>
+                    <input type="hidden" name="seasonId" value={season.id} />
+                    <button
+                      type="submit"
+                      className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700"
+                    >
+                      Clear token (open registration)
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
       <section>

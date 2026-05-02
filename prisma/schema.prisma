@@ -132,6 +132,7 @@ model Season {
 
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
+  registrationToken String? @unique
 }
 
 model CarClass {

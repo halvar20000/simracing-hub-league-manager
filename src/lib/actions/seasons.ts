@@ -142,3 +142,29 @@ export async function deleteSeason(leagueSlug: string, seasonId: string) {
   revalidatePath(`/leagues/${leagueSlug}`);
   redirect(`/admin/leagues/${leagueSlug}`);
 }
+
+export async function regenerateRegistrationToken(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  if (!seasonId) throw new Error("seasonId required");
+  const token = crypto.randomUUID();
+  const season = await prisma.season.update({
+    where: { id: seasonId },
+    data: { registrationToken: token },
+    include: { league: true },
+  });
+  revalidatePath(`/admin/leagues/${season.league.slug}/seasons/${season.id}`);
+}
+
+export async function clearRegistrationToken(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  if (!seasonId) throw new Error("seasonId required");
+  const season = await prisma.season.update({
+    where: { id: seasonId },
+    data: { registrationToken: null },
+    include: { league: true },
+  });
+  revalidatePath(`/admin/leagues/${season.league.slug}/seasons/${season.id}`);
+}
+
