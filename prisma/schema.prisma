@@ -228,9 +228,9 @@ model Registration {
 
   @@unique([seasonId, userId])
   excludedAt      DateTime?
-  startingFeePaid           AdminCheckStatus @default(PENDING)
-  iracingInvitationSent     AdminCheckStatus @default(PENDING)
-  iracingInvitationAccepted AdminCheckStatus @default(PENDING)
+  startingFeePaid           AdminCheckStatus @default(NO)
+  iracingInvitationSent     AdminCheckStatus @default(NO)
+  iracingInvitationAccepted AdminCheckStatus @default(NO)
 }
 
 model RaceResult {

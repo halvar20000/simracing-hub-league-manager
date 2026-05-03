@@ -70,8 +70,14 @@ export default async function RosterPage({
               <th className="px-4 py-3">Pro/Am</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Fee</th>
-              <th className="px-4 py-3">Invite</th>
-              <th className="px-4 py-3">Accepted</th>
+              <th className="px-4 py-3">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-500">iRacing</div>
+                Invite
+              </th>
+              <th className="px-4 py-3">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-500">iRacing</div>
+                Accepted
+              </th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
