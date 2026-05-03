@@ -78,6 +78,12 @@ export default async function AdminSeasonDetail({
                 >
                   Manage cars →
                 </Link>
+                <Link
+                  href={`/admin/leagues/${slug}/seasons/${seasonId}/pro-am`}
+                  className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700"
+                >
+                  Pro/Am calculator →
+                </Link>
               </div>
               <p className="text-sm text-zinc-400">
                 {season.year} • {season.scoringSystem.name} •{" "}
