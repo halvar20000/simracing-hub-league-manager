@@ -57,7 +57,7 @@ export default async function RosterPage({
         </p>
       </div>
 
-      <div className="overflow-hidden rounded border border-zinc-800">
+      <div className="overflow-x-auto rounded border border-zinc-800">
         <table className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
