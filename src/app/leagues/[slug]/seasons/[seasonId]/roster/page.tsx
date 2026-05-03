@@ -62,6 +62,19 @@ export default async function PublicSeasonRoster({
                 <th className="px-4 py-3">Team</th>
                 {showClass && <th className="px-4 py-3">Class</th>}
                 <th className="px-4 py-3">Car</th>
+                <th className="px-4 py-3">Fee</th>
+                <th className="px-4 py-3">
+                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+                    iRacing
+                  </div>
+                  Invite
+                </th>
+                <th className="px-4 py-3">
+                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+                    iRacing
+                  </div>
+                  Accepted
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -89,6 +102,24 @@ export default async function PublicSeasonRoster({
                   <td className="px-4 py-3 text-zinc-400">
                     {r.car?.name ?? "—"}
                   </td>
+                  <td className="px-4 py-3">
+                    <FlagBadge
+                      value={r.startingFeePaid}
+                      labels={{ YES: "Paid", NO: "Not paid" }}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <FlagBadge
+                      value={r.iracingInvitationSent}
+                      labels={{ YES: "Sent", NO: "Not sent" }}
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <FlagBadge
+                      value={r.iracingInvitationAccepted}
+                      labels={{ YES: "Accepted", NO: "Not accepted" }}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -96,5 +127,27 @@ export default async function PublicSeasonRoster({
         </div>
       )}
     </div>
+  );
+}
+
+function FlagBadge({
+  value,
+  labels,
+}: {
+  value: "PENDING" | "YES" | "NO";
+  labels: { YES: string; NO: string };
+}) {
+  const safe = value === "PENDING" ? "NO" : value;
+  const cls =
+    safe === "YES"
+      ? "border-emerald-700/50 bg-emerald-950/40 text-emerald-200"
+      : "border-red-800/50 bg-red-950/40 text-red-200";
+  const text = safe === "YES" ? labels.YES : labels.NO;
+  return (
+    <span
+      className={`inline-block rounded border px-2 py-0.5 text-xs ${cls}`}
+    >
+      {text}
+    </span>
   );
 }
