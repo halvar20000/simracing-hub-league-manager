@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
+import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
 
 export default async function ProAmCalculator({
   params,
@@ -44,6 +45,7 @@ export default async function ProAmCalculator({
     lastName: string | null;
     iracingMemberId: string | null;
     classRanking: string | null;
+    proAmClass: "PRO" | "AM" | null;
     starts: number;
     rawAvg: number;
     adjustedAvg: number | null;
@@ -83,6 +85,7 @@ export default async function ProAmCalculator({
         ? roundIncidents.reduce((a, b) => a + b, 0) / starts
         : 0;
     return {
+      proAmClass: (reg as { proAmClass: "PRO" | "AM" | null }).proAmClass ?? null,
       regId: reg.id,
       firstName: reg.user.firstName,
       lastName: reg.user.lastName,
@@ -183,6 +186,7 @@ export default async function ProAmCalculator({
                   <th className="px-3 py-2">Best {keepN} avg</th>
                   <th className="px-3 py-2">Avg inc.</th>
                   <th className="px-3 py-2">Suggested</th>
+                  <th className="px-3 py-2">Override</th>
                 </tr>
               </thead>
               <tbody>
@@ -246,6 +250,7 @@ export default async function ProAmCalculator({
                   <th className="px-3 py-2">Starts</th>
                   <th className="px-3 py-2">Raw avg</th>
                   <th className="px-3 py-2">Avg inc.</th>
+                  <th className="px-3 py-2">Override</th>
                 </tr>
               </thead>
               <tbody>
@@ -266,6 +271,13 @@ export default async function ProAmCalculator({
                     </td>
                     <td className="px-3 py-2 text-zinc-400">
                       {r.avgIncidents.toFixed(1)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <ProAmOverrideSelect
+                        registrationId={r.regId}
+                        value={r.proAmClass}
+                        suggested="UNRANKED"
+                      />
                     </td>
                   </tr>
                 ))}

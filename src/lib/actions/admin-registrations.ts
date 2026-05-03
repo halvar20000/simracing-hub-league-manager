@@ -122,3 +122,26 @@ export async function updateRegistrationFlag(formData: FormData) {
   );
 }
 
+const PROAM_VALUES = new Set(["PRO", "AM", "AUTO"]);
+
+export async function setRegistrationProAmClass(formData: FormData) {
+  await requireAdmin();
+  const registrationId = String(formData.get("registrationId") ?? "");
+  const value = String(formData.get("value") ?? "");
+  if (!registrationId) throw new Error("registrationId required");
+  if (!PROAM_VALUES.has(value)) throw new Error("Invalid value");
+
+  const reg = await prisma.registration.update({
+    where: { id: registrationId },
+    data: { proAmClass: value === "AUTO" ? null : (value as "PRO" | "AM") },
+    include: { season: { include: { league: true } } },
+  });
+
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/pro-am`
+  );
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+}
+
