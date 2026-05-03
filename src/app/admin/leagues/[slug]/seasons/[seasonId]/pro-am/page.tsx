@@ -3,14 +3,24 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
+import { applyProAmToTargetSeason } from "@/lib/actions/admin-registrations";
 
 export default async function ProAmCalculator({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
+  searchParams: Promise<{
+    appliedPro?: string;
+    appliedAm?: string;
+    appliedAuto?: string;
+    skipped?: string;
+    target?: string;
+  }>;
 }) {
   await requireAdmin();
   const { slug, seasonId } = await params;
+  const sp = await searchParams;
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
@@ -31,6 +41,12 @@ export default async function ProAmCalculator({
     },
   });
   if (!season || season.league.slug !== slug) notFound();
+
+  const otherSeasons = await prisma.season.findMany({
+    where: { leagueId: season.leagueId, id: { not: seasonId } },
+    orderBy: [{ year: "desc" }, { name: "asc" }],
+    select: { id: true, name: true, year: true, status: true },
+  });
 
   const totalRounds = season.rounds.length;
   // Smart-default parameters that scale with season length.
@@ -135,6 +151,14 @@ export default async function ProAmCalculator({
           Smart classification based on points-per-round across the season.
         </p>
       </div>
+
+      {sp.appliedPro !== undefined && (
+        <div className="rounded border border-emerald-700/50 bg-emerald-950/30 p-3 text-sm text-emerald-200">
+          Applied Pro/Am to <strong>{sp.target?.replace(/\+/g, " ")}</strong>:{" "}
+          {sp.appliedPro} as Pro, {sp.appliedAm} as Am, {sp.appliedAuto} as
+          Auto, {sp.skipped} skipped (no matching driver in target).
+        </div>
+      )}
 
       <section className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm">
         <h2 className="mb-2 font-semibold">Formula</h2>
@@ -286,6 +310,56 @@ export default async function ProAmCalculator({
           </div>
         </section>
       )}
+
+      <section>
+        <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+          Apply to another season
+        </h2>
+        <form
+          action={applyProAmToTargetSeason}
+          className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-3"
+        >
+          <input type="hidden" name="sourceSeasonId" value={seasonId} />
+          <p className="text-sm text-zinc-300">
+            Apply each driver&apos;s classification (override or algorithm
+            result) to a chosen target season. Drivers are matched by user —
+            those not registered in the target are skipped.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs text-zinc-400">
+                Target season
+              </label>
+              <select
+                name="targetSeasonId"
+                required
+                className="w-64 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  Pick target season…
+                </option>
+                {otherSeasons.map((os) => (
+                  <option key={os.id} value={os.id}>
+                    {os.name} {os.year} ({os.status.replace("_", " ")})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
+            >
+              Apply Pro/Am
+            </button>
+          </div>
+          {otherSeasons.length === 0 && (
+            <p className="text-xs text-zinc-500">
+              No other seasons in this league.
+            </p>
+          )}
+        </form>
+      </section>
     </div>
   );
 }
