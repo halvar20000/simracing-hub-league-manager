@@ -23,6 +23,7 @@ async function FullAdminDashboard() {
     teamCount,
     pendingRegs,
     pendingReports,
+    liveSeasons,
   ] = await Promise.all([
     prisma.league.findMany({
       orderBy: { name: "asc" },
@@ -42,6 +43,14 @@ async function FullAdminDashboard() {
     prisma.team.count(),
     prisma.registration.count({ where: { status: "PENDING" } }),
     prisma.incidentReport.count({ where: { status: "SUBMITTED" } }),
+    prisma.season.findMany({
+      where: { status: { in: ["OPEN_REGISTRATION", "ACTIVE"] } },
+      include: {
+        league: { select: { name: true, slug: true } },
+        _count: { select: { registrations: true } },
+      },
+      orderBy: [{ year: "desc" }, { name: "asc" }],
+    }),
   ]);
 
   const pending = pendingRegs + pendingReports;
@@ -91,6 +100,60 @@ async function FullAdminDashboard() {
           + New League
         </Link>
       </div>
+      <section>
+        <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+          Active rosters
+        </h2>
+        {liveSeasons.length === 0 ? (
+          <p className="rounded border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-500">
+            No seasons in OPEN_REGISTRATION or ACTIVE status.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded border border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-900 text-left text-zinc-400">
+                <tr>
+                  <th className="px-3 py-2">League</th>
+                  <th className="px-3 py-2">Season</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Drivers</th>
+                  <th className="px-3 py-2 text-right"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveSeasons.map((s) => (
+                  <tr
+                    key={s.id}
+                    className="border-t border-zinc-800 hover:bg-zinc-900"
+                  >
+                    <td className="px-3 py-2 text-zinc-400">{s.league.name}</td>
+                    <td className="px-3 py-2 font-medium">
+                      {s.name} {s.year}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="inline-block rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+                        {s.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-zinc-400">
+                      {s._count.registrations}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Link
+                        href={`/admin/leagues/${s.league.slug}/seasons/${s.id}/roster`}
+                        className="text-orange-400 hover:underline"
+                      >
+                        Roster →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
 
       <section>
         <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">

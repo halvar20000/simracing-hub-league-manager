@@ -5,20 +5,22 @@ import { prisma } from "@/lib/prisma";
 export default async function Nav() {
   const session = await auth();
 
-  let isAdmin = false;
+  let role: string | null = null;
   let pendingReports = 0;
   if (session?.user?.id) {
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true },
     });
-    isAdmin = user?.role === "ADMIN" || user?.role === "STEWARD";
-    if (isAdmin) {
+    role = user?.role ?? null;
+    if (role === "ADMIN" || role === "STEWARD") {
       pendingReports = await prisma.incidentReport.count({
         where: { status: "SUBMITTED" },
       });
     }
   }
+  const isFullAdmin = role === "ADMIN";
+  const isSteward = role === "ADMIN" || role === "STEWARD";
 
   return (
     <nav className="border-b border-zinc-800 bg-[#0a0a0f]/95 backdrop-blur">
@@ -49,9 +51,10 @@ export default async function Nav() {
               <NavLink href="/profile">Profile</NavLink>
             </>
           )}
-          {isAdmin && (
+          {isFullAdmin && <NavLink href="/admin">Admin</NavLink>}
+          {isSteward && (
             <NavLink href="/admin/stewards">
-              Admin
+              Stewards
               {pendingReports > 0 && (
                 <span className="ml-1 inline-block min-w-[1.25rem] rounded-full bg-orange-500 px-1.5 text-center text-[10px] font-bold leading-5 text-zinc-950">
                   {pendingReports}
