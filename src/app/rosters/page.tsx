@@ -6,6 +6,7 @@ export default async function PublicRostersIndex() {
     orderBy: { name: "asc" },
     include: {
       seasons: {
+        where: { status: { in: ["OPEN_REGISTRATION", "ACTIVE"] } },
         orderBy: [{ year: "desc" }, { name: "asc" }],
       },
     },
@@ -40,7 +41,9 @@ export default async function PublicRostersIndex() {
         </p>
       ) : (
         <div className="space-y-6">
-          {leagues.map((league) => (
+          {leagues
+            .filter((league) => league.seasons.length > 0)
+            .map((league) => (
             <section key={league.id}>
               <h2 className="mb-2 font-display text-base font-semibold tracking-wide">
                 {league.name}
