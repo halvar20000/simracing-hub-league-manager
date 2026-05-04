@@ -85,8 +85,19 @@ export default async function PublicSeasonRoster({
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium">
-                      {r.user.firstName} {r.user.lastName}
-                    </div>
+                    {r.user.iracingMemberId ? (
+                      <Link
+                        href={`/drivers/${r.user.iracingMemberId}`}
+                        className="hover:text-orange-400"
+                      >
+                        {r.user.firstName} {r.user.lastName}
+                      </Link>
+                    ) : (
+                      <>
+                        {r.user.firstName} {r.user.lastName}
+                      </>
+                    )}
+                  </div>
                   </td>
                   <td className="px-4 py-3 text-zinc-400">
                     {r.user.iracingMemberId ?? "—"}
