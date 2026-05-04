@@ -35,6 +35,8 @@ export default async function RosterPage({
   const pendingCount = registrations.filter(
     (r) => r.status === "PENDING"
   ).length;
+  const showFee =
+    !!season.league.registrationFee && season.league.registrationFee > 0;
 
   return (
     <div className="space-y-6">
@@ -69,7 +71,9 @@ export default async function RosterPage({
               <th className="px-4 py-3">Car</th>
               <th className="px-4 py-3">Pro/Am</th>
               <th className="px-4 py-3">Status</th>
+              {showFee && (
               <th className="px-4 py-3">Fee</th>
+              )}
               <th className="px-4 py-3">
                 <div className="text-[10px] uppercase tracking-wide text-zinc-500">iRacing</div>
                 Invite
@@ -116,6 +120,7 @@ export default async function RosterPage({
                 <td className="px-4 py-3">
                   <StatusBadge status={r.status} />
                 </td>
+                {showFee && (
                 <td className="px-4 py-3">
                   <RegistrationFlagSelect
                     registrationId={r.id}
@@ -123,6 +128,7 @@ export default async function RosterPage({
                     value={r.startingFeePaid}
                   />
                 </td>
+                )}
                 <td className="px-4 py-3">
                   <RegistrationFlagSelect
                     registrationId={r.id}

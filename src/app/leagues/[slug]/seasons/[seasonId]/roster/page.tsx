@@ -30,6 +30,8 @@ export default async function PublicSeasonRoster({
   });
 
   const showClass = season.isMulticlass;
+  const showFee =
+    !!season.league.registrationFee && season.league.registrationFee > 0;
 
   return (
     <div className="space-y-6">
@@ -62,7 +64,9 @@ export default async function PublicSeasonRoster({
                 <th className="px-4 py-3">Team</th>
                 {showClass && <th className="px-4 py-3">Class</th>}
                 <th className="px-4 py-3">Car</th>
-                <th className="px-4 py-3">Fee</th>
+                {showFee && (
+                  <th className="px-4 py-3">Fee</th>
+                )}
                 <th className="px-4 py-3">
                   <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                     iRacing
@@ -113,12 +117,14 @@ export default async function PublicSeasonRoster({
                   <td className="px-4 py-3 text-zinc-400">
                     {r.car?.name ?? "—"}
                   </td>
+                  {showFee && (
                   <td className="px-4 py-3">
                     <FlagBadge
                       value={r.startingFeePaid}
                       labels={{ YES: "Paid", NO: "Not paid" }}
                     />
                   </td>
+                  )}
                   <td className="px-4 py-3">
                     <FlagBadge
                       value={r.iracingInvitationSent}
