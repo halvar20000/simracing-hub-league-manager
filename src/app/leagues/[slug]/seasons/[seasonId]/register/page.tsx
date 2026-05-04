@@ -3,6 +3,8 @@ import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { createRegistration } from "@/lib/actions/registrations";
+import { getLeaguePayment } from "@/lib/payment";
+import PaymentNotice from "@/components/PaymentNotice";
 
 export default async function RegisterPage({
   params,
@@ -97,6 +99,7 @@ export default async function RegisterPage({
     existing.status !== "REJECTED";
 
   const hasCars = carClasses.some((cc) => cc.cars.length > 0);
+  const paymentInfo = getLeaguePayment(season.league);
   const carLocked = !!existing?.carId && season.status === "ACTIVE";
   const lockedCarId = carLocked ? existing?.carId ?? null : null;
   const lockedCar = lockedCarId
@@ -297,6 +300,10 @@ export default async function RegisterPage({
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
         </label>
+
+        {paymentInfo && (
+          <PaymentNotice payment={paymentInfo} variant="preview" />
+        )}
 
         <div className="flex gap-2">
           <button

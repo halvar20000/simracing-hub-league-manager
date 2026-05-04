@@ -101,6 +101,9 @@ model League {
   updatedAt   DateTime  @updatedAt
   discordRegistrationsWebhookUrl String?
   registrationNotifyEmails      String[]  @default([])
+  paypalUsername          String?
+  registrationFee         Int?
+  registrationFeeCurrency String?  @default("EUR")
 }
 
 model Season {

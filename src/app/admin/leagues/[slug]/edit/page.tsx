@@ -81,6 +81,60 @@ export default async function EditLeaguePage({
           </span>
         </label>
 
+        <fieldset className="rounded border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+          <legend className="px-2 text-sm text-zinc-300">
+            Registration fee (optional)
+          </legend>
+          <p className="text-xs text-zinc-500">
+            If set, drivers will see a PayPal payment link after registering.
+            The link uses Friends &amp; Family + their real name as reference,
+            shown automatically.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">Amount</span>
+              <input
+                name="registrationFee"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={league.registrationFee ?? ""}
+                placeholder="10"
+                className="w-24 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">Currency</span>
+              <input
+                name="registrationFeeCurrency"
+                type="text"
+                defaultValue={league.registrationFeeCurrency ?? "EUR"}
+                placeholder="EUR"
+                maxLength={3}
+                className="w-24 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm uppercase text-zinc-100"
+              />
+            </label>
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                PayPal.me username
+              </span>
+              <input
+                name="paypalUsername"
+                type="text"
+                defaultValue={league.paypalUsername ?? ""}
+                placeholder="auro2082"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+          </div>
+          <p className="text-xs text-zinc-500">
+            Generates link:{" "}
+            <code className="rounded bg-zinc-800 px-1.5 py-0.5">
+              paypal.me/&lt;username&gt;/&lt;amount&gt;&lt;currency&gt;
+            </code>
+          </p>
+        </fieldset>
+
         <div className="flex gap-2">
           <button
             type="submit"

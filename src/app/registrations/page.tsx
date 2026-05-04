@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { withdrawRegistration } from "@/lib/actions/registrations";
+import { getLeaguePayment } from "@/lib/payment";
+import PaymentNotice from "@/components/PaymentNotice";
 
 export default async function MyRegistrationsPage({
   searchParams,
@@ -25,6 +27,12 @@ export default async function MyRegistrationsPage({
     },
     orderBy: { createdAt: "desc" },
   });
+
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { firstName: true, lastName: true },
+  });
+  const driverName = me ? `${me.firstName ?? ""} ${me.lastName ?? ""}`.trim() : "";
 
   return (
     <div className="space-y-6">

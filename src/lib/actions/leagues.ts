@@ -47,6 +47,18 @@ export async function updateLeague(id: string, formData: FormData) {
     .map((e) => e.trim())
     .filter((e) => e.length > 0 && /@/.test(e));
 
+  const paypalUsername =
+    String(formData.get("paypalUsername") ?? "").trim() || null;
+
+  const feeRaw = String(formData.get("registrationFee") ?? "").trim();
+  const registrationFee =
+    feeRaw && /^\d+$/.test(feeRaw) ? parseInt(feeRaw, 10) : null;
+
+  const currencyRaw = String(formData.get("registrationFeeCurrency") ?? "")
+    .trim()
+    .toUpperCase();
+  const registrationFeeCurrency = currencyRaw || "EUR";
+
   if (!name) {
     redirect(`/admin/leagues/${id}/edit?error=Name+is+required`);
   }
@@ -58,6 +70,9 @@ export async function updateLeague(id: string, formData: FormData) {
       description,
       discordRegistrationsWebhookUrl,
       registrationNotifyEmails,
+      paypalUsername,
+      registrationFee,
+      registrationFeeCurrency,
     },
   });
 
