@@ -84,6 +84,12 @@ export default async function AdminSeasonDetail({
                 >
                   Pro/Am calculator →
                 </Link>
+                <Link
+                  href={`/leagues/${slug}/seasons/${seasonId}/stats`}
+                  className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700"
+                >
+                  Statistics →
+                </Link>
               </div>
               <p className="text-sm text-zinc-400">
                 {season.year} • {season.scoringSystem.name} •{" "}
