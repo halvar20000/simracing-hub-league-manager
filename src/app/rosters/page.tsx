@@ -14,7 +14,7 @@ export default async function PublicRostersIndex() {
 
   const counts = await prisma.registration.groupBy({
     by: ["seasonId"],
-    where: { status: "APPROVED" },
+    where: { status: { in: ["APPROVED", "PENDING"] } },
     _count: { _all: true },
   });
   const approvedCount = new Map<string, number>(

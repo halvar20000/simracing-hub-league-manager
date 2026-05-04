@@ -15,7 +15,7 @@ export default async function PublicSeasonRoster({
   if (!season || season.league.slug !== slug) notFound();
 
   const registrations = await prisma.registration.findMany({
-    where: { seasonId, status: "APPROVED" },
+    where: { seasonId, status: { in: ["APPROVED", "PENDING"] } },
     include: {
       user: true,
       team: true,
@@ -30,6 +30,7 @@ export default async function PublicSeasonRoster({
   });
 
   const showClass = season.isMulticlass;
+  const pendingCount = registrations.filter((r) => r.status === "PENDING").length;
   const showFee =
     !!season.league.registrationFee && season.league.registrationFee > 0;
 
@@ -44,14 +45,19 @@ export default async function PublicSeasonRoster({
         </Link>
         <h1 className="mt-2 text-2xl font-bold">Roster</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          {registrations.length} approved{" "}
+          {registrations.length}{" "}
           {registrations.length === 1 ? "driver" : "drivers"}
+          {pendingCount > 0 && (
+            <span className="ml-1 text-zinc-500">
+              ({pendingCount} pending)
+            </span>
+          )}
         </p>
       </div>
 
       {registrations.length === 0 ? (
         <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
-          No approved drivers yet.
+          No drivers registered yet.
         </p>
       ) : (
         <div className="overflow-x-auto rounded border border-zinc-800">
@@ -102,6 +108,11 @@ export default async function PublicSeasonRoster({
                       </>
                     )}
                   </div>
+                    {r.status === "PENDING" && (
+                      <div className="mt-0.5 inline-block rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                        Pending
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-zinc-400">
                     {r.user.iracingMemberId ?? "—"}
