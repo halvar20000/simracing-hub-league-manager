@@ -121,6 +121,20 @@ export default async function MyRegistrationsPage({
                   )}
                 </div>
               </div>
+              {(() => {
+                const pi = getLeaguePayment(r.season.league);
+                if (!pi) return null;
+                const isPaid = r.startingFeePaid === "YES";
+                return (
+                  <div className="mt-3">
+                    <PaymentNotice
+                      payment={pi}
+                      paid={isPaid}
+                      driverName={driverName}
+                    />
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
