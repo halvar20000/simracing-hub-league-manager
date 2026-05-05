@@ -124,11 +124,20 @@ export async function createRegistration(
       `/registrations?error=You+are+already+approved+for+this+season`
     );
   }
+  const seasonHasStartedRound = await prisma.round.findFirst({
+    where: {
+      seasonId,
+      countsForChampionship: true,
+      startsAt: { lte: new Date() },
+    },
+    select: { id: true },
+  });
+
 
   if (
     existing &&
     existing.carId &&
-    season.status === "ACTIVE" &&
+    (season.status === "ACTIVE" || !!seasonHasStartedRound) &&
     existing.carId !== carId
   ) {
     redirect(

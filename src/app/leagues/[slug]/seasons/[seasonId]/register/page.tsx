@@ -25,7 +25,17 @@ export default async function RegisterPage({
   const [season, user, teams, carClasses, existing] = await Promise.all([
     prisma.season.findUnique({
       where: { id: seasonId },
-      include: { league: true },
+      include: {
+        league: true,
+        rounds: {
+          where: {
+            countsForChampionship: true,
+            startsAt: { lte: new Date() },
+          },
+          take: 1,
+          select: { id: true },
+        },
+      },
     }),
     prisma.user.findUnique({ where: { id: session.user.id } }),
     prisma.team.findMany({
@@ -100,7 +110,10 @@ export default async function RegisterPage({
 
   const hasCars = carClasses.some((cc) => cc.cars.length > 0);
   const paymentInfo = getLeaguePayment(season.league);
-  const carLocked = !!existing?.carId && season.status === "ACTIVE";
+  const seasonHasStarted = season.rounds.length > 0;
+  const carLocked =
+    !!existing?.carId &&
+    (season.status === "ACTIVE" || seasonHasStarted);
   const lockedCarId = carLocked ? existing?.carId ?? null : null;
   const lockedCar = lockedCarId
     ? carClasses.flatMap((cc) => cc.cars).find((c) => c.id === lockedCarId) ?? null
