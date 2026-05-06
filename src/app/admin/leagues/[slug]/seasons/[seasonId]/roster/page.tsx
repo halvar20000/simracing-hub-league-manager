@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import {
   approveRegistration,
   rejectRegistration,
+  approveTeamRegistrations,
+  rejectTeamRegistrations,
 } from "@/lib/actions/admin-registrations";
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 
@@ -119,8 +121,42 @@ export default async function RosterPage({
                       </td>
                       <td className="px-4 py-3 align-top">
                         {ri === 0 && (
-                          <div className="font-semibold text-zinc-100">
-                            {team.name}
+                          <div className="space-y-1.5">
+                            <div className="font-semibold text-zinc-100">
+                              {team.name}
+                            </div>
+                            {team.registrations.some(
+                              (rr) => rr.status === "PENDING"
+                            ) && (
+                              <div className="flex flex-wrap gap-1.5">
+                                <form action={approveTeamRegistrations}>
+                                  <input
+                                    type="hidden"
+                                    name="teamId"
+                                    value={team.id}
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="rounded bg-emerald-600 px-2 py-0.5 text-xs font-medium text-zinc-50 hover:bg-emerald-500"
+                                  >
+                                    Approve team
+                                  </button>
+                                </form>
+                                <form action={rejectTeamRegistrations}>
+                                  <input
+                                    type="hidden"
+                                    name="teamId"
+                                    value={team.id}
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="rounded border border-red-800 bg-red-950/40 px-2 py-0.5 text-xs text-red-300 hover:bg-red-900/60"
+                                  >
+                                    Reject team
+                                  </button>
+                                </form>
+                              </div>
+                            )}
                           </div>
                         )}
                       </td>

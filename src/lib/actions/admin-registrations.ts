@@ -296,3 +296,55 @@ export async function applyProAmToTargetSeason(formData: FormData) {
   );
 }
 
+export async function approveTeamRegistrations(formData: FormData) {
+  const me = await requireAdmin();
+  const teamId = String(formData.get("teamId") ?? "");
+  if (!teamId) throw new Error("teamId required");
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { season: { include: { league: true } } },
+  });
+  if (!team) throw new Error("Team not found");
+
+  await prisma.registration.updateMany({
+    where: { teamId, status: "PENDING" },
+    data: {
+      status: "APPROVED",
+      approvedAt: new Date(),
+      approvedById: me.id,
+    },
+  });
+
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+}
+
+export async function rejectTeamRegistrations(formData: FormData) {
+  await requireAdmin();
+  const teamId = String(formData.get("teamId") ?? "");
+  if (!teamId) throw new Error("teamId required");
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { season: { include: { league: true } } },
+  });
+  if (!team) throw new Error("Team not found");
+
+  await prisma.registration.updateMany({
+    where: { teamId, status: { in: ["PENDING", "APPROVED"] } },
+    data: { status: "REJECTED", approvedAt: null, approvedById: null },
+  });
+
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+}
+
