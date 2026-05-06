@@ -24,6 +24,27 @@ export const metadata: Metadata = {
   title: "CLS — CAS League Scoring",
   description:
     "League management for the CAS iRacing community. Six championships, live standings, Fair Play Rating, race-by-race results.",
+  openGraph: {
+    title: "CLS — CAS League Scoring",
+    description:
+      "League management for the CAS iRacing community. Six championships, live standings, Fair Play Rating, race-by-race results.",
+    url: "/",
+    siteName: "CLS",
+    type: "website",
+    images: [
+      {
+        url: "/logos/cls-league-scoring.png",
+        alt: "CLS — CAS League Scoring",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "CLS — CAS League Scoring",
+    description:
+      "League management for the CAS iRacing community. Six championships, live standings, Fair Play Rating, race-by-race results.",
+    images: ["/logos/cls-league-scoring.png"],
+  },
 };
 
 export default function RootLayout({
