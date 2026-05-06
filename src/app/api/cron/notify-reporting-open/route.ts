@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notifyReportingOpenForRound } from "@/lib/actions/round-reporting";
+import { notifyReportingOpenForRound } from "@/lib/notify-reporting";
 
 export const dynamic = "force-dynamic";
 
