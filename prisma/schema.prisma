@@ -238,6 +238,7 @@ model Registration {
   startingFeePaid           AdminCheckStatus @default(NO)
   iracingInvitationSent     AdminCheckStatus @default(NO)
   iracingInvitationAccepted AdminCheckStatus @default(NO)
+  iRating       Int?
 }
 
 model RaceResult {

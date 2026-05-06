@@ -195,19 +195,20 @@ export default async function RegisterPage({
             </label>
             <label className="block">
               <span className="mb-1 block text-sm text-zinc-300">
-                Preferred start number
+                Your current iRating <span className="text-orange-400">*</span>
               </span>
               <input
-                name="startNumber"
+                name="leaderIRating"
                 type="number"
-                min={1}
-                max={999}
-                defaultValue={existing?.startNumber ?? ""}
-                placeholder="e.g. 42"
+                min={0}
+                max={20000}
+                required
+                defaultValue={existing?.iRating ?? ""}
+                placeholder="e.g. 2400"
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
               <span className="mt-1 block text-xs text-zinc-500">
-                Subject to availability — admin may assign a different number.
+                Maximum 5000 for all classes. Minimum 1500 for LMP2.
               </span>
             </label>
           </fieldset>
@@ -276,6 +277,7 @@ export default async function RegisterPage({
                   <tr className="text-left text-xs text-zinc-500">
                     <th className="pb-2 pr-2 font-normal">iRacing name</th>
                     <th className="pb-2 pr-2 font-normal">iRacing ID</th>
+                    <th className="pb-2 pr-2 font-normal">iRating</th>
                     <th className="pb-2 font-normal">Email (optional)</th>
                   </tr>
                 </thead>
@@ -304,6 +306,18 @@ export default async function RegisterPage({
                             inputMode="numeric"
                             placeholder="123456"
                             className="w-32 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                          />
+                        </td>
+                        <td className="py-1 pr-2">
+                          <input
+                            name={`teammate${i}IRating`}
+                            type="number"
+                            min={0}
+                            max={20000}
+                            inputMode="numeric"
+                            defaultValue={pre?.iRating ?? ""}
+                            placeholder="2400"
+                            className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
                           />
                         </td>
                         <td className="py-1">

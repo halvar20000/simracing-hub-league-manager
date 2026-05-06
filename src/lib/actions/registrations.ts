@@ -366,8 +366,9 @@ export async function createTeamRegistration(
   const teamName = String(formData.get("teamName") ?? "").trim();
   const carClassId = String(formData.get("carClassId") ?? "").trim();
   const carId = String(formData.get("carId") ?? "").trim();
-  const startNumberRaw = String(formData.get("startNumber") ?? "").trim();
-  const startNumber = startNumberRaw ? parseInt(startNumberRaw, 10) : null;
+  const LMP2_MIN_IRATING = 1500;
+  const MAX_IRATING = 5000;
+  const leaderIRatingRaw = String(formData.get("leaderIRating") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   const errBack = (msg: string) =>
@@ -385,6 +386,17 @@ export async function createTeamRegistration(
   });
   if (!carClass || carClass.seasonId !== seasonId) errBack("Invalid class");
   if (carClass!.isLocked) errBack("That class is locked — no new registrations");
+
+  if (!leaderIRatingRaw || !/^\d+$/.test(leaderIRatingRaw)) {
+    errBack("Your current iRating is required");
+  }
+  const leaderIRating = parseInt(leaderIRatingRaw, 10);
+  if (leaderIRating > MAX_IRATING) {
+    errBack(`iRating must be ${MAX_IRATING} or lower (you entered ${leaderIRating})`);
+  }
+  if (carClass!.shortCode === "LMP2" && leaderIRating < LMP2_MIN_IRATING) {
+    errBack(`LMP2 requires iRating ${LMP2_MIN_IRATING} or higher (you entered ${leaderIRating})`);
+  }
 
   const car = await prisma.car.findUnique({ where: { id: carId } });
   if (!car || car.seasonId !== seasonId || car.carClassId !== carClassId) {
@@ -409,7 +421,7 @@ export async function createTeamRegistration(
       teamId: team.id,
       carClassId,
       carId,
-      startNumber,
+      iRating: leaderIRating,
       notes,
       approvedById: null,
       approvedAt: null,
@@ -421,13 +433,13 @@ export async function createTeamRegistration(
       teamId: team.id,
       carClassId,
       carId,
-      startNumber,
+      iRating: leaderIRating,
       notes,
     },
   });
 
   // ---------- teammates ----------
-  type TM = { name: string; iracingId: string; email: string };
+  type TM = { name: string; iracingId: string; email: string; iRating: number };
   const teammates: TM[] = [];
   for (let i = 1; i <= 4; i++) {
     const name = String(formData.get(`teammate${i}Name`) ?? "").trim();
@@ -439,7 +451,18 @@ export async function createTeamRegistration(
         `Teammate row ${i}: both iRacing name and iRacing ID are required`
       );
     }
-    teammates.push({ name, iracingId, email });
+    const iratingRaw = String(formData.get(`teammate${i}IRating`) ?? "").trim();
+    if (!iratingRaw || !/^\d+$/.test(iratingRaw)) {
+      errBack(`Teammate row ${i}: iRating is required and must be a number`);
+    }
+    const tIrating = parseInt(iratingRaw, 10);
+    if (tIrating > MAX_IRATING) {
+      errBack(`Teammate row ${i}: iRating must be ${MAX_IRATING} or lower (entered ${tIrating})`);
+    }
+    if (carClass!.shortCode === "LMP2" && tIrating < LMP2_MIN_IRATING) {
+      errBack(`Teammate row ${i}: LMP2 requires iRating ${LMP2_MIN_IRATING} or higher (entered ${tIrating})`);
+    }
+    teammates.push({ name, iracingId, email, iRating: tIrating });
   }
 
   const teammateNames: string[] = [];
@@ -480,6 +503,7 @@ export async function createTeamRegistration(
         carClassId,
         carId,
         startNumber: null,
+        iRating: tm.iRating,
         approvedById: null,
         approvedAt: null,
       },
@@ -491,6 +515,7 @@ export async function createTeamRegistration(
         carClassId,
         carId,
         startNumber: null,
+        iRating: tm.iRating,
       },
     });
     teammateNames.push(`${mate.firstName ?? ""} ${mate.lastName ?? ""}`.trim());
@@ -511,8 +536,7 @@ export async function createTeamRegistration(
           {
             title: `🏁 New team registration — ${season.league.name} ${season.name}`,
             description:
-              `**${team.name}** — ${carClass!.name} class, ${car!.name}` +
-              (startNumber != null ? ` · #${startNumber}` : ""),
+              `**${team.name}** — ${carClass!.name} class, ${car!.name}`,
             url: `${baseUrl}/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`,
             color: 0xff6b35,
             fields: [

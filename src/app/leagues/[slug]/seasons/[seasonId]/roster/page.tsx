@@ -81,6 +81,7 @@ export default async function PublicSeasonRoster({
                   <th className="px-4 py-3">Class</th>
                   <th className="px-4 py-3">Car</th>
                   <th className="px-4 py-3">iRacing ID</th>
+                  <th className="px-4 py-3">iRating</th>
                   <th className="px-4 py-3">
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                       iRacing
@@ -154,6 +155,7 @@ export default async function PublicSeasonRoster({
                       <td className="px-4 py-3 text-zinc-400">
                         {reg.user.iracingMemberId ?? "—"}
                       </td>
+                      <td className="px-4 py-3 text-zinc-400">{reg.iRating ?? "—"}</td>
                       <td className="px-4 py-3">
                         <FlagBadge
                           value={reg.iracingInvitationSent}
