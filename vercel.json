@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/notify-reporting-open",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

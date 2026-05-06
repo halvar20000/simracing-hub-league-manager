@@ -200,6 +200,7 @@ model Round {
 
   @@unique([seasonId, roundNumber])
   teamResults     TeamResult[]
+  reportingNotifiedAt     DateTime?
 }
 
 model Registration {
