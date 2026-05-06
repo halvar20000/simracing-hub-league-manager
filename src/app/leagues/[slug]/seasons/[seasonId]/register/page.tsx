@@ -6,6 +6,7 @@ import { createRegistration, createTeamRegistration } from "@/lib/actions/regist
 import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
+import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 
 export default async function RegisterPage({
   params,
@@ -214,54 +215,17 @@ export default async function RegisterPage({
             </label>
           </fieldset>
 
-          <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">
-              Class <span className="text-orange-400">*</span>
-            </span>
-            <select
-              name="carClassId"
-              required
-              defaultValue={existing?.carClassId ?? ""}
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            >
-              <option value="">Select class…</option>
-              {carClasses.map((c) => (
-                <option key={c.id} value={c.id} disabled={c.isLocked}>
-                  {c.name}
-                  {c.isLocked ? " — locked (full)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">
-              Car <span className="text-orange-400">*</span>
-            </span>
-            <select
-              name="carId"
-              required
-              defaultValue={existing?.carId ?? ""}
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            >
-              <option value="">Select car…</option>
-              {carClasses
-                .filter((c) => !c.isLocked && c.cars.length > 0)
-                .map((c) => (
-                  <optgroup key={c.id} label={c.name}>
-                    {c.cars.map((car) => (
-                      <option key={car.id} value={car.id}>
-                        {car.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-            </select>
-            <span className="mt-1 block text-xs text-zinc-500">
-              All teammates drive the same car. Cars from locked classes are
-              hidden.
-            </span>
-          </label>
+          <TeamClassCarSelect
+            carClasses={carClasses.map((c) => ({
+              id: c.id,
+              name: c.name,
+              shortCode: c.shortCode,
+              isLocked: c.isLocked,
+              cars: c.cars.map((car) => ({ id: car.id, name: car.name })),
+            }))}
+            defaultClassId={existing?.carClassId ?? undefined}
+            defaultCarId={existing?.carId ?? undefined}
+          />
 
           <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
             <legend className="px-2 text-sm text-zinc-300">
