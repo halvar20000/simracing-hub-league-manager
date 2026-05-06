@@ -173,6 +173,8 @@ model Team {
 
   @@unique([seasonId, name])
   iracingTeamId Int?       @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 }
 
 model Round {
