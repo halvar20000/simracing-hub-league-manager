@@ -778,6 +778,43 @@ export async function updateTeamRegistration(formData: FormData) {
   revalidatePath(
     `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
   );
+  // Notify admins of the change
+  const finalTeammates = await prisma.registration.findMany({
+    where: {
+      teamId: team.id,
+      userId: { not: team.leaderUserId ?? '' },
+      status: { not: 'WITHDRAWN' },
+    },
+    include: { user: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const teammateLines = finalTeammates.map((r) =>
+    `${r.user.firstName ?? ''} ${r.user.lastName ?? ''}`.trim() +
+    (r.user.iracingMemberId ? ` (iR ${r.user.iracingMemberId})` : '')
+  );
+  const leaderReg = team.registrations.find((r) => r.userId === team.leaderUserId);
+  await notifyTeamChange({
+    leagueSlug: team.season.league.slug,
+    seasonId: team.seasonId,
+    kind: 'UPDATED',
+    teamName: team.name,
+    seasonLabel: `${team.season.name} ${team.season.year}`,
+    fields: [
+      {
+        name: 'Team leader',
+        value: leaderReg
+          ? `${leaderReg.user.firstName ?? ''} ${leaderReg.user.lastName ?? ''}`.trim()
+          : '—',
+        inline: false,
+      },
+      {
+        name: `Active teammates (${finalTeammates.length})`,
+        value: teammateLines.length > 0 ? teammateLines.join('\n') : '(none)',
+        inline: false,
+      },
+    ],
+  });
+
   revalidatePath(`/teams/${teamId}/manage`);
   revalidatePath(`/registrations`);
   redirect(`/registrations?success=team_updated`);
@@ -791,6 +828,29 @@ export async function withdrawTeam(formData: FormData) {
   await prisma.registration.updateMany({
     where: { teamId },
     data: { status: "WITHDRAWN" },
+  });
+
+  const leaderReg = team.registrations.find((r) => r.userId === team.leaderUserId);
+  await notifyTeamChange({
+    leagueSlug: team.season.league.slug,
+    seasonId: team.seasonId,
+    kind: 'WITHDRAWN',
+    teamName: team.name,
+    seasonLabel: `${team.season.name} ${team.season.year}`,
+    fields: [
+      {
+        name: 'Withdrawn by',
+        value: leaderReg
+          ? `${leaderReg.user.firstName ?? ''} ${leaderReg.user.lastName ?? ''}`.trim()
+          : '—',
+        inline: false,
+      },
+      {
+        name: 'Members affected',
+        value: String(team.registrations.length),
+        inline: false,
+      },
+    ],
   });
 
   revalidatePath(
@@ -832,6 +892,25 @@ export async function transferTeamLeadership(formData: FormData) {
     }),
   ]);
 
+  const oldLeaderReg = team.registrations.find((r) => r.userId === sessionUser.id);
+  const newLeaderName = newLeaderReg.user
+    ? `${newLeaderReg.user.firstName ?? ''} ${newLeaderReg.user.lastName ?? ''}`.trim()
+    : '—';
+  const oldLeaderName = oldLeaderReg
+    ? `${oldLeaderReg.user.firstName ?? ''} ${oldLeaderReg.user.lastName ?? ''}`.trim()
+    : '—';
+  await notifyTeamChange({
+    leagueSlug: team.season.league.slug,
+    seasonId: team.seasonId,
+    kind: 'LEADERSHIP_TRANSFERRED',
+    teamName: team.name,
+    seasonLabel: `${team.season.name} ${team.season.year}`,
+    fields: [
+      { name: 'Old leader', value: oldLeaderName, inline: true },
+      { name: 'New leader', value: newLeaderName, inline: true },
+    ],
+  });
+
   revalidatePath(
     `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
   );
@@ -840,5 +919,130 @@ export async function transferTeamLeadership(formData: FormData) {
   );
   revalidatePath(`/registrations`);
   redirect(`/registrations?success=leadership_transferred`);
+}
+
+// ============================================================================
+// Shared notifier for team-leader-driven changes (used by update / withdraw /
+// transfer). Fires Discord webhook AND email to the league's notify list.
+// Fire-and-forget — never blocks the action on a webhook/email failure.
+// ============================================================================
+type TeamChangeKind =
+  | "REGISTERED"
+  | "UPDATED"
+  | "WITHDRAWN"
+  | "LEADERSHIP_TRANSFERRED";
+
+async function notifyTeamChange(params: {
+  leagueSlug: string;
+  seasonId: string;
+  kind: TeamChangeKind;
+  teamName: string;
+  seasonLabel: string;
+  fields: Array<{ name: string; value: string; inline?: boolean }>;
+}) {
+  const META: Record<
+    TeamChangeKind,
+    { emoji: string; title: string; color: number }
+  > = {
+    REGISTERED: { emoji: "🏁", title: "New team registration", color: 0xff6b35 },
+    UPDATED: { emoji: "✏️", title: "Team updated", color: 0x3b82f6 },
+    WITHDRAWN: { emoji: "❌", title: "Team withdrawn", color: 0xef4444 },
+    LEADERSHIP_TRANSFERRED: {
+      emoji: "🔄",
+      title: "Team leadership transferred",
+      color: 0xf59e0b,
+    },
+  };
+  const meta = META[params.kind];
+
+  const lg = await prisma.league.findUnique({
+    where: { slug: params.leagueSlug },
+    select: {
+      name: true,
+      discordRegistrationsWebhookUrl: true,
+      registrationNotifyEmails: true,
+    },
+  });
+  if (!lg) return;
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
+  const rosterUrl = `${baseUrl}/admin/leagues/${params.leagueSlug}/seasons/${params.seasonId}/roster`;
+  const heading = `${meta.emoji} ${meta.title} — ${lg.name} ${params.seasonLabel}`;
+
+  // ---- Discord ----
+  if (lg.discordRegistrationsWebhookUrl) {
+    try {
+      await postDiscordWebhook(lg.discordRegistrationsWebhookUrl, {
+        username: "CLS Registrations",
+        embeds: [
+          {
+            title: heading,
+            description: `Team: **${params.teamName}**`,
+            url: rosterUrl,
+            color: meta.color,
+            fields: params.fields,
+            timestamp: new Date().toISOString(),
+            footer: { text: "Click the title to open the roster" },
+          },
+        ],
+      });
+    } catch {
+      // never block on webhook errors
+    }
+  }
+
+  // ---- Email ----
+  const recipients = (lg.registrationNotifyEmails ?? []).filter(
+    (e): e is string => typeof e === "string" && /@/.test(e)
+  );
+  if (recipients.length > 0) {
+    const escape = (v: string | number | null | undefined) =>
+      String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const subject = `${meta.emoji} ${meta.title} — ${lg.name} ${params.seasonLabel} — ${params.teamName}`;
+    const fieldsHtml = params.fields
+      .map(
+        (f) =>
+          `<tr><td style="padding:6px 0;color:#71717a;width:140px;vertical-align:top;">${escape(
+            f.name
+          )}</td><td>${escape(f.value)}</td></tr>`
+      )
+      .join("");
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; color: #18181b;">
+        <h2 style="margin: 0 0 8px 0; color: #ff6b35;">${escape(heading)}</h2>
+        <p style="margin: 0 0 16px 0; color: #52525b; font-size: 13px;">
+          Team: <strong>${escape(params.teamName)}</strong>
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          ${fieldsHtml}
+        </table>
+        <p style="margin-top: 20px;">
+          <a href="${rosterUrl}" style="display: inline-block; background: #ff6b35; color: #18181b; padding: 10px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Open roster</a>
+        </p>
+        <p style="margin-top: 24px; color: #a1a1aa; font-size: 12px;">CLS — CAS League Scoring</p>
+      </div>
+    `;
+    const text = [
+      heading,
+      "",
+      `Team: ${params.teamName}`,
+      "",
+      ...params.fields.map((f) => `${f.name}: ${f.value}`),
+      "",
+      `Open roster: ${rosterUrl}`,
+    ].join("\n");
+
+    try {
+      await sendResendEmail({ to: recipients, subject, html, text });
+    } catch {
+      // never block on email errors
+    }
+  }
 }
 
