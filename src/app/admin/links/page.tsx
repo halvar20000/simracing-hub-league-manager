@@ -65,6 +65,7 @@ export default async function AdminLinksPage() {
           <LinkRow label="All rosters" url={`${baseUrl}/rosters`} />
           <LinkRow label="All leagues" url={`${baseUrl}/leagues`} />
           <LinkRow label="Admin dashboard" url={`${baseUrl}/admin`} />
+          <LinkRow label="Stewards queue" url={`${baseUrl}/admin/stewards`} />
         </div>
       </section>
 
@@ -183,6 +184,11 @@ export default async function AdminLinksPage() {
                         <LinkRow
                           label="Cars"
                           url={`${adminBase}/cars`}
+                          muted={isCompleted}
+                        />
+                        <LinkRow
+                          label="Reports queue"
+                          url={`${adminBase}/reports`}
                           muted={isCompleted}
                         />
                       </div>

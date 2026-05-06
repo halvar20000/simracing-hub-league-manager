@@ -1,3 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if command -v pbcopy >/dev/null 2>&1; then
+  exec > >(tee >(pbcopy)) 2>&1
+fi
+cd "$HOME/Nextcloud/AI/league-manager"
+
+# ============================================================================
+# 1. Public /leagues — add 'Open for incident reporting' section
+# ============================================================================
+echo "=== 1. Patch /leagues page ==="
+cat > /tmp/lm_leagues_reporting_block.txt <<'JSX'
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
@@ -110,3 +122,94 @@ export default async function PublicLeaguesList() {
     </div>
   );
 }
+JSX
+
+# Replace the entire file (small file, full rewrite is cleanest)
+cp /tmp/lm_leagues_reporting_block.txt src/app/leagues/page.tsx
+echo "  Rewritten."
+
+# ============================================================================
+# 2. Admin /admin/links — add stewards top-level link + per-season Reports
+# ============================================================================
+echo ""
+echo "=== 2. Patch /admin/links page ==="
+node -e "
+const fs = require('fs');
+const FILE = 'src/app/admin/links/page.tsx';
+let s = fs.readFileSync(FILE, 'utf8');
+const before = s;
+
+// (a) Add Stewards queue to top-level quick links
+if (!s.includes('Stewards queue')) {
+  s = s.replace(
+    /(<LinkRow label=\"Admin dashboard\" url=\\\`\\\${baseUrl}\/admin\\\` \/>)/,
+    '\$1\n          <LinkRow label=\"Stewards queue\" url={\\\`\\\${baseUrl}/admin/stewards\\\`} />'
+  );
+}
+
+// (b) Add Reports link in admin section per season. Anchor on the existing
+// 'Cars' link inside each season's admin column.
+if (!s.includes('Reports queue')) {
+  s = s.replace(
+    /<LinkRow\s*\n\s*label=\"Cars\"\s*\n\s*url=\\\`\\\${adminBase}\/cars\\\`\s*\n\s*muted=\{isCompleted\}\s*\n\s*\/>/,
+    \`<LinkRow
+                          label=\"Cars\"
+                          url={\\\`\\\${adminBase}/cars\\\`}
+                          muted={isCompleted}
+                        />
+                        <LinkRow
+                          label=\"Reports queue\"
+                          url={\\\`\\\${adminBase}/reports\\\`}
+                          muted={isCompleted}
+                        />\`
+  );
+}
+
+if (s === before) {
+  console.error('  No edits made (anchors did not match).');
+  process.exit(1);
+}
+fs.writeFileSync(FILE, s);
+console.log('  Patched.');
+"
+
+# ============================================================================
+# 3. Verify
+# ============================================================================
+echo ""
+echo "=== 3. Verify ==="
+echo "-- /leagues page --"
+grep -n 'Open for incident reporting\|recentRounds' src/app/leagues/page.tsx | head -5
+echo ""
+echo "-- /admin/links --"
+grep -n 'Stewards queue\|Reports queue' src/app/admin/links/page.tsx | head -5
+
+# ============================================================================
+# 4. TS check
+# ============================================================================
+echo ""
+echo "=== 4. TypeScript check ==="
+npx --yes tsc --noEmit -p tsconfig.json || {
+  echo "!!! TS errors. NOT pushing."
+  exit 1
+}
+
+# ============================================================================
+# 5. Commit + push
+# ============================================================================
+echo ""
+echo "=== 5. Commit + push ==="
+git add -A
+git status --short
+git commit -m "Reporting shortcuts: 'Open for incident reporting' frame on /leagues; Stewards + per-season Reports on /admin/links"
+git push
+
+echo ""
+echo "Done. Wait ~60s for Vercel."
+echo ""
+echo "After deploy:"
+echo "  • /leagues — amber 'Open for incident reporting' frame at the top,"
+echo "    listing every COMPLETED round from the last 14 days with a direct"
+echo "    'Report incident →' button per round."
+echo "  • /admin/links — Stewards queue link in the top section, plus a"
+echo "    'Reports queue' link in each season's admin column."
