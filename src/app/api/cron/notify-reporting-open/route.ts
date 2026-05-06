@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { notifyReportingOpenForRound } from "@/lib/notify-reporting";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   // Vercel cron auto-attaches Authorization: Bearer ${CRON_SECRET}
