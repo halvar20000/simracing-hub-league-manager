@@ -180,3 +180,23 @@ export async function deleteCarClass(formData: FormData) {
   );
 }
 
+export async function toggleCarClassLock(formData: FormData) {
+  await requireAdmin();
+  const carClassId = String(formData.get("carClassId") ?? "");
+  if (!carClassId) throw new Error("carClassId required");
+  const cc = await prisma.carClass.findUnique({
+    where: { id: carClassId },
+    include: {
+      season: { include: { league: true } },
+    },
+  });
+  if (!cc) throw new Error("CarClass not found");
+  await prisma.carClass.update({
+    where: { id: carClassId },
+    data: { isLocked: !cc.isLocked },
+  });
+  revalidatePath(
+    `/admin/leagues/${cc.season.league.slug}/seasons/${cc.seasonId}/cars`
+  );
+}
+

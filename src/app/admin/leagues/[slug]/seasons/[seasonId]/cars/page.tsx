@@ -8,6 +8,7 @@ import {
   updateCarIracingId,
   addCarClass,
   deleteCarClass,
+  toggleCarClassLock,
 } from "@/lib/actions/cars";
 
 export default async function AdminSeasonCars({
@@ -114,6 +115,20 @@ export default async function AdminSeasonCars({
                 ({cc._count.cars} car{cc._count.cars === 1 ? "" : "s"})
               </span>
             </h2>
+            <form action={toggleCarClassLock} className="mr-2">
+              <input type="hidden" name="carClassId" value={cc.id} />
+              <button
+                type="submit"
+                className={`rounded border px-2 py-1 text-xs ${
+                  cc.isLocked
+                    ? "border-amber-700/50 bg-amber-950/40 text-amber-200"
+                    : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                }`}
+                title="Locked classes cannot accept new registrations. Existing teams stay."
+              >
+                {cc.isLocked ? "🔒 Locked" : "Lock class"}
+              </button>
+            </form>
             {cc._count.cars === 0 && (
               <form action={deleteCarClass}>
                 <input type="hidden" name="carClassId" value={cc.id} />

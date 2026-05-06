@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
 import CopyTextButton from "@/components/CopyTextButton";
-import { regenerateRegistrationToken, clearRegistrationToken } from "@/lib/actions/seasons";
+import { regenerateRegistrationToken, clearRegistrationToken, toggleSeasonTeamRegistration } from "@/lib/actions/seasons";
 
 export default async function AdminSeasonDetail({
   params,
@@ -90,6 +90,20 @@ export default async function AdminSeasonDetail({
                 >
                   Statistics →
                 </Link>
+                <form action={toggleSeasonTeamRegistration}>
+                  <input type="hidden" name="seasonId" value={seasonId} />
+                  <button
+                    type="submit"
+                    className={`rounded border px-3 py-1 text-sm ${
+                      season.teamRegistration
+                        ? "border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-900/50"
+                        : "border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    }`}
+                    title="When ON, registration uses the team-leader form (one leader + up to 4 teammates)."
+                  >
+                    {season.teamRegistration ? "✓ Team registration ON" : "Team registration OFF"}
+                  </button>
+                </form>
               </div>
               <p className="text-sm text-zinc-400">
                 {season.year} • {season.scoringSystem.name} •{" "}

@@ -136,6 +136,7 @@ model Season {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   registrationToken String? @unique
+  teamRegistration  Boolean  @default(false)
 }
 
 model CarClass {
@@ -154,6 +155,7 @@ model CarClass {
   @@unique([seasonId, shortCode])
   iracingCarClassId Int?
   iracingCarClassIds Int[]     @default([])
+  isLocked      Boolean  @default(false)
 }
 
 

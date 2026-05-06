@@ -168,3 +168,21 @@ export async function clearRegistrationToken(formData: FormData) {
   revalidatePath(`/admin/leagues/${season.league.slug}/seasons/${season.id}`);
 }
 
+export async function toggleSeasonTeamRegistration(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  if (!seasonId) throw new Error("seasonId required");
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { league: true },
+  });
+  if (!season) throw new Error("Season not found");
+  await prisma.season.update({
+    where: { id: seasonId },
+    data: { teamRegistration: !season.teamRegistration },
+  });
+  revalidatePath(
+    `/admin/leagues/${season.league.slug}/seasons/${seasonId}`
+  );
+}
+
