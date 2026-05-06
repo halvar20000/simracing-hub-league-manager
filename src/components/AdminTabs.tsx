@@ -34,6 +34,9 @@ export default function AdminTabs({
           </span>
         )}
       </Tab>
+      <Tab href="/admin/links" active={isActive("/admin/links")}>
+        Links
+      </Tab>
       {isAdmin && (
         <>
           <Tab href="/admin/users" active={isActive("/admin/users")}>
