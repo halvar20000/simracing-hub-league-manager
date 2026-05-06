@@ -407,6 +407,24 @@ export async function createTeamRegistration(
   let team = await prisma.team.findFirst({
     where: { seasonId, name: teamName },
   });
+
+  if (team) {
+    if (team.leaderUserId !== leader!.id) {
+      const teammate = await prisma.registration.findFirst({
+        where: { teamId: team.id, userId: leader!.id },
+        select: { id: true },
+      });
+      if (teammate) {
+        errBack(
+          "This team is already registered. Ask the team leader to update the lineup via Manage Team."
+        );
+      } else {
+        errBack(
+          `Team name "${teamName}" is already registered for this season. Pick a different name.`
+        );
+      }
+    }
+  }
   if (!team) {
     team = await prisma.team.create({
       data: { seasonId, name: teamName, leaderUserId: leader!.id },
