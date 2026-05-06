@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createRegistration, createTeamRegistration } from "@/lib/actions/registrations";
 import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
+import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 
 export default async function RegisterPage({
   params,
@@ -349,6 +350,9 @@ export default async function RegisterPage({
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
+          <TeamIRatingValidator
+            classes={carClasses.map((c) => ({ id: c.id, shortCode: c.shortCode }))}
+          />
 
           {paymentInfo && (
             <PaymentNotice payment={paymentInfo} variant="preview" />

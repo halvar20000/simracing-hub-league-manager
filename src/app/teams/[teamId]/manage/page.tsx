@@ -7,6 +7,7 @@ import {
   withdrawTeam,
   transferTeamLeadership,
 } from "@/lib/actions/registrations";
+import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 
 export default async function ManageTeamPage({
   params,
@@ -195,6 +196,9 @@ export default async function ManageTeamPage({
               </table>
             </div>
           </fieldset>
+          <TeamIRatingValidator
+            lockedClassShortCode={leaderReg?.carClass?.shortCode}
+          />
 
           <button
             type="submit"
