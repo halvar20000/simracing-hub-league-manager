@@ -323,3 +323,230 @@ export async function withdrawRegistration(registrationId: string) {
   );
   redirect("/registrations");
 }
+
+export async function createTeamRegistration(
+  leagueSlug: string,
+  seasonId: string,
+  token: string,
+  formData: FormData
+) {
+  const sessionUser = await requireAuth();
+
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { league: true },
+  });
+  if (!season || season.league.slug !== leagueSlug) {
+    redirect("/leagues");
+  }
+  if (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE") {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}?error=Registration+is+not+open`
+    );
+  }
+  if (season.registrationToken && season.registrationToken !== token) {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}?error=Registration+is+link-protected`
+    );
+  }
+
+  const leader = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+  });
+  if (
+    !leader ||
+    !leader.firstName ||
+    !leader.lastName ||
+    !leader.iracingMemberId
+  ) {
+    redirect("/profile?error=Please+complete+your+profile+before+registering");
+  }
+
+  // ---------- parse form ----------
+  const teamName = String(formData.get("teamName") ?? "").trim();
+  const carClassId = String(formData.get("carClassId") ?? "").trim();
+  const carId = String(formData.get("carId") ?? "").trim();
+  const startNumberRaw = String(formData.get("startNumber") ?? "").trim();
+  const startNumber = startNumberRaw ? parseInt(startNumberRaw, 10) : null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  const errBack = (msg: string) =>
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(msg)}`
+    );
+
+  if (!teamName) errBack("Team name is required");
+  if (!carClassId) errBack("Class is required");
+  if (!carId) errBack("Car is required");
+
+  // ---------- validate class + car ----------
+  const carClass = await prisma.carClass.findUnique({
+    where: { id: carClassId },
+  });
+  if (!carClass || carClass.seasonId !== seasonId) errBack("Invalid class");
+  if (carClass!.isLocked) errBack("That class is locked — no new registrations");
+
+  const car = await prisma.car.findUnique({ where: { id: carId } });
+  if (!car || car.seasonId !== seasonId || car.carClassId !== carClassId) {
+    errBack("Invalid car for the selected class");
+  }
+
+  // ---------- find or create Team ----------
+  let team = await prisma.team.findFirst({
+    where: { seasonId, name: teamName },
+  });
+  if (!team) {
+    team = await prisma.team.create({
+      data: { seasonId, name: teamName },
+    });
+  }
+
+  // ---------- leader registration ----------
+  await prisma.registration.upsert({
+    where: { seasonId_userId: { seasonId, userId: leader!.id } },
+    update: {
+      status: "PENDING",
+      teamId: team.id,
+      carClassId,
+      carId,
+      startNumber,
+      notes,
+      approvedById: null,
+      approvedAt: null,
+    },
+    create: {
+      seasonId,
+      userId: leader!.id,
+      status: "PENDING",
+      teamId: team.id,
+      carClassId,
+      carId,
+      startNumber,
+      notes,
+    },
+  });
+
+  // ---------- teammates ----------
+  type TM = { name: string; iracingId: string; email: string };
+  const teammates: TM[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const name = String(formData.get(`teammate${i}Name`) ?? "").trim();
+    const iracingId = String(formData.get(`teammate${i}IracingId`) ?? "").trim();
+    const email = String(formData.get(`teammate${i}Email`) ?? "").trim();
+    if (!name && !iracingId) continue;
+    if (!name || !iracingId) {
+      errBack(
+        `Teammate row ${i}: both iRacing name and iRacing ID are required`
+      );
+    }
+    teammates.push({ name, iracingId, email });
+  }
+
+  const teammateNames: string[] = [];
+  for (const tm of teammates) {
+    // Find existing user by iRacing ID, then by email, then create.
+    let mate = await prisma.user.findFirst({
+      where: { iracingMemberId: tm.iracingId },
+    });
+    if (!mate && tm.email) {
+      mate = await prisma.user.findFirst({ where: { email: tm.email } });
+      if (mate && !mate.iracingMemberId) {
+        mate = await prisma.user.update({
+          where: { id: mate.id },
+          data: { iracingMemberId: tm.iracingId },
+        });
+      }
+    }
+    if (!mate) {
+      const parts = tm.name.split(/\s+/);
+      const firstName = parts[0] || tm.name;
+      const lastName = parts.slice(1).join(" ") || "";
+      mate = await prisma.user.create({
+        data: {
+          firstName,
+          lastName,
+          iracingMemberId: tm.iracingId,
+          email: tm.email || null,
+        },
+      });
+    }
+    if (mate.id === leader!.id) continue; // can't be teammate of self
+
+    await prisma.registration.upsert({
+      where: { seasonId_userId: { seasonId, userId: mate.id } },
+      update: {
+        status: "PENDING",
+        teamId: team.id,
+        carClassId,
+        carId,
+        startNumber: null,
+        approvedById: null,
+        approvedAt: null,
+      },
+      create: {
+        seasonId,
+        userId: mate.id,
+        status: "PENDING",
+        teamId: team.id,
+        carClassId,
+        carId,
+        startNumber: null,
+      },
+    });
+    teammateNames.push(`${mate.firstName ?? ""} ${mate.lastName ?? ""}`.trim());
+  }
+
+  // ---------- Discord webhook (fire-and-forget) ----------
+  try {
+    const lg = await prisma.league.findUnique({
+      where: { slug: leagueSlug },
+      select: { discordRegistrationsWebhookUrl: true },
+    });
+    if (lg?.discordRegistrationsWebhookUrl) {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
+      await postDiscordWebhook(lg.discordRegistrationsWebhookUrl, {
+        username: "CLS Registrations",
+        embeds: [
+          {
+            title: `🏁 New team registration — ${season.league.name} ${season.name}`,
+            description:
+              `**${team.name}** — ${carClass!.name} class, ${car!.name}` +
+              (startNumber != null ? ` · #${startNumber}` : ""),
+            url: `${baseUrl}/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`,
+            color: 0xff6b35,
+            fields: [
+              {
+                name: "Team leader",
+                value: `${leader!.firstName} ${leader!.lastName} (iR ${leader!.iracingMemberId})`,
+                inline: false,
+              },
+              ...(teammateNames.length > 0
+                ? [
+                    {
+                      name: `Teammates (${teammateNames.length})`,
+                      value: teammateNames.join("\n"),
+                      inline: false,
+                    },
+                  ]
+                : []),
+              ...(notes
+                ? [{ name: "Notes", value: notes, inline: false }]
+                : []),
+            ],
+            timestamp: new Date().toISOString(),
+            footer: { text: "Click the title to open the roster" },
+          },
+        ],
+      });
+    }
+  } catch {
+    // never block registration on webhook failure
+  }
+
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}`);
+  revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`);
+  revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/teams`);
+  redirect("/registrations?success=team");
+}
+

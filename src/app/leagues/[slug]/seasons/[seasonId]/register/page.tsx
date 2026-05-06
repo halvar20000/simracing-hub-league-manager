@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { createRegistration } from "@/lib/actions/registrations";
+import { createRegistration, createTeamRegistration } from "@/lib/actions/registrations";
 import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
 
@@ -51,6 +51,7 @@ export default async function RegisterPage({
     }),
     prisma.registration.findUnique({
       where: { seasonId_userId: { seasonId, userId: session.user.id } },
+      include: { team: true },
     }),
   ]);
 
@@ -118,6 +119,241 @@ export default async function RegisterPage({
   const lockedCar = lockedCarId
     ? carClasses.flatMap((cc) => cc.cars).find((c) => c.id === lockedCarId) ?? null
     : null;
+  if (season.teamRegistration) {
+    const createTeam = createTeamRegistration.bind(
+      null,
+      slug,
+      seasonId,
+      t ?? ""
+    );
+
+    // Pre-fill teammate rows from existing team if user is the leader.
+    const leaderTeamId = existing?.teamId ?? null;
+    const teammateRegs = leaderTeamId
+      ? await prisma.registration.findMany({
+          where: {
+            teamId: leaderTeamId,
+            userId: { not: session.user.id },
+          },
+          include: { user: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+    const tmRow = (i: number) => teammateRegs[i] ?? null;
+
+    return (
+      <div className="max-w-3xl space-y-6">
+        <div>
+          <Link
+            href={`/leagues/${slug}/seasons/${seasonId}`}
+            className="text-sm text-zinc-400 hover:text-zinc-200"
+          >
+            ← {season.league.name} {season.name}
+          </Link>
+          <h1 className="mt-2 text-2xl font-bold">
+            {existing
+              ? "Update your team registration"
+              : "Register your team"}
+          </h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Multiclass team season. Add up to 4 teammates — they&apos;ll show
+            on the roster automatically. Each driver gets their own iRacing
+            invitation tracked.
+          </p>
+        </div>
+
+        {error && (
+          <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        <div className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm">
+          <p className="text-zinc-400">Team leader (you):</p>
+          <p className="mt-1 font-semibold text-zinc-200">
+            {user.firstName} {user.lastName}{" "}
+            <span className="text-zinc-500">
+              (iRacing #{user.iracingMemberId})
+            </span>
+          </p>
+        </div>
+
+        <form action={createTeam} className="space-y-4">
+          <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
+            <legend className="px-2 text-sm text-zinc-300">Team</legend>
+            <label className="block">
+              <span className="mb-1 block text-sm text-zinc-300">
+                Team name <span className="text-orange-400">*</span>
+              </span>
+              <input
+                name="teamName"
+                required
+                defaultValue={existing?.team?.name ?? ""}
+                placeholder="e.g. CAS Racing #1"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm text-zinc-300">
+                Preferred start number
+              </span>
+              <input
+                name="startNumber"
+                type="number"
+                min={1}
+                max={999}
+                defaultValue={existing?.startNumber ?? ""}
+                placeholder="e.g. 42"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+              <span className="mt-1 block text-xs text-zinc-500">
+                Subject to availability — admin may assign a different number.
+              </span>
+            </label>
+          </fieldset>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">
+              Class <span className="text-orange-400">*</span>
+            </span>
+            <select
+              name="carClassId"
+              required
+              defaultValue={existing?.carClassId ?? ""}
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            >
+              <option value="">Select class…</option>
+              {carClasses.map((c) => (
+                <option key={c.id} value={c.id} disabled={c.isLocked}>
+                  {c.name}
+                  {c.isLocked ? " — locked (full)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">
+              Car <span className="text-orange-400">*</span>
+            </span>
+            <select
+              name="carId"
+              required
+              defaultValue={existing?.carId ?? ""}
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            >
+              <option value="">Select car…</option>
+              {carClasses
+                .filter((c) => !c.isLocked && c.cars.length > 0)
+                .map((c) => (
+                  <optgroup key={c.id} label={c.name}>
+                    {c.cars.map((car) => (
+                      <option key={car.id} value={car.id}>
+                        {car.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+            </select>
+            <span className="mt-1 block text-xs text-zinc-500">
+              All teammates drive the same car. Cars from locked classes are
+              hidden.
+            </span>
+          </label>
+
+          <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
+            <legend className="px-2 text-sm text-zinc-300">
+              Register teammates (up to 4)
+            </legend>
+            <p className="text-xs text-zinc-500">
+              Provide each teammate&apos;s iRacing display name and ID. Email
+              is optional but helps if they later want to log in to manage
+              their own profile. Empty rows are ignored.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-zinc-500">
+                    <th className="pb-2 pr-2 font-normal">iRacing name</th>
+                    <th className="pb-2 pr-2 font-normal">iRacing ID</th>
+                    <th className="pb-2 font-normal">Email (optional)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2, 3, 4].map((i) => {
+                    const pre = tmRow(i - 1);
+                    const preName = pre
+                      ? `${pre.user.firstName ?? ""} ${pre.user.lastName ?? ""}`.trim()
+                      : "";
+                    const preIr = pre?.user.iracingMemberId ?? "";
+                    const preEmail = pre?.user.email ?? "";
+                    return (
+                      <tr key={i}>
+                        <td className="py-1 pr-2">
+                          <input
+                            name={`teammate${i}Name`}
+                            defaultValue={preName}
+                            placeholder="John Doe"
+                            className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                          />
+                        </td>
+                        <td className="py-1 pr-2">
+                          <input
+                            name={`teammate${i}IracingId`}
+                            defaultValue={preIr}
+                            inputMode="numeric"
+                            placeholder="123456"
+                            className="w-32 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                          />
+                        </td>
+                        <td className="py-1">
+                          <input
+                            name={`teammate${i}Email`}
+                            type="email"
+                            defaultValue={preEmail}
+                            placeholder="optional@example.com"
+                            className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </fieldset>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">
+              Notes (optional)
+            </span>
+            <textarea
+              name="notes"
+              rows={3}
+              defaultValue={existing?.notes ?? ""}
+              placeholder="Anything you want the admin to know"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+
+          {paymentInfo && (
+            <PaymentNotice payment={paymentInfo} variant="preview" />
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
+            >
+              {existing ? "Update team registration" : "Submit team registration"}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+
 
   return (
     <div className="max-w-xl space-y-6">
