@@ -57,7 +57,20 @@ export default async function RegisterPage({
   const session = await auth();
   if (!session?.user?.id) {
     const cbPath = `/leagues/${slug}/seasons/${seasonId}/register${t ? `?t=${encodeURIComponent(t)}` : ""}`;
-    redirect(`/api/auth/signin?callbackUrl=${encodeURIComponent(cbPath)}`);
+    return (
+      <div className="max-w-xl space-y-4">
+        <h1 className="text-2xl font-bold">Sign in to register</h1>
+        <p className="text-zinc-400">
+          You must be signed in with Discord to register for this season.
+        </p>
+        <Link
+          href={`/api/auth/signin?callbackUrl=${encodeURIComponent(cbPath)}`}
+          className="inline-block rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-indigo-500"
+        >
+          Sign in with Discord
+        </Link>
+      </div>
+    );
   }
 
   const [season, user, teams, carClasses, existing] = await Promise.all([
