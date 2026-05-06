@@ -8,6 +8,42 @@ import PaymentNotice from "@/components/PaymentNotice";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 
+import type { Metadata } from "next";
+import { pageMetadataLarge } from "@/lib/og";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; seasonId: string }>;
+}): Promise<Metadata> {
+  const { slug, seasonId } = await params;
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { league: true },
+  });
+  if (!season || season.league.slug !== slug)
+    return pageMetadataLarge({
+      title: "Registration not available",
+      description:
+        "This season is not currently open for registration, or the link is invalid.",
+    });
+
+  const isTeam = season.teamRegistration;
+  const title = isTeam
+    ? `Register your team — ${season.league.name} ${season.name} ${season.year}`
+    : `Register — ${season.league.name} ${season.name} ${season.year}`;
+  const description = isTeam
+    ? `Click to register your team. Add up to 4 teammates, pick your class and car. Limited slots — first come first served.`
+    : `Click to register for this season. Pick your car, set your start number, and you're in.`;
+
+  return pageMetadataLarge({
+    title,
+    description,
+    url: `/leagues/${slug}/seasons/${seasonId}/register`,
+  });
+}
+
+
 export default async function RegisterPage({
   params,
   searchParams,
