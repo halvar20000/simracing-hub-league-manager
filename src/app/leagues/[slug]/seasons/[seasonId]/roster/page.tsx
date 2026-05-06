@@ -2,6 +2,33 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
+import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/og";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; seasonId: string }>;
+}): Promise<Metadata> {
+  const { slug, seasonId } = await params;
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: { league: true },
+  });
+  if (!season || season.league.slug !== slug)
+    return pageMetadata({
+      title: "Roster not found",
+      description: "This roster does not exist or is no longer available.",
+    });
+  const title = `Roster — ${season.league.name} ${season.name} ${season.year}`;
+  return pageMetadata({
+    title,
+    description: `Driver list for ${season.league.name} ${season.name} ${season.year}.`,
+    url: `/leagues/${slug}/seasons/${seasonId}/roster`,
+  });
+}
+
+
 export default async function PublicSeasonRoster({
   params,
 }: {

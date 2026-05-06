@@ -126,7 +126,16 @@ export default async function RosterPage({
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-medium">
-                          {reg.user.firstName} {reg.user.lastName}
+                          {reg.user.iracingMemberId ? (
+                            <Link
+                              href={`/drivers/${reg.user.iracingMemberId}`}
+                              className="hover:text-orange-400"
+                            >
+                              {reg.user.firstName} {reg.user.lastName}
+                            </Link>
+                          ) : (
+                            <>{reg.user.firstName} {reg.user.lastName}</>
+                          )}
                           {ri === 0 && (
                             <span
                               className="ml-1 text-amber-400"
@@ -258,7 +267,16 @@ export default async function RosterPage({
               >
                 <td className="px-4 py-3">
                   <div className="font-medium">
-                    {r.user.firstName} {r.user.lastName}
+                    {r.user.iracingMemberId ? (
+                      <Link
+                        href={`/drivers/${r.user.iracingMemberId}`}
+                        className="hover:text-orange-400"
+                      >
+                        {r.user.firstName} {r.user.lastName}
+                      </Link>
+                    ) : (
+                      <>{r.user.firstName} {r.user.lastName}</>
+                    )}
                   </div>
                   <div className="text-xs text-zinc-500">
                     {r.user.email ?? r.user.name}

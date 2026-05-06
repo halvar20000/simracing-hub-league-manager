@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/og";
+
+export const metadata: Metadata = pageMetadata({
+  title: "Rosters — All seasons",
+  description: "Browse driver lists for every season across every league.",
+  url: "/rosters",
+});
+
+
 export default async function PublicRostersIndex() {
   const leagues = await prisma.league.findMany({
     orderBy: { name: "asc" },

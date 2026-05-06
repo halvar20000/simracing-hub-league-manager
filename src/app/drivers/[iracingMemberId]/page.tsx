@@ -2,6 +2,32 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
+import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/og";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ iracingMemberId: string }>;
+}): Promise<Metadata> {
+  const { iracingMemberId } = await params;
+  const user = await prisma.user.findFirst({
+    where: { iracingMemberId },
+  });
+  if (!user)
+    return pageMetadata({
+      title: "Driver not found",
+      description: "This driver does not exist or has not registered yet.",
+    });
+  const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
+  return pageMetadata({
+    title: `${name} — Driver profile`,
+    description: `iRacing #${user.iracingMemberId}. Career stats: seasons, wins, podiums, best finishes.`,
+    url: `/drivers/${iracingMemberId}`,
+  });
+}
+
+
 export default async function DriverPage({
   params,
 }: {
