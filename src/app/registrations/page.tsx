@@ -121,6 +121,16 @@ export default async function MyRegistrationsPage({
                   )}
                 </div>
               </div>
+              {r.season.teamRegistration && r.team && r.team.leaderUserId === session.user.id && (
+                <div className="mt-3">
+                  <Link
+                    href={`/teams/${r.team.id}/manage`}
+                    className="inline-block rounded border border-orange-700 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-300 hover:bg-orange-900/40"
+                  >
+                    Manage team →
+                  </Link>
+                </div>
+              )}
               {(() => {
                 const pi = getLeaguePayment(r.season.league);
                 if (!pi) return null;

@@ -409,7 +409,7 @@ export async function createTeamRegistration(
   });
   if (!team) {
     team = await prisma.team.create({
-      data: { seasonId, name: teamName },
+      data: { seasonId, name: teamName, leaderUserId: leader!.id },
     });
   }
 
@@ -572,5 +572,255 @@ export async function createTeamRegistration(
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`);
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/teams`);
   redirect("/registrations?success=team");
+}
+
+const TEAM_LMP2_MIN_IRATING = 1500;
+const TEAM_MAX_IRATING = 5000;
+
+async function requireTeamLeader(teamId: string) {
+  const sessionUser = await requireAuth();
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: {
+      season: { include: { league: true } },
+      registrations: { include: { user: true }, orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!team) throw new Error("Team not found");
+  if (team.leaderUserId !== sessionUser.id) {
+    throw new Error("Only the team leader can perform this action");
+  }
+  return { team, sessionUser };
+}
+
+export async function updateTeamRegistration(formData: FormData) {
+  const teamId = String(formData.get("teamId") ?? "");
+  if (!teamId) throw new Error("teamId required");
+  const { team } = await requireTeamLeader(teamId);
+
+  const carClass = team.registrations[0]?.carClassId
+    ? await prisma.carClass.findUnique({
+        where: { id: team.registrations[0].carClassId! },
+      })
+    : null;
+
+  // Leader iRating
+  const leaderRatingRaw = String(formData.get("leaderIRating") ?? "").trim();
+  if (!leaderRatingRaw || !/^\d+$/.test(leaderRatingRaw)) {
+    throw new Error("Your current iRating is required");
+  }
+  const leaderIRating = parseInt(leaderRatingRaw, 10);
+  if (leaderIRating > TEAM_MAX_IRATING) {
+    throw new Error(
+      `iRating must be ${TEAM_MAX_IRATING} or lower (you entered ${leaderIRating})`
+    );
+  }
+  if (carClass?.shortCode === "LMP2" && leaderIRating < TEAM_LMP2_MIN_IRATING) {
+    throw new Error(
+      `LMP2 requires iRating ${TEAM_LMP2_MIN_IRATING} or higher (you entered ${leaderIRating})`
+    );
+  }
+
+  // Update leader registration's iRating
+  await prisma.registration.update({
+    where: {
+      seasonId_userId: {
+        seasonId: team.seasonId,
+        userId: team.leaderUserId!,
+      },
+    },
+    data: { iRating: leaderIRating },
+  });
+
+  // Parse + validate teammate rows
+  type TM = {
+    name: string;
+    iracingId: string;
+    email: string;
+    iRating: number;
+  };
+  const tmIn: TM[] = [];
+  for (let i = 1; i <= 4; i++) {
+    const name = String(formData.get(`teammate${i}Name`) ?? "").trim();
+    const iracingId = String(formData.get(`teammate${i}IracingId`) ?? "").trim();
+    const email = String(formData.get(`teammate${i}Email`) ?? "").trim();
+    const iratingRaw = String(formData.get(`teammate${i}IRating`) ?? "").trim();
+    if (!name && !iracingId && !iratingRaw) continue;
+    if (!name || !iracingId) {
+      throw new Error(
+        `Teammate row ${i}: both iRacing name and iRacing ID are required`
+      );
+    }
+    if (!iratingRaw || !/^\d+$/.test(iratingRaw)) {
+      throw new Error(`Teammate row ${i}: iRating is required`);
+    }
+    const iR = parseInt(iratingRaw, 10);
+    if (iR > TEAM_MAX_IRATING) {
+      throw new Error(
+        `Teammate row ${i}: iRating must be ${TEAM_MAX_IRATING} or lower (entered ${iR})`
+      );
+    }
+    if (carClass?.shortCode === "LMP2" && iR < TEAM_LMP2_MIN_IRATING) {
+      throw new Error(
+        `Teammate row ${i}: LMP2 requires iRating ${TEAM_LMP2_MIN_IRATING} or higher (entered ${iR})`
+      );
+    }
+    tmIn.push({ name, iracingId, email, iRating: iR });
+  }
+
+  // Existing teammates (active, not the leader)
+  const existingTeammates = team.registrations.filter(
+    (r) => r.userId !== team.leaderUserId && r.status !== "WITHDRAWN"
+  );
+
+  const seenUserIds = new Set<string>();
+
+  for (const tm of tmIn) {
+    let mate = await prisma.user.findFirst({
+      where: { iracingMemberId: tm.iracingId },
+    });
+    if (!mate && tm.email) {
+      mate = await prisma.user.findFirst({ where: { email: tm.email } });
+      if (mate && !mate.iracingMemberId) {
+        mate = await prisma.user.update({
+          where: { id: mate.id },
+          data: { iracingMemberId: tm.iracingId },
+        });
+      }
+    }
+    if (!mate) {
+      const parts = tm.name.split(/\s+/);
+      const firstName = parts[0] || tm.name;
+      const lastName = parts.slice(1).join(" ") || "";
+      mate = await prisma.user.create({
+        data: {
+          firstName,
+          lastName,
+          iracingMemberId: tm.iracingId,
+          email: tm.email || null,
+        },
+      });
+    }
+    if (mate.id === team.leaderUserId) continue;
+
+    const existingReg = team.registrations.find((r) => r.userId === mate!.id);
+
+    if (existingReg && existingReg.status !== "WITHDRAWN") {
+      // Existing — preserve invitation flags, just update what changed
+      await prisma.registration.update({
+        where: { id: existingReg.id },
+        data: { iRating: tm.iRating },
+      });
+    } else {
+      // New (or previously withdrawn) — reset invitation flags
+      await prisma.registration.upsert({
+        where: {
+          seasonId_userId: { seasonId: team.seasonId, userId: mate.id },
+        },
+        update: {
+          status: "PENDING",
+          teamId: team.id,
+          carClassId: team.registrations[0]?.carClassId,
+          carId: team.registrations[0]?.carId,
+          startNumber: null,
+          iRating: tm.iRating,
+          iracingInvitationSent: "NO",
+          iracingInvitationAccepted: "NO",
+        },
+        create: {
+          seasonId: team.seasonId,
+          userId: mate.id,
+          status: "PENDING",
+          teamId: team.id,
+          carClassId: team.registrations[0]?.carClassId,
+          carId: team.registrations[0]?.carId,
+          startNumber: null,
+          iRating: tm.iRating,
+          iracingInvitationSent: "NO",
+          iracingInvitationAccepted: "NO",
+        },
+      });
+    }
+    seenUserIds.add(mate.id);
+  }
+
+  // Withdraw any existing teammate not present in the form
+  for (const r of existingTeammates) {
+    if (!seenUserIds.has(r.userId)) {
+      await prisma.registration.update({
+        where: { id: r.id },
+        data: { status: "WITHDRAWN" },
+      });
+    }
+  }
+
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(`/teams/${teamId}/manage`);
+  revalidatePath(`/registrations`);
+  redirect(`/registrations?success=team_updated`);
+}
+
+export async function withdrawTeam(formData: FormData) {
+  const teamId = String(formData.get("teamId") ?? "");
+  if (!teamId) throw new Error("teamId required");
+  const { team } = await requireTeamLeader(teamId);
+
+  await prisma.registration.updateMany({
+    where: { teamId },
+    data: { status: "WITHDRAWN" },
+  });
+
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(`/registrations`);
+  redirect(`/registrations?success=team_withdrawn`);
+}
+
+export async function transferTeamLeadership(formData: FormData) {
+  const teamId = String(formData.get("teamId") ?? "");
+  const newLeaderUserId = String(formData.get("newLeaderUserId") ?? "");
+  if (!teamId) throw new Error("teamId required");
+  if (!newLeaderUserId) throw new Error("New leader is required");
+
+  const { team, sessionUser } = await requireTeamLeader(teamId);
+
+  const newLeaderReg = team.registrations.find(
+    (r) => r.userId === newLeaderUserId && r.status !== "WITHDRAWN"
+  );
+  if (!newLeaderReg) {
+    throw new Error("New leader must be a current team member (not withdrawn)");
+  }
+  if (newLeaderUserId === sessionUser.id) {
+    throw new Error("New leader cannot be yourself");
+  }
+
+  await prisma.$transaction([
+    prisma.team.update({
+      where: { id: teamId },
+      data: { leaderUserId: newLeaderUserId },
+    }),
+    prisma.registration.updateMany({
+      where: { teamId, userId: sessionUser.id },
+      data: { status: "WITHDRAWN" },
+    }),
+  ]);
+
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(`/registrations`);
+  redirect(`/registrations?success=leadership_transferred`);
 }
 

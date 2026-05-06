@@ -175,6 +175,7 @@ model Team {
   iracingTeamId Int?       @unique
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
+  leaderUserId  String?
 }
 
 model Round {
