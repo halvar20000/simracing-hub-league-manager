@@ -38,7 +38,7 @@ export default async function PublicLeagueDetail({
         orderBy: [{ year: "desc" }, { name: "asc" }],
         include: {
           scoringSystem: { select: { name: true } },
-          _count: { select: { rounds: true, registrations: true } },
+          _count: { select: { rounds: true, registrations: { where: { status: { in: ["APPROVED", "PENDING"] } } } } },
           rounds: {
             orderBy: { startsAt: "asc" },
             select: {
