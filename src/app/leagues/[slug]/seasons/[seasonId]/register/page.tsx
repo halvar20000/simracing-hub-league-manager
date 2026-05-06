@@ -159,6 +159,7 @@ export default async function RegisterPage({
     existing &&
     existing.status !== "WITHDRAWN" &&
     existing.status !== "REJECTED";
+  const activeRegistration = isUpdate ? existing : null;
 
   const hasCars = carClasses.some((cc) => cc.cars.length > 0);
   const paymentInfo = getLeaguePayment(season.league);
@@ -179,12 +180,13 @@ export default async function RegisterPage({
     );
 
     // Pre-fill teammate rows from existing team if user is the leader.
-    const leaderTeamId = existing?.teamId ?? null;
+    const leaderTeamId = activeRegistration?.teamId ?? null;
     const teammateRegs = leaderTeamId
       ? await prisma.registration.findMany({
           where: {
             teamId: leaderTeamId,
             userId: { not: session.user.id },
+            status: { notIn: ["WITHDRAWN", "REJECTED"] },
           },
           include: { user: true },
           orderBy: { createdAt: "asc" },
@@ -202,7 +204,7 @@ export default async function RegisterPage({
             ← {season.league.name} {season.name}
           </Link>
           <h1 className="mt-2 text-2xl font-bold">
-            {existing
+            {activeRegistration
               ? "Update your team registration"
               : "Register your team"}
           </h1>
@@ -239,7 +241,7 @@ export default async function RegisterPage({
               <input
                 name="teamName"
                 required
-                defaultValue={existing?.team?.name ?? ""}
+                defaultValue={activeRegistration?.team?.name ?? ""}
                 placeholder="e.g. CAS Racing #1"
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
@@ -254,7 +256,7 @@ export default async function RegisterPage({
                 min={0}
                 max={20000}
                 required
-                defaultValue={existing?.iRating ?? ""}
+                defaultValue={activeRegistration?.iRating ?? ""}
                 placeholder="e.g. 2400"
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
@@ -272,8 +274,8 @@ export default async function RegisterPage({
               isLocked: c.isLocked,
               cars: c.cars.map((car) => ({ id: car.id, name: car.name })),
             }))}
-            defaultClassId={existing?.carClassId ?? undefined}
-            defaultCarId={existing?.carId ?? undefined}
+            defaultClassId={activeRegistration?.carClassId ?? undefined}
+            defaultCarId={activeRegistration?.carId ?? undefined}
           />
 
           <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
@@ -358,7 +360,7 @@ export default async function RegisterPage({
             <textarea
               name="notes"
               rows={3}
-              defaultValue={existing?.notes ?? ""}
+              defaultValue={activeRegistration?.notes ?? ""}
               placeholder="Anything you want the admin to know"
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
@@ -376,7 +378,7 @@ export default async function RegisterPage({
               type="submit"
               className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
             >
-              {existing ? "Update team registration" : "Submit team registration"}
+              {activeRegistration ? "Update team registration" : "Submit team registration"}
             </button>
           </div>
         </form>
@@ -575,7 +577,7 @@ export default async function RegisterPage({
           <textarea
             name="notes"
             rows={3}
-            defaultValue={existing?.notes ?? ""}
+            defaultValue={activeRegistration?.notes ?? ""}
             placeholder="Anything you want the admin to know"
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
