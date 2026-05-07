@@ -67,6 +67,10 @@ export default async function FileReportPage({
   });
 
   // Roster of approved drivers for the picker
+  const seasonForFlag = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: { teamRegistration: true },
+  });
   const roster = await prisma.registration.findMany({
     where: { seasonId, status: "APPROVED" },
     include: {
@@ -77,6 +81,7 @@ export default async function FileReportPage({
           countryCode: true,
         },
       },
+      team: { select: { id: true, name: true } },
     },
     orderBy: [{ startNumber: "asc" }],
   });
@@ -86,6 +91,8 @@ export default async function FileReportPage({
     firstName: r.user.firstName,
     lastName: r.user.lastName,
     countryCode: r.user.countryCode,
+    teamId: r.team?.id ?? null,
+    teamName: r.team?.name ?? null,
   }));
   if (!reporterReg) {
     return (
@@ -210,6 +217,7 @@ export default async function FileReportPage({
           <InvolvedDriversPicker
             drivers={driverChoices}
             excludeRegistrationId={reporterReg.id}
+            teamMode={!!seasonForFlag?.teamRegistration}
           />
         </div>
 
