@@ -313,7 +313,7 @@ export default async function AdminReportDetail({
               </p>
               <label className="mt-2 block">
                 <span className="mb-1 block text-sm text-zinc-300">
-                  Accused driver
+                  {teamMode ? "Accused team" : "Accused driver"}
                 </span>
                 <select
                   name="accusedRegistrationId"
@@ -330,14 +330,12 @@ export default async function AdminReportDetail({
                           return map;
                         }, new Map<string, typeof accusedDrivers>())
                       ).map(([teamName, members]) => (
-                        <optgroup key={teamName} label={teamName}>
-                          {members.map((d) => (
-                            <option key={d.id} value={d.registrationId}>
-                              {d.registration.user.firstName}{" "}
-                              {d.registration.user.lastName}
-                            </option>
-                          ))}
-                        </optgroup>
+                        <option
+                          key={teamName}
+                          value={members[0].registrationId}
+                        >
+                          {teamName}
+                        </option>
                       ))
                     : accusedDrivers.map((d) => (
                         <option key={d.id} value={d.registrationId}>
