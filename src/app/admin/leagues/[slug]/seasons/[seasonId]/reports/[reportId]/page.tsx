@@ -35,16 +35,35 @@ export default async function AdminReportDetail({
   const report = await prisma.incidentReport.findUnique({
     where: { id: reportId },
     include: {
-      round: { include: { season: { include: { league: true, scoringSystem: true } } } },
+      round: {
+        include: {
+          season: {
+            include: {
+              league: true,
+              scoringSystem: true,
+            },
+          },
+        },
+      },
       reporterUser: true,
+      reporterRegistration: { include: { team: { select: { name: true } } } },
       involvedDrivers: {
-        include: { registration: { include: { user: true } } },
+        include: {
+          registration: {
+            include: {
+              user: true,
+              team: { select: { name: true } },
+            },
+          },
+        },
       },
       evidence: true,
       decision: { include: { penalties: true } },
     },
   });
   if (!report || report.round.season.league.slug !== slug) notFound();
+
+  const teamMode = !!report.round.season.teamRegistration;
 
   const accusedDrivers = report.involvedDrivers.filter(
     (d) => d.role === "ACCUSED"
@@ -102,6 +121,11 @@ export default async function AdminReportDetail({
           </h2>
           <p className="mt-1 font-medium">
             {report.reporterUser.firstName} {report.reporterUser.lastName}
+            {teamMode && report.reporterRegistration?.team?.name && (
+              <span className="ml-2 text-zinc-400">
+                — {report.reporterRegistration.team.name}
+              </span>
+            )}
           </p>
           {report.lapNumber != null && (
             <p className="text-sm text-zinc-400">Lap {report.lapNumber}</p>
@@ -116,6 +140,30 @@ export default async function AdminReportDetail({
           </h2>
           {accusedDrivers.length === 0 ? (
             <p className="text-sm text-zinc-500">No drivers tagged.</p>
+          ) : teamMode ? (
+            <ul className="space-y-2 text-sm">
+              {Array.from(
+                accusedDrivers.reduce((map, d) => {
+                  const key = d.registration.team?.name ?? "(No team)";
+                  const arr = map.get(key) ?? [];
+                  arr.push(d);
+                  map.set(key, arr);
+                  return map;
+                }, new Map<string, typeof accusedDrivers>())
+              ).map(([teamName, members]) => (
+                <li key={teamName}>
+                  <div className="font-semibold text-zinc-200">{teamName}</div>
+                  <ul className="ml-4 space-y-0.5 text-zinc-400">
+                    {members.map((d) => (
+                      <li key={d.id}>
+                        {d.registration.user.firstName}{" "}
+                        {d.registration.user.lastName}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
           ) : (
             <ul className="text-sm">
               {accusedDrivers.map((d) => (
@@ -272,13 +320,32 @@ export default async function AdminReportDetail({
                   className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
                 >
                   <option value="">— Select —</option>
-                  {accusedDrivers.map((d) => (
-                    <option key={d.id} value={d.registrationId}>
-                      #{d.registration.startNumber ?? "?"}{" "}
-                      {d.registration.user.firstName}{" "}
-                      {d.registration.user.lastName}
-                    </option>
-                  ))}
+                  {teamMode
+                    ? Array.from(
+                        accusedDrivers.reduce((map, d) => {
+                          const key = d.registration.team?.name ?? "(No team)";
+                          const arr = map.get(key) ?? [];
+                          arr.push(d);
+                          map.set(key, arr);
+                          return map;
+                        }, new Map<string, typeof accusedDrivers>())
+                      ).map(([teamName, members]) => (
+                        <optgroup key={teamName} label={teamName}>
+                          {members.map((d) => (
+                            <option key={d.id} value={d.registrationId}>
+                              {d.registration.user.firstName}{" "}
+                              {d.registration.user.lastName}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))
+                    : accusedDrivers.map((d) => (
+                        <option key={d.id} value={d.registrationId}>
+                          #{d.registration.startNumber ?? "?"}{" "}
+                          {d.registration.user.firstName}{" "}
+                          {d.registration.user.lastName}
+                        </option>
+                      ))}
                 </select>
               </label>
 
