@@ -252,9 +252,9 @@ export default async function EditScoringSystem({
               className="mt-0.5 h-4 w-4 accent-orange-500"
             />
             <span>
-              <span className="font-medium">Enable driver FPR</span>
+              <span className="font-medium">{teamMode ? "Enable team FPR" : "Enable driver FPR"}</span>
               <span className="ml-1 block text-xs text-zinc-500">
-                Awards FPR points to each driver per round based on the total
+                {teamMode ? "Awards FPR points to each team per round" : "Awards FPR points to each driver per round"} based on the total
                 incidents across all races in that round. Added to combined
                 + class totals.
               </span>
