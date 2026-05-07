@@ -45,6 +45,7 @@ export default async function Nav() {
         <div className="flex items-center gap-1 text-sm">
           <NavLink href="/leagues">Leagues</NavLink>
           <NavLink href="/rosters">Rosters</NavLink>
+          <NavLink href="/incidents">Incidents</NavLink>
           {session?.user && (
             <>
               <NavLink href="/registrations">My Registrations</NavLink>
