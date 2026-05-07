@@ -19,8 +19,12 @@ export default async function EditScoringSystem({
 
   const ss = await prisma.scoringSystem.findUnique({
     where: { id },
-    include: { _count: { select: { seasons: true } } },
+    include: {
+      _count: { select: { seasons: true } },
+      seasons: { select: { teamRegistration: true } },
+    },
   });
+  const teamMode = !!ss?.seasons?.some((s) => s.teamRegistration);
   if (!ss) notFound();
 
   const points = (ss.pointsTable as Record<string, number>) ?? {};
@@ -100,7 +104,7 @@ export default async function EditScoringSystem({
           />
         </Section>
 
-        <Section title="Participation">
+        <Section title={teamMode ? "Participation (team-based)" : "Participation"}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field
               label="Participation points"
@@ -239,7 +243,7 @@ export default async function EditScoringSystem({
           </label>
         </Section>
 
-        <Section title="Driver Fair Play Rating (incident-based)">
+        <Section title={teamMode ? "Team Fair Play Rating (incident-based)" : "Driver Fair Play Rating (incident-based)"}>
           <label className="flex items-start gap-3 text-sm text-zinc-200">
             <input
               type="checkbox"
