@@ -27,18 +27,8 @@ export default async function Nav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2.5">
         <Link href="/" className="flex items-center gap-3">
           <img
-            src="/logos/cls-league-scoring.png"
-            alt="CLS — CAS League Scoring"
-            className="h-12 w-auto"
-          />
-          <img
             src="/logos/site-logo.svg"
             alt="Simracing-Hub"
-            className="h-12 w-auto"
-          />
-          <img
-            src="/logos/cas-community.webp"
-            alt="CAS Racing Community"
             className="h-12 w-auto"
           />
         </Link>
