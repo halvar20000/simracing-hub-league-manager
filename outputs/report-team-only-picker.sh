@@ -1,3 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if command -v pbcopy >/dev/null 2>&1; then
+  exec > >(tee >(pbcopy)) 2>&1
+fi
+cd "$HOME/Nextcloud/AI/league-manager"
+
+PICKER_FILE=$(find src -name 'InvolvedDriversPicker*' | head -1)
+echo "Picker: $PICKER_FILE"
+
+# ============================================================================
+# 1. Rewrite picker to show team-level checkboxes when teamMode
+# ============================================================================
+echo ""
+echo "=== 1. Rewrite InvolvedDriversPicker for team-only mode ==="
+cat > "$PICKER_FILE" <<'TSX'
 "use client";
 
 import { useMemo, useState } from "react";
@@ -195,3 +211,50 @@ export function InvolvedDriversPicker({
     </div>
   );
 }
+TSX
+echo "  Rewritten."
+
+# ============================================================================
+# 2. Update report page label "Other driver(s) involved" → conditional
+# ============================================================================
+echo ""
+echo "=== 2. Patch report page label ==="
+node -e "
+const fs = require('fs');
+const FILE = 'src/app/leagues/[slug]/seasons/[seasonId]/rounds/[roundId]/report/page.tsx';
+let s = fs.readFileSync(FILE, 'utf8');
+const before = s;
+s = s.replace(
+  /Other driver\(s\) involved/,
+  '{seasonForFlag?.teamRegistration ? \"Other team(s) involved\" : \"Other driver(s) involved\"}'
+);
+if (s === before) {
+  console.error('  Anchor not found.');
+  process.exit(1);
+}
+fs.writeFileSync(FILE, s);
+console.log('  Patched.');
+"
+
+echo ""
+echo "-- Verify --"
+grep -n 'teamMode\|Other driver\|Other team\|seasonForFlag' src/app/leagues/\[slug\]/seasons/\[seasonId\]/rounds/\[roundId\]/report/page.tsx | head -10
+echo ""
+grep -n 'visibleTeams\|memberRegIds\|submitRegIds' "$PICKER_FILE" | head -10
+
+echo ""
+echo "=== 3. TypeScript check ==="
+npx --yes tsc --noEmit -p tsconfig.json || {
+  echo "!!! TS errors. NOT pushing."
+  exit 1
+}
+
+echo ""
+echo "=== 4. Commit + push ==="
+git add -A
+git status --short
+git commit -m "Report form: team-mode shows team-only checkboxes; label says 'Other team(s) involved'; submits all team members as ACCUSED"
+git push
+
+echo ""
+echo "Done."

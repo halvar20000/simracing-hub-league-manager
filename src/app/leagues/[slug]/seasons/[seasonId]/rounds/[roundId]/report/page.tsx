@@ -212,7 +212,7 @@ export default async function FileReportPage({
 
         <div>
           <span className="mb-1 block text-sm text-zinc-300">
-            Other driver(s) involved
+            {seasonForFlag?.teamRegistration ? "Other team(s) involved" : "Other driver(s) involved"}
           </span>
           <InvolvedDriversPicker
             drivers={driverChoices}
