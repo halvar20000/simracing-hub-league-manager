@@ -1,0 +1,27 @@
+name: Notify reporting open
+
+on:
+  schedule:
+    # Every 30 minutes, on the :00 and :30 marks (UTC).
+    - cron: "*/30 * * * *"
+  # Allow manual run from GitHub UI for testing
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call cron endpoint
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            https://league.simracing-hub.com/api/cron/notify-reporting-open)
+          echo "$response"
+          status=$(echo "$response" | tail -1 | sed 's/HTTP_STATUS://')
+          if [ "$status" != "200" ]; then
+            echo "::error::Endpoint returned HTTP $status"
+            exit 1
+          fi
