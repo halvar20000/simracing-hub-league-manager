@@ -2,15 +2,30 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
 export default async function PublicLeaguesList() {
-  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-  const recentRounds = await prisma.round.findMany({
+  const now = new Date();
+  const candidateRounds = await prisma.round.findMany({
     where: {
       status: "COMPLETED",
-      startsAt: { gte: since },
+      season: {
+        scoringSystem: {
+          protestCooldownHours: { not: null },
+          protestWindowHours: { not: null },
+        },
+      },
     },
-    include: { season: { include: { league: true } } },
+    include: {
+      season: { include: { league: true, scoringSystem: true } },
+    },
     orderBy: { startsAt: "desc" },
-    take: 30,
+    take: 100,
+  });
+  const recentRounds = candidateRounds.filter((r) => {
+    const cd = r.season.scoringSystem?.protestCooldownHours;
+    const wn = r.season.scoringSystem?.protestWindowHours;
+    if (cd == null || wn == null) return false;
+    const opensAt = new Date(r.startsAt.getTime() + cd * 3600 * 1000);
+    const closesAt = new Date(opensAt.getTime() + wn * 3600 * 1000);
+    return now >= opensAt && now < closesAt;
   });
 
   const fmtDate = (d: Date) =>
