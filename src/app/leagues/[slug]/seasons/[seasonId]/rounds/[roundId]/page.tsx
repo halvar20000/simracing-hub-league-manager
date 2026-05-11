@@ -414,6 +414,13 @@ export default async function PublicRoundResults({
             Teams
           </Link>
         )}
+        <span className="mx-2 text-zinc-700" aria-hidden="true">|</span>
+        <Link
+          href={`/leagues/${slug}/seasons/${seasonId}/standings`}
+          className={`${pillBase} ${pillOff}`}
+        >
+          Standings →
+        </Link>
       </div>
 
       {cls === "combined" && podium.length > 0 && (
