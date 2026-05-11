@@ -8,6 +8,7 @@ import {
   unreleasePenalty,
   releaseAllPending,
 } from "@/lib/actions/penalty-pool";
+import { recomputePenaltyPoolAction } from "@/lib/actions/penalty-pool-recompute";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -65,6 +66,7 @@ export default async function PenaltyPoolPage({
     startNumber: number | null;
     pendingPoints: number;
     forgivenPoints: number;
+    autoForgivenPoints: number;
     releasedPoints: number;
     penalties: typeof penalties;
   };
@@ -81,16 +83,18 @@ export default async function PenaltyPoolPage({
         startNumber: p.registration.startNumber,
         pendingPoints: 0,
         forgivenPoints: 0,
+        autoForgivenPoints: 0,
         releasedPoints: 0,
         penalties: [],
       };
       byDriver.set(id, row);
     }
     const pts = p.pointsValue ?? 0;
-    const eff = Math.max(0, pts - p.forgivenPoints);
+    const eff = Math.max(0, pts - p.forgivenPoints - p.autoForgivenPoints);
     if (p.releasedAt) row.releasedPoints += eff;
     else row.pendingPoints += eff;
     row.forgivenPoints += p.forgivenPoints;
+    row.autoForgivenPoints += p.autoForgivenPoints;
     row.penalties.push(p);
   }
   const drivers = Array.from(byDriver.values()).sort(
@@ -103,6 +107,7 @@ export default async function PenaltyPoolPage({
   const totals = {
     pending: drivers.reduce((s, d) => s + d.pendingPoints, 0),
     forgiven: drivers.reduce((s, d) => s + d.forgivenPoints, 0),
+    autoForgiven: drivers.reduce((s, d) => s + d.autoForgivenPoints, 0),
     released: drivers.reduce((s, d) => s + d.releasedPoints, 0),
   };
 
@@ -131,6 +136,11 @@ export default async function PenaltyPoolPage({
           <span className="rounded bg-red-900/40 px-2 py-1 text-red-200">
             Released: <strong>{totals.released}</strong>
           </span>
+          {totals.autoForgiven > 0 && (
+            <span className="rounded bg-cyan-900/40 px-2 py-1 text-cyan-200">
+              Auto-forgiven: <strong>{totals.autoForgiven}</strong>
+            </span>
+          )}
         </div>
       </div>
 
@@ -201,7 +211,7 @@ export default async function PenaltyPoolPage({
                   <tbody>
                     {d.penalties.map((p) => {
                       const pts = p.pointsValue ?? 0;
-                      const eff = Math.max(0, pts - p.forgivenPoints);
+                      const eff = Math.max(0, pts - p.forgivenPoints - p.autoForgivenPoints);
                       const released = !!p.releasedAt;
                       const forgive = forgivePenalty.bind(null, slug, seasonId, p.id);
                       const release = releasePenalty.bind(null, slug, seasonId, p.id);
@@ -234,7 +244,14 @@ export default async function PenaltyPoolPage({
                               </Link>
                             )}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums">{pts}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">
+                            {pts}
+                            {p.autoForgivenPoints > 0 && (
+                              <div className="text-[10px] text-cyan-400">
+                                −{p.autoForgivenPoints} auto
+                              </div>
+                            )}
+                          </td>
                           <td className="px-2 py-2 text-right tabular-nums">
                             <form action={forgive} className="inline-flex items-center gap-1">
                               <input

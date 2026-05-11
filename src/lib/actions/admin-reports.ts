@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSteward } from "@/lib/auth-helpers";
+import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
 import { pointsForLevel } from "@/lib/penalty-categories";
 import type { IncidentStatus, Verdict, PenaltyCategory } from "@prisma/client";
 
@@ -147,6 +148,9 @@ export async function submitDecision(
     });
   }
 
+  // Penalty pool: recompute auto-forgiveness (GT3 WCT only; engine guards by slug)
+  await recomputePenaltyPoolForSeason(seasonId);
+
   revalidatePath(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`
   );
@@ -179,6 +183,7 @@ export async function deleteDecision(
     where: { id: reportId },
     data: { status: "UNDER_REVIEW" },
   });
+  await recomputePenaltyPoolForSeason(seasonId);
   revalidatePath(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports/${reportId}`
   );

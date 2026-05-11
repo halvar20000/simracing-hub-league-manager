@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
 import type { RoundStatus } from "@prisma/client";
 
 export async function createRound(
@@ -93,6 +94,11 @@ export async function updateRound(
       status,
     },
   });
+
+  // Penalty pool: recompute auto-forgiveness when a round is marked complete
+  if (status === "COMPLETED") {
+    await recomputePenaltyPoolForSeason(seasonId);
+  }
 
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
   revalidatePath(`/leagues/${leagueSlug}`);
