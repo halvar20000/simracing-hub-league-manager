@@ -444,6 +444,7 @@ model Penalty {
   category        PenaltyCategory?
   releasedAt      DateTime?
   forgivenPoints  Int                @default(0)
+  autoForgivenPoints Int            @default(0)
   forgivenAt      DateTime?
   forgivenReason  String?
   categoryLevel   Int?
