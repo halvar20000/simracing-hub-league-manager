@@ -1,3 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if command -v pbcopy >/dev/null 2>&1; then
+  exec > >(tee >(pbcopy)) 2>&1
+fi
+cd "$HOME/Nextcloud/AI/league-manager"
+
+FILE='src/lib/actions/penalty-pool-recompute.ts'
+
+echo "=== Rewrite $FILE so the action returns void ==="
+cat > "$FILE" <<'TS'
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -23,3 +34,23 @@ export async function recomputePenaltyPoolAction(formData: FormData): Promise<vo
     revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/penalty-pool`);
   }
 }
+TS
+
+echo "  Rewritten."
+echo ""
+
+echo "=== TypeScript check ==="
+npx --yes tsc --noEmit -p tsconfig.json || {
+  echo "!!! TS errors. NOT pushing."
+  exit 1
+}
+
+echo ""
+echo "=== Commit + push ==="
+git add -A
+git status --short
+git commit -m "Penalty pool recompute action: return void so it can be used directly as <form action>"
+git push
+
+echo ""
+echo "Done."

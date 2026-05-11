@@ -144,6 +144,21 @@ export default async function PenaltyPoolPage({
         </div>
       </div>
 
+      {season.league.slug === "cas-gt3-wct" && (
+        <form action={recomputePenaltyPoolAction}>
+          <input type="hidden" name="seasonId" value={seasonId} />
+          <input type="hidden" name="leagueSlug" value={slug} />
+          <SubmitWithSpinner
+            label="Recompute auto-forgiveness pool"
+            pendingLabel="Recomputing…"
+            className="rounded bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-600"
+          />
+          <span className="ml-2 text-xs text-zinc-500">
+            2 clean rounds forgive 1 pool point. Runs automatically after decisions are published and rounds are marked complete.
+          </span>
+        </form>
+      )}
+
       {season.scoringSystem.deferPenaltyPoints && totals.pending > 0 && (
         <form action={releaseAll}>
           <SubmitWithSpinner
