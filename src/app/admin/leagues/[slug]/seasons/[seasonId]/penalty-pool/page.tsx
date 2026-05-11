@@ -3,27 +3,13 @@ import { notFound } from "next/navigation";
 import { requireSteward } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import {
-  forgivePenalty,
-  releasePenalty,
-  unreleasePenalty,
   releaseAllPending,
+  releasePoolForRegistration,
 } from "@/lib/actions/penalty-pool";
 import { recomputePenaltyPoolAction } from "@/lib/actions/penalty-pool-recompute";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
-const CATEGORY_LABEL: Record<string, string> = {
-  AVOIDABLE_CONTACT: "Avoidable contact",
-  CAUSING_COLLISION: "Causing a collision",
-  BLOCKING: "Blocking",
-  TRACK_LIMITS: "Track limits",
-  JUMP_START: "Jump start",
-  IGNORING_BLUE_FLAGS: "Ignoring blue flags",
-  UNSPORTSMANLIKE: "Unsportsmanlike",
-  CHAT_MISCONDUCT: "Chat misconduct",
-  OTHER: "Other",
-};
-
-export default async function PenaltyPoolPage({
+export default async function PenaltyPoolAdminPage({
   params,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
@@ -37,79 +23,94 @@ export default async function PenaltyPoolPage({
   });
   if (!season || season.league.slug !== slug) notFound();
 
+  const registrations = await prisma.registration.findMany({
+    where: { seasonId },
+    select: {
+      id: true,
+      startNumber: true,
+      user: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  const rounds = await prisma.round.findMany({
+    where: { seasonId },
+    orderBy: { roundNumber: "asc" },
+    select: { id: true, roundNumber: true, name: true, status: true },
+  });
+
   const penalties = await prisma.penalty.findMany({
     where: {
       type: "POINTS_DEDUCTION",
       round: { seasonId },
     },
-    include: {
-      round: { select: { roundNumber: true, name: true } },
-      registration: {
-        include: {
-          user: { select: { firstName: true, lastName: true } },
-        },
-      },
-      sourceIncidentDecision: {
-        include: { incidentReport: { select: { id: true } } },
-      },
+    select: {
+      id: true,
+      registrationId: true,
+      roundId: true,
+      pointsValue: true,
+      forgivenPoints: true,
+      autoForgivenPoints: true,
+      releasedAt: true,
     },
-    orderBy: [
-      { releasedAt: { sort: "asc", nulls: "first" } },
-      { round: { roundNumber: "asc" } },
-    ],
   });
 
-  // Aggregate per driver
-  type Row = {
+  type DriverRow = {
     registrationId: string;
     name: string;
     startNumber: number | null;
-    pendingPoints: number;
-    forgivenPoints: number;
-    autoForgivenPoints: number;
-    releasedPoints: number;
-    penalties: typeof penalties;
+    cellsByRound: Map<string, number>;
+    autoForgiven: number;
+    activePool: number;
+    released: number;
+    hasPending: boolean;
   };
-  const byDriver = new Map<string, Row>();
-  for (const p of penalties) {
-    const id = p.registrationId;
-    let row = byDriver.get(id);
-    if (!row) {
-      row = {
-        registrationId: id,
-        name: `${p.registration.user.firstName ?? ""} ${
-          p.registration.user.lastName ?? ""
-        }`.trim(),
-        startNumber: p.registration.startNumber,
-        pendingPoints: 0,
-        forgivenPoints: 0,
-        autoForgivenPoints: 0,
-        releasedPoints: 0,
-        penalties: [],
-      };
-      byDriver.set(id, row);
-    }
-    const pts = p.pointsValue ?? 0;
-    const eff = Math.max(0, pts - p.forgivenPoints - p.autoForgivenPoints);
-    if (p.releasedAt) row.releasedPoints += eff;
-    else row.pendingPoints += eff;
-    row.forgivenPoints += p.forgivenPoints;
-    row.autoForgivenPoints += p.autoForgivenPoints;
-    row.penalties.push(p);
-  }
-  const drivers = Array.from(byDriver.values()).sort(
-    (a, b) =>
-      b.pendingPoints + b.releasedPoints - (a.pendingPoints + a.releasedPoints)
-  );
 
-  const releaseAll = releaseAllPending.bind(null, slug, seasonId);
+  const rowMap = new Map<string, DriverRow>();
+  for (const reg of registrations) {
+    rowMap.set(reg.id, {
+      registrationId: reg.id,
+      name: `${reg.user.firstName ?? ""} ${reg.user.lastName ?? ""}`.trim() || "—",
+      startNumber: reg.startNumber,
+      cellsByRound: new Map(),
+      autoForgiven: 0,
+      activePool: 0,
+      released: 0,
+      hasPending: false,
+    });
+  }
+
+  for (const p of penalties) {
+    const row = rowMap.get(p.registrationId);
+    if (!row) continue;
+    const pts = p.pointsValue ?? 0;
+    row.cellsByRound.set(
+      p.roundId,
+      (row.cellsByRound.get(p.roundId) ?? 0) + pts
+    );
+
+    const effective = Math.max(0, pts - p.forgivenPoints - p.autoForgivenPoints);
+    if (p.releasedAt) {
+      row.released += effective;
+    } else {
+      row.activePool += effective;
+      if (effective > 0) row.hasPending = true;
+    }
+    row.autoForgiven += p.autoForgivenPoints;
+  }
+
+  const drivers = Array.from(rowMap.values()).sort((a, b) => {
+    const aN = a.startNumber ?? 9999;
+    const bN = b.startNumber ?? 9999;
+    if (aN !== bN) return aN - bN;
+    return a.name.localeCompare(b.name);
+  });
 
   const totals = {
-    pending: drivers.reduce((s, d) => s + d.pendingPoints, 0),
-    forgiven: drivers.reduce((s, d) => s + d.forgivenPoints, 0),
-    autoForgiven: drivers.reduce((s, d) => s + d.autoForgivenPoints, 0),
-    released: drivers.reduce((s, d) => s + d.releasedPoints, 0),
+    pending: drivers.reduce((s, d) => s + d.activePool, 0),
+    autoForgiven: drivers.reduce((s, d) => s + d.autoForgiven, 0),
+    released: drivers.reduce((s, d) => s + d.released, 0),
   };
+  const releaseAll = releaseAllPending.bind(null, slug, seasonId);
 
   return (
     <div className="space-y-6">
@@ -123,220 +124,140 @@ export default async function PenaltyPoolPage({
         <h1 className="mt-2 text-2xl font-bold">Penalty pool</h1>
         <p className="mt-1 text-sm text-zinc-400">
           {season.scoringSystem.deferPenaltyPoints
-            ? "This scoring system DEFERS penalty points. Pending penalties are visible here but not in standings until released."
-            : "This scoring system applies penalty points IMMEDIATELY. Pool view is read-only."}
+            ? "Pending penalty points stay in the pool until you release them. Releasing applies them to the championship standings."
+            : "Penalty points apply IMMEDIATELY to standings on this scoring system. This view is informational."}
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <span className="rounded bg-amber-900/40 px-2 py-1 text-amber-200">
             Pending: <strong>{totals.pending}</strong>
-          </span>
-          <span className="rounded bg-emerald-900/40 px-2 py-1 text-emerald-200">
-            Forgiven: <strong>{totals.forgiven}</strong>
-          </span>
-          <span className="rounded bg-red-900/40 px-2 py-1 text-red-200">
-            Released: <strong>{totals.released}</strong>
           </span>
           {totals.autoForgiven > 0 && (
             <span className="rounded bg-cyan-900/40 px-2 py-1 text-cyan-200">
               Auto-forgiven: <strong>{totals.autoForgiven}</strong>
             </span>
           )}
+          <span className="rounded bg-red-900/40 px-2 py-1 text-red-200">
+            Released: <strong>{totals.released}</strong>
+          </span>
         </div>
       </div>
 
-      {season.league.slug === "cas-gt3-wct" && (
-        <form action={recomputePenaltyPoolAction}>
-          <input type="hidden" name="seasonId" value={seasonId} />
-          <input type="hidden" name="leagueSlug" value={slug} />
-          <SubmitWithSpinner
-            label="Recompute auto-forgiveness pool"
-            pendingLabel="Recomputing…"
-            className="rounded bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-600"
-          />
-          <span className="ml-2 text-xs text-zinc-500">
-            2 clean rounds forgive 1 pool point. Runs automatically after decisions are published and rounds are marked complete.
-          </span>
-        </form>
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        {season.league.slug === "cas-gt3-wct" && (
+          <form action={recomputePenaltyPoolAction}>
+            <input type="hidden" name="seasonId" value={seasonId} />
+            <input type="hidden" name="leagueSlug" value={slug} />
+            <SubmitWithSpinner
+              label="Recompute auto-forgiveness pool"
+              pendingLabel="Recomputing…"
+              className="rounded bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-600"
+            />
+            <span className="ml-2 text-xs text-zinc-500">
+              2 clean races forgive 1 pool point. Auto-runs after a decision is
+              published and after a round is set to Completed.
+            </span>
+          </form>
+        )}
+        {season.scoringSystem.deferPenaltyPoints && totals.pending > 0 && (
+          <form action={releaseAll}>
+            <SubmitWithSpinner
+              label={`Release ALL ${totals.pending} pending points (end of season)`}
+              pendingLabel="Releasing penalties…"
+              className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600"
+            />
+          </form>
+        )}
+      </div>
 
-      {season.scoringSystem.deferPenaltyPoints && totals.pending > 0 && (
-        <form action={releaseAll}>
-          <SubmitWithSpinner
-            label={`Release all ${totals.pending} pending points to standings`}
-            pendingLabel="Releasing penalties…"
-            className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600"
-          />
-          <span className="ml-2 text-xs text-zinc-500">
-            (Use after end-of-season review)
-          </span>
-        </form>
-      )}
-
-      {drivers.length === 0 ? (
-        <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
-          No penalty points decided yet.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {drivers.map((d) => (
-            <details
-              key={d.registrationId}
-              className="rounded border border-zinc-800 bg-zinc-900 open:bg-zinc-900"
-              open={d.pendingPoints > 0}
-            >
-              <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-800">
-                <span className="flex items-center gap-3">
-                  {d.startNumber != null && (
-                    <span className="text-xs text-zinc-500">#{d.startNumber}</span>
-                  )}
-                  <span className="font-medium">{d.name}</span>
-                </span>
-                <span className="flex items-center gap-2 text-xs">
-                  {d.pendingPoints > 0 && (
-                    <span className="rounded bg-amber-900/40 px-2 py-0.5 text-amber-200">
-                      pending {d.pendingPoints}
-                    </span>
-                  )}
-                  {d.forgivenPoints > 0 && (
-                    <span className="rounded bg-emerald-900/40 px-2 py-0.5 text-emerald-200">
-                      forgiven {d.forgivenPoints}
-                    </span>
-                  )}
-                  {d.releasedPoints > 0 && (
-                    <span className="rounded bg-red-900/40 px-2 py-0.5 text-red-200">
-                      released {d.releasedPoints}
-                    </span>
-                  )}
-                </span>
-              </summary>
-              <div className="border-t border-zinc-800 px-4 py-3">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
-                    <tr>
-                      <th className="px-2 py-1">Round</th>
-                      <th className="px-2 py-1">Category</th>
-                      <th className="px-2 py-1">Reason</th>
-                      <th className="px-2 py-1 text-right">Pts</th>
-                      <th className="px-2 py-1 text-right">Forgive</th>
-                      <th className="px-2 py-1 text-right">Effective</th>
-                      <th className="px-2 py-1 text-right">Status</th>
-                      <th className="px-2 py-1"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.penalties.map((p) => {
-                      const pts = p.pointsValue ?? 0;
-                      const eff = Math.max(0, pts - p.forgivenPoints - p.autoForgivenPoints);
-                      const released = !!p.releasedAt;
-                      const forgive = forgivePenalty.bind(null, slug, seasonId, p.id);
-                      const release = releasePenalty.bind(null, slug, seasonId, p.id);
-                      const unrelease = unreleasePenalty.bind(null, slug, seasonId, p.id);
-                      const reportId = p.sourceIncidentDecision?.incidentReport.id;
-                      return (
-                        <tr
-                          key={p.id}
-                          className="border-t border-zinc-800 align-top"
-                        >
-                          <td className="px-2 py-2">
-                            R{p.round.roundNumber}
-                            <div className="text-xs text-zinc-500">{p.round.name}</div>
-                          </td>
-                          <td className="px-2 py-2 text-xs text-zinc-300">
-                            {p.categoryLevel != null
-                              ? `Cat ${p.categoryLevel}`
-                              : p.category
-                                ? CATEGORY_LABEL[p.category] ?? p.category
-                                : "—"}
-                          </td>
-                          <td className="px-2 py-2 text-xs text-zinc-400">
-                            {p.reason}
-                            {reportId && (
-                              <Link
-                                href={`/admin/leagues/${slug}/seasons/${seasonId}/reports/${reportId}`}
-                                className="ml-2 text-orange-400 hover:underline"
-                              >
-                                report ↗
-                              </Link>
-                            )}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">
+      <div className="overflow-x-auto rounded border border-zinc-800">
+        <table className="min-w-full text-sm">
+          <thead className="bg-zinc-900 text-xs uppercase tracking-wider text-zinc-400">
+            <tr>
+              <th className="px-3 py-2 text-left">Driver</th>
+              {rounds.map((r) => (
+                <th
+                  key={r.id}
+                  className="px-2 py-2 text-center"
+                  title={`${r.name}${r.status === "COMPLETED" ? " (completed)" : ""}`}
+                >
+                  R{r.roundNumber}
+                </th>
+              ))}
+              <th className="px-2 py-2 text-right">Forgiven</th>
+              <th className="px-2 py-2 text-right">Pool</th>
+              <th className="px-2 py-2 text-right">Released</th>
+              <th className="px-2 py-2 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {drivers.map((d) => {
+              const releaseDriver = releasePoolForRegistration.bind(
+                null,
+                slug,
+                seasonId,
+                d.registrationId
+              );
+              return (
+                <tr
+                  key={d.registrationId}
+                  className="border-t border-zinc-800 hover:bg-zinc-900/60"
+                >
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {d.startNumber != null && (
+                      <span className="text-zinc-500 text-xs mr-2">
+                        #{d.startNumber}
+                      </span>
+                    )}
+                    {d.name}
+                  </td>
+                  {rounds.map((r) => {
+                    const pts = d.cellsByRound.get(r.id) ?? 0;
+                    return (
+                      <td
+                        key={r.id}
+                        className="px-2 py-2 text-center tabular-nums"
+                      >
+                        {pts > 0 ? (
+                          <span className="rounded bg-amber-900/40 px-2 py-0.5 text-amber-200">
                             {pts}
-                            {p.autoForgivenPoints > 0 && (
-                              <div className="text-[10px] text-cyan-400">
-                                −{p.autoForgivenPoints} auto
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">
-                            <form action={forgive} className="inline-flex items-center gap-1">
-                              <input
-                                name="forgivenPoints"
-                                type="number"
-                                min={0}
-                                max={pts}
-                                defaultValue={p.forgivenPoints || ""}
-                                placeholder="0"
-                                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-right text-sm tabular-nums"
-                              />
-                              <input
-                                name="forgivenReason"
-                                type="text"
-                                defaultValue={p.forgivenReason ?? ""}
-                                placeholder="reason"
-                                className="w-32 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-xs"
-                              />
-                              <button
-                                className="rounded bg-emerald-800 px-2 py-0.5 text-xs hover:bg-emerald-700"
-                                title="Save forgiveness"
-                              >
-                                Save
-                              </button>
-                            </form>
-                            {p.forgivenAt && (
-                              <div className="mt-0.5 text-[10px] text-zinc-500">
-                                {p.forgivenReason ?? "—"}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums font-semibold">
-                            {eff}
-                          </td>
-                          <td className="px-2 py-2 text-right text-xs">
-                            {released ? (
-                              <span className="rounded bg-red-900/40 px-2 py-0.5 text-red-200">
-                                released
-                              </span>
-                            ) : (
-                              <span className="rounded bg-amber-900/40 px-2 py-0.5 text-amber-200">
-                                pending
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-2 py-2 text-right">
-                            {released ? (
-                              <form action={unrelease}>
-                                <button className="text-xs text-zinc-400 hover:text-zinc-200">
-                                  Un-release
-                                </button>
-                              </form>
-                            ) : (
-                              <form action={release}>
-                                <button className="rounded bg-red-700 px-2 py-0.5 text-xs text-white hover:bg-red-600">
-                                  Release
-                                </button>
-                              </form>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          ))}
-        </div>
-      )}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-700">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="px-2 py-2 text-right tabular-nums text-cyan-300">
+                    {d.autoForgiven > 0 ? `−${d.autoForgiven}` : ""}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                    {d.activePool > 0 ? d.activePool : (
+                      <span className="text-zinc-600">0</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums text-red-300">
+                    {d.released > 0 ? d.released : ""}
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    {d.hasPending && season.scoringSystem.deferPenaltyPoints ? (
+                      <form action={releaseDriver}>
+                        <button
+                          className="rounded bg-red-700 px-2 py-1 text-xs text-white hover:bg-red-600"
+                          title="Release this driver's pending pool points to the standings"
+                        >
+                          Release pool
+                        </button>
+                      </form>
+                    ) : (
+                      ""
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

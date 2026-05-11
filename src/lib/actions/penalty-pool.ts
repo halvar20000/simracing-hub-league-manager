@@ -69,3 +69,31 @@ export async function releaseAllPending(leagueSlug: string, seasonId: string) {
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/penalty-pool`);
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/standings`);
 }
+
+/**
+ * Per-driver release: marks every NOT-yet-released POINTS_DEDUCTION penalty
+ * for one registration as released. Called by the "Release pool" button on
+ * each row of the new penalty pool table.
+ */
+export async function releasePoolForRegistration(
+  leagueSlug: string,
+  seasonId: string,
+  registrationId: string,
+  _formData?: FormData
+) {
+  const { requireSteward } = await import("@/lib/auth-helpers");
+  const { prisma } = await import("@/lib/prisma");
+  const { revalidatePath } = await import("next/cache");
+
+  await requireSteward();
+  await prisma.penalty.updateMany({
+    where: {
+      registrationId,
+      type: "POINTS_DEDUCTION",
+      releasedAt: null,
+    },
+    data: { releasedAt: new Date() },
+  });
+  revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/penalty-pool`);
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/penalty-pool`);
+}
