@@ -10,6 +10,7 @@ import {
   deleteDecision,
 } from "@/lib/actions/admin-reports";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import { CategoryLevelSelect } from "@/components/CategoryLevelSelect";
 
 const VERDICTS = [
   { value: "NO_ACTION", label: "No action" },
@@ -113,6 +114,43 @@ export default async function AdminReportDetail({
           {error}
         </div>
       )}
+
+      <section className="rounded border border-zinc-800 bg-zinc-900/60 p-4">
+        <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
+          <div>
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              Replay timestamp
+            </span>
+            <div className="font-mono text-2xl font-bold text-amber-200">
+              {report.replayTimestamp ?? "—"}
+            </div>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              Session
+            </span>
+            <div className="text-base text-zinc-200">
+              {report.session ?? "—"}
+            </div>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              Lap
+            </span>
+            <div className="text-base text-zinc-200">
+              {report.lapNumber ?? "—"}
+            </div>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">
+              Turn / Sector
+            </span>
+            <div className="text-base text-zinc-200">
+              {report.turnOrSector ?? "—"}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
@@ -257,22 +295,14 @@ export default async function AdminReportDetail({
           </label>
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">Penalty category</span>
-            <select
-              name="categoryLevel"
-              defaultValue={
+            <CategoryLevelSelect
+              initialLevel={
                 report.decision?.penalties?.[0]?.categoryLevel != null
                   ? String(report.decision.penalties[0].categoryLevel)
                   : ""
               }
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            >
-              <option value="">— (no category)</option>
-              {PENALTY_LEVELS.map((lv) => (
-                <option key={lv} value={String(lv)}>
-                  {PENALTY_LEVEL_LABEL[lv]} — {categoryPointsTable[String(lv)] ?? 0} pts
-                </option>
-              ))}
-            </select>
+              pointsTable={categoryPointsTable}
+            />
             <span className="mt-1 block text-xs text-zinc-500">
               When the verdict is "Points deduction", the category determines
               how many points are removed (per this scoring system's table).
