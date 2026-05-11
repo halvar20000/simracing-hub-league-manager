@@ -124,6 +124,17 @@ export default async function StandingsPage({
         <h1 className="mt-2 font-display text-3xl font-bold">
           Standings — {season.name} {season.year}
         </h1>
+      {season.league.slug === "cas-gt3-wct" && (
+        <div className="mb-4">
+          <Link
+            href={`/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
+            className="inline-block rounded bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-600"
+          >
+            View penalty pool →
+          </Link>
+        </div>
+      )}
+
         <p className="mt-1 text-sm text-zinc-400">
           {season.scoringSystem.name}
           {season.proAmEnabled && " • Pro/Am"}
