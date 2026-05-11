@@ -65,8 +65,23 @@ export default async function PenaltyPoolPublicPage({
     },
   });
 
+  const raceResults = await prisma.raceResult.findMany({
+    where: { round: { seasonId } },
+    select: { roundId: true, registrationId: true },
+  });
+  const enteredByReg = new Map<string, Set<string>>();
+  for (const rr of raceResults) {
+    let set = enteredByReg.get(rr.registrationId);
+    if (!set) {
+      set = new Set();
+      enteredByReg.set(rr.registrationId, set);
+    }
+    set.add(rr.roundId);
+  }
+
   type DriverRow = {
     name: string;
+    registrationId: string;
     startNumber: number | null;
     cellsByRound: Map<string, number>;
     autoForgiven: number;
@@ -76,6 +91,7 @@ export default async function PenaltyPoolPublicPage({
   const rowMap = new Map<string, DriverRow>();
   for (const reg of registrations) {
     rowMap.set(reg.id, {
+      registrationId: reg.id,
       name: `${reg.user.firstName ?? ""} ${reg.user.lastName ?? ""}`.trim() || "—",
       startNumber: reg.startNumber,
       cellsByRound: new Map(),
