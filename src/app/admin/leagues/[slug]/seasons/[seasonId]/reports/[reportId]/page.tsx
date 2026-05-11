@@ -8,6 +8,7 @@ import {
   submitDecision,
   setReportStatus,
   deleteDecision,
+  deleteIncidentReport,
 } from "@/lib/actions/admin-reports";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { CategoryLevelSelect } from "@/components/CategoryLevelSelect";
@@ -90,6 +91,7 @@ export default async function AdminReportDetail({
     "DISMISSED"
   );
   const removeDecision = deleteDecision.bind(null, slug, seasonId, reportId);
+  const deleteReport = deleteIncidentReport.bind(null, slug, seasonId, reportId);
 
   return (
     <div className="space-y-6">
@@ -456,6 +458,28 @@ export default async function AdminReportDetail({
             )}
           </div>
         </form>
+      </section>
+      <section className="mt-8 rounded border border-red-900/60 bg-red-950/20 p-4">
+        <h2 className="font-display text-[10px] font-semibold uppercase tracking-widest text-red-300">
+          Danger zone
+        </h2>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-sm text-red-300 hover:text-red-200">
+            Delete this report permanently
+          </summary>
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-zinc-400">
+              This removes the report, its evidence, comments, involved drivers, the decision and any penalties tied to it. The penalty pool will be recomputed. This action cannot be undone.
+            </p>
+            <form action={deleteReport}>
+              <SubmitWithSpinner
+                label="Yes, permanently delete this report"
+                pendingLabel="Deleting…"
+                className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600"
+              />
+            </form>
+          </div>
+        </details>
       </section>
     </div>
   );

@@ -190,3 +190,43 @@ export async function deleteDecision(
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/standings`);
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/decisions`);
 }
+
+/**
+ * Permanently delete an incident report (and everything attached to it).
+ * Cascades remove: involvedDrivers, evidence, comments, decision.
+ * Penalty rows are not cascaded by the schema, so we delete them explicitly.
+ * Finally recompute the penalty pool since we may have removed pool points.
+ */
+export async function deleteIncidentReport(
+  leagueSlug: string,
+  seasonId: string,
+  reportId: string
+) {
+  await requireSteward();
+
+  const report = await prisma.incidentReport.findUnique({
+    where: { id: reportId },
+    include: { decision: { select: { id: true } } },
+  });
+  if (!report) {
+    redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
+  }
+
+  if (report.decision) {
+    await prisma.penalty.deleteMany({
+      where: { sourceIncidentDecisionId: report.decision.id },
+    });
+  }
+
+  await prisma.incidentReport.delete({ where: { id: reportId } });
+
+  // Recompute pool (no-op outside GT3 WCT)
+  await recomputePenaltyPoolForSeason(seasonId);
+
+  revalidatePath(
+    `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`
+  );
+  revalidatePath(`/incidents`);
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/decisions`);
+  redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
+}
