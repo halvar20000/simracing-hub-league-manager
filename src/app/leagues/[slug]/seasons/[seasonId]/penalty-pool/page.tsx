@@ -174,15 +174,21 @@ export default async function PenaltyPoolPublicPage({
                 </td>
                 {rounds.map((r) => {
                   const pts = d.cellsByRound.get(r.id) ?? 0;
+                  const entered =
+                    enteredByReg.get(d.registrationId)?.has(r.id) ?? false;
+                  const cleanCompleted =
+                    pts === 0 && entered && r.status === "COMPLETED";
                   return (
                     <td
                       key={r.id}
-                      className="px-2 py-2 text-center tabular-nums"
+                      className={`px-2 py-2 text-center tabular-nums ${cleanCompleted ? "bg-emerald-900/40" : ""}`}
                     >
                       {pts > 0 ? (
                         <span className="rounded bg-amber-900/40 px-2 py-0.5 text-amber-200">
                           {pts}
                         </span>
+                      ) : cleanCompleted ? (
+                        <span className="text-emerald-300" title="Clean race">✓</span>
                       ) : (
                         <span className="text-zinc-700">—</span>
                       )}
