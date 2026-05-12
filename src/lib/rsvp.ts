@@ -58,8 +58,15 @@ export async function upsertRsvp(args: {
   userId: string;
   status: RsvpStatus;
   source: RsvpSource;
+  /**
+   * If true, skip the Discord embed refresh. The caller is responsible for
+   * triggering it (usually in a background task via `after()`). Used by the
+   * Discord interactions endpoint to keep the response under Discord's 3s
+   * deadline; the embed refresh runs after the response is sent.
+   */
+  skipRefresh?: boolean;
 }): Promise<UpsertRsvpResult> {
-  const { roundId, userId, status, source } = args;
+  const { roundId, userId, status, source, skipRefresh } = args;
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
@@ -96,14 +103,17 @@ export async function upsertRsvp(args: {
     },
   });
 
-  // Discord embed refresh — AWAITED. Vercel kills serverless functions as
-  // soon as the response is sent, so fire-and-forget promises don't run to
-  // completion and the embed silently stops updating. Wrapped in try/catch
-  // so a Discord outage doesn't fail the DB write.
-  try {
-    await refreshDiscordRsvpMessage(roundId);
-  } catch {
-    /* swallow */
+  // Discord embed refresh. The caller can opt out via skipRefresh and run
+  // the refresh in the background (via Next.js `after()`) to stay under
+  // Discord's 3s interaction deadline. When inlined here, it's awaited
+  // because Vercel kills serverless functions as soon as the response is
+  // sent — fire-and-forget promises don't run to completion.
+  if (!skipRefresh) {
+    try {
+      await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
   }
 
   return { ok: true, status, registrationId: registration.id };
@@ -129,8 +139,10 @@ export async function toggleDecline(args: {
   roundId: string;
   userId: string;
   source: "DISCORD" | "WEBSITE";
+  /** See upsertRsvp.skipRefresh for the rationale. */
+  skipRefresh?: boolean;
 }): Promise<ToggleDeclineResult> {
-  const { roundId, userId, source } = args;
+  const { roundId, userId, source, skipRefresh } = args;
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     select: { id: true, seasonId: true },
@@ -154,10 +166,12 @@ export async function toggleDecline(args: {
 
   if (existing?.status === "DECLINED") {
     await prisma.roundRsvp.delete({ where: { id: existing.id } });
-    try {
-      await refreshDiscordRsvpMessage(roundId);
-    } catch {
-      /* swallow */
+    if (!skipRefresh) {
+      try {
+        await refreshDiscordRsvpMessage(roundId);
+      } catch {
+        /* swallow */
+      }
     }
     return { ok: true, action: "removed" };
   }
@@ -174,10 +188,12 @@ export async function toggleDecline(args: {
     },
     update: { status: "DECLINED", source, respondedAt: new Date() },
   });
-  try {
-    await refreshDiscordRsvpMessage(roundId);
-  } catch {
-    /* swallow */
+  if (!skipRefresh) {
+    try {
+      await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
   }
   return { ok: true, action: "added" };
 }

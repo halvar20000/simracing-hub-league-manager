@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, requireAdmin } from "@/lib/auth-helpers";
 import { upsertRsvp, toggleDecline, refreshDiscordRsvpMessage } from "@/lib/rsvp";
@@ -29,6 +30,7 @@ export async function submitRsvpAction(formData: FormData): Promise<void> {
     userId: user.id!,
     status,
     source: "WEBSITE",
+    skipRefresh: true,
   });
 
   // Revalidate the public round page so the widget reflects the new state.
@@ -44,6 +46,16 @@ export async function submitRsvpAction(formData: FormData): Promise<void> {
       `/admin/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}/rsvp`
     );
   }
+
+  // Refresh the Discord embed after the response — keeps the user-facing
+  // submit fast and the embed in sync.
+  after(async () => {
+    try {
+      await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
+  });
 }
 
 /**
@@ -59,6 +71,7 @@ export async function toggleDeclineAction(formData: FormData): Promise<void> {
     roundId,
     userId: user.id!,
     source: "WEBSITE",
+    skipRefresh: true,
   });
 
   const round = await prisma.round.findUnique({
@@ -73,6 +86,14 @@ export async function toggleDeclineAction(formData: FormData): Promise<void> {
       `/admin/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}/rsvp`
     );
   }
+
+  after(async () => {
+    try {
+      await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
+  });
 }
 
 /**

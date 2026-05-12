@@ -12,13 +12,14 @@
  * which is a pure helper (no "use server" directive). See CLAUDE.md.
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createPublicKey, verify } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import {
   findUserByDiscordId,
   upsertRsvp,
   toggleDecline,
+  refreshDiscordRsvpMessage,
   driverDisplayName,
 } from "@/lib/rsvp";
 import { parseRsvpCustomId } from "@/lib/discord-rsvp-embed";
@@ -156,6 +157,7 @@ export async function POST(req: NextRequest) {
       roundId: parsed.roundId,
       userId: user.id,
       source: "DISCORD",
+      skipRefresh: true, // run refresh in background after responding
     });
     if (!t.ok) {
       if (t.reason === "user-not-registered") {
@@ -171,6 +173,15 @@ export async function POST(req: NextRequest) {
       }
       return ephemeral("Could not record your decline. Please try again later.");
     }
+    // Run the embed refresh AFTER the response goes back to Discord, so we
+    // stay inside the 3-second interaction deadline even on cold starts.
+    after(async () => {
+      try {
+        await refreshDiscordRsvpMessage(parsed.roundId);
+      } catch {
+        /* swallow */
+      }
+    });
     const verb =
       t.action === "added"
         ? "❌ Decline recorded — you won't be on the grid."
@@ -187,6 +198,7 @@ export async function POST(req: NextRequest) {
     userId: user.id,
     status: parsed.status,
     source: "DISCORD",
+    skipRefresh: true, // run refresh in background after responding
   });
 
   if (!result.ok) {
@@ -203,6 +215,14 @@ export async function POST(req: NextRequest) {
     }
     return ephemeral("Could not record your RSVP. Please try again later.");
   }
+
+  after(async () => {
+    try {
+      await refreshDiscordRsvpMessage(parsed.roundId);
+    } catch {
+      /* swallow */
+    }
+  });
 
   const label =
     result.status === "ACCEPTED"
