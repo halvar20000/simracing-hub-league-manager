@@ -5,7 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { getRoundRsvpSummary } from "@/lib/rsvp";
 import { formatDateTime } from "@/lib/date";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
-import { postRsvpManually, refreshRsvpMessageAction } from "@/lib/actions/rsvp";
+import {
+  postRsvpManually,
+  refreshRsvpMessageAction,
+  checkDiscordAccessAction,
+} from "@/lib/actions/rsvp";
 
 const STATUS_LABEL: Record<string, string> = {
   ACCEPTED: "✅ Accepted",
@@ -13,13 +17,31 @@ const STATUS_LABEL: Record<string, string> = {
   TENTATIVE: "❔ Tentative",
 };
 
+const REASON_HINTS: Record<string, string> = {
+  "round-not-found": "Round does not exist (was it deleted?).",
+  "already-notified": "Round was already notified (we use force=true here so this shouldn't appear).",
+  "no-channel": "No Discord channel ID is configured on the league. Set it in Edit League.",
+  "round-not-upcoming": "Round status is not UPCOMING — only upcoming rounds can be posted.",
+  "too-early": "Round is further out than the league's rsvpDaysBefore window.",
+  "post-failed": "Discord rejected the post — see the details below.",
+};
+
 export default async function AdminRoundRsvp({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string; roundId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
+  const sp = await searchParams;
+  const pickStr = (k: string): string | null => {
+    const v = sp[k];
+    if (typeof v === "string") return v;
+    if (Array.isArray(v)) return v[0] ?? null;
+    return null;
+  };
 
   const summary = await getRoundRsvpSummary(roundId);
   if (!summary) notFound();
@@ -39,6 +61,19 @@ export default async function AdminRoundRsvp({
   const tentative = rows.filter((r) => r.status === "TENTATIVE");
   const silent = rows.filter((r) => r.status === null);
 
+  // Read banners from search params (set by the server action redirects).
+  const postStatus = pickStr("status");
+  const postReason = pickStr("reason");
+  const postMessageId = pickStr("messageId");
+  const postDiscordStatus = pickStr("discordStatus");
+  const postDiscordBody = pickStr("discordBody");
+
+  const diagStatus = pickStr("diagStatus");
+  const diagReason = pickStr("diagReason");
+  const diagChannelName = pickStr("diagChannelName");
+  const diagGuildId = pickStr("diagGuildId");
+  const diagDiscordStatus = pickStr("diagDiscordStatus");
+
   return (
     <div className="space-y-6">
       <div className="flex items-baseline justify-between">
@@ -57,6 +92,71 @@ export default async function AdminRoundRsvp({
           ← Season
         </Link>
       </div>
+
+      {/* Post-now result banner */}
+      {postStatus === "posted" && (
+        <div className="rounded border border-emerald-700 bg-emerald-950/60 p-3 text-sm">
+          <strong className="text-emerald-300">Posted ✓</strong>{" "}
+          <span className="text-emerald-200">
+            Message ID:{" "}
+            <code className="rounded bg-emerald-950 px-1 font-mono">{postMessageId}</code>
+          </span>
+        </div>
+      )}
+      {postStatus === "error" && (
+        <div className="rounded border border-red-700 bg-red-950/60 p-3 text-sm text-red-100 space-y-1">
+          <div>
+            <strong className="text-red-200">Post failed:</strong>{" "}
+            <code className="rounded bg-red-950 px-1 font-mono">{postReason}</code>
+          </div>
+          {postReason && REASON_HINTS[postReason] && (
+            <div className="text-xs text-red-200/80">{REASON_HINTS[postReason]}</div>
+          )}
+          {postReason === "post-failed" && (
+            <div className="mt-1 text-xs">
+              Discord HTTP{" "}
+              <code className="rounded bg-red-950 px-1 font-mono">{postDiscordStatus}</code>{" "}
+              — body:
+              <pre className="mt-1 max-h-40 overflow-auto rounded bg-red-950 p-2 text-[11px]">
+                {postDiscordBody}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Discord diagnostic banner */}
+      {diagStatus === "ok" && (
+        <div className="rounded border border-cyan-700 bg-cyan-950/60 p-3 text-sm text-cyan-100">
+          <strong className="text-cyan-200">Discord access ✓</strong> — bot can see channel{" "}
+          <code className="rounded bg-cyan-950 px-1 font-mono">#{diagChannelName}</code>{" "}
+          in guild{" "}
+          <code className="rounded bg-cyan-950 px-1 font-mono">{diagGuildId}</code>.
+        </div>
+      )}
+      {diagStatus === "error" && (
+        <div className="rounded border border-amber-700 bg-amber-950/60 p-3 text-sm text-amber-100 space-y-1">
+          <div>
+            <strong className="text-amber-200">Discord access check failed</strong>
+            {diagDiscordStatus && (
+              <>
+                {" "}— HTTP{" "}
+                <code className="rounded bg-amber-950 px-1 font-mono">{diagDiscordStatus}</code>
+              </>
+            )}
+          </div>
+          {diagReason && (
+            <pre className="max-h-40 overflow-auto rounded bg-amber-950 p-2 text-[11px]">
+              {diagReason}
+            </pre>
+          )}
+          <div className="text-xs text-amber-200/80">
+            Common causes: invalid <code>DISCORD_BOT_TOKEN</code> (HTTP 401), bot not in
+            the server (HTTP 404), bot lacks View Channel permission (HTTP 403), or
+            channel ID is wrong.
+          </div>
+        </div>
+      )}
 
       {/* Tallies */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -110,6 +210,13 @@ export default async function AdminRoundRsvp({
               />
             </form>
           )}
+          <form action={checkDiscordAccessAction}>
+            <input type="hidden" name="roundId" value={round.id} />
+            <SubmitWithSpinner
+              label="Check Discord access"
+              className="rounded border border-cyan-700 bg-cyan-950/40 px-4 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-900/60"
+            />
+          </form>
         </div>
         {!league.discordRsvpChannelId && (
           <p className="mt-3 text-xs text-amber-400">

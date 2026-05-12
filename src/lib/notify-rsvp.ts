@@ -19,8 +19,13 @@ export type PostRsvpResult =
         | "already-notified"
         | "no-channel"
         | "round-not-upcoming"
-        | "too-early"
-        | "post-failed";
+        | "too-early";
+    }
+  | {
+      ok: false;
+      reason: "post-failed";
+      discordStatus: number;
+      discordBody: string;
     };
 
 export async function postRsvpForRound(
@@ -87,7 +92,14 @@ export async function postRsvpForRound(
   );
 
   const posted = await postBotMessage(channelId, payload);
-  if (!posted.ok) return { ok: false, reason: "post-failed" };
+  if (!posted.ok) {
+    return {
+      ok: false,
+      reason: "post-failed",
+      discordStatus: posted.status,
+      discordBody: posted.body,
+    };
+  }
 
   // Persist message ID for future edits, mark round as notified.
   await prisma.$transaction([

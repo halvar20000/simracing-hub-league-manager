@@ -103,3 +103,14 @@ export async function deleteBotMessage(
     method: "DELETE",
   });
 }
+
+/**
+ * Diagnostic: ask Discord "can the bot see this channel?".
+ * Returns the channel object on success, or a structured error on failure.
+ * Useful for admin debugging — surfaces the exact Discord error.
+ */
+export async function getChannelAsBot(
+  channelId: string
+): Promise<Result<{ id: string; name?: string; guild_id?: string; type?: number }>> {
+  return discordFetch(`/channels/${channelId}`, { method: "GET" });
+}
