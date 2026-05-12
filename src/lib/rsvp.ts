@@ -8,7 +8,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { editBotMessage } from "@/lib/discord-bot";
-import { buildRsvpEmbed, type RsvpDriverSummary } from "@/lib/discord-rsvp-embed";
+import {
+  buildRsvpEmbed,
+  resolveLogoUrl,
+  type RsvpDriverSummary,
+} from "@/lib/discord-rsvp-embed";
 import { isRsvpClosed } from "@/lib/rsvp-window";
 import type { RsvpStatus, RsvpSource } from "@prisma/client";
 
@@ -247,6 +251,7 @@ export async function refreshDiscordRsvpMessage(roundId: string): Promise<void> 
   const payload = buildRsvpEmbed(
     {
       leagueName: round.season.league.name,
+      leagueLogoUrl: resolveLogoUrl(round.season.league.logoUrl),
       seasonLabel: `${round.season.year} ${round.season.name}`,
       roundNumber: round.roundNumber,
       roundName: round.name,

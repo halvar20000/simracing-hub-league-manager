@@ -7,7 +7,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { postBotMessage } from "@/lib/discord-bot";
-import { buildRsvpEmbed, type RsvpDriverSummary } from "@/lib/discord-rsvp-embed";
+import {
+  buildRsvpEmbed,
+  resolveLogoUrl,
+  type RsvpDriverSummary,
+} from "@/lib/discord-rsvp-embed";
 import { driverDisplayName } from "@/lib/rsvp";
 
 export type PostRsvpResult =
@@ -84,6 +88,7 @@ export async function postRsvpForRound(
   const payload = buildRsvpEmbed(
     {
       leagueName: round.season.league.name,
+      leagueLogoUrl: resolveLogoUrl(round.season.league.logoUrl),
       seasonLabel: `${round.season.year} ${round.season.name}`,
       roundNumber: round.roundNumber,
       roundName: round.name,

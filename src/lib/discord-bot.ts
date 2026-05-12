@@ -33,6 +33,8 @@ export type Embed = {
   timestamp?: string;
   fields?: EmbedField[];
   footer?: { text: string };
+  thumbnail?: { url: string };
+  image?: { url: string };
 };
 
 export type MessagePayload = {

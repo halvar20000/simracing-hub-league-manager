@@ -28,6 +28,7 @@ export type RsvpDriverSummary = {
 
 export type RsvpEmbedInput = {
   leagueName: string;
+  leagueLogoUrl?: string | null;   // resolved to an absolute URL by the caller, or null
   seasonLabel: string;             // e.g. "2026 Season 1"
   roundNumber: number;
   roundName: string;
@@ -40,6 +41,19 @@ export type RsvpEmbedInput = {
   rsvpMode?: RsvpMode;             // default FULL
   closed?: boolean;                // when true, render disabled buttons + "Closed"
 };
+
+/**
+ * Discord requires absolute URLs in embeds. If the stored logoUrl is
+ * relative (e.g. "/logos/foo.png"), prefix it with NEXT_PUBLIC_SITE_URL.
+ * Returns null when the input is empty so callers can omit the thumbnail.
+ */
+export function resolveLogoUrl(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  if (/^https?:\/\//i.test(stored)) return stored;
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
+  return `${base.replace(/\/$/, "")}${stored.startsWith("/") ? "" : "/"}${stored}`;
+}
 
 const CUSTOM_ID_PREFIX = "rsvp"; // custom_id = "rsvp:<roundId>:<status>"
 
@@ -116,6 +130,7 @@ function buildFullPayload(
         ? "Registration closed"
         : "Click below to RSVP — you can change your mind any time before the race.",
     },
+    ...(input.leagueLogoUrl ? { thumbnail: { url: input.leagueLogoUrl } } : {}),
   };
 
   const buttons = [
@@ -168,6 +183,7 @@ function buildDeclineOnlyPayload(
         ? "Registration closed"
         : "No-shows without a Decline incur a penalty point (GT3 WCT).",
     },
+    ...(input.leagueLogoUrl ? { thumbnail: { url: input.leagueLogoUrl } } : {}),
   };
 
   const buttons = [
