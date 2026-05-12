@@ -11,6 +11,7 @@ import { formatDateTime } from "@/lib/date";
 import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
 import { RsvpWidget } from "@/components/RsvpWidget";
+import { isRsvpClosed } from "@/lib/rsvp-window";
 
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams";
 const TEAM_BEST_N = 2;
@@ -375,6 +376,11 @@ export default async function PublicRoundResults({
           currentStatus={driverRsvpStatus}
           isRegistered={driverIsRegistered}
           rsvpMode={round.season.league.rsvpMode}
+          isClosed={isRsvpClosed({
+            startsAt: round.startsAt,
+            status: round.status,
+            rsvpCloseBeforeHours: round.season.league.rsvpCloseBeforeHours,
+          })}
         />
       )}
 

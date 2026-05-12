@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { editBotMessage } from "@/lib/discord-bot";
 import { buildRsvpEmbed, type RsvpDriverSummary } from "@/lib/discord-rsvp-embed";
+import { isRsvpClosed } from "@/lib/rsvp-window";
 import type { RsvpStatus, RsvpSource } from "@prisma/client";
 
 export type UpsertRsvpResult =
@@ -256,7 +257,11 @@ export async function refreshDiscordRsvpMessage(roundId: string): Promise<void> 
       drivers,
       totalRegistered: round.season._count.registrations,
       rsvpMode: round.season.league.rsvpMode,
-      closed: round.status !== "UPCOMING",
+      closed: isRsvpClosed({
+        startsAt: round.startsAt,
+        status: round.status,
+        rsvpCloseBeforeHours: round.season.league.rsvpCloseBeforeHours,
+      }),
     },
     round.id
   );

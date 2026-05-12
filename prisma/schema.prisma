@@ -110,6 +110,7 @@ model League {
   discordRsvpChannelId    String?
   rsvpDaysBefore          Int      @default(7)
   rsvpMode                RsvpMode @default(FULL)
+  rsvpCloseBeforeHours    Int      @default(1) // Hours before race start when RSVP locks
 }
 
 model Season {
@@ -212,6 +213,7 @@ model Round {
   rsvpNotifiedAt          DateTime?
   rsvpReminder48hAt       DateTime?
   rsvpReminder12hAt       DateTime?
+  rsvpClosedAt            DateTime?
   rsvps                   RoundRsvp[]
   rsvpDiscordMessage      RoundDiscordRsvpMessage?
 }

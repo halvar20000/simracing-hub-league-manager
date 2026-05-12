@@ -145,6 +145,20 @@ export default async function EditLeaguePage({
                 </option>
               </select>
             </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Close RSVP N hours before
+              </span>
+              <input
+                name="rsvpCloseBeforeHours"
+                type="number"
+                min={0}
+                max={72}
+                step={1}
+                defaultValue={league.rsvpCloseBeforeHours ?? 1}
+                className="w-24 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
           </div>
           <p className="text-xs text-zinc-500">
             In Discord, enable Developer Mode (User Settings → Advanced) and

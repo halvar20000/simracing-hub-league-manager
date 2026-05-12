@@ -49,12 +49,14 @@ export function RsvpWidget({
   currentStatus,
   isRegistered,
   rsvpMode = "FULL",
+  isClosed = false,
 }: {
   roundId: string;
   roundStatus: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
   currentStatus: RsvpStatus | null;
   isRegistered: boolean;
   rsvpMode?: RsvpMode;
+  isClosed?: boolean;
 }) {
   if (roundStatus !== "UPCOMING") return null;
 
@@ -66,6 +68,32 @@ export function RsvpWidget({
         </h3>
         <p className="mt-2 text-sm text-zinc-400">
           You&apos;re not registered for this season. Register first to RSVP for rounds.
+        </p>
+      </div>
+    );
+  }
+
+  // Closed state — show the current status, no buttons.
+  if (isClosed) {
+    let label: string;
+    if (rsvpMode === "DECLINE_ONLY") {
+      label =
+        currentStatus === "DECLINED"
+          ? "Declined — you won't be on the grid"
+          : "Expected on the grid";
+    } else {
+      label = currentStatus ?? "No response — silent";
+    }
+    return (
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          {rsvpMode === "DECLINE_ONLY" ? "Race attendance" : "Your RSVP"}
+        </h3>
+        <p className="mt-2 text-sm text-zinc-300">
+          🔒 Registration is closed — RSVPs can no longer be changed.
+        </p>
+        <p className="mt-2 text-sm">
+          Your status: <span className="font-medium text-zinc-100">{label}</span>
         </p>
       </div>
     );

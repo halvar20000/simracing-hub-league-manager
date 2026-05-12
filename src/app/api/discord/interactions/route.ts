@@ -23,6 +23,7 @@ import {
   driverDisplayName,
 } from "@/lib/rsvp";
 import { parseRsvpCustomId } from "@/lib/discord-rsvp-embed";
+import { isRsvpClosed } from "@/lib/rsvp-window";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -140,12 +141,46 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Look up the league's rsvpMode so we know whether to upsert or toggle.
+  // Look up the league's rsvpMode + close window so we know whether to
+  // upsert/toggle and whether the RSVP is still open.
   const round = await prisma.round.findUnique({
     where: { id: parsed.roundId },
-    select: { season: { select: { league: { select: { rsvpMode: true } } } } },
+    select: {
+      startsAt: true,
+      status: true,
+      season: {
+        select: {
+          league: {
+            select: { rsvpMode: true, rsvpCloseBeforeHours: true },
+          },
+        },
+      },
+    },
   });
   const mode = round?.season.league.rsvpMode ?? "FULL";
+
+  // Hard block: if the RSVP is closed (race within close window, or round
+  // not UPCOMING), reject the click and trigger a refresh so the embed
+  // updates to show disabled buttons.
+  if (
+    round &&
+    isRsvpClosed({
+      startsAt: round.startsAt,
+      status: round.status,
+      rsvpCloseBeforeHours: round.season.league.rsvpCloseBeforeHours,
+    })
+  ) {
+    after(async () => {
+      try {
+        await refreshDiscordRsvpMessage(parsed.roundId);
+      } catch {
+        /* swallow */
+      }
+    });
+    return ephemeral(
+      "Registration for this round is closed — RSVPs can no longer be changed."
+    );
+  }
 
   // DECLINE_ONLY: clicking Decline toggles. (Other buttons can't exist in
   // this mode because the embed only renders Decline, but we still defend.)
