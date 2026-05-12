@@ -70,6 +70,9 @@ export async function updateLeague(id: string, formData: FormData) {
       ? Math.max(1, Math.min(30, parseInt(daysBeforeRaw, 10)))
       : 7;
 
+  const rsvpModeRaw = String(formData.get("rsvpMode") ?? "FULL").trim();
+  const rsvpMode = rsvpModeRaw === "DECLINE_ONLY" ? "DECLINE_ONLY" : "FULL";
+
   if (!name) {
     redirect(`/admin/leagues/${id}/edit?error=Name+is+required`);
   }
@@ -87,6 +90,7 @@ export async function updateLeague(id: string, formData: FormData) {
       discordGuildId,
       discordRsvpChannelId,
       rsvpDaysBefore,
+      rsvpMode,
     },
   });
 

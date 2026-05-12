@@ -9,8 +9,8 @@
  * or is in progress).
  */
 
-import type { RsvpStatus } from "@prisma/client";
-import { submitRsvpAction } from "@/lib/actions/rsvp";
+import type { RsvpStatus, RsvpMode } from "@prisma/client";
+import { submitRsvpAction, toggleDeclineAction } from "@/lib/actions/rsvp";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 const STATUS_META: Record<
@@ -48,11 +48,13 @@ export function RsvpWidget({
   roundStatus,
   currentStatus,
   isRegistered,
+  rsvpMode = "FULL",
 }: {
   roundId: string;
   roundStatus: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
   currentStatus: RsvpStatus | null;
   isRegistered: boolean;
+  rsvpMode?: RsvpMode;
 }) {
   if (roundStatus !== "UPCOMING") return null;
 
@@ -64,6 +66,41 @@ export function RsvpWidget({
         </h3>
         <p className="mt-2 text-sm text-zinc-400">
           You&apos;re not registered for this season. Register first to RSVP for rounds.
+        </p>
+      </div>
+    );
+  }
+
+  if (rsvpMode === "DECLINE_ONLY") {
+    const declined = currentStatus === "DECLINED";
+    return (
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          Race attendance
+        </h3>
+        <p className="mt-1 text-xs text-zinc-500">
+          Only click Decline if you <em>can&apos;t</em> race. Otherwise you&apos;re
+          assumed to be on the grid. You can undo a decline if your plans change.
+        </p>
+        <div className="mt-3">
+          <form action={toggleDeclineAction}>
+            <input type="hidden" name="roundId" value={roundId} />
+            <SubmitWithSpinner
+              label={declined ? "↶ Undo decline — I will race" : "❌ I can't race"}
+              pendingLabel={declined ? "Undoing…" : "Recording decline…"}
+              className={
+                declined
+                  ? "rounded border border-emerald-700 bg-emerald-950/40 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/60"
+                  : "rounded bg-red-500 px-4 py-2 text-sm font-medium text-zinc-50 hover:bg-red-400"
+              }
+            />
+          </form>
+        </div>
+        <p className="mt-3 text-xs text-zinc-500">
+          Status: <span className="font-medium text-zinc-300">
+            {declined ? "Declined" : "Expected on the grid"}
+          </span>.
+          {!declined && " No-shows without a decline incur a penalty point in GT3 WCT."}
         </p>
       </div>
     );

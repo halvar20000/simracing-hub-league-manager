@@ -9,7 +9,7 @@
  */
 
 import type { Embed, MessagePayload } from "@/lib/discord-bot";
-import type { RsvpStatus } from "@prisma/client";
+import type { RsvpStatus, RsvpMode } from "@prisma/client";
 
 // Discord component types
 const ROW = 1;
@@ -36,6 +36,8 @@ export type RsvpEmbedInput = {
   startsAt: Date;
   roundUrl: string;                // deep link to league-manager round page
   drivers: RsvpDriverSummary[];    // current state (used for tallies + name lists)
+  totalRegistered?: number;        // used in DECLINE_ONLY mode to compute "expected on grid"
+  rsvpMode?: RsvpMode;             // default FULL
   closed?: boolean;                // when true, render disabled buttons + "Closed"
 };
 
@@ -66,13 +68,6 @@ function bulletList(names: string[], limit = 25): string {
 }
 
 export function buildRsvpEmbed(input: RsvpEmbedInput, roundId: string): MessagePayload {
-  const accepted = input.drivers.filter((d) => d.status === "ACCEPTED");
-  const declined = input.drivers.filter((d) => d.status === "DECLINED");
-  const tentative = input.drivers.filter((d) => d.status === "TENTATIVE");
-
-  // Discord renders unix timestamps in viewer's local TZ.
-  // :F = "Tuesday, May 12, 2026 8:00 PM"
-  // :R = relative ("in 3 days")
   const ts = Math.floor(input.startsAt.getTime() / 1000);
   const trackLine = input.trackConfig
     ? `${input.track} — ${input.trackConfig}`
@@ -82,6 +77,22 @@ export function buildRsvpEmbed(input: RsvpEmbedInput, roundId: string): MessageP
     `**${input.seasonLabel}** · Round ${input.roundNumber}: **${input.roundName}**\n` +
     `📍 ${trackLine}\n` +
     `🕐 <t:${ts}:F> (<t:${ts}:R>)`;
+
+  if (input.rsvpMode === "DECLINE_ONLY") {
+    return buildDeclineOnlyPayload(input, roundId, description);
+  }
+
+  return buildFullPayload(input, roundId, description);
+}
+
+function buildFullPayload(
+  input: RsvpEmbedInput,
+  roundId: string,
+  description: string
+): MessagePayload {
+  const accepted = input.drivers.filter((d) => d.status === "ACCEPTED");
+  const declined = input.drivers.filter((d) => d.status === "DECLINED");
+  const tentative = input.drivers.filter((d) => d.status === "TENTATIVE");
 
   const tally =
     `✅ **${accepted.length}** · ❌ **${declined.length}** · ❔ **${tentative.length}**`;
@@ -97,7 +108,7 @@ export function buildRsvpEmbed(input: RsvpEmbedInput, roundId: string): MessageP
     title: `🏁 RSVP — ${input.leagueName}`,
     description,
     url: input.roundUrl,
-    color: 0xff6b35, // brand orange
+    color: 0xff6b35,
     fields,
     timestamp: new Date().toISOString(),
     footer: {
@@ -108,34 +119,67 @@ export function buildRsvpEmbed(input: RsvpEmbedInput, roundId: string): MessageP
   };
 
   const buttons = [
+    { type: BUTTON, style: BTN_SUCCESS, label: "Accept", emoji: { name: "✅" }, custom_id: rsvpCustomId(roundId, "ACCEPTED"), disabled: !!input.closed },
+    { type: BUTTON, style: BTN_DANGER, label: "Decline", emoji: { name: "❌" }, custom_id: rsvpCustomId(roundId, "DECLINED"), disabled: !!input.closed },
+    { type: BUTTON, style: BTN_SECONDARY, label: "Tentative", emoji: { name: "❔" }, custom_id: rsvpCustomId(roundId, "TENTATIVE"), disabled: !!input.closed },
+  ];
+
+  return { embeds: [embed], components: [{ type: ROW, components: buttons }] };
+}
+
+function buildDeclineOnlyPayload(
+  input: RsvpEmbedInput,
+  roundId: string,
+  description: string
+): MessagePayload {
+  const declined = input.drivers.filter((d) => d.status === "DECLINED");
+  const total = input.totalRegistered ?? 0;
+  // "Expected on grid" = registered drivers minus declines. Only meaningful
+  // when we know the total.
+  const expectedOnGrid = total > 0 ? Math.max(0, total - declined.length) : null;
+
+  const tally =
+    expectedOnGrid !== null
+      ? `❌ **${declined.length}** declined · 🏁 **${expectedOnGrid}** expected on the grid (of ${total} registered)`
+      : `❌ **${declined.length}** declined`;
+
+  const fields: Embed["fields"] = [
+    { name: "Tally", value: tally, inline: false },
     {
-      type: BUTTON,
-      style: BTN_SUCCESS,
-      label: "Accept",
-      emoji: { name: "✅" },
-      custom_id: rsvpCustomId(roundId, "ACCEPTED"),
-      disabled: !!input.closed,
+      name: `❌ Declined (${declined.length})`,
+      value: bulletList(declined.map((d) => d.displayName)),
+      inline: false,
     },
+  ];
+
+  const embed: Embed = {
+    title: `🏁 Race attendance — ${input.leagueName}`,
+    description:
+      description +
+      `\n\n` +
+      `**Click Decline only if you CAN'T race.** All other drivers are assumed to be on the grid.` +
+      (input.closed ? "" : ` Clicking Decline again removes it.`),
+    url: input.roundUrl,
+    color: 0xff6b35,
+    fields,
+    timestamp: new Date().toISOString(),
+    footer: {
+      text: input.closed
+        ? "Registration closed"
+        : "No-shows without a Decline incur a penalty point (GT3 WCT).",
+    },
+  };
+
+  const buttons = [
     {
       type: BUTTON,
       style: BTN_DANGER,
-      label: "Decline",
+      label: "Decline (I can't race)",
       emoji: { name: "❌" },
       custom_id: rsvpCustomId(roundId, "DECLINED"),
       disabled: !!input.closed,
     },
-    {
-      type: BUTTON,
-      style: BTN_SECONDARY,
-      label: "Tentative",
-      emoji: { name: "❔" },
-      custom_id: rsvpCustomId(roundId, "TENTATIVE"),
-      disabled: !!input.closed,
-    },
   ];
 
-  return {
-    embeds: [embed],
-    components: [{ type: ROW, components: buttons }],
-  };
+  return { embeds: [embed], components: [{ type: ROW, components: buttons }] };
 }

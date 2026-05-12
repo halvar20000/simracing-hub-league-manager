@@ -14,9 +14,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createPublicKey, verify } from "node:crypto";
+import { prisma } from "@/lib/prisma";
 import {
   findUserByDiscordId,
   upsertRsvp,
+  toggleDecline,
   driverDisplayName,
 } from "@/lib/rsvp";
 import { parseRsvpCustomId } from "@/lib/discord-rsvp-embed";
@@ -137,6 +139,49 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Look up the league's rsvpMode so we know whether to upsert or toggle.
+  const round = await prisma.round.findUnique({
+    where: { id: parsed.roundId },
+    select: { season: { select: { league: { select: { rsvpMode: true } } } } },
+  });
+  const mode = round?.season.league.rsvpMode ?? "FULL";
+
+  // DECLINE_ONLY: clicking Decline toggles. (Other buttons can't exist in
+  // this mode because the embed only renders Decline, but we still defend.)
+  if (mode === "DECLINE_ONLY") {
+    if (parsed.status !== "DECLINED") {
+      return ephemeral("Only the Decline button is active for this league.");
+    }
+    const t = await toggleDecline({
+      roundId: parsed.roundId,
+      userId: user.id,
+      source: "DISCORD",
+    });
+    if (!t.ok) {
+      if (t.reason === "user-not-registered") {
+        const baseUrl =
+          process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
+        return ephemeral(
+          `You're not registered for this season yet. Sign up at ${baseUrl} ` +
+            `— once you're registered you can RSVP for each round.`
+        );
+      }
+      if (t.reason === "round-not-found") {
+        return ephemeral("This round no longer exists.");
+      }
+      return ephemeral("Could not record your decline. Please try again later.");
+    }
+    const verb =
+      t.action === "added"
+        ? "❌ Decline recorded — you won't be on the grid."
+        : "✅ Decline removed — you're back on the grid.";
+    return NextResponse.json({
+      type: CHANNEL_MESSAGE_WITH_SOURCE,
+      data: { content: `${verb} (${driverDisplayName(user)})`, flags: EPHEMERAL },
+    });
+  }
+
+  // FULL mode (default): upsert any of the three statuses.
   const result = await upsertRsvp({
     roundId: parsed.roundId,
     userId: user.id,
@@ -166,8 +211,6 @@ export async function POST(req: NextRequest) {
       ? "❌ Declined"
       : "❔ Tentative";
 
-  // Reply ephemerally to the clicker; the original message is edited
-  // separately by upsertRsvp → refreshDiscordRsvpMessage.
   return NextResponse.json({
     type: CHANNEL_MESSAGE_WITH_SOURCE,
     data: {

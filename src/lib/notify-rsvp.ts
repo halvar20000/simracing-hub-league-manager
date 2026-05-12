@@ -35,7 +35,12 @@ export async function postRsvpForRound(
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
-      season: { include: { league: true } },
+      season: {
+        include: {
+          league: true,
+          _count: { select: { registrations: { where: { excludedAt: null } } } },
+        },
+      },
       rsvps: {
         include: {
           registration: {
@@ -87,6 +92,8 @@ export async function postRsvpForRound(
       startsAt: round.startsAt,
       roundUrl,
       drivers,
+      totalRegistered: round.season._count.registrations,
+      rsvpMode: round.season.league.rsvpMode,
     },
     round.id
   );

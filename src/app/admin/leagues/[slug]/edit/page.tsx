@@ -132,10 +132,29 @@ export default async function EditLeaguePage({
                 className="w-24 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
             </label>
+            <label className="block flex-1 min-w-[16rem]">
+              <span className="mb-1 block text-xs text-zinc-400">RSVP mode</span>
+              <select
+                name="rsvpMode"
+                defaultValue={league.rsvpMode ?? "FULL"}
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="FULL">Full — Accept / Decline / Tentative</option>
+                <option value="DECLINE_ONLY">
+                  Decline only — silent drivers are assumed racing
+                </option>
+              </select>
+            </label>
           </div>
           <p className="text-xs text-zinc-500">
             In Discord, enable Developer Mode (User Settings → Advanced) and
             right-click a channel → Copy Channel ID.
+          </p>
+          <p className="text-xs text-zinc-500">
+            <strong>Decline only mode:</strong> Only a red Decline button is
+            shown. Drivers who can race don&apos;t need to click anything. The
+            no-show penalty for GT3 WCT still works — declined drivers are
+            exempt, silent no-shows get the penalty point.
           </p>
         </fieldset>
 

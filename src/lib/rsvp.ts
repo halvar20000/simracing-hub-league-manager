@@ -105,6 +105,71 @@ export async function upsertRsvp(args: {
 }
 
 /**
+ * Result of a click in DECLINE_ONLY mode (Discord or website) where the
+ * intent is to toggle a decline rather than upsert any status.
+ */
+export type ToggleDeclineResult =
+  | { ok: true; action: "added" | "removed" }
+  | { ok: false; reason: "round-not-found" | "user-not-registered" };
+
+/**
+ * Toggle a driver's DECLINED RSVP. If they already have a DECLINED row,
+ * remove it (they're back on the grid). Otherwise create one (they've
+ * declined). Used by DECLINE_ONLY leagues so a single button drives both
+ * "I can't race" and "Actually, I can race after all".
+ *
+ * Idempotency: re-running with the same state is a no-op.
+ */
+export async function toggleDecline(args: {
+  roundId: string;
+  userId: string;
+  source: "DISCORD" | "WEBSITE";
+}): Promise<ToggleDeclineResult> {
+  const { roundId, userId, source } = args;
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: { id: true, seasonId: true },
+  });
+  if (!round) return { ok: false, reason: "round-not-found" };
+
+  const registration = await prisma.registration.findUnique({
+    where: { seasonId_userId: { seasonId: round.seasonId, userId } },
+    select: { id: true, excludedAt: true },
+  });
+  if (!registration || registration.excludedAt) {
+    return { ok: false, reason: "user-not-registered" };
+  }
+
+  const existing = await prisma.roundRsvp.findUnique({
+    where: {
+      roundId_registrationId: { roundId, registrationId: registration.id },
+    },
+    select: { id: true, status: true },
+  });
+
+  if (existing?.status === "DECLINED") {
+    await prisma.roundRsvp.delete({ where: { id: existing.id } });
+    refreshDiscordRsvpMessage(roundId).catch(() => {});
+    return { ok: true, action: "removed" };
+  }
+
+  await prisma.roundRsvp.upsert({
+    where: {
+      roundId_registrationId: { roundId, registrationId: registration.id },
+    },
+    create: {
+      roundId,
+      registrationId: registration.id,
+      status: "DECLINED",
+      source,
+    },
+    update: { status: "DECLINED", source, respondedAt: new Date() },
+  });
+  refreshDiscordRsvpMessage(roundId).catch(() => {});
+  return { ok: true, action: "added" };
+}
+
+/**
  * Rebuild the Discord embed for a round and PATCH the original message.
  * Idempotent — safe to call repeatedly. Bails silently if the round has
  * no Discord message stored, or env vars are missing.
@@ -118,7 +183,12 @@ export async function refreshDiscordRsvpMessage(roundId: string): Promise<void> 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
-      season: { include: { league: true } },
+      season: {
+        include: {
+          league: true,
+          _count: { select: { registrations: { where: { excludedAt: null } } } },
+        },
+      },
       rsvps: {
         include: {
           registration: {
@@ -155,6 +225,8 @@ export async function refreshDiscordRsvpMessage(roundId: string): Promise<void> 
       startsAt: round.startsAt,
       roundUrl,
       drivers,
+      totalRegistered: round.season._count.registrations,
+      rsvpMode: round.season.league.rsvpMode,
       closed: round.status !== "UPCOMING",
     },
     round.id

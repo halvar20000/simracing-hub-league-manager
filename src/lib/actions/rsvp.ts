@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, requireAdmin } from "@/lib/auth-helpers";
-import { upsertRsvp, refreshDiscordRsvpMessage } from "@/lib/rsvp";
+import { upsertRsvp, toggleDecline, refreshDiscordRsvpMessage } from "@/lib/rsvp";
 import { postRsvpForRound } from "@/lib/notify-rsvp";
 import { getChannelAsBot } from "@/lib/discord-bot";
 import type { RsvpStatus } from "@prisma/client";
@@ -32,6 +32,35 @@ export async function submitRsvpAction(formData: FormData): Promise<void> {
   });
 
   // Revalidate the public round page so the widget reflects the new state.
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: { season: { include: { league: true } } },
+  });
+  if (round) {
+    revalidatePath(
+      `/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}`
+    );
+    revalidatePath(
+      `/admin/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}/rsvp`
+    );
+  }
+}
+
+/**
+ * Driver-side toggle action for DECLINE_ONLY leagues. The widget renders a
+ * single Decline button; this action flips between "declined" and "no row".
+ */
+export async function toggleDeclineAction(formData: FormData): Promise<void> {
+  const user = await requireAuth();
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) throw new Error("roundId required");
+
+  await toggleDecline({
+    roundId,
+    userId: user.id!,
+    source: "WEBSITE",
+  });
+
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: { season: { include: { league: true } } },

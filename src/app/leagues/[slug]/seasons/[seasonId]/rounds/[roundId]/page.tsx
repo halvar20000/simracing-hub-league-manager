@@ -374,6 +374,7 @@ export default async function PublicRoundResults({
           roundStatus={round.status}
           currentStatus={driverRsvpStatus}
           isRegistered={driverIsRegistered}
+          rsvpMode={round.season.league.rsvpMode}
         />
       )}
 

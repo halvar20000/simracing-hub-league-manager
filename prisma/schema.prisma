@@ -109,6 +109,7 @@ model League {
   discordGuildId          String?
   discordRsvpChannelId    String?
   rsvpDaysBefore          Int      @default(7)
+  rsvpMode                RsvpMode @default(FULL)
 }
 
 model Season {
@@ -598,6 +599,11 @@ enum RsvpStatus {
 enum RsvpSource {
   DISCORD
   WEBSITE
+}
+
+enum RsvpMode {
+  FULL          // Accept / Decline / Tentative buttons + all three driver lists
+  DECLINE_ONLY  // Only a Decline button; silent drivers are assumed racing
 }
 
 enum PenaltyType {
