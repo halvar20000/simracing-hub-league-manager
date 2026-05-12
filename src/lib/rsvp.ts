@@ -96,10 +96,15 @@ export async function upsertRsvp(args: {
     },
   });
 
-  // Fire-and-forget Discord refresh — failure here does NOT roll back the
-  // database upsert. The website widget will still reflect the change, and
-  // the next button click or refresh will rebuild the embed correctly.
-  refreshDiscordRsvpMessage(roundId).catch(() => {});
+  // Discord embed refresh — AWAITED. Vercel kills serverless functions as
+  // soon as the response is sent, so fire-and-forget promises don't run to
+  // completion and the embed silently stops updating. Wrapped in try/catch
+  // so a Discord outage doesn't fail the DB write.
+  try {
+    await refreshDiscordRsvpMessage(roundId);
+  } catch {
+    /* swallow */
+  }
 
   return { ok: true, status, registrationId: registration.id };
 }
@@ -149,7 +154,11 @@ export async function toggleDecline(args: {
 
   if (existing?.status === "DECLINED") {
     await prisma.roundRsvp.delete({ where: { id: existing.id } });
-    refreshDiscordRsvpMessage(roundId).catch(() => {});
+    try {
+      await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
     return { ok: true, action: "removed" };
   }
 
@@ -165,7 +174,11 @@ export async function toggleDecline(args: {
     },
     update: { status: "DECLINED", source, respondedAt: new Date() },
   });
-  refreshDiscordRsvpMessage(roundId).catch(() => {});
+  try {
+    await refreshDiscordRsvpMessage(roundId);
+  } catch {
+    /* swallow */
+  }
   return { ok: true, action: "added" };
 }
 
