@@ -130,7 +130,7 @@ function buildFullPayload(
         ? "Registration closed"
         : "Click below to RSVP — you can change your mind any time before the race.",
     },
-    ...(input.leagueLogoUrl ? { thumbnail: { url: input.leagueLogoUrl } } : {}),
+    ...(input.leagueLogoUrl ? { image: { url: input.leagueLogoUrl } } : {}),
   };
 
   const buttons = [
@@ -183,7 +183,7 @@ function buildDeclineOnlyPayload(
         ? "Registration closed"
         : "No-shows without a Decline incur a penalty point (GT3 WCT).",
     },
-    ...(input.leagueLogoUrl ? { thumbnail: { url: input.leagueLogoUrl } } : {}),
+    ...(input.leagueLogoUrl ? { image: { url: input.leagueLogoUrl } } : {}),
   };
 
   const buttons = [
