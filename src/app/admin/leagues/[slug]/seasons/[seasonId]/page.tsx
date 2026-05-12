@@ -300,6 +300,12 @@ export default async function AdminSeasonDetail({
                         Results
                       </Link>
                       <Link
+                        href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}/rsvp`}
+                        className="text-zinc-400 hover:underline"
+                      >
+                        RSVP
+                      </Link>
+                      <Link
                         href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}/edit`}
                         className="text-zinc-400 hover:underline"
                       >

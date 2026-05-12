@@ -92,6 +92,12 @@ export default async function AdminRoundResults({
               Import iRacing JSON
             </Link>
             <Link
+              href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/rsvp`}
+              className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+            >
+              RSVP
+            </Link>
+            <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/edit`}
               className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
             >
