@@ -135,6 +135,26 @@ export default async function EditSeasonPage({
           />
         </label>
 
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">
+            Maximum drivers (grid cap, optional)
+          </span>
+          <input
+            name="maxDrivers"
+            type="number"
+            min={1}
+            max={999}
+            step={1}
+            defaultValue={season.maxDrivers ?? ""}
+            placeholder="e.g. 50"
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            Shown on the RSVP Discord embed as &quot;max. N drivers can register&quot;.
+            Leave blank to hide.
+          </span>
+        </label>
+
         <fieldset className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
           <legend className="px-2 text-xs uppercase tracking-wider text-zinc-500">iRLeagueManager bridge</legend>
           <label className="block">

@@ -261,6 +261,7 @@ export async function refreshDiscordRsvpMessage(roundId: string): Promise<void> 
       roundUrl,
       drivers,
       totalRegistered: round.season._count.registrations,
+      maxDrivers: round.season.maxDrivers,
       rsvpMode: round.season.league.rsvpMode,
       closed: isRsvpClosed({
         startsAt: round.startsAt,

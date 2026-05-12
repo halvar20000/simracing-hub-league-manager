@@ -98,6 +98,7 @@ export async function postRsvpForRound(
       roundUrl,
       drivers,
       totalRegistered: round.season._count.registrations,
+      maxDrivers: round.season.maxDrivers,
       rsvpMode: round.season.league.rsvpMode,
     },
     round.id

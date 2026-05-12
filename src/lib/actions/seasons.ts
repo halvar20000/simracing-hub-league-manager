@@ -114,6 +114,12 @@ export async function updateSeason(
   const irlmSeasonIdRaw = String(formData.get("irlmSeasonId") ?? "").trim();
   const irlmSeasonId = irlmSeasonIdRaw ? parseInt(irlmSeasonIdRaw, 10) : null;
 
+  const maxDriversRaw = String(formData.get("maxDrivers") ?? "").trim();
+  const maxDrivers =
+    maxDriversRaw && /^\d+$/.test(maxDriversRaw)
+      ? Math.max(1, Math.min(999, parseInt(maxDriversRaw, 10)))
+      : null;
+
   await prisma.season.update({
     where: { id: seasonId },
     data: {
@@ -127,6 +133,7 @@ export async function updateSeason(
       proAmEnabled,
       teamScoringMode,
       teamScoringBestN,
+      maxDrivers,
     },
   });
 

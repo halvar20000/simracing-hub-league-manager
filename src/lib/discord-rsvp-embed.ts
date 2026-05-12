@@ -38,6 +38,7 @@ export type RsvpEmbedInput = {
   roundUrl: string;                // deep link to league-manager round page
   drivers: RsvpDriverSummary[];    // current state (used for tallies + name lists)
   totalRegistered?: number;        // used in DECLINE_ONLY mode to compute "expected on grid"
+  maxDrivers?: number | null;      // optional grid cap; appended to the tally line when set
   rsvpMode?: RsvpMode;             // default FULL
   closed?: boolean;                // when true, render disabled buttons + "Closed"
 };
@@ -153,9 +154,13 @@ function buildDeclineOnlyPayload(
   // when we know the total.
   const expectedOnGrid = total > 0 ? Math.max(0, total - declined.length) : null;
 
+  const maxSuffix =
+    typeof input.maxDrivers === "number" && input.maxDrivers > 0
+      ? `, max. ${input.maxDrivers} drivers can register`
+      : "";
   const tally =
     expectedOnGrid !== null
-      ? `❌ **${declined.length}** declined · 🏁 **${expectedOnGrid}** expected on the grid (of ${total} registered)`
+      ? `❌ **${declined.length}** declined · 🏁 **${expectedOnGrid}** expected on the grid (of ${total} registered)${maxSuffix}`
       : `❌ **${declined.length}** declined`;
 
   const fields: Embed["fields"] = [

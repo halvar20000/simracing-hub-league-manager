@@ -144,6 +144,7 @@ model Season {
   updatedAt           DateTime        @updatedAt
   registrationToken String? @unique
   teamRegistration  Boolean  @default(false)
+  maxDrivers        Int?
 }
 
 model CarClass {
