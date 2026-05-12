@@ -1,0 +1,24 @@
+Start Time,Track,Series,Hosted Session Name
+"2026-03-29T16:00:23Z","Sebring International Raceway - International","Hosted iRacing","CAS - GT3 World Championship Tour"
+
+
+"League Name","League ID"
+"CAS - GT3 World Championship Tour",9707
+
+"Fin Pos","Car ID","Car","Car Class ID","Car Class","Team ID","Cust ID","Name","Start Pos","Car #","Out ID","Out","Interval","Laps Led","Qualify Time","Average Lap Time","Fastest Lap Time","Fast Lap#","Laps Comp","Inc","League Points","Max Fuel Fill%","Weight Penalty (KG)","League Agg Points","AI"
+"1","169","Porsche 911 GT3 R (992)","0","Hosted All Cars Class","633394","633394","Mike Zocher","1","26","0","Running","-00.000","8","","2:00.301","1:59.129","8","8","2","0","100","0","0","0"
+"2","133","Lamborghini Huracán GT3 EVO","0","Hosted All Cars Class","861718","861718","Yannick Wonnenberg","2","02","0","Running","-05.543","0","","2:00.993","1:59.826","5","8","2","0","100","0","0","0"
+"3","185","Ford Mustang GT3","0","Hosted All Cars Class","974264","974264","Andy Weber","3","05","0","Running","-2 L","0","","2:31.587","2:00.472","6","6","1","0","100","0","0","0"
+"4","133","Lamborghini Huracán GT3 EVO","0","Hosted All Cars Class","407036","407036","Hubert Diethard","4","77","32","Disconnected","-3 L","0","","2:14.356","2:00.825","4","5","4","0","100","0","0","0"
+"5","132","BMW M4 GT3 EVO","0","Hosted All Cars Class","1118486","1118486","Manfred Baar","5","581","32","Disconnected","-4 L","0","","2:15.972","2:01.533","4","4","4","0","100","0","0","0"
+"6","206","Aston Martin Vantage GT3 EVO","0","Hosted All Cars Class","574387","574387","Dennis Ulli Richter","6","63","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"7","132","BMW M4 GT3 EVO","0","Hosted All Cars Class","1021560","1021560","Klaus Oberlaender","7","860","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"8","132","BMW M4 GT3 EVO","0","Hosted All Cars Class","731013","731013","Julian Borowski","8","91","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"9","132","BMW M4 GT3 EVO","0","Hosted All Cars Class","891101","891101","Michael Gessner","9","46","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"10","169","Porsche 911 GT3 R (992)","0","Hosted All Cars Class","227997","227997","Mike Girenz","10","33","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"11","169","Porsche 911 GT3 R (992)","0","Hosted All Cars Class","616923","616923","Dirk Bolte","11","34","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"12","169","Porsche 911 GT3 R (992)","0","Hosted All Cars Class","1174590","1174590","Michael Krieger5","12","479","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"13","169","Porsche 911 GT3 R (992)","0","Hosted All Cars Class","841362","841362","Bernhard Wlach","13","118","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"14","132","BMW M4 GT3 EVO","0","Hosted All Cars Class","439230","439230","Alexander Thieme2","14","812","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"15","133","Lamborghini Huracán GT3 EVO","0","Hosted All Cars Class","1135701","1135701","Danny Platzer","15","244","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"
+"16","173","Ferrari 296 GT3","0","Hosted All Cars Class","645893","645893","Björn Butze","16","666","32","Disconnected","-8 L","0","","00.000","","","0","0","0","100","0","0","0"

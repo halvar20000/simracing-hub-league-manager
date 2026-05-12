@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
+import { applyNoRsvpNoShowPenalties } from "@/lib/no-rsvp-penalty";
 import type { RoundStatus } from "@prisma/client";
 
 export async function createRound(
@@ -94,6 +95,12 @@ export async function updateRound(
       status,
     },
   });
+
+  // No-RSVP no-show penalties (GT3 WCT only). Runs before the pool recompute
+  // so the new penalties feed into the auto-forgiveness calculation. The
+  // helper is safe to call on any status transition — it clears stale auto
+  // penalties when a round is moved out of COMPLETED.
+  await applyNoRsvpNoShowPenalties(roundId);
 
   // Penalty pool: recompute auto-forgiveness when a round is marked complete
   if (status === "COMPLETED") {

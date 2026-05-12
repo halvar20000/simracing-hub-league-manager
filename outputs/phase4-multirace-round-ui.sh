@@ -1,0 +1,762 @@
+#!/usr/bin/env bash
+# Phase 4: round page UI for multi-race seasons (SFL).
+# Toggle becomes Combined / Race 1 / Race 2 / Team for racesPerRound > 1.
+# Other seasons (GT3 / GT4 / IEC) keep the existing Combined / Pro / Am / Team.
+set -euo pipefail
+cd "$HOME/Nextcloud/AI/league-manager"
+
+PAGE='src/app/leagues/[slug]/seasons/[seasonId]/rounds/[roundId]/page.tsx'
+
+cat > "$PAGE" <<'EOF'
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { formatMsToTime } from "@/lib/time";
+import { auth } from "@/auth";
+import { formatDateTime } from "@/lib/date";
+
+type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2";
+const TEAM_BEST_N = 2;
+
+function ptsOf(r: {
+  rawPointsAwarded: number;
+  participationPointsAwarded: number;
+  manualPenaltyPoints: number;
+}) {
+  return (
+    r.rawPointsAwarded + r.participationPointsAwarded - r.manualPenaltyPoints
+  );
+}
+
+function sortByFinish<R extends { finishStatus: string; finishPosition: number }>(
+  rows: R[]
+): R[] {
+  return [...rows].sort((a, b) => {
+    if (a.finishStatus !== b.finishStatus) {
+      if (a.finishStatus === "CLASSIFIED") return -1;
+      if (b.finishStatus === "CLASSIFIED") return 1;
+    }
+    return a.finishPosition - b.finishPosition;
+  });
+}
+
+export default async function PublicRoundResults({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string; seasonId: string; roundId: string }>;
+  searchParams: Promise<{ cls?: string }>;
+}) {
+  const { slug, seasonId, roundId } = await params;
+  const { cls: clsRaw } = await searchParams;
+
+  await auth();
+
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      season: { include: { league: true, scoringSystem: true } },
+      raceResults: {
+        include: {
+          registration: {
+            include: { user: true, team: true, carClass: true },
+          },
+        },
+        orderBy: [
+          { raceNumber: "asc" },
+          { finishStatus: "asc" },
+          { finishPosition: "asc" },
+        ],
+      },
+      fprAwards: { include: { team: true, carClass: true } },
+    },
+  });
+  if (
+    !round ||
+    round.season.league.slug !== slug ||
+    round.seasonId !== seasonId
+  ) {
+    notFound();
+  }
+
+  const isMulticlass = round.season.isMulticlass;
+  const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
+  const isMultiRace = racesPerRound > 1;
+
+  const cls: Cls =
+    clsRaw === "pro"
+      ? "pro"
+      : clsRaw === "am"
+        ? "am"
+        : clsRaw === "team"
+          ? "team"
+          : clsRaw === "race1"
+            ? "race1"
+            : clsRaw === "race2"
+              ? "race2"
+              : "combined";
+
+  const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
+  const allRows = round.raceResults;
+
+  // For multi-race rounds, the per-race row sets
+  const race1Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 1));
+  const race2Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 2));
+
+  // Aggregate per driver for the Combined / Team views (works for both
+  // single-race and multi-race rounds).
+  type Agg = {
+    registrationId: string;
+    rows: typeof allRows;
+    raceResultsByNumber: Map<number, (typeof allRows)[number]>;
+    racePoints: number;            // sum of rawPointsAwarded
+    participationPoints: number;
+    penaltyPoints: number;
+    totalPoints: number;
+    incidents: number;
+  };
+  const aggMap = new Map<string, Agg>();
+  for (const r of allRows) {
+    let a = aggMap.get(r.registrationId);
+    if (!a) {
+      a = {
+        registrationId: r.registrationId,
+        rows: [],
+        raceResultsByNumber: new Map(),
+        racePoints: 0,
+        participationPoints: 0,
+        penaltyPoints: 0,
+        totalPoints: 0,
+        incidents: 0,
+      };
+      aggMap.set(r.registrationId, a);
+    }
+    a.rows.push(r);
+    a.raceResultsByNumber.set(r.raceNumber, r);
+    a.racePoints += r.rawPointsAwarded;
+    a.participationPoints += r.participationPointsAwarded;
+    a.penaltyPoints += r.manualPenaltyPoints;
+    a.incidents += r.incidents;
+  }
+  for (const a of aggMap.values()) {
+    a.totalPoints = a.racePoints + a.participationPoints - a.penaltyPoints;
+  }
+  const aggRows = [...aggMap.values()].sort(
+    (a, b) => b.totalPoints - a.totalPoints
+  );
+
+  // Pro / Am views still operate on per-race-result rows
+  const proRows = sortByFinish(
+    allRows.filter((r) => r.registration.carClass?.shortCode === "PRO")
+  );
+  const amRows = sortByFinish(
+    allRows.filter((r) => r.registration.carClass?.shortCode === "AM")
+  );
+
+  // Team groupings (aggregated across all the team's drivers, multi-race aware)
+  type TeamRow = {
+    teamName: string;
+    drivers: Agg[];
+    topNTotal: number;
+    bestFinish: number | null;
+  };
+  const byTeam = new Map<string, Agg[]>();
+  for (const a of aggRows) {
+    // Use the lowest-raceNumber row for team / class info
+    const sample = a.rows[0];
+    const key = sample.registration.team?.name ?? "Independent";
+    const arr = byTeam.get(key);
+    if (arr) arr.push(a);
+    else byTeam.set(key, [a]);
+  }
+  const teamRows: TeamRow[] = [...byTeam.entries()]
+    .map(([teamName, drivers]) => {
+      const byPts = [...drivers].sort((a, b) => b.totalPoints - a.totalPoints);
+      const topN = byPts.slice(0, TEAM_BEST_N);
+      const topNTotal = topN.reduce((s, d) => s + d.totalPoints, 0);
+      const classifieds = drivers.flatMap((d) =>
+        d.rows.filter((r) => r.finishStatus === "CLASSIFIED")
+      );
+      const bestFinish =
+        classifieds.length > 0
+          ? Math.min(...classifieds.map((r) => r.finishPosition))
+          : null;
+      return { teamName, drivers: byPts, topNTotal, bestFinish };
+    })
+    .sort((a, b) => b.topNTotal - a.topNTotal);
+
+  // Combined-view "winner" (overall leader) for gap calc — only meaningful
+  // for single-race rounds today
+  const combinedWinner = !isMultiRace
+    ? allRows.find(
+        (r) => r.finishStatus === "CLASSIFIED" && r.finishPosition === 1
+      )
+    : null;
+
+  const pillBase = "rounded px-3 py-1.5 transition-colors";
+  const pillOn = "bg-[#ff6b35] text-zinc-950";
+  const pillOff = "text-zinc-300 hover:text-zinc-100";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">
+            R{round.roundNumber} — {round.name}
+          </h1>
+          <p className="text-sm text-zinc-400">
+            {round.track}
+            {round.trackConfig ? ` (${round.trackConfig})` : ""}
+            {" • "}
+            {formatDateTime(round.startsAt)}
+            {isMulticlass && " • Multiclass"}
+            {isMultiRace && ` • ${racesPerRound} races per round`}
+          </p>
+        </div>
+        <Link
+          href={`/leagues/${slug}/seasons/${seasonId}`}
+          className="text-sm text-zinc-400 hover:text-zinc-100"
+        >
+          ← Season
+        </Link>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-zinc-500">View:</span>
+        <Link
+          href={baseHref}
+          className={`${pillBase} ${cls === "combined" ? pillOn : pillOff}`}
+        >
+          Combined
+        </Link>
+        {isMultiRace && (
+          <>
+            <Link
+              href={`${baseHref}?cls=race1`}
+              className={`${pillBase} ${cls === "race1" ? pillOn : pillOff}`}
+            >
+              Race 1
+            </Link>
+            <Link
+              href={`${baseHref}?cls=race2`}
+              className={`${pillBase} ${cls === "race2" ? pillOn : pillOff}`}
+            >
+              Race 2
+            </Link>
+          </>
+        )}
+        {isMulticlass && (
+          <>
+            <Link
+              href={`${baseHref}?cls=pro`}
+              className={`${pillBase} ${cls === "pro" ? pillOn : pillOff}`}
+            >
+              Pro
+            </Link>
+            <Link
+              href={`${baseHref}?cls=am`}
+              className={`${pillBase} ${cls === "am" ? pillOn : pillOff}`}
+            >
+              Am
+            </Link>
+          </>
+        )}
+        <Link
+          href={`${baseHref}?cls=team`}
+          className={`${pillBase} ${cls === "team" ? pillOn : pillOff}`}
+        >
+          Team
+        </Link>
+      </div>
+
+      <section>
+        <h2 className="mb-3 text-lg font-semibold">Race results</h2>
+        {allRows.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            No results entered yet for this round.
+          </p>
+        ) : cls === "team" ? (
+          <TeamView
+            teams={teamRows}
+            isMulticlass={isMulticlass}
+            isMultiRace={isMultiRace}
+          />
+        ) : cls === "race1" ? (
+          <ResultsTable
+            rows={race1Rows}
+            isMulticlass={isMulticlass}
+            renumberWithinGroup={false}
+            heading="Race 1"
+          />
+        ) : cls === "race2" ? (
+          <ResultsTable
+            rows={race2Rows}
+            isMulticlass={isMulticlass}
+            renumberWithinGroup={false}
+            heading="Race 2"
+          />
+        ) : cls === "pro" ? (
+          <ResultsTable
+            rows={proRows}
+            isMulticlass={false}
+            renumberWithinGroup
+          />
+        ) : cls === "am" ? (
+          <ResultsTable
+            rows={amRows}
+            isMulticlass={false}
+            renumberWithinGroup
+          />
+        ) : isMultiRace ? (
+          <CombinedMultiRaceTable
+            rows={aggRows}
+            isMulticlass={isMulticlass}
+            racesPerRound={racesPerRound}
+          />
+        ) : (
+          <ResultsTable
+            rows={allRows}
+            isMulticlass={isMulticlass}
+            renumberWithinGroup={false}
+            winnerTotalTimeMs={combinedWinner?.totalTimeMs ?? null}
+          />
+        )}
+      </section>
+
+      {round.fprAwards.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold">FPR awards</h2>
+          <div className="overflow-hidden rounded border border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-900 text-left text-zinc-400">
+                <tr>
+                  <th className="px-3 py-2">Team</th>
+                  {isMulticlass && <th className="px-3 py-2">Class</th>}
+                  <th className="px-3 py-2 text-right">Team incidents</th>
+                  <th className="px-3 py-2 text-right">FPR pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {round.fprAwards.map((a) => (
+                  <tr key={a.id} className="border-t border-zinc-800">
+                    <td className="px-3 py-2 font-medium">{a.team.name}</td>
+                    {isMulticlass && (
+                      <td className="px-3 py-2 text-zinc-400">
+                        {a.carClass?.name ?? "—"}
+                      </td>
+                    )}
+                    <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                      {a.teamIncidentTotal}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold text-orange-400 tabular-nums">
+                      {a.fprPointsAwarded}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+type Row = {
+  id: string;
+  raceNumber: number;
+  finishStatus: string;
+  finishPosition: number;
+  startPosition: number | null;
+  qualifyingTimeMs: number | null;
+  bestLapTimeMs: number | null;
+  totalTimeMs: number | null;
+  lapsCompleted: number;
+  incidents: number;
+  rawPointsAwarded: number;
+  participationPointsAwarded: number;
+  manualPenaltyPoints: number;
+  registration: {
+    startNumber: number | null;
+    user: { firstName: string | null; lastName: string | null };
+    team: { name: string } | null;
+    carClass: { name: string } | null;
+    excludedAt: Date | null;
+  };
+};
+
+function ResultsTable({
+  rows,
+  isMulticlass,
+  renumberWithinGroup,
+  winnerTotalTimeMs = null,
+  heading = null,
+}: {
+  rows: Row[];
+  isMulticlass: boolean;
+  renumberWithinGroup: boolean;
+  winnerTotalTimeMs?: number | null;
+  heading?: string | null;
+}) {
+  const groupWinnerTotalTimeMs = renumberWithinGroup
+    ? rows.find(
+        (r) => r.finishStatus === "CLASSIFIED" && r.totalTimeMs != null
+      )?.totalTimeMs ?? null
+    : winnerTotalTimeMs;
+  let classifiedCount = 0;
+  return (
+    <div className="overflow-hidden rounded border border-zinc-800">
+      {heading && (
+        <div className="bg-zinc-900 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-300">
+          {heading}
+        </div>
+      )}
+      <table className="w-full text-sm">
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="px-3 py-2">Pos</th>
+            <th className="px-3 py-2">Grid</th>
+            <th className="px-3 py-2">#</th>
+            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2">Team</th>
+            {isMulticlass && <th className="px-3 py-2">Class</th>}
+            <th className="px-3 py-2 text-right">Laps</th>
+            <th className="px-3 py-2 text-right">Time</th>
+            <th className="px-3 py-2 text-right">Quali</th>
+            <th className="px-3 py-2 text-right">Best lap</th>
+            <th className="px-3 py-2 text-right">Inc</th>
+            <th className="px-3 py-2 text-right">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const total = ptsOf(r);
+            const gap =
+              groupWinnerTotalTimeMs && r.totalTimeMs
+                ? r.totalTimeMs - groupWinnerTotalTimeMs
+                : null;
+            let displayPos: string | number = r.finishStatus;
+            if (r.finishStatus === "CLASSIFIED") {
+              if (renumberWithinGroup) {
+                classifiedCount += 1;
+                displayPos = classifiedCount;
+              } else {
+                displayPos = r.finishPosition;
+              }
+            }
+            return (
+              <tr
+                key={r.id}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="px-3 py-2 font-medium">{displayPos}</td>
+                <td className="px-3 py-2 text-zinc-500">
+                  {r.startPosition ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-zinc-500">
+                  {r.registration.startNumber ?? "—"}
+                </td>
+                <td
+                  className={`px-3 py-2 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                >
+                  {r.registration.user.firstName}{" "}
+                  {r.registration.user.lastName}
+                  {r.registration.excludedAt && (
+                    <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                      Excluded
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-zinc-400">
+                  {r.registration.team?.name ?? "—"}
+                </td>
+                {isMulticlass && (
+                  <td className="px-3 py-2 text-zinc-400">
+                    {r.registration.carClass?.name ?? "—"}
+                  </td>
+                )}
+                <td className="px-3 py-2 text-right text-zinc-400">
+                  {r.lapsCompleted}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {r.finishStatus === "CLASSIFIED" && r.totalTimeMs
+                    ? formatMsToTime(r.totalTimeMs)
+                    : r.finishStatus === "CLASSIFIED" && gap != null
+                      ? `+${formatMsToTime(gap)}`
+                      : "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {formatMsToTime(r.qualifyingTimeMs) || "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {formatMsToTime(r.bestLapTimeMs) || "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400">
+                  {r.incidents}
+                </td>
+                <td className="px-3 py-2 text-right font-semibold text-orange-400">
+                  {total}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+type Agg = {
+  registrationId: string;
+  rows: Row[];
+  raceResultsByNumber: Map<number, Row>;
+  racePoints: number;
+  participationPoints: number;
+  penaltyPoints: number;
+  totalPoints: number;
+  incidents: number;
+};
+
+function CombinedMultiRaceTable({
+  rows,
+  isMulticlass,
+  racesPerRound,
+}: {
+  rows: Agg[];
+  isMulticlass: boolean;
+  racesPerRound: number;
+}) {
+  const raceNumbers = Array.from({ length: racesPerRound }, (_, i) => i + 1);
+  return (
+    <div className="overflow-x-auto rounded border border-zinc-800">
+      <table className="w-full text-sm">
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="px-3 py-2">Pos</th>
+            <th className="px-3 py-2">#</th>
+            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2">Team</th>
+            {isMulticlass && <th className="px-3 py-2">Class</th>}
+            {raceNumbers.map((n) => (
+              <th key={n} className="px-3 py-2 text-right">
+                R{n} pos
+              </th>
+            ))}
+            {raceNumbers.map((n) => (
+              <th key={`p${n}`} className="px-3 py-2 text-right">
+                R{n} pts
+              </th>
+            ))}
+            <th className="px-3 py-2 text-right">Bonus</th>
+            <th className="px-3 py-2 text-right">Pen</th>
+            <th className="px-3 py-2 text-right">Inc</th>
+            <th className="px-3 py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((a, idx) => {
+            const sample = a.rows[0];
+            return (
+              <tr
+                key={a.registrationId}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="px-3 py-2 font-medium">{idx + 1}</td>
+                <td className="px-3 py-2 text-zinc-500">
+                  {sample.registration.startNumber ?? "—"}
+                </td>
+                <td
+                  className={`px-3 py-2 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                >
+                  {sample.registration.user.firstName}{" "}
+                  {sample.registration.user.lastName}
+                  {sample.registration.excludedAt && (
+                    <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                      Excluded
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-zinc-400">
+                  {sample.registration.team?.name ?? "—"}
+                </td>
+                {isMulticlass && (
+                  <td className="px-3 py-2 text-zinc-400">
+                    {sample.registration.carClass?.name ?? "—"}
+                  </td>
+                )}
+                {raceNumbers.map((n) => {
+                  const r = a.raceResultsByNumber.get(n);
+                  return (
+                    <td
+                      key={n}
+                      className="px-3 py-2 text-right text-zinc-400 tabular-nums"
+                    >
+                      {r
+                        ? r.finishStatus === "CLASSIFIED"
+                          ? r.finishPosition
+                          : r.finishStatus
+                        : "—"}
+                    </td>
+                  );
+                })}
+                {raceNumbers.map((n) => {
+                  const r = a.raceResultsByNumber.get(n);
+                  return (
+                    <td
+                      key={`p${n}`}
+                      className="px-3 py-2 text-right text-zinc-300 tabular-nums"
+                    >
+                      {r ? r.rawPointsAwarded : 0}
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-2 text-right text-emerald-400 tabular-nums">
+                  {a.participationPoints || ""}
+                </td>
+                <td className="px-3 py-2 text-right text-red-400 tabular-nums">
+                  {a.penaltyPoints ? `−${a.penaltyPoints}` : ""}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {a.incidents}
+                </td>
+                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
+                  {a.totalPoints}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TeamView({
+  teams,
+  isMulticlass,
+  isMultiRace,
+}: {
+  teams: {
+    teamName: string;
+    drivers: Agg[];
+    topNTotal: number;
+    bestFinish: number | null;
+  }[];
+  isMulticlass: boolean;
+  isMultiRace: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-zinc-500">
+        Team total = sum of the top {TEAM_BEST_N} drivers&apos; round totals
+        {isMultiRace && " (race 1 + race 2 + bonus − penalty)"}.
+        Click a team to expand its drivers.
+      </p>
+      {teams.map((team, i) => (
+        <details
+          key={team.teamName}
+          className="overflow-hidden rounded border border-zinc-800"
+        >
+          <summary className="flex cursor-pointer flex-wrap items-center gap-3 bg-zinc-900 px-3 py-2 hover:bg-zinc-800">
+            <span className="w-8 text-right font-medium tabular-nums text-zinc-300">
+              {i + 1}
+            </span>
+            <span className="flex-1 font-medium">{team.teamName}</span>
+            <span className="text-xs text-zinc-500">
+              {team.drivers.length}{" "}
+              {team.drivers.length === 1 ? "driver" : "drivers"}
+            </span>
+            <span className="text-xs text-zinc-400">
+              Best P{team.bestFinish ?? "—"}
+            </span>
+            <span className="font-semibold text-orange-400 tabular-nums">
+              Top {TEAM_BEST_N}: {team.topNTotal} pts
+            </span>
+          </summary>
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-950 text-left text-xs text-zinc-500">
+              <tr>
+                <th className="px-3 py-1.5">Driver</th>
+                {isMulticlass && <th className="px-3 py-1.5">Class</th>}
+                <th className="px-3 py-1.5 text-right">Inc</th>
+                <th className="px-3 py-1.5 text-right">Race pts</th>
+                <th className="px-3 py-1.5 text-right">Bonus</th>
+                <th className="px-3 py-1.5 text-right">Pen</th>
+                <th className="px-3 py-1.5 text-right">Total</th>
+                <th className="px-3 py-1.5 text-right">In top {TEAM_BEST_N}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {team.drivers.map((a, idx) => {
+                const sample = a.rows[0];
+                const inTopN = idx < TEAM_BEST_N;
+                return (
+                  <tr
+                    key={a.registrationId}
+                    className="border-t border-zinc-800"
+                  >
+                    <td
+                      className={`px-3 py-1.5 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                    >
+                      {sample.registration.user.firstName}{" "}
+                      {sample.registration.user.lastName}
+                      {sample.registration.excludedAt && (
+                        <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
+                          Excluded
+                        </span>
+                      )}
+                    </td>
+                    {isMulticlass && (
+                      <td className="px-3 py-1.5 text-zinc-400">
+                        {sample.registration.carClass?.name ?? "—"}
+                      </td>
+                    )}
+                    <td className="px-3 py-1.5 text-right text-zinc-400">
+                      {a.incidents}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-zinc-300 tabular-nums">
+                      {a.racePoints}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-emerald-400 tabular-nums">
+                      {a.participationPoints || ""}
+                    </td>
+                    <td className="px-3 py-1.5 text-right text-red-400 tabular-nums">
+                      {a.penaltyPoints ? `−${a.penaltyPoints}` : ""}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-semibold text-orange-400 tabular-nums">
+                      {a.totalPoints}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      {inTopN ? (
+                        <span className="text-orange-400">✓</span>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </details>
+      ))}
+    </div>
+  );
+}
+EOF
+
+echo ""
+echo "Wrote $PAGE."
+
+echo ""
+echo "=== Commit and push ==="
+git add -A
+git commit -m "Phase 4: round page UI for multi-race seasons (Combined/Race1/Race2/Team)"
+git push
+
+echo ""
+echo "Done. After Vercel:"
+echo "  - SFL S7 round page now has 4 buttons: Combined, Race 1, Race 2, Team."
+echo "  - Combined view: one row per driver with R1 pos/pts + R2 pos/pts + total."
+echo "  - Race 1 / Race 2: per-race table sorted by that race's finish position."
+echo "  - GT3/GT4 round pages: unchanged (still Combined/Pro/Am/Team)."

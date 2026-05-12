@@ -104,6 +104,27 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
   - `.github/workflows/cron-reporting-open.yml` — every 30 min, runs free on GitHub Actions
 - Team-mode change notifications use a similar pattern via `src/lib/actions/registrations.ts:notifyTeamChange`.
 
+## Per-round RSVP (Discord bot)
+
+Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on a Discord embed posted N days before the race. Same upsert is available from the public round page widget; the two stay in sync.
+
+- **Env vars**: `DISCORD_BOT_TOKEN`, `DISCORD_PUBLIC_KEY`, `DISCORD_APPLICATION_ID`. Discord Interactions Endpoint URL must be set to `https://league.simracing-hub.com/api/discord/interactions`.
+- **League config**: `League.discordGuildId`, `League.discordRsvpChannelId`, `League.rsvpDaysBefore` (default 7). Set per-league via admin → league edit.
+- **Data model**: `RoundRsvp(roundId, registrationId, status: ACCEPTED|DECLINED|TENTATIVE, source: DISCORD|WEBSITE)`, unique `(roundId, registrationId)`. `RoundDiscordRsvpMessage` stores the posted message ID so the bot can edit it on every change.
+- **Posting**: `src/lib/notify-rsvp.ts:postRsvpForRound` (idempotent via `Round.rsvpNotifiedAt`). Cron: `/api/cron/post-rsvp` + `.github/workflows/cron-post-rsvp.yml` (every 30 min).
+- **Reminders**: 48h + 12h before race, pings silent drivers only. `src/lib/notify-rsvp-reminder.ts:sendReminderForRound`. Idempotent via `Round.rsvpReminder48hAt` / `rsvpReminder12hAt`. Cron: `/api/cron/rsvp-reminders` + `.github/workflows/cron-rsvp-reminders.yml`.
+- **Button clicks**: `/api/discord/interactions` verifies Ed25519 signature with Node's built-in `crypto.verify` (no tweetnacl dep). Resolves Discord ID → User via `Account.providerAccountId` where `provider = "discord"`.
+- **Pure helpers**: `src/lib/rsvp.ts` (`upsertRsvp`, `refreshDiscordRsvpMessage`, `getRoundRsvpSummary`, `findUserByDiscordId`). Imported by both the API route and `src/lib/actions/rsvp.ts` — do NOT add `"use server"` to `rsvp.ts` (see "Common gotchas").
+- **Embed builder**: `src/lib/discord-rsvp-embed.ts` — single source of truth for embed shape + button `custom_id` (`rsvp:<roundId>:<status>`).
+- **REST helpers**: `src/lib/discord-bot.ts` — bot-token authenticated (`Authorization: Bot ...`), distinct from `discord-webhook.ts` (anonymous).
+- **Admin overview**: `/admin/leagues/[slug]/seasons/[seasonId]/rounds/[roundId]/rsvp` — tallies, per-status driver lists, silent-drivers highlight, "Post now" / "Refresh embed" buttons.
+
+### No-RSVP-no-show penalty (GT3 WCT only)
+
+- Helper: `src/lib/no-rsvp-penalty.ts:applyNoRsvpNoShowPenalties(roundId)` — pure, idempotent, hard-gated by `league.slug === "cas-gt3-wct"`.
+- Trigger: `src/lib/actions/rounds.ts:updateRound` runs the helper on every save. When status flips to `COMPLETED`: drivers with no `RaceResult` AND no `RoundRsvp` row at all get a `Penalty(source=NO_RSVP_NO_SHOW, type=POINTS_DEDUCTION, pointsValue=1, reason="No RSVP and no-show")`. When status flips back away from `COMPLETED`: auto-penalties are deleted.
+- Pool integration: `src/lib/penalty-pool.ts` walks rounds where the driver entered OR carries a penalty, so `NO_RSVP_NO_SHOW` correctly resets the clean-race counter even though the driver didn't enter that round.
+
 ## Logos
 
 - `public/logos/site-logo.png` — top nav logo (CAS LEAGUE SCORING SYSTEM)

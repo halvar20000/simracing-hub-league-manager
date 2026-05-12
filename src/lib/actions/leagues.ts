@@ -59,6 +59,17 @@ export async function updateLeague(id: string, formData: FormData) {
     .toUpperCase();
   const registrationFeeCurrency = currencyRaw || "EUR";
 
+  // Per-round RSVP Discord integration
+  const discordGuildId =
+    String(formData.get("discordGuildId") ?? "").trim() || null;
+  const discordRsvpChannelId =
+    String(formData.get("discordRsvpChannelId") ?? "").trim() || null;
+  const daysBeforeRaw = String(formData.get("rsvpDaysBefore") ?? "").trim();
+  const rsvpDaysBefore =
+    daysBeforeRaw && /^\d+$/.test(daysBeforeRaw)
+      ? Math.max(1, Math.min(30, parseInt(daysBeforeRaw, 10)))
+      : 7;
+
   if (!name) {
     redirect(`/admin/leagues/${id}/edit?error=Name+is+required`);
   }
@@ -73,6 +84,9 @@ export async function updateLeague(id: string, formData: FormData) {
       paypalUsername,
       registrationFee,
       registrationFeeCurrency,
+      discordGuildId,
+      discordRsvpChannelId,
+      rsvpDaysBefore,
     },
   });
 

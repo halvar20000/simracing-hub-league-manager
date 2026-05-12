@@ -83,6 +83,64 @@ export default async function EditLeaguePage({
 
         <fieldset className="rounded border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
           <legend className="px-2 text-sm text-zinc-300">
+            Per-round RSVP (Discord bot)
+          </legend>
+          <p className="text-xs text-zinc-500">
+            Configure the channel where the bot will post Accept / Decline /
+            Tentative buttons before each round. Set <code>DISCORD_BOT_TOKEN</code>,{" "}
+            <code>DISCORD_PUBLIC_KEY</code> and <code>DISCORD_APPLICATION_ID</code>{" "}
+            as Vercel env vars; the bot needs the <em>Send Messages</em> and{" "}
+            <em>Embed Links</em> permissions and{" "}
+            <em>applications.commands</em> scope.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Discord Guild ID (optional)
+              </span>
+              <input
+                name="discordGuildId"
+                type="text"
+                defaultValue={league.discordGuildId ?? ""}
+                placeholder="e.g. 123456789012345678"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+              />
+            </label>
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                RSVP channel ID
+              </span>
+              <input
+                name="discordRsvpChannelId"
+                type="text"
+                defaultValue={league.discordRsvpChannelId ?? ""}
+                placeholder="e.g. 234567890123456789"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Post N days before
+              </span>
+              <input
+                name="rsvpDaysBefore"
+                type="number"
+                min={1}
+                max={30}
+                step={1}
+                defaultValue={league.rsvpDaysBefore ?? 7}
+                className="w-24 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+          </div>
+          <p className="text-xs text-zinc-500">
+            In Discord, enable Developer Mode (User Settings → Advanced) and
+            right-click a channel → Copy Channel ID.
+          </p>
+        </fieldset>
+
+        <fieldset className="rounded border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+          <legend className="px-2 text-sm text-zinc-300">
             Registration fee (optional)
           </legend>
           <p className="text-xs text-zinc-500">

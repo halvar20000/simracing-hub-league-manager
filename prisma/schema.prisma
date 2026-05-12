@@ -104,6 +104,11 @@ model League {
   paypalUsername          String?
   registrationFee         Int?
   registrationFeeCurrency String?  @default("EUR")
+
+  // Per-round RSVP (Accept/Decline/Tentative) Discord integration
+  discordGuildId          String?
+  discordRsvpChannelId    String?
+  rsvpDaysBefore          Int      @default(7)
 }
 
 model Season {
@@ -201,6 +206,13 @@ model Round {
   @@unique([seasonId, roundNumber])
   teamResults     TeamResult[]
   reportingNotifiedAt     DateTime?
+
+  // RSVP system
+  rsvpNotifiedAt          DateTime?
+  rsvpReminder48hAt       DateTime?
+  rsvpReminder12hAt       DateTime?
+  rsvps                   RoundRsvp[]
+  rsvpDiscordMessage      RoundDiscordRsvpMessage?
 }
 
 model Registration {
@@ -231,6 +243,7 @@ model Registration {
   involvedInIncidents     IncidentReportInvolvedDriver[]
   teamRoundDrivers   TeamRoundDriver[]
   penalties               Penalty[]
+  rsvps              RoundRsvp[]
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -451,6 +464,40 @@ model Penalty {
 }
 
 // ==========================================
+// RSVP (per-round Discord registration)
+// ==========================================
+
+model RoundRsvp {
+  id              String         @id @default(cuid())
+  roundId         String
+  round           Round          @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  registrationId  String
+  registration    Registration   @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  status          RsvpStatus
+  source          RsvpSource     @default(DISCORD)
+
+  respondedAt     DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([roundId, registrationId])
+  @@index([roundId])
+  @@index([registrationId])
+}
+
+model RoundDiscordRsvpMessage {
+  id              String         @id @default(cuid())
+  roundId         String         @unique
+  round           Round          @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  channelId       String
+  messageId       String
+  postedAt        DateTime       @default(now())
+  closedAt        DateTime?
+  updatedAt       DateTime       @updatedAt
+}
+
+// ==========================================
 // Enums
 // ==========================================
 
@@ -539,6 +586,18 @@ enum PenaltySource {
   INCIDENT_DECISION
   ADMIN_MANUAL
   IRACECONTROL_IMPORT
+  NO_RSVP_NO_SHOW
+}
+
+enum RsvpStatus {
+  ACCEPTED
+  DECLINED
+  TENTATIVE
+}
+
+enum RsvpSource {
+  DISCORD
+  WEBSITE
 }
 
 enum PenaltyType {

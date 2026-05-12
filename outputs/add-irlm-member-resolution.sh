@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+# Resolve iRLM internal memberId -> real iRacing CustID via /Members endpoint,
+# then match against User.iracingMemberId in our DB.
+#
+# Touches two files:
+#   src/lib/irlm.ts            -> add IRLMMember type + fetchLeagueMembers()
+#   src/lib/actions/irlm-import.ts -> build memberId map, use it in importRow
+
+set -euo pipefail
+cd "$HOME/Nextcloud/AI/league-manager"
+
+# ----------------------------------------------------------
+# 1. Append IRLMMember + fetchLeagueMembers to @/lib/irlm.ts
+#    (only if not already there).
+# ----------------------------------------------------------
+node -e "
+const fs = require('fs');
+const path = 'src/lib/irlm.ts';
+let s = fs.readFileSync(path, 'utf8');
+if (s.includes('export async function fetchLeagueMembers')) {
+  console.log('fetchLeagueMembers already present in irlm.ts — skipping.');
+} else {
+  const addition = \`
+
+export interface IRLMMember {
+  memberId: number;
+  iRacingId: string;
+  firstname: string;
+  lastname: string;
+  teamName?: string;
+  discordId?: string;
+}
+
+export async function fetchLeagueMembers(
+  leagueName: string
+): Promise<IRLMMember[]> {
+  const data = await irlmFetch<unknown>(\\\`/\\\${leagueName}/Members\\\`);
+  return Array.isArray(data) ? (data as IRLMMember[]) : [];
+}
+\`;
+  s = s.trimEnd() + addition + '\n';
+  fs.writeFileSync(path, s);
+  console.log('Appended fetchLeagueMembers to irlm.ts');
+}
+"
+
+# ----------------------------------------------------------
+# 2. Rewrite irlm-import.ts to use the memberId -> iRacingId map.
+# ----------------------------------------------------------
+cat > src/lib/actions/irlm-import.ts <<'EOF'
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth-helpers";
+import {
+  fetchEventResults,
+  fetchLeagueMembers,
+  type IRLMResultRow,
+} from "@/lib/irlm";
+import { recomputeRoundScoring } from "@/lib/scoring";
+import type { FinishStatus } from "@prisma/client";
+
+function statusFromIRLM(status: string | undefined): FinishStatus {
+  if (!status) return "CLASSIFIED";
+  const lc = status.toLowerCase();
+  if (lc.includes("running")) return "CLASSIFIED";
+  if (lc.includes("disq")) return "DSQ";
+  if (lc.includes("disconnect")) return "DNF";
+  return "DNF";
+}
+
+function durationToMs(d: string | null | undefined): number | null {
+  if (!d) return null;
+  const t = d.trim();
+  if (!t || t === "00:00:00" || t === "0") return null;
+  const parts = t.split(":");
+  let h = 0;
+  let m = 0;
+  let s = 0;
+  if (parts.length === 3) {
+    h = parseInt(parts[0], 10);
+    m = parseInt(parts[1], 10);
+    s = parseFloat(parts[2]);
+  } else if (parts.length === 2) {
+    m = parseInt(parts[0], 10);
+    s = parseFloat(parts[1]);
+  } else {
+    s = parseFloat(t);
+  }
+  if (Number.isNaN(h) || Number.isNaN(m) || Number.isNaN(s)) return null;
+  const total = h * 3600 + m * 60 + s;
+  if (total <= 0) return null;
+  return Math.round(total * 1000);
+}
+
+function isRaceSession(sessionTypeOrName: string | undefined): boolean {
+  if (!sessionTypeOrName) return true;
+  const lc = sessionTypeOrName.toLowerCase();
+  if (lc.includes("qualif") || lc.includes("practice") || lc.includes("warmup")) {
+    return false;
+  }
+  return true;
+}
+
+async function importRow(
+  seasonId: string,
+  roundId: string,
+  row: IRLMResultRow,
+  maxLaps: number,
+  memberMap: Map<number, string>
+): Promise<{ ok: boolean; reason?: string }> {
+  const irlmInternalId = Number(row.memberId);
+  if (!irlmInternalId || Number.isNaN(irlmInternalId)) {
+    return { ok: false, reason: "no memberId on row" };
+  }
+  const iracingCustId = memberMap.get(irlmInternalId);
+  if (!iracingCustId) {
+    return {
+      ok: false,
+      reason: `iRLM memberId ${irlmInternalId} not in /Members lookup`,
+    };
+  }
+
+  const reg = await prisma.registration.findFirst({
+    where: {
+      seasonId,
+      status: "APPROVED",
+      user: { iracingMemberId: iracingCustId },
+    },
+  });
+  if (!reg) {
+    return {
+      ok: false,
+      reason: `no approved registration for iRacingId ${iracingCustId}`,
+    };
+  }
+
+  const finishStatus = statusFromIRLM(row.status);
+  const finishPosition = Math.round(Number(row.finishPosition ?? 0));
+  const lapsCompleted = Math.round(Number(row.completedLaps ?? 0));
+  let raceDistancePct = 0;
+  if (maxLaps > 0) {
+    raceDistancePct = Math.round((lapsCompleted / maxLaps) * 100);
+  } else if (typeof row.completedPct === "number") {
+    raceDistancePct = Math.round(row.completedPct * 100);
+  }
+  const incidents = Math.round(Number(row.incidents ?? 0));
+  const bestLapTimeMs = durationToMs(row.fastestLapTime);
+  const iRating = typeof row.newIrating === "number" ? row.newIrating : null;
+
+  await prisma.raceResult.upsert({
+    where: { roundId_registrationId: { roundId, registrationId: reg.id } },
+    create: {
+      roundId,
+      registrationId: reg.id,
+      finishStatus,
+      finishPosition,
+      lapsCompleted,
+      raceDistancePct,
+      bestLapTimeMs,
+      totalTimeMs: null,
+      incidents,
+      iRating,
+    },
+    update: {
+      finishStatus,
+      finishPosition,
+      lapsCompleted,
+      raceDistancePct,
+      bestLapTimeMs,
+      incidents,
+      iRating,
+    },
+  });
+  return { ok: true };
+}
+
+export async function pullResultsFromIRLM(formData: FormData): Promise<void> {
+  const leagueSlug = String(formData.get("leagueSlug") ?? "");
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const roundId = String(formData.get("roundId") ?? "");
+  console.log("[IRLM] action invoked", { leagueSlug, seasonId, roundId });
+  if (!leagueSlug || !seasonId || !roundId) return;
+
+  const admin = await requireAdmin();
+
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: { season: true },
+  });
+  if (!round) {
+    redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
+  }
+
+  if (!round.irlmEventId || !round.season.irlmLeagueName) {
+    redirect(
+      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=Configure+iRLM+league+name+on+the+season+and+event+ID+on+the+round+first`
+    );
+  }
+
+  let eventResults;
+  let memberMap: Map<number, string>;
+  try {
+    const [results, members] = await Promise.all([
+      fetchEventResults(round.season.irlmLeagueName, round.irlmEventId),
+      fetchLeagueMembers(round.season.irlmLeagueName),
+    ]);
+    eventResults = results;
+    memberMap = new Map<number, string>();
+    for (const m of members) {
+      const id = Number(m.memberId);
+      const cust = String(m.iRacingId ?? "").trim();
+      if (id && cust) memberMap.set(id, cust);
+    }
+    console.log(
+      `[IRLM] fetched ${eventResults.length} eventResults, ${members.length} members`
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "iRLM fetch failed";
+    redirect(
+      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=${encodeURIComponent(msg)}`
+    );
+  }
+
+  let imported = 0;
+  let skipped = 0;
+  const errors: { memberId: string; reason: string }[] = [];
+
+  for (const eventResult of eventResults) {
+    for (const session of eventResult.sessionResults ?? []) {
+      if (!isRaceSession(session.sessionType ?? session.sessionName)) {
+        continue;
+      }
+      const rows = session.resultRows ?? [];
+      let maxLaps = 0;
+      for (const row of rows) {
+        const l = Number(row.completedLaps ?? 0);
+        if (l > maxLaps) maxLaps = l;
+      }
+      for (const row of rows) {
+        const result = await importRow(
+          seasonId,
+          roundId,
+          row,
+          maxLaps,
+          memberMap
+        );
+        if (result.ok) {
+          imported++;
+        } else {
+          skipped++;
+          if (result.reason) {
+            errors.push({
+              memberId: String(row.memberId ?? "?"),
+              reason: result.reason,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  await prisma.csvImport.create({
+    data: {
+      roundId,
+      uploadedById: admin.id,
+      originalFilename: `iRLM-pull-${new Date().toISOString()}`,
+      rowsImported: imported,
+      rowsSkipped: skipped,
+      errorLog: errors.length > 0 ? (errors as object) : undefined,
+    },
+  });
+
+  await recomputeRoundScoring(prisma, roundId);
+
+  revalidatePath(
+    `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}`
+  );
+  revalidatePath(
+    `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}`
+  );
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/standings`);
+
+  redirect(
+    `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?imported=${imported}&skipped=${skipped}`
+  );
+}
+EOF
+
+echo ""
+echo "=== Verify ==="
+echo "First 1 line of irlm-import.ts (must be \"use server\";):"
+head -1 src/lib/actions/irlm-import.ts
+echo ""
+echo "Confirm fetchLeagueMembers is exported by irlm.ts:"
+grep -n 'export async function fetchLeagueMembers' src/lib/irlm.ts || echo "  MISSING in irlm.ts"
+
+echo ""
+echo "=== Commit and push ==="
+git add -A
+git commit -m "IRLM: resolve iRLM memberId -> iRacingId via /Members endpoint"
+git push
+
+echo ""
+echo "Done. Wait ~60s for Vercel, then click 'Pull from iRLM' again on the round."
+echo "Expected: imported ~30, skipped 0 (or fewer)."

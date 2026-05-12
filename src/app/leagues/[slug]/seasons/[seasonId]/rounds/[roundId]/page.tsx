@@ -10,6 +10,7 @@ import { auth } from "@/auth";
 import { formatDateTime } from "@/lib/date";
 import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
+import { RsvpWidget } from "@/components/RsvpWidget";
 
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams";
 const TEAM_BEST_N = 2;
@@ -122,7 +123,8 @@ export default async function PublicRoundResults({
   const { slug, seasonId, roundId } = await params;
   const { cls: clsRaw } = await searchParams;
 
-  await auth();
+  const session = await auth();
+  const sessionUserId = session?.user?.id ?? null;
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
@@ -149,6 +151,26 @@ export default async function PublicRoundResults({
     round.seasonId !== seasonId
   ) {
     notFound();
+  }
+
+  // RSVP context for the signed-in driver (UPCOMING rounds only).
+  let driverRsvpStatus: "ACCEPTED" | "DECLINED" | "TENTATIVE" | null = null;
+  let driverIsRegistered = false;
+  if (sessionUserId && round.status === "UPCOMING") {
+    const reg = await prisma.registration.findUnique({
+      where: { seasonId_userId: { seasonId, userId: sessionUserId } },
+      select: { id: true, excludedAt: true },
+    });
+    driverIsRegistered = !!reg && !reg.excludedAt;
+    if (reg) {
+      const rsvp = await prisma.roundRsvp.findUnique({
+        where: {
+          roundId_registrationId: { roundId: round.id, registrationId: reg.id },
+        },
+        select: { status: true },
+      });
+      driverRsvpStatus = rsvp?.status ?? null;
+    }
   }
 
   const isMulticlass = round.season.isMulticlass;
@@ -345,6 +367,15 @@ export default async function PublicRoundResults({
           </Link>
         </div>
       </div>
+
+      {sessionUserId && round.status === "UPCOMING" && (
+        <RsvpWidget
+          roundId={round.id}
+          roundStatus={round.status}
+          currentStatus={driverRsvpStatus}
+          isRegistered={driverIsRegistered}
+        />
+      )}
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-zinc-500">View:</span>

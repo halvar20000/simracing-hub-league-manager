@@ -105,10 +105,18 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
     if (myPenalties.length === 0) continue;
 
     const enteredRoundIds = enteredByReg.get(reg.id) ?? new Set<string>();
+    // A NO_RSVP_NO_SHOW penalty lives on a round the driver did NOT enter,
+    // so we must also walk any round where the driver carries a penalty —
+    // otherwise the "new penalty resets the clean counter" rule misses it.
+    const penaltyRoundIds = new Set(
+      myPenalties.map((p) => p.roundId)
+    );
     let cleanCounter = 0;
 
     for (const round of completedRounds) {
-      if (!enteredRoundIds.has(round.id)) continue;
+      const didEnter = enteredRoundIds.has(round.id);
+      const hasPenaltyThisRound = penaltyRoundIds.has(round.id);
+      if (!didEnter && !hasPenaltyThisRound) continue;
 
       const incurredThisRound = myPenalties.some((p) => p.roundId === round.id);
       if (incurredThisRound) {
