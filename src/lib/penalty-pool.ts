@@ -13,6 +13,15 @@ import { prisma } from "@/lib/prisma";
  * Effective pool point per penalty = pointsValue - forgivenPoints - autoForgivenPoints
  * Effective season pool = sum of effective points over all non-released penalties.
  *
+ * NO_RSVP_NO_SHOW penalties are EXCLUDED from this engine entirely:
+ *   - They are never auto-forgiven (their autoForgivenPoints stays at 0).
+ *   - They do not contribute to the "remaining pool" gate that triggers
+ *     forgiveness cycles.
+ *   - They do not reset the clean-race counter (not showing up is not a
+ *     racing incident).
+ * They sit permanently as their own kind of demerit. Clean races forgive
+ * incident-decision penalties only.
+ *
  * The engine OWNS autoForgivenPoints. It resets it for every penalty in the
  * season's registrations before recomputing, so it is idempotent and free of
  * drift. Manual forgiveness (admin) lives in forgivenPoints and is untouched.
@@ -57,13 +66,16 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
     data: { autoForgivenPoints: 0 },
   });
 
-  // 2. Load all penalties + race-result entries in one shot
+  // 2. Load all penalties + race-result entries in one shot.
+  //    NO_RSVP_NO_SHOW penalties are excluded — they never participate in the
+  //    auto-forgiveness loop (they're a separate, permanent demerit).
   const allPenalties = await prisma.penalty.findMany({
     where: {
       registrationId: { in: regIds },
       type: "POINTS_DEDUCTION",
       releasedAt: null,
       pointsValue: { gt: 0 },
+      source: { not: "NO_RSVP_NO_SHOW" },
     },
     select: {
       id: true,
