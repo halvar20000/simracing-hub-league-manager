@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
  *   - Penalty points from each finalized IncidentDecision go into the driver's pool.
  *   - For every 2 COMPLETED rounds the driver entered WITHOUT new penalty points,
  *     1 point is forgiven from the oldest non-fully-forgiven penalty.
+ *   - Only clean races AFTER the driver's first penalty count toward forgiveness.
+ *     Clean races earlier in the season do not pre-credit a later penalty.
  *   - A new penalty point arriving mid-cycle resets the clean-race counter to 0.
  *   - Forgiveness stops when the effective pool reaches 0.
  *
@@ -88,8 +90,16 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
     orderBy: [{ createdAt: "asc" }],
   });
 
+  // "Entered" for the clean-race counter means the driver was actually on
+  // the grid. A DNS result (race-banned, suspended, technical no-start) does
+  // NOT count as entering, so it doesn't tick up the clean counter — even
+  // though there's a result row in the DB for record-keeping.
   const allResults = await prisma.raceResult.findMany({
-    where: { roundId: { in: completedRounds.map((r) => r.id) }, registrationId: { in: regIds } },
+    where: {
+      roundId: { in: completedRounds.map((r) => r.id) },
+      registrationId: { in: regIds },
+      finishStatus: { not: "DNS" },
+    },
     select: { roundId: true, registrationId: true },
   });
   const enteredByReg = new Map<string, Set<string>>();
@@ -124,6 +134,10 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
       myPenalties.map((p) => p.roundId)
     );
     let cleanCounter = 0;
+    // Only clean races AFTER the driver's first penalty count toward
+    // forgiveness. Clean races earlier in the season are not "credit" toward
+    // a future penalty's forgiveness.
+    let hasIncurredAnyPenaltyYet = false;
 
     for (const round of completedRounds) {
       const didEnter = enteredRoundIds.has(round.id);
@@ -132,9 +146,13 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
 
       const incurredThisRound = myPenalties.some((p) => p.roundId === round.id);
       if (incurredThisRound) {
+        hasIncurredAnyPenaltyYet = true;
         cleanCounter = 0;
         continue;
       }
+
+      // Pre-penalty clean races don't pre-credit forgiveness.
+      if (!hasIncurredAnyPenaltyYet) continue;
 
       const remainingPool = myPenalties.reduce(
         (sum, p) => sum + Math.max(0, p.pointsValue - p.manualForgiven - p.autoForgiven),
