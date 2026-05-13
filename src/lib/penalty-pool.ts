@@ -90,15 +90,15 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
     orderBy: [{ createdAt: "asc" }],
   });
 
-  // "Entered" for the clean-race counter means the driver was actually on
-  // the grid. A DNS result (race-banned, suspended, technical no-start) does
-  // NOT count as entering, so it doesn't tick up the clean counter — even
-  // though there's a result row in the DB for record-keeping.
+  // "Entered" for the clean-race counter means the driver actually raced
+  // cleanly. Only CLASSIFIED and DNF count — both mean the driver started
+  // the race. DNS (didn't start, e.g. ban) and DSQ (disqualified — the
+  // opposite of clean) do not count toward forgiveness.
   const allResults = await prisma.raceResult.findMany({
     where: {
       roundId: { in: completedRounds.map((r) => r.id) },
       registrationId: { in: regIds },
-      finishStatus: { not: "DNS" },
+      finishStatus: { in: ["CLASSIFIED", "DNF"] },
     },
     select: { roundId: true, registrationId: true },
   });
