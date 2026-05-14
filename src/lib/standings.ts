@@ -339,6 +339,8 @@ export async function computeDriverStandings(
   standings.sort(
     (a, b) =>
       b.classTotal - a.classTotal ||
+      // Tiebreaker: fewer total incidents ranks higher (applies to all leagues).
+      a.totalIncidents - b.totalIncidents ||
       b.classRawPoints - a.classRawPoints ||
       b.roundsCompleted - a.roundsCompleted ||
       (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
