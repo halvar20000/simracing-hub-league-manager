@@ -657,7 +657,7 @@ export default async function PublicRoundResults({
         </section>
       )}
 
-      {round.fprAwards.length > 0 && (
+      {!hasTeamData && round.fprAwards.length > 0 && (
         <section>
           <h2 className="mb-3 text-lg font-semibold">FPR awards</h2>
           <div className="overflow-hidden rounded border border-zinc-800">
