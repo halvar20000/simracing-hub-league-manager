@@ -1848,13 +1848,10 @@ function RoundTeamRaceTable({
 }
 
 /**
- * Qualifying table for a single class: same row format as the race table,
- * sorted ascending by best qualifying time across the team's drivers.
- *
- * Note: CLS only stores per-driver qualifyingTimeMs (the lap they recorded
- * during the quali session); the race columns (Fastest Lap, Avg Lap, etc.)
- * still reflect the race session — so the row shows race data ranked by
- * quali order, which is what the standings-style mock shows.
+ * Qualifying table for a single class: only quali-relevant columns
+ * (Pos, Team, Qualy Lap, Interval). Race-session columns are intentionally
+ * omitted — qualifying doesn't generate race points, bonus points, or
+ * penalties.
  */
 function RoundTeamQualiTable({
   teamResults,
@@ -1881,6 +1878,8 @@ function RoundTeamQualiTable({
       </p>
     );
   }
+  // We still reuse buildTeamRowSummary to harvest bestQualiMs and teamName
+  // per team — race-side fields it produces are simply not rendered here.
   const summaries = teamResults.map((tr) =>
     buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable, scoring)
   );
@@ -1888,11 +1887,8 @@ function RoundTeamQualiTable({
     const at = a.bestQualiMs ?? Number.POSITIVE_INFINITY;
     const bt = b.bestQualiMs ?? Number.POSITIVE_INFINITY;
     if (at !== bt) return at - bt;
-    // Fall back to classPosition for stability
     return (a.classPosition ?? 9999) - (b.classPosition ?? 9999);
   });
-  const leader = sorted[0];
-  // If literally no one has a quali time, surface that prominently.
   const anyQuali = sorted.some((s) => s.bestQualiMs != null);
   if (!anyQuali) {
     return (
@@ -1901,19 +1897,47 @@ function RoundTeamQualiTable({
       </p>
     );
   }
+  const pole = sorted[0]?.bestQualiMs ?? null;
+
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
       <table className="min-w-full text-sm">
-        <TeamTableHead />
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="px-3 py-2">Pos.</th>
+            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2 text-right">Qualy Lap</th>
+            <th className="px-3 py-2 text-right">Interval</th>
+          </tr>
+        </thead>
         <tbody>
-          {sorted.map((s, i) => (
-            <tr
-              key={s.teamId}
-              className="border-t border-zinc-800 hover:bg-zinc-900"
-            >
-              <TeamRowCells s={s} pos={i + 1} leader={leader} intervalKind="quali" />
-            </tr>
-          ))}
+          {sorted.map((s, i) => {
+            const gapToPole =
+              pole != null && s.bestQualiMs != null
+                ? s.bestQualiMs - pole
+                : null;
+            return (
+              <tr
+                key={s.teamId}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="px-3 py-2 font-medium tabular-nums">
+                  {s.bestQualiMs != null ? `${i + 1}.` : "—"}
+                </td>
+                <td className="px-3 py-2 font-medium">{s.teamName}</td>
+                <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
+                  {formatMsToTime(s.bestQualiMs) || "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {gapToPole == null
+                    ? "—"
+                    : gapToPole === 0
+                      ? "pole"
+                      : "+" + formatMsToTime(gapToPole)}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
