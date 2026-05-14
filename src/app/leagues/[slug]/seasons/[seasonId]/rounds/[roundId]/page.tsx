@@ -1603,9 +1603,11 @@ function buildTeamRowSummary(
   //                  >= participationMinDistancePct
   //   FPR:          driver-FPR tier when enabled AND raceDistancePct meets
   //                  driverFprMinDistancePct, indexed by totalIncidents
+  //   DSQ teams forfeit race + participation + FPR for the round.
   //   Bonus Pts column = participation + FPR (+ any legacy FPRAward row)
+  const isDsq = tr.finishStatus === "DSQ";
   const meetsRaceDistance =
-    (tr.raceDistancePct ?? 0) >= scoring.racePointsMinDistancePct;
+    !isDsq && (tr.raceDistancePct ?? 0) >= scoring.racePointsMinDistancePct;
   const basePts =
     meetsRaceDistance && tr.classPosition != null
       ? pointsTable[String(tr.classPosition)] ?? 0
@@ -1619,14 +1621,17 @@ function buildTeamRowSummary(
   const participationStored = tr.participationPointsAwarded ?? 0;
   let participationPts = participationStored;
   if (
+    !isDsq &&
     participationPts === 0 &&
     (tr.raceDistancePct ?? 0) >= scoring.participationMinDistancePct
   ) {
     participationPts = scoring.participationPoints;
   }
+  if (isDsq) participationPts = 0;
 
   let fprPts = 0;
   if (
+    !isDsq &&
     scoring.driverFprEnabled &&
     (tr.raceDistancePct ?? 0) >= scoring.driverFprMinDistancePct
   ) {
@@ -1636,9 +1641,10 @@ function buildTeamRowSummary(
     );
   }
   // Plus any legacy FPRAward row stored on this round (rare on IEC but
-  // kept for backwards compatibility).
-  const legacyFpr =
-    fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
+  // kept for backwards compatibility). Suppress for DSQ.
+  const legacyFpr = isDsq
+    ? 0
+    : fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
 
   const bonusPts = participationPts + fprPts + legacyFpr;
   return {

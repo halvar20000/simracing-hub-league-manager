@@ -674,9 +674,12 @@ export async function computeTeamClassStandings(
       b.teams.set(r.team.id, t);
     }
     // A team that didn't reach the configured min race distance gets 0 race
-    // points (raceDistancePct defaults to 50; IEC sets this to 90).
+    // points (raceDistancePct defaults to 50; IEC sets this to 90). A team
+    // that was disqualified (DSQ) forfeits all scoring for the round — race,
+    // participation, and FPR — mirroring the driver-DSQ forfeit rule.
+    const isDsq = r.finishStatus === "DSQ";
     const meetsRaceDistance =
-      (r.raceDistancePct ?? 0) >= racePointsMinPct;
+      !isDsq && (r.raceDistancePct ?? 0) >= racePointsMinPct;
     const basePts =
       meetsRaceDistance && r.classPosition != null
         ? pointsTable[String(r.classPosition)] ?? 0
@@ -689,14 +692,24 @@ export async function computeTeamClassStandings(
       : 0;
 
     // --- team participation + fpr (computed) ---
+    // DSQ teams forfeit participation and FPR alongside race points.
     const participationStored = r.participationPointsAwarded ?? 0;
     let participation = participationStored;
-    if (participation === 0 && (r.raceDistancePct ?? 0) >= participationMinPct) {
+    if (
+      !isDsq &&
+      participation === 0 &&
+      (r.raceDistancePct ?? 0) >= participationMinPct
+    ) {
       participation = participationPointsAward;
     }
+    if (isDsq) participation = 0;
 
     let fprPoints = 0;
-    if (teamFprEnabled && (r.raceDistancePct ?? 0) >= teamFprMinDistance) {
+    if (
+      !isDsq &&
+      teamFprEnabled &&
+      (r.raceDistancePct ?? 0) >= teamFprMinDistance
+    ) {
       fprPoints = fprPointsForIncidents(r.totalIncidents ?? 0, teamFprTiers);
     }
 
