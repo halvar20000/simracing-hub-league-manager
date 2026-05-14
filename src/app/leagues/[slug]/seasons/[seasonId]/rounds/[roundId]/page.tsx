@@ -197,6 +197,39 @@ export default async function PublicRoundResults({
   const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
   const isMultiRace = racesPerRound > 1;
 
+  // Lookup tables for the team-event team tables.
+  //   - raceResultByRegId: a registration's race-1 result for this round
+  //     (provides qualifyingTimeMs per driver and the driver's identity).
+  //   - fprByTeamAndClass: FPR-award points per (teamId, carClassId) for
+  //     the "Bonus Pts" column.
+  const raceResultByRegId = new Map<
+    string,
+    {
+      qualifyingTimeMs: number | null;
+      bestLapTimeMs: number | null;
+      firstName: string | null;
+      lastName: string | null;
+      countryCode: string | null;
+    }
+  >();
+  for (const rr of round.raceResults) {
+    if (rr.raceNumber !== 1 && raceResultByRegId.has(rr.registrationId)) continue;
+    raceResultByRegId.set(rr.registrationId, {
+      qualifyingTimeMs: rr.qualifyingTimeMs,
+      bestLapTimeMs: rr.bestLapTimeMs,
+      firstName: rr.registration.user.firstName,
+      lastName: rr.registration.user.lastName,
+      countryCode: rr.registration.user.countryCode,
+    });
+  }
+  const fprByTeamAndClass = new Map<string, number>();
+  for (const a of round.fprAwards) {
+    fprByTeamAndClass.set(
+      `${a.teamId}::${a.carClassId ?? ""}`,
+      a.fprPointsAwarded
+    );
+  }
+
   // For team-event rounds (e.g. IEC), build the list of car classes present
   // in this round's team results, sorted by displayOrder. Each becomes its
   // own tab on the page; the cls URL param holds the carClass shortCode.
@@ -526,10 +559,13 @@ export default async function PublicRoundResults({
             description="Once race results are imported, they will appear here."
           />
         ) : cls === "teams" && selectedTeamClass ? (
-          <RoundTeamSection
+          <RoundTeamRaceTable
             teamResults={teamResultsForRound.filter(
               (tr) => tr.carClass?.id === selectedTeamClass.id
             )}
+            raceResultByRegId={raceResultByRegId}
+            fprByTeamAndClass={fprByTeamAndClass}
+            selectedClassId={selectedTeamClass.id}
           />
         ) : cls === "teams" ? (
           <RoundTeamSection teamResults={teamResultsForRound} />
@@ -586,10 +622,13 @@ export default async function PublicRoundResults({
       {hasTeamData && selectedTeamClass && (
         <section>
           <h2 className="mb-3 text-lg font-semibold">Qualifying — {selectedTeamClass.name}</h2>
-          <RoundTeamQualifyingTable
-            raceResults={allRows.filter(
-              (r) => r.registration.carClass?.name === selectedTeamClass.name
+          <RoundTeamQualiTable
+            teamResults={teamResultsForRound.filter(
+              (tr) => tr.carClass?.id === selectedTeamClass.id
             )}
+            raceResultByRegId={raceResultByRegId}
+            fprByTeamAndClass={fprByTeamAndClass}
+            selectedClassId={selectedTeamClass.id}
           />
         </section>
       )}
@@ -1350,11 +1389,17 @@ function ByCarSection({
 
 interface RoundTeamRow {
   id: string;
+  teamId: string;
   finishPosition: number;
   classPosition: number | null;
   lapsCompleted: number;
   totalIncidents: number;
   finishStatus: string;
+  totalTimeMs: number | null;
+  bestLapTimeMs: number | null;
+  rawPointsAwarded: number;
+  participationPointsAwarded: number;
+  manualPenaltyPoints: number;
   team: { id: string; name: string };
   carClass: { id: string; name: string; shortCode: string; displayOrder: number } | null;
   participations: Array<{
@@ -1365,6 +1410,7 @@ interface RoundTeamRow {
     iRating: number | null;
     finishStatus: string;
     registration: {
+      id: string;
       user: {
         firstName: string | null;
         lastName: string | null;
@@ -1464,112 +1510,325 @@ function RoundTeamSection({ teamResults }: { teamResults: RoundTeamRow[] }) {
 }
 
 /**
- * Team-level qualifying for a single car class. The caller pre-filters
- * raceResults to one class. For each team with one or more drivers, this
- * computes the best (smallest) qualifyingTimeMs across the team's drivers
- * and shows which driver set it. Sorted by team time ASC.
+ * Build a flat per-team summary row for the team-event tables. Aggregates
+ * team data with per-driver lookups via participations → RaceResult.
  */
-function RoundTeamQualifyingTable({
-  raceResults,
-}: {
-  raceResults: Row[];
-}) {
-  type TeamQuali = {
-    teamName: string;
-    bestQualiMs: number | null;
-    bestDriverFirst: string | null;
-    bestDriverLast: string | null;
-    bestDriverCountry: string | null;
-  };
-  const byTeam = new Map<string, TeamQuali>();
-  for (const r of raceResults) {
-    const teamName = r.registration.team?.name ?? null;
-    if (!teamName) continue;
-    const qt = r.qualifyingTimeMs;
-    let existing = byTeam.get(teamName);
-    if (!existing) {
-      existing = {
-        teamName,
-        bestQualiMs: null,
-        bestDriverFirst: null,
-        bestDriverLast: null,
-        bestDriverCountry: null,
-      };
-      byTeam.set(teamName, existing);
+type TeamRowSummary = {
+  teamId: string;
+  teamName: string;
+  classPosition: number | null;
+  finishPosition: number;
+  finishStatus: string;
+  lapsCompleted: number;
+  totalTimeMs: number | null;
+  bestLapTimeMs: number | null;
+  bestQualiMs: number | null;
+  totalLapsLed: number;
+  racePts: number;
+  bonusPts: number;
+  penPts: number;
+};
+
+function buildTeamRowSummary(
+  tr: RoundTeamRow & {
+    teamId: string;
+    rawPointsAwarded: number;
+    participationPointsAwarded: number;
+    manualPenaltyPoints: number;
+  },
+  raceResultByRegId: Map<
+    string,
+    { qualifyingTimeMs: number | null; bestLapTimeMs: number | null }
+  >,
+  fprByTeamAndClass: Map<string, number>,
+  selectedClassId: string
+): TeamRowSummary {
+  let bestQualiMs: number | null = null;
+  let bestLapTimeMs: number | null = tr.bestLapTimeMs ?? null;
+  let totalLapsLed = 0;
+  for (const p of tr.participations) {
+    totalLapsLed += p.lapsLed;
+    const rr = raceResultByRegId.get(p.registration.id);
+    if (rr) {
+      if (
+        rr.qualifyingTimeMs != null &&
+        (bestQualiMs == null || rr.qualifyingTimeMs < bestQualiMs)
+      ) {
+        bestQualiMs = rr.qualifyingTimeMs;
+      }
+      if (
+        rr.bestLapTimeMs != null &&
+        (bestLapTimeMs == null || rr.bestLapTimeMs < bestLapTimeMs)
+      ) {
+        bestLapTimeMs = rr.bestLapTimeMs;
+      }
     }
-    if (qt != null && (existing.bestQualiMs == null || qt < existing.bestQualiMs)) {
-      existing.bestQualiMs = qt;
-      existing.bestDriverFirst = r.registration.user.firstName;
-      existing.bestDriverLast = r.registration.user.lastName;
-      existing.bestDriverCountry = r.registration.user.countryCode;
+  }
+  const bonusPts =
+    fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
+  return {
+    teamId: tr.teamId,
+    teamName: tr.team.name,
+    classPosition: tr.classPosition,
+    finishPosition: tr.finishPosition,
+    finishStatus: tr.finishStatus,
+    lapsCompleted: tr.lapsCompleted,
+    totalTimeMs: tr.totalTimeMs,
+    bestLapTimeMs,
+    bestQualiMs,
+    totalLapsLed,
+    racePts: tr.rawPointsAwarded,
+    bonusPts,
+    penPts: tr.manualPenaltyPoints,
+  };
+}
+
+function formatGapMs(gapMs: number | null): string {
+  if (gapMs == null) return "—";
+  if (gapMs === 0) return "—";
+  return "+" + formatMsToTime(gapMs);
+}
+
+// Header cells reused by both race and quali tables.
+function TeamTableHead() {
+  return (
+    <thead className="bg-zinc-900 text-left text-zinc-400">
+      <tr>
+        <th className="px-3 py-2">Pos.</th>
+        <th className="px-3 py-2">Team</th>
+        <th className="px-3 py-2 text-right">Qualy Lap</th>
+        <th className="px-3 py-2 text-right">Fastest Lap</th>
+        <th className="px-3 py-2 text-right">Avg. Lap</th>
+        <th className="px-3 py-2 text-right">Interval</th>
+        <th className="px-3 py-2 text-right">Laps Lead</th>
+        <th className="px-3 py-2 text-right">Laps Compl.</th>
+        <th className="px-3 py-2 text-right">Race Pts.</th>
+        <th className="px-3 py-2 text-right">Bonus Pts.</th>
+        <th className="px-3 py-2 text-right">Pen.</th>
+      </tr>
+    </thead>
+  );
+}
+
+function TeamRowCells({
+  s,
+  pos,
+  leader,
+  intervalKind, // "race" => gap to leader by laps/time; "quali" => gap to pole quali time
+}: {
+  s: TeamRowSummary;
+  pos: number;
+  leader: TeamRowSummary;
+  intervalKind: "race" | "quali";
+}) {
+  // Avg lap from totalTimeMs / lapsCompleted
+  const avgLapMs =
+    s.totalTimeMs != null && s.lapsCompleted > 0
+      ? Math.round(s.totalTimeMs / s.lapsCompleted)
+      : null;
+
+  // Race interval: if same lap count, time delta; otherwise laps behind.
+  // Quali interval: gap in best quali time.
+  let intervalCell: string;
+  if (intervalKind === "quali") {
+    intervalCell =
+      s.bestQualiMs != null && leader.bestQualiMs != null
+        ? s === leader
+          ? "—"
+          : "+" + formatMsToTime(s.bestQualiMs - leader.bestQualiMs)
+        : "—";
+  } else {
+    if (s === leader) intervalCell = "—";
+    else if (s.lapsCompleted < leader.lapsCompleted) {
+      intervalCell = `+${leader.lapsCompleted - s.lapsCompleted} Lap${leader.lapsCompleted - s.lapsCompleted === 1 ? "" : "s"}`;
+    } else if (
+      s.totalTimeMs != null &&
+      leader.totalTimeMs != null
+    ) {
+      intervalCell = "+" + formatMsToTime(s.totalTimeMs - leader.totalTimeMs);
+    } else {
+      intervalCell = "—";
     }
   }
 
-  const sorted = [...byTeam.values()].sort((a, b) => {
-    const at = a.bestQualiMs ?? Number.POSITIVE_INFINITY;
-    const bt = b.bestQualiMs ?? Number.POSITIVE_INFINITY;
-    return at - bt;
-  });
+  return (
+    <>
+      <td className="px-3 py-2 font-medium tabular-nums">{pos}.</td>
+      <td className="px-3 py-2 font-medium">
+        {s.teamName}
+        {s.finishStatus !== "CLASSIFIED" && (
+          <span className="ml-2 rounded bg-red-900/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-red-200">
+            {s.finishStatus}
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
+        {formatMsToTime(s.bestQualiMs) || "—"}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
+        {formatMsToTime(s.bestLapTimeMs) || "—"}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
+        {formatMsToTime(avgLapMs) || "—"}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+        {intervalCell}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+        {s.totalLapsLed}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+        {s.lapsCompleted}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-200 tabular-nums">
+        {s.racePts}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+        {s.bonusPts || ""}
+      </td>
+      <td className="px-3 py-2 text-right text-red-400 tabular-nums">
+        {s.penPts > 0 ? `−${s.penPts} pts.` : ""}
+      </td>
+    </>
+  );
+}
 
-  if (sorted.length === 0) {
+/**
+ * Race results table for a single class: one row per team, sorted by
+ * classPosition (DNFs/DSQ last by finishPosition).
+ */
+function RoundTeamRaceTable({
+  teamResults,
+  raceResultByRegId,
+  fprByTeamAndClass,
+  selectedClassId,
+}: {
+  teamResults: (RoundTeamRow & {
+    teamId: string;
+    rawPointsAwarded: number;
+    participationPointsAwarded: number;
+    manualPenaltyPoints: number;
+    bestLapTimeMs: number | null;
+    totalTimeMs: number | null;
+  })[];
+  raceResultByRegId: Map<
+    string,
+    { qualifyingTimeMs: number | null; bestLapTimeMs: number | null }
+  >;
+  fprByTeamAndClass: Map<string, number>;
+  selectedClassId: string;
+}) {
+  if (teamResults.length === 0) {
+    return (
+      <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+        No team results for this class.
+      </p>
+    );
+  }
+  const summaries = teamResults.map((tr) =>
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId)
+  );
+  const sorted = [...summaries].sort((a, b) => {
+    // Classified first by classPosition, then DNF/DSQ by finishPosition
+    const aClassPos = a.classPosition ?? 9999;
+    const bClassPos = b.classPosition ?? 9999;
+    return aClassPos - bClassPos || a.finishPosition - b.finishPosition;
+  });
+  const leader = sorted[0];
+  return (
+    <div className="overflow-x-auto rounded border border-zinc-800">
+      <table className="min-w-full text-sm">
+        <TeamTableHead />
+        <tbody>
+          {sorted.map((s, i) => (
+            <tr
+              key={s.teamId}
+              className="border-t border-zinc-800 hover:bg-zinc-900"
+            >
+              <TeamRowCells s={s} pos={i + 1} leader={leader} intervalKind="race" />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Qualifying table for a single class: same row format as the race table,
+ * sorted ascending by best qualifying time across the team's drivers.
+ *
+ * Note: CLS only stores per-driver qualifyingTimeMs (the lap they recorded
+ * during the quali session); the race columns (Fastest Lap, Avg Lap, etc.)
+ * still reflect the race session — so the row shows race data ranked by
+ * quali order, which is what the standings-style mock shows.
+ */
+function RoundTeamQualiTable({
+  teamResults,
+  raceResultByRegId,
+  fprByTeamAndClass,
+  selectedClassId,
+}: {
+  teamResults: (RoundTeamRow & {
+    teamId: string;
+    rawPointsAwarded: number;
+    participationPointsAwarded: number;
+    manualPenaltyPoints: number;
+    bestLapTimeMs: number | null;
+    totalTimeMs: number | null;
+  })[];
+  raceResultByRegId: Map<
+    string,
+    { qualifyingTimeMs: number | null; bestLapTimeMs: number | null }
+  >;
+  fprByTeamAndClass: Map<string, number>;
+  selectedClassId: string;
+}) {
+  if (teamResults.length === 0) {
     return (
       <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
         No qualifying data available for this class.
       </p>
     );
   }
-
-  const pole = sorted[0]?.bestQualiMs ?? null;
-
+  const summaries = teamResults.map((tr) =>
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId)
+  );
+  const sorted = [...summaries].sort((a, b) => {
+    const at = a.bestQualiMs ?? Number.POSITIVE_INFINITY;
+    const bt = b.bestQualiMs ?? Number.POSITIVE_INFINITY;
+    if (at !== bt) return at - bt;
+    // Fall back to classPosition for stability
+    return (a.classPosition ?? 9999) - (b.classPosition ?? 9999);
+  });
+  const leader = sorted[0];
+  // If literally no one has a quali time, surface that prominently.
+  const anyQuali = sorted.some((s) => s.bestQualiMs != null);
+  if (!anyQuali) {
+    return (
+      <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+        No qualifying times recorded for this class — the import may have come from a results-only source, or the qualifying session was not captured.
+      </p>
+    );
+  }
   return (
-    <div className="overflow-hidden rounded border border-zinc-800">
-      <table className="w-full text-sm">
-        <thead className="bg-zinc-900 text-left text-zinc-400">
-          <tr>
-            <th className="px-3 py-2">Pos</th>
-            <th className="px-3 py-2">Team</th>
-            <th className="px-3 py-2">Best lap by</th>
-            <th className="px-3 py-2 text-right">Quali time</th>
-            <th className="px-3 py-2 text-right">Gap to pole</th>
-          </tr>
-        </thead>
+    <div className="overflow-x-auto rounded border border-zinc-800">
+      <table className="min-w-full text-sm">
+        <TeamTableHead />
         <tbody>
-          {sorted.map((t, i) => {
-            const gap =
-              pole != null && t.bestQualiMs != null
-                ? t.bestQualiMs - pole
-                : null;
-            return (
-              <tr key={t.teamName} className="border-t border-zinc-800 hover:bg-zinc-900">
-                <td className="px-3 py-2 font-medium">
-                  {t.bestQualiMs != null ? i + 1 : "—"}
-                </td>
-                <td className="px-3 py-2 font-medium">{t.teamName}</td>
-                <td className="px-3 py-2 text-zinc-400">
-                  {t.bestQualiMs != null ? (
-                    <>
-                      <CountryFlag code={t.bestDriverCountry} />
-                      {t.bestDriverFirst} {t.bestDriverLast}
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
-                  {formatMsToTime(t.bestQualiMs) || "—"}
-                </td>
-                <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">
-                  {gap != null && gap > 0
-                    ? "+" + formatMsToTime(gap)
-                    : gap === 0
-                      ? "pole"
-                      : "—"}
-                </td>
-              </tr>
-            );
-          })}
+          {sorted.map((s, i) => (
+            <tr
+              key={s.teamId}
+              className="border-t border-zinc-800 hover:bg-zinc-900"
+            >
+              <TeamRowCells s={s} pos={i + 1} leader={leader} intervalKind="quali" />
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
   );
 }
+
+// formatGapMs is reserved for future per-cell gap formatting helpers.
+void formatGapMs;
