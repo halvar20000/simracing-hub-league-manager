@@ -653,6 +653,25 @@ export async function computeTeamClassStandings(
       rounds: TeamClassRoundResult[];
     }>;
   };
+  // First pass: per-(roundId, carClassId) max laps. In multi-class IEC the
+  // GT4 leader runs far fewer overall laps than the LMP2 leader, so the
+  // stored TeamResult.raceDistancePct (which is computed against the
+  // session-wide max) under-counts slower classes. Gates need to be
+  // CLASS-relative: GT4 is at 100% when it ran 100% of GT4's leader.
+  const maxLapsByRoundAndClass = new Map<string, number>();
+  for (const r of results) {
+    if (!r.carClass) continue;
+    const key = `${r.round.id}::${r.carClass.id}`;
+    const cur = maxLapsByRoundAndClass.get(key) ?? 0;
+    if (r.lapsCompleted > cur) maxLapsByRoundAndClass.set(key, r.lapsCompleted);
+  }
+  const classDistancePctFor = (r: (typeof results)[number]): number => {
+    if (!r.carClass) return r.raceDistancePct ?? 0;
+    const max = maxLapsByRoundAndClass.get(`${r.round.id}::${r.carClass.id}`);
+    if (!max || max <= 0) return r.raceDistancePct ?? 0;
+    return Math.min(100, Math.floor((r.lapsCompleted / max) * 100));
+  };
+
   const byClass = new Map<string, Bucket>();
   for (const r of results) {
     if (!r.carClass) continue;
@@ -674,12 +693,14 @@ export async function computeTeamClassStandings(
       b.teams.set(r.team.id, t);
     }
     // A team that didn't reach the configured min race distance gets 0 race
-    // points (raceDistancePct defaults to 50; IEC sets this to 90). A team
-    // that was disqualified (DSQ) forfeits all scoring for the round — race,
-    // participation, and FPR — mirroring the driver-DSQ forfeit rule.
+    // points (raceDistancePct defaults to 50; IEC sets this to 90). The
+    // distance check is CLASS-relative so multi-class slower classes aren't
+    // disadvantaged. A team that was disqualified (DSQ) forfeits all
+    // scoring for the round — race, participation, and FPR — mirroring the
+    // driver-DSQ forfeit rule.
     const isDsq = r.finishStatus === "DSQ";
-    const meetsRaceDistance =
-      !isDsq && (r.raceDistancePct ?? 0) >= racePointsMinPct;
+    const classDistance = classDistancePctFor(r);
+    const meetsRaceDistance = !isDsq && classDistance >= racePointsMinPct;
     const basePts =
       meetsRaceDistance && r.classPosition != null
         ? pointsTable[String(r.classPosition)] ?? 0
@@ -698,7 +719,7 @@ export async function computeTeamClassStandings(
     if (
       !isDsq &&
       participation === 0 &&
-      (r.raceDistancePct ?? 0) >= participationMinPct
+      classDistance >= participationMinPct
     ) {
       participation = participationPointsAward;
     }
@@ -708,7 +729,7 @@ export async function computeTeamClassStandings(
     if (
       !isDsq &&
       teamFprEnabled &&
-      (r.raceDistancePct ?? 0) >= teamFprMinDistance
+      classDistance >= teamFprMinDistance
     ) {
       fprPoints = fprPointsForIncidents(r.totalIncidents ?? 0, teamFprTiers);
     }

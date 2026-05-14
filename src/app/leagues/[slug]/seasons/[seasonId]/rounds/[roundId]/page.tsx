@@ -1575,7 +1575,8 @@ function buildTeamRowSummary(
   fprByTeamAndClass: Map<string, number>,
   selectedClassId: string,
   pointsTable: Record<string, number>,
-  scoring: ScoringFlags
+  scoring: ScoringFlags,
+  classMaxLaps: number
 ): TeamRowSummary {
   let bestQualiMs: number | null = null;
   let bestLapTimeMs: number | null = tr.bestLapTimeMs ?? null;
@@ -1607,9 +1608,19 @@ function buildTeamRowSummary(
   //                  driverFprMinDistancePct, indexed by totalIncidents
   //   DSQ teams forfeit race + participation + FPR for the round.
   //   Bonus Pts column = participation + FPR (+ any legacy FPRAward row)
+  //
+  // The distance check is CLASS-relative (lapsCompleted / class-leader laps)
+  // so slower classes aren't penalised. In multi-class IEC, GT4 leader laps
+  // are well below LMP2 leader laps; if we used the session-wide
+  // raceDistancePct (which is overall-relative), every GT4 team would fail
+  // the 90% gate.
+  const classDistancePct =
+    classMaxLaps > 0
+      ? Math.min(100, Math.floor((tr.lapsCompleted / classMaxLaps) * 100))
+      : tr.raceDistancePct ?? 0;
   const isDsq = tr.finishStatus === "DSQ";
   const meetsRaceDistance =
-    !isDsq && (tr.raceDistancePct ?? 0) >= scoring.racePointsMinDistancePct;
+    !isDsq && classDistancePct >= scoring.racePointsMinDistancePct;
   const basePts =
     meetsRaceDistance && tr.classPosition != null
       ? pointsTable[String(tr.classPosition)] ?? 0
@@ -1625,7 +1636,7 @@ function buildTeamRowSummary(
   if (
     !isDsq &&
     participationPts === 0 &&
-    (tr.raceDistancePct ?? 0) >= scoring.participationMinDistancePct
+    classDistancePct >= scoring.participationMinDistancePct
   ) {
     participationPts = scoring.participationPoints;
   }
@@ -1635,7 +1646,7 @@ function buildTeamRowSummary(
   if (
     !isDsq &&
     scoring.driverFprEnabled &&
-    (tr.raceDistancePct ?? 0) >= scoring.driverFprMinDistancePct
+    classDistancePct >= scoring.driverFprMinDistancePct
   ) {
     fprPts = fprPointsForIncidents(
       tr.totalIncidents ?? 0,
@@ -1818,8 +1829,14 @@ function RoundTeamRaceTable({
       </p>
     );
   }
+  // Class-relative distance: 100% means the team finished at the class
+  // leader's lap count, regardless of how slow the class is overall.
+  const classMaxLaps = teamResults.reduce(
+    (m, tr) => Math.max(m, tr.lapsCompleted ?? 0),
+    0
+  );
   const summaries = teamResults.map((tr) =>
-    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable, scoring)
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable, scoring, classMaxLaps)
   );
   const sorted = [...summaries].sort((a, b) => {
     // Classified first by classPosition, then DNF/DSQ by finishPosition
@@ -1880,8 +1897,12 @@ function RoundTeamQualiTable({
   }
   // We still reuse buildTeamRowSummary to harvest bestQualiMs and teamName
   // per team — race-side fields it produces are simply not rendered here.
+  const classMaxLaps = teamResults.reduce(
+    (m, tr) => Math.max(m, tr.lapsCompleted ?? 0),
+    0
+  );
   const summaries = teamResults.map((tr) =>
-    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable, scoring)
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable, scoring, classMaxLaps)
   );
   const sorted = [...summaries].sort((a, b) => {
     const at = a.bestQualiMs ?? Number.POSITIVE_INFINITY;
