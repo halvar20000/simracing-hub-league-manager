@@ -7,7 +7,7 @@ export default function Footer() {
         </p>
         <nav className="flex flex-wrap items-center justify-center gap-3 text-xs">
           <a
-            href="https://docs.google.com/document/d/1mfzw9eATrx9hmVED1xB2k_40soJ5JpKwlBPONZ-0sio/edit?tab=t.os392vq0z8ib"
+            href="https://docs.google.com/document/d/1-PSzsVuO72ibGj0ioXDoHIMyehA5lOsn9LVuo5vI2M8/edit?tab=t.os392vq0z8ib"
             target="_blank"
             rel="noopener noreferrer"
             className="text-zinc-400 hover:text-[#ff6b35]"
