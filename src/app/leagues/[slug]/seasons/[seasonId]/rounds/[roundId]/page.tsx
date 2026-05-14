@@ -229,6 +229,10 @@ export default async function PublicRoundResults({
       a.fprPointsAwarded
     );
   }
+  // Reuse the same fallback the standings engine uses: when TeamResult
+  // rawPointsAwarded is 0 (typical for IEC imports), derive race points
+  // from scoringSystem.pointsTable[classPosition].
+  const seasonPointsTable = (round.season.scoringSystem.pointsTable ?? {}) as Record<string, number>;
 
   // For team-event rounds (e.g. IEC), build the list of car classes present
   // in this round's team results, sorted by displayOrder. Each becomes its
@@ -566,6 +570,7 @@ export default async function PublicRoundResults({
             raceResultByRegId={raceResultByRegId}
             fprByTeamAndClass={fprByTeamAndClass}
             selectedClassId={selectedTeamClass.id}
+            pointsTable={seasonPointsTable}
           />
         ) : cls === "teams" ? (
           <RoundTeamSection teamResults={teamResultsForRound} />
@@ -629,6 +634,7 @@ export default async function PublicRoundResults({
             raceResultByRegId={raceResultByRegId}
             fprByTeamAndClass={fprByTeamAndClass}
             selectedClassId={selectedTeamClass.id}
+            pointsTable={seasonPointsTable}
           />
         </section>
       )}
@@ -1541,7 +1547,8 @@ function buildTeamRowSummary(
     { qualifyingTimeMs: number | null; bestLapTimeMs: number | null }
   >,
   fprByTeamAndClass: Map<string, number>,
-  selectedClassId: string
+  selectedClassId: string,
+  pointsTable: Record<string, number>
 ): TeamRowSummary {
   let bestQualiMs: number | null = null;
   let bestLapTimeMs: number | null = tr.bestLapTimeMs ?? null;
@@ -1566,6 +1573,13 @@ function buildTeamRowSummary(
   }
   const bonusPts =
     fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
+  // Mirror the standings logic: rawPointsAwarded stays at 0 on IEC team
+  // results today, so fall back to the configured points table by class
+  // position. (See computeTeamClassStandings in src/lib/standings.ts.)
+  const basePts =
+    tr.classPosition != null ? pointsTable[String(tr.classPosition)] ?? 0 : 0;
+  const racePts =
+    tr.rawPointsAwarded > 0 ? tr.rawPointsAwarded : basePts;
   return {
     teamId: tr.teamId,
     teamName: tr.team.name,
@@ -1577,7 +1591,7 @@ function buildTeamRowSummary(
     bestLapTimeMs,
     bestQualiMs,
     totalLapsLed,
-    racePts: tr.rawPointsAwarded,
+    racePts,
     bonusPts,
     penPts: tr.manualPenaltyPoints,
   };
@@ -1702,6 +1716,7 @@ function RoundTeamRaceTable({
   raceResultByRegId,
   fprByTeamAndClass,
   selectedClassId,
+  pointsTable,
 }: {
   teamResults: (RoundTeamRow & {
     teamId: string;
@@ -1717,6 +1732,7 @@ function RoundTeamRaceTable({
   >;
   fprByTeamAndClass: Map<string, number>;
   selectedClassId: string;
+  pointsTable: Record<string, number>;
 }) {
   if (teamResults.length === 0) {
     return (
@@ -1726,7 +1742,7 @@ function RoundTeamRaceTable({
     );
   }
   const summaries = teamResults.map((tr) =>
-    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId)
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable)
   );
   const sorted = [...summaries].sort((a, b) => {
     // Classified first by classPosition, then DNF/DSQ by finishPosition
@@ -1768,6 +1784,7 @@ function RoundTeamQualiTable({
   raceResultByRegId,
   fprByTeamAndClass,
   selectedClassId,
+  pointsTable,
 }: {
   teamResults: (RoundTeamRow & {
     teamId: string;
@@ -1783,6 +1800,7 @@ function RoundTeamQualiTable({
   >;
   fprByTeamAndClass: Map<string, number>;
   selectedClassId: string;
+  pointsTable: Record<string, number>;
 }) {
   if (teamResults.length === 0) {
     return (
@@ -1792,7 +1810,7 @@ function RoundTeamQualiTable({
     );
   }
   const summaries = teamResults.map((tr) =>
-    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId)
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable)
   );
   const sorted = [...summaries].sort((a, b) => {
     const at = a.bestQualiMs ?? Number.POSITIVE_INFINITY;
