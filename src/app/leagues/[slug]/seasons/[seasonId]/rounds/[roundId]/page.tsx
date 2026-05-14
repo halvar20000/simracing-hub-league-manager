@@ -196,6 +196,9 @@ export default async function PublicRoundResults({
   const hasTeamData = teamResultsForRound.length > 0;
   const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
   const isMultiRace = racesPerRound > 1;
+  // Team-event rounds (e.g. IEC) collapse to the class/team grouping only —
+  // mirrors the standings page behaviour. All driver-centric tabs are hidden.
+  const defaultCls: Cls = hasTeamData ? "teams" : "combined";
   const cls: Cls =
     clsRaw === "pro"
       ? "pro"
@@ -209,7 +212,11 @@ export default async function PublicRoundResults({
               ? "race2"
               : clsRaw === "quali"
                 ? "quali"
-                : clsRaw === "car" ? "car" : clsRaw === "teams" ? "teams" : "combined";
+                : clsRaw === "car"
+                  ? "car"
+                  : clsRaw === "teams"
+                    ? "teams"
+                    : defaultCls;
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
@@ -386,71 +393,74 @@ export default async function PublicRoundResults({
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-zinc-500">View:</span>
-        {!hasTeamData && (
-        <Link
-          href={baseHref}
-          className={`${pillBase} ${cls === "combined" ? pillOn : pillOff}`}
-        >
-          Combined
-        </Link>
-        )}
-        <Link
-          href={`${baseHref}?cls=quali`}
-          className={`${pillBase} ${cls === "quali" ? pillOn : pillOff}`}
-        >
-          Quali
-        </Link>
-        {isMultiRace && (
-          <>
-            <Link
-              href={`${baseHref}?cls=race1`}
-              className={`${pillBase} ${cls === "race1" ? pillOn : pillOff}`}
-            >
-              Race 1
-            </Link>
-            <Link
-              href={`${baseHref}?cls=race2`}
-              className={`${pillBase} ${cls === "race2" ? pillOn : pillOff}`}
-            >
-              Race 2
-            </Link>
-          </>
-        )}
-        {proAmEnabled && (
-          <>
-            <Link
-              href={`${baseHref}?cls=pro`}
-              className={`${pillBase} ${cls === "pro" ? pillOn : pillOff}`}
-            >
-              Pro
-            </Link>
-            <Link
-              href={`${baseHref}?cls=am`}
-              className={`${pillBase} ${cls === "am" ? pillOn : pillOff}`}
-            >
-              Am
-            </Link>
-          </>
-        )}
-        <Link
-          href={`${baseHref}?cls=team`}
-          className={`${pillBase} ${cls === "team" ? pillOn : pillOff}`}
-        >
-          Team
-        </Link>
-        <Link
-          href={`${baseHref}?cls=car`}
-          className={`${pillBase} ${cls === "car" ? pillOn : pillOff}`}
-        >
-          By Car
-        </Link>
-        {hasTeamData && (
+        {hasTeamData ? (
+          // Team-event rounds (IEC): only show Teams. Driver-centric tabs
+          // are hidden to mirror the standings view.
           <Link
             href={`${baseHref}?cls=teams`}
             className={`${pillBase} ${cls === "teams" ? pillOn : pillOff}`}
           >
             Teams
           </Link>
+        ) : (
+          <>
+            <Link
+              href={baseHref}
+              className={`${pillBase} ${cls === "combined" ? pillOn : pillOff}`}
+            >
+              Combined
+            </Link>
+            <Link
+              href={`${baseHref}?cls=quali`}
+              className={`${pillBase} ${cls === "quali" ? pillOn : pillOff}`}
+            >
+              Quali
+            </Link>
+            {isMultiRace && (
+              <>
+                <Link
+                  href={`${baseHref}?cls=race1`}
+                  className={`${pillBase} ${cls === "race1" ? pillOn : pillOff}`}
+                >
+                  Race 1
+                </Link>
+                <Link
+                  href={`${baseHref}?cls=race2`}
+                  className={`${pillBase} ${cls === "race2" ? pillOn : pillOff}`}
+                >
+                  Race 2
+                </Link>
+              </>
+            )}
+            {proAmEnabled && (
+              <>
+                <Link
+                  href={`${baseHref}?cls=pro`}
+                  className={`${pillBase} ${cls === "pro" ? pillOn : pillOff}`}
+                >
+                  Pro
+                </Link>
+                <Link
+                  href={`${baseHref}?cls=am`}
+                  className={`${pillBase} ${cls === "am" ? pillOn : pillOff}`}
+                >
+                  Am
+                </Link>
+              </>
+            )}
+            <Link
+              href={`${baseHref}?cls=team`}
+              className={`${pillBase} ${cls === "team" ? pillOn : pillOff}`}
+            >
+              Team
+            </Link>
+            <Link
+              href={`${baseHref}?cls=car`}
+              className={`${pillBase} ${cls === "car" ? pillOn : pillOff}`}
+            >
+              By Car
+            </Link>
+          </>
         )}
         <span className="mx-2 text-zinc-700" aria-hidden="true">|</span>
         <Link
@@ -461,7 +471,7 @@ export default async function PublicRoundResults({
         </Link>
       </div>
 
-      {cls === "combined" && podium.length > 0 && (
+      {!hasTeamData && cls === "combined" && podium.length > 0 && (
         <RoundPodium
           drivers={podium}
           isMultiRace={isMultiRace}
@@ -471,12 +481,14 @@ export default async function PublicRoundResults({
 
       <section>
         <h2 className="mb-3 text-lg font-semibold">Race results</h2>
-        {allRows.length === 0 ? (
+        {allRows.length === 0 && !hasTeamData ? (
           <EmptyState
             icon={<FlagIcon />}
             title="No results entered yet"
             description="Once race results are imported, they will appear here."
           />
+        ) : cls === "teams" ? (
+          <RoundTeamSection teamResults={teamResultsForRound} />
         ) : cls === "quali" ? (
           <QualifyingTable rows={aggRows} isMulticlass={isMulticlass} />
         ) : cls === "team" ? (
