@@ -12,6 +12,7 @@ import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
 import { RsvpWidget } from "@/components/RsvpWidget";
 import { isRsvpClosed } from "@/lib/rsvp-window";
+import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams";
 const TEAM_BEST_N = 2;
@@ -233,6 +234,19 @@ export default async function PublicRoundResults({
   // rawPointsAwarded is 0 (typical for IEC imports), derive race points
   // from scoringSystem.pointsTable[classPosition].
   const seasonPointsTable = (round.season.scoringSystem.pointsTable ?? {}) as Record<string, number>;
+  // Scoring flags used by both team tables to derive participation + FPR
+  // the same way computeTeamClassStandings does in src/lib/standings.ts.
+  const teamScoringFlags = {
+    participationPoints: round.season.scoringSystem.participationPoints ?? 0,
+    participationMinDistancePct:
+      round.season.scoringSystem.participationMinDistancePct ?? 75,
+    driverFprEnabled: !!round.season.scoringSystem.driverFprEnabled,
+    driverFprTiers: round.season.scoringSystem.driverFprEnabled
+      ? readDriverFprTiers(round.season.scoringSystem.driverFprTiers)
+      : [],
+    driverFprMinDistancePct:
+      round.season.scoringSystem.driverFprMinDistancePct ?? 90,
+  };
 
   // For team-event rounds (e.g. IEC), build the list of car classes present
   // in this round's team results, sorted by displayOrder. Each becomes its
@@ -571,6 +585,7 @@ export default async function PublicRoundResults({
             fprByTeamAndClass={fprByTeamAndClass}
             selectedClassId={selectedTeamClass.id}
             pointsTable={seasonPointsTable}
+            scoring={teamScoringFlags}
           />
         ) : cls === "teams" ? (
           <RoundTeamSection teamResults={teamResultsForRound} />
@@ -635,6 +650,7 @@ export default async function PublicRoundResults({
             fprByTeamAndClass={fprByTeamAndClass}
             selectedClassId={selectedTeamClass.id}
             pointsTable={seasonPointsTable}
+            scoring={teamScoringFlags}
           />
         </section>
       )}
@@ -1399,12 +1415,14 @@ interface RoundTeamRow {
   finishPosition: number;
   classPosition: number | null;
   lapsCompleted: number;
+  raceDistancePct: number;
   totalIncidents: number;
   finishStatus: string;
   totalTimeMs: number | null;
   bestLapTimeMs: number | null;
   rawPointsAwarded: number;
   participationPointsAwarded: number;
+  correctionPoints: number;
   manualPenaltyPoints: number;
   team: { id: string; name: string };
   carClass: { id: string; name: string; shortCode: string; displayOrder: number } | null;
@@ -1535,20 +1553,24 @@ type TeamRowSummary = {
   penPts: number;
 };
 
+interface ScoringFlags {
+  participationPoints: number;
+  participationMinDistancePct: number;
+  driverFprEnabled: boolean;
+  driverFprTiers: ReturnType<typeof readDriverFprTiers>;
+  driverFprMinDistancePct: number;
+}
+
 function buildTeamRowSummary(
-  tr: RoundTeamRow & {
-    teamId: string;
-    rawPointsAwarded: number;
-    participationPointsAwarded: number;
-    manualPenaltyPoints: number;
-  },
+  tr: RoundTeamRow,
   raceResultByRegId: Map<
     string,
     { qualifyingTimeMs: number | null; bestLapTimeMs: number | null }
   >,
   fprByTeamAndClass: Map<string, number>,
   selectedClassId: string,
-  pointsTable: Record<string, number>
+  pointsTable: Record<string, number>,
+  scoring: ScoringFlags
 ): TeamRowSummary {
   let bestQualiMs: number | null = null;
   let bestLapTimeMs: number | null = tr.bestLapTimeMs ?? null;
@@ -1571,15 +1593,43 @@ function buildTeamRowSummary(
       }
     }
   }
-  const bonusPts =
-    fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
-  // Mirror the standings logic: rawPointsAwarded stays at 0 on IEC team
-  // results today, so fall back to the configured points table by class
-  // position. (See computeTeamClassStandings in src/lib/standings.ts.)
+  // Mirror computeTeamClassStandings in src/lib/standings.ts:
+  //   Race pts: rawPointsAwarded if set, else pointsTable[classPosition]
+  //   Participation: stored value, else participationPoints when raceDistancePct
+  //                  >= participationMinDistancePct
+  //   FPR:          driver-FPR tier when enabled AND raceDistancePct meets
+  //                  driverFprMinDistancePct, indexed by totalIncidents
+  //   Bonus Pts column = participation + FPR (+ any legacy FPRAward row)
   const basePts =
     tr.classPosition != null ? pointsTable[String(tr.classPosition)] ?? 0 : 0;
   const racePts =
     tr.rawPointsAwarded > 0 ? tr.rawPointsAwarded : basePts;
+
+  const participationStored = tr.participationPointsAwarded ?? 0;
+  let participationPts = participationStored;
+  if (
+    participationPts === 0 &&
+    (tr.raceDistancePct ?? 0) >= scoring.participationMinDistancePct
+  ) {
+    participationPts = scoring.participationPoints;
+  }
+
+  let fprPts = 0;
+  if (
+    scoring.driverFprEnabled &&
+    (tr.raceDistancePct ?? 0) >= scoring.driverFprMinDistancePct
+  ) {
+    fprPts = fprPointsForIncidents(
+      tr.totalIncidents ?? 0,
+      scoring.driverFprTiers
+    );
+  }
+  // Plus any legacy FPRAward row stored on this round (rare on IEC but
+  // kept for backwards compatibility).
+  const legacyFpr =
+    fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
+
+  const bonusPts = participationPts + fprPts + legacyFpr;
   return {
     teamId: tr.teamId,
     teamName: tr.team.name,
@@ -1717,15 +1767,9 @@ function RoundTeamRaceTable({
   fprByTeamAndClass,
   selectedClassId,
   pointsTable,
+  scoring,
 }: {
-  teamResults: (RoundTeamRow & {
-    teamId: string;
-    rawPointsAwarded: number;
-    participationPointsAwarded: number;
-    manualPenaltyPoints: number;
-    bestLapTimeMs: number | null;
-    totalTimeMs: number | null;
-  })[];
+  teamResults: RoundTeamRow[];
   raceResultByRegId: Map<
     string,
     { qualifyingTimeMs: number | null; bestLapTimeMs: number | null }
@@ -1733,6 +1777,7 @@ function RoundTeamRaceTable({
   fprByTeamAndClass: Map<string, number>;
   selectedClassId: string;
   pointsTable: Record<string, number>;
+  scoring: ScoringFlags;
 }) {
   if (teamResults.length === 0) {
     return (
@@ -1742,7 +1787,7 @@ function RoundTeamRaceTable({
     );
   }
   const summaries = teamResults.map((tr) =>
-    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable)
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable, scoring)
   );
   const sorted = [...summaries].sort((a, b) => {
     // Classified first by classPosition, then DNF/DSQ by finishPosition
@@ -1785,15 +1830,9 @@ function RoundTeamQualiTable({
   fprByTeamAndClass,
   selectedClassId,
   pointsTable,
+  scoring,
 }: {
-  teamResults: (RoundTeamRow & {
-    teamId: string;
-    rawPointsAwarded: number;
-    participationPointsAwarded: number;
-    manualPenaltyPoints: number;
-    bestLapTimeMs: number | null;
-    totalTimeMs: number | null;
-  })[];
+  teamResults: RoundTeamRow[];
   raceResultByRegId: Map<
     string,
     { qualifyingTimeMs: number | null; bestLapTimeMs: number | null }
@@ -1801,6 +1840,7 @@ function RoundTeamQualiTable({
   fprByTeamAndClass: Map<string, number>;
   selectedClassId: string;
   pointsTable: Record<string, number>;
+  scoring: ScoringFlags;
 }) {
   if (teamResults.length === 0) {
     return (
@@ -1810,7 +1850,7 @@ function RoundTeamQualiTable({
     );
   }
   const summaries = teamResults.map((tr) =>
-    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable)
+    buildTeamRowSummary(tr, raceResultByRegId, fprByTeamAndClass, selectedClassId, pointsTable, scoring)
   );
   const sorted = [...summaries].sort((a, b) => {
     const at = a.bestQualiMs ?? Number.POSITIVE_INFINITY;
