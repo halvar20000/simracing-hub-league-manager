@@ -240,6 +240,8 @@ export default async function PublicRoundResults({
     participationPoints: round.season.scoringSystem.participationPoints ?? 0,
     participationMinDistancePct:
       round.season.scoringSystem.participationMinDistancePct ?? 75,
+    racePointsMinDistancePct:
+      round.season.scoringSystem.racePointsMinDistancePct ?? 50,
     driverFprEnabled: !!round.season.scoringSystem.driverFprEnabled,
     driverFprTiers: round.season.scoringSystem.driverFprEnabled
       ? readDriverFprTiers(round.season.scoringSystem.driverFprTiers)
@@ -1556,6 +1558,7 @@ type TeamRowSummary = {
 interface ScoringFlags {
   participationPoints: number;
   participationMinDistancePct: number;
+  racePointsMinDistancePct: number;
   driverFprEnabled: boolean;
   driverFprTiers: ReturnType<typeof readDriverFprTiers>;
   driverFprMinDistancePct: number;
@@ -1594,16 +1597,24 @@ function buildTeamRowSummary(
     }
   }
   // Mirror computeTeamClassStandings in src/lib/standings.ts:
-  //   Race pts: rawPointsAwarded if set, else pointsTable[classPosition]
+  //   Race pts: rawPointsAwarded if set, else pointsTable[classPosition],
+  //             gated by raceDistancePct >= racePointsMinDistancePct
   //   Participation: stored value, else participationPoints when raceDistancePct
   //                  >= participationMinDistancePct
   //   FPR:          driver-FPR tier when enabled AND raceDistancePct meets
   //                  driverFprMinDistancePct, indexed by totalIncidents
   //   Bonus Pts column = participation + FPR (+ any legacy FPRAward row)
+  const meetsRaceDistance =
+    (tr.raceDistancePct ?? 0) >= scoring.racePointsMinDistancePct;
   const basePts =
-    tr.classPosition != null ? pointsTable[String(tr.classPosition)] ?? 0 : 0;
-  const racePts =
-    tr.rawPointsAwarded > 0 ? tr.rawPointsAwarded : basePts;
+    meetsRaceDistance && tr.classPosition != null
+      ? pointsTable[String(tr.classPosition)] ?? 0
+      : 0;
+  const racePts = meetsRaceDistance
+    ? tr.rawPointsAwarded > 0
+      ? tr.rawPointsAwarded
+      : basePts
+    : 0;
 
   const participationStored = tr.participationPointsAwarded ?? 0;
   let participationPts = participationStored;

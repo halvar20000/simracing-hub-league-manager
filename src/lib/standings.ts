@@ -624,6 +624,7 @@ export async function computeTeamClassStandings(
   const pointsTable = (season.scoringSystem.pointsTable ?? {}) as Record<string, number>;
   const participationPointsAward = season.scoringSystem.participationPoints ?? 0;
   const participationMinPct = season.scoringSystem.participationMinDistancePct ?? 75;
+  const racePointsMinPct = season.scoringSystem.racePointsMinDistancePct ?? 50;
   const teamFprEnabled = !!season.scoringSystem.driverFprEnabled;
   const teamFprTiers = teamFprEnabled
     ? readDriverFprTiers(season.scoringSystem.driverFprTiers)
@@ -672,10 +673,20 @@ export async function computeTeamClassStandings(
       t = { teamName: r.team.name, total: 0, incidents: 0, rounds: [] };
       b.teams.set(r.team.id, t);
     }
+    // A team that didn't reach the configured min race distance gets 0 race
+    // points (raceDistancePct defaults to 50; IEC sets this to 90).
+    const meetsRaceDistance =
+      (r.raceDistancePct ?? 0) >= racePointsMinPct;
     const basePts =
-      r.classPosition != null ? pointsTable[String(r.classPosition)] ?? 0 : 0;
+      meetsRaceDistance && r.classPosition != null
+        ? pointsTable[String(r.classPosition)] ?? 0
+        : 0;
     const stored = r.rawPointsAwarded ?? 0;
-    const racePts = stored > 0 ? stored : basePts;
+    const racePts = meetsRaceDistance
+      ? stored > 0
+        ? stored
+        : basePts
+      : 0;
 
     // --- team participation + fpr (computed) ---
     const participationStored = r.participationPointsAwarded ?? 0;
