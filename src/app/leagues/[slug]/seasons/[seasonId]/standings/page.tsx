@@ -97,6 +97,8 @@ export default async function StandingsPage({
 
   const sortByCombined = (a: DriverStanding, b: DriverStanding) =>
     b.combinedTotal - a.combinedTotal ||
+    // Tiebreaker: fewer total incidents ranks higher (applies to all leagues).
+    a.totalIncidents - b.totalIncidents ||
     b.rawPoints - a.rawPoints ||
     (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "");
 
@@ -591,7 +593,8 @@ function RaceByRaceTable({
   const sorted = [...rows].sort((a, b) => {
     const at = kind === "combined" ? a.combinedTotal : a.classTotal;
     const bt = kind === "combined" ? b.combinedTotal : b.classTotal;
-    return bt - at;
+    // Tiebreaker: fewer total incidents ranks higher (applies to all leagues).
+    return bt - at || a.totalIncidents - b.totalIncidents;
   });
 
   function formatShortDate(d: Date): string {
