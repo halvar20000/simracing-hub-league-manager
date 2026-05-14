@@ -1550,9 +1550,11 @@ type TeamRowSummary = {
   bestLapTimeMs: number | null;
   bestQualiMs: number | null;
   totalLapsLed: number;
+  totalIncidents: number;
   racePts: number;
   bonusPts: number;
   penPts: number;
+  totalPts: number;
 };
 
 interface ScoringFlags {
@@ -1647,6 +1649,9 @@ function buildTeamRowSummary(
     : fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
 
   const bonusPts = participationPts + fprPts + legacyFpr;
+  const penPts = tr.manualPenaltyPoints;
+  // Total = Race + Bonus (penalty is shown separately).
+  const totalPts = racePts + bonusPts;
   return {
     teamId: tr.teamId,
     teamName: tr.team.name,
@@ -1658,9 +1663,11 @@ function buildTeamRowSummary(
     bestLapTimeMs,
     bestQualiMs,
     totalLapsLed,
+    totalIncidents: tr.totalIncidents ?? 0,
     racePts,
     bonusPts,
-    penPts: tr.manualPenaltyPoints,
+    penPts,
+    totalPts,
   };
 }
 
@@ -1683,9 +1690,11 @@ function TeamTableHead() {
         <th className="px-3 py-2 text-right">Interval</th>
         <th className="px-3 py-2 text-right">Laps Lead</th>
         <th className="px-3 py-2 text-right">Laps Compl.</th>
+        <th className="px-3 py-2 text-right">Inc.</th>
         <th className="px-3 py-2 text-right">Race Pts.</th>
         <th className="px-3 py-2 text-right">Bonus Pts.</th>
         <th className="px-3 py-2 text-right">Pen.</th>
+        <th className="px-3 py-2 text-right">Total</th>
       </tr>
     </thead>
   );
@@ -1761,6 +1770,9 @@ function TeamRowCells({
       <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
         {s.lapsCompleted}
       </td>
+      <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+        {s.totalIncidents}
+      </td>
       <td className="px-3 py-2 text-right text-zinc-200 tabular-nums">
         {s.racePts}
       </td>
@@ -1769,6 +1781,9 @@ function TeamRowCells({
       </td>
       <td className="px-3 py-2 text-right text-red-400 tabular-nums">
         {s.penPts > 0 ? `−${s.penPts} pts.` : ""}
+      </td>
+      <td className="px-3 py-2 text-right font-semibold text-orange-400 tabular-nums">
+        {s.totalPts}
       </td>
     </>
   );
