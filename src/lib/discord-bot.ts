@@ -41,7 +41,11 @@ export type MessagePayload = {
   content?: string;
   embeds?: Embed[];
   components?: Component[];
-  allowed_mentions?: { users?: string[]; parse?: string[] };
+  allowed_mentions?: {
+    users?: string[];
+    roles?: string[];
+    parse?: string[];
+  };
 };
 
 type Result<T = unknown> = { ok: true; data: T } | { ok: false; status: number; body: string };

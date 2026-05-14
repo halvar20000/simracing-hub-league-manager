@@ -104,6 +104,18 @@ export async function postRsvpForRound(
     round.id
   );
 
+  // Optional role @-mention on the INITIAL post only. The reminders
+  // (48h / 12h) deliberately don't ping the role — they only ping silent
+  // drivers individually.
+  const roleId = round.season.league.discordRsvpRoleId;
+  if (roleId) {
+    payload.content = `<@&${roleId}>${payload.content ? `\n${payload.content}` : ""}`;
+    payload.allowed_mentions = {
+      ...(payload.allowed_mentions ?? {}),
+      roles: [roleId],
+    };
+  }
+
   const posted = await postBotMessage(channelId, payload);
   if (!posted.ok) {
     return {
