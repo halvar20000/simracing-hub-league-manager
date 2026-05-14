@@ -196,27 +196,59 @@ export default async function PublicRoundResults({
   const hasTeamData = teamResultsForRound.length > 0;
   const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
   const isMultiRace = racesPerRound > 1;
+
+  // For team-event rounds (e.g. IEC), build the list of car classes present
+  // in this round's team results, sorted by displayOrder. Each becomes its
+  // own tab on the page; the cls URL param holds the carClass shortCode.
+  type RoundTeamClass = {
+    id: string;
+    name: string;
+    shortCode: string;
+    displayOrder: number;
+  };
+  const roundTeamClassesById = new Map<string, RoundTeamClass>();
+  for (const tr of teamResultsForRound) {
+    if (tr.carClass && !roundTeamClassesById.has(tr.carClass.id)) {
+      roundTeamClassesById.set(tr.carClass.id, tr.carClass);
+    }
+  }
+  const roundTeamClasses = [...roundTeamClassesById.values()].sort(
+    (a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name)
+  );
+  const teamClassByCode = new Map(
+    roundTeamClasses.map((c) => [c.shortCode.toUpperCase(), c])
+  );
+  const defaultTeamClass: RoundTeamClass | null = roundTeamClasses[0] ?? null;
+  const selectedTeamClass: RoundTeamClass | null = hasTeamData
+    ? teamClassByCode.get((clsRaw ?? "").toUpperCase()) ??
+      defaultTeamClass
+    : null;
+
   // Team-event rounds (e.g. IEC) collapse to the class/team grouping only —
   // mirrors the standings page behaviour. All driver-centric tabs are hidden.
   const defaultCls: Cls = hasTeamData ? "teams" : "combined";
   const cls: Cls =
-    clsRaw === "pro"
-      ? "pro"
-      : clsRaw === "am"
-        ? "am"
-        : clsRaw === "team"
-          ? "team"
-          : clsRaw === "race1"
-            ? "race1"
-            : clsRaw === "race2"
-              ? "race2"
-              : clsRaw === "quali"
-                ? "quali"
-                : clsRaw === "car"
-                  ? "car"
-                  : clsRaw === "teams"
-                    ? "teams"
-                    : defaultCls;
+    // In team mode, the clsRaw is a carClass shortCode (e.g. "GTP"), not one
+    // of the legacy tab keys. Treat it as the team-mode marker.
+    hasTeamData && selectedTeamClass
+      ? "teams"
+      : clsRaw === "pro"
+        ? "pro"
+        : clsRaw === "am"
+          ? "am"
+          : clsRaw === "team"
+            ? "team"
+            : clsRaw === "race1"
+              ? "race1"
+              : clsRaw === "race2"
+                ? "race2"
+                : clsRaw === "quali"
+                  ? "quali"
+                  : clsRaw === "car"
+                    ? "car"
+                    : clsRaw === "teams"
+                      ? "teams"
+                      : defaultCls;
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
@@ -394,14 +426,20 @@ export default async function PublicRoundResults({
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-zinc-500">View:</span>
         {hasTeamData ? (
-          // Team-event rounds (IEC): only show Teams. Driver-centric tabs
-          // are hidden to mirror the standings view.
-          <Link
-            href={`${baseHref}?cls=teams`}
-            className={`${pillBase} ${cls === "teams" ? pillOn : pillOff}`}
-          >
-            Teams
-          </Link>
+          // Team-event rounds (IEC): one tab per car class. Each tab shows
+          // team race results above and team qualifying below.
+          roundTeamClasses.map((c) => {
+            const active = selectedTeamClass?.id === c.id;
+            return (
+              <Link
+                key={c.id}
+                href={`${baseHref}?cls=${encodeURIComponent(c.shortCode)}`}
+                className={`${pillBase} ${active ? pillOn : pillOff}`}
+              >
+                {c.name}
+              </Link>
+            );
+          })
         ) : (
           <>
             <Link
@@ -487,6 +525,12 @@ export default async function PublicRoundResults({
             title="No results entered yet"
             description="Once race results are imported, they will appear here."
           />
+        ) : cls === "teams" && selectedTeamClass ? (
+          <RoundTeamSection
+            teamResults={teamResultsForRound.filter(
+              (tr) => tr.carClass?.id === selectedTeamClass.id
+            )}
+          />
         ) : cls === "teams" ? (
           <RoundTeamSection teamResults={teamResultsForRound} />
         ) : cls === "quali" ? (
@@ -538,6 +582,17 @@ export default async function PublicRoundResults({
           />
         )}
       </section>
+
+      {hasTeamData && selectedTeamClass && (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold">Qualifying — {selectedTeamClass.name}</h2>
+          <RoundTeamQualifyingTable
+            raceResults={allRows.filter(
+              (r) => r.registration.carClass?.name === selectedTeamClass.name
+            )}
+          />
+        </section>
+      )}
 
       {round.fprAwards.length > 0 && (
         <section>
@@ -1405,5 +1460,116 @@ function RoundTeamSection({ teamResults }: { teamResults: RoundTeamRow[] }) {
         </details>
       ))}
     </section>
+  );
+}
+
+/**
+ * Team-level qualifying for a single car class. The caller pre-filters
+ * raceResults to one class. For each team with one or more drivers, this
+ * computes the best (smallest) qualifyingTimeMs across the team's drivers
+ * and shows which driver set it. Sorted by team time ASC.
+ */
+function RoundTeamQualifyingTable({
+  raceResults,
+}: {
+  raceResults: Row[];
+}) {
+  type TeamQuali = {
+    teamName: string;
+    bestQualiMs: number | null;
+    bestDriverFirst: string | null;
+    bestDriverLast: string | null;
+    bestDriverCountry: string | null;
+  };
+  const byTeam = new Map<string, TeamQuali>();
+  for (const r of raceResults) {
+    const teamName = r.registration.team?.name ?? null;
+    if (!teamName) continue;
+    const qt = r.qualifyingTimeMs;
+    let existing = byTeam.get(teamName);
+    if (!existing) {
+      existing = {
+        teamName,
+        bestQualiMs: null,
+        bestDriverFirst: null,
+        bestDriverLast: null,
+        bestDriverCountry: null,
+      };
+      byTeam.set(teamName, existing);
+    }
+    if (qt != null && (existing.bestQualiMs == null || qt < existing.bestQualiMs)) {
+      existing.bestQualiMs = qt;
+      existing.bestDriverFirst = r.registration.user.firstName;
+      existing.bestDriverLast = r.registration.user.lastName;
+      existing.bestDriverCountry = r.registration.user.countryCode;
+    }
+  }
+
+  const sorted = [...byTeam.values()].sort((a, b) => {
+    const at = a.bestQualiMs ?? Number.POSITIVE_INFINITY;
+    const bt = b.bestQualiMs ?? Number.POSITIVE_INFINITY;
+    return at - bt;
+  });
+
+  if (sorted.length === 0) {
+    return (
+      <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+        No qualifying data available for this class.
+      </p>
+    );
+  }
+
+  const pole = sorted[0]?.bestQualiMs ?? null;
+
+  return (
+    <div className="overflow-hidden rounded border border-zinc-800">
+      <table className="w-full text-sm">
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="px-3 py-2">Pos</th>
+            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2">Best lap by</th>
+            <th className="px-3 py-2 text-right">Quali time</th>
+            <th className="px-3 py-2 text-right">Gap to pole</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((t, i) => {
+            const gap =
+              pole != null && t.bestQualiMs != null
+                ? t.bestQualiMs - pole
+                : null;
+            return (
+              <tr key={t.teamName} className="border-t border-zinc-800 hover:bg-zinc-900">
+                <td className="px-3 py-2 font-medium">
+                  {t.bestQualiMs != null ? i + 1 : "—"}
+                </td>
+                <td className="px-3 py-2 font-medium">{t.teamName}</td>
+                <td className="px-3 py-2 text-zinc-400">
+                  {t.bestQualiMs != null ? (
+                    <>
+                      <CountryFlag code={t.bestDriverCountry} />
+                      {t.bestDriverFirst} {t.bestDriverLast}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
+                  {formatMsToTime(t.bestQualiMs) || "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">
+                  {gap != null && gap > 0
+                    ? "+" + formatMsToTime(gap)
+                    : gap === 0
+                      ? "pole"
+                      : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
