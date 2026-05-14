@@ -81,36 +81,95 @@ function buildSession(
   raceNumber: number
 ): ParsedSession {
   const rows: any[] = Array.isArray(s?.results) ? s.results : [];
-  const drivers: ParsedDriver[] = rows
-    .filter((r) => typeof r?.cust_id === "number" && r.cust_id > 0)
-    .map((r) => {
-      const startPosRaw = r.starting_position;
-      const startingPosition =
-        typeof startPosRaw === "number" && startPosRaw >= 0
-          ? startPosRaw + 1
-          : null;
-      return {
-        custId: r.cust_id,
-        displayName: String(r.display_name ?? ""),
-        countryCode: typeof r.country_code === "string" && r.country_code.length === 2
+
+  // For solo sessions, each row IS a driver and has cust_id directly.
+  // For team sessions (e.g. IEC), each row is a TEAM (no cust_id, may have a
+  // negative team_id) and the actual drivers live in row.driver_results[].
+  // We flatten both shapes into a single ParsedDriver[] list, using the
+  // driver's own fields where available and falling back to the team row.
+  const toParsedDriver = (
+    r: any,
+    team: any | null = null
+  ): ParsedDriver => {
+    // Helper: take driver-level value if set, else the team-level value.
+    const driverOrTeam = <T>(k: string): T => (r[k] ?? team?.[k]) as T;
+    const startPosRaw = driverOrTeam<number | null | undefined>("starting_position");
+    const startingPosition =
+      typeof startPosRaw === "number" && startPosRaw >= 0
+        ? startPosRaw + 1
+        : null;
+    return {
+      custId: r.cust_id,
+      displayName: String(r.display_name ?? team?.display_name ?? ""),
+      countryCode:
+        typeof r.country_code === "string" && r.country_code.length === 2
           ? r.country_code.toUpperCase()
+          : typeof team?.country_code === "string" && team.country_code.length === 2
+            ? team.country_code.toUpperCase()
+            : null,
+      finishPosition:
+        (typeof driverOrTeam<number>("finish_position") === "number"
+          ? (driverOrTeam<number>("finish_position") as number)
+          : 0) + 1,
+      startingPosition,
+      lapsComplete:
+        typeof driverOrTeam<number>("laps_complete") === "number"
+          ? (driverOrTeam<number>("laps_complete") as number)
+          : 0,
+      bestLapMs: tenThousandthsToMs(driverOrTeam("best_lap_time")),
+      // iRacing returns -1 (not null/undefined) for unset fields, so a
+      // raw `??` chain doesn't fall through. Try each candidate through
+      // the converter (which rejects <=0) and pick the first real value.
+      qualLapMs:
+        tenThousandthsToMs(driverOrTeam("best_qual_lap_time")) ??
+        tenThousandthsToMs(driverOrTeam("qual_lap_time")),
+      incidents:
+        typeof driverOrTeam<number>("incidents") === "number"
+          ? (driverOrTeam<number>("incidents") as number)
+          : 0,
+      iRating:
+        typeof r.newi_rating === "number" && r.newi_rating > 0
+          ? r.newi_rating
           : null,
-        finishPosition: (typeof r.finish_position === "number" ? r.finish_position : 0) + 1,
-        startingPosition,
-        lapsComplete: typeof r.laps_complete === "number" ? r.laps_complete : 0,
-        bestLapMs: tenThousandthsToMs(r.best_lap_time),
-        qualLapMs: tenThousandthsToMs(r.qual_lap_time ?? r.best_qual_lap_time),
-        incidents: typeof r.incidents === "number" ? r.incidents : 0,
-        iRating: typeof r.newi_rating === "number" && r.newi_rating > 0 ? r.newi_rating : null,
-        carClassShortName:
-          typeof r.car_class_short_name === "string" ? r.car_class_short_name : null,
-        carIracingId: typeof r.car_id === "number" ? r.car_id : null,
-        carName: typeof r.car_name === "string" ? r.car_name : null,
-        carNumber: typeof r.livery?.car_number === "string" ? r.livery.car_number : null,
-        reasonOut: String(r.reason_out ?? "Running"),
-        finishStatus: mapReasonOut(r.reason_out),
-      };
-    });
+      carClassShortName:
+        typeof driverOrTeam("car_class_short_name") === "string"
+          ? (driverOrTeam("car_class_short_name") as string)
+          : null,
+      carIracingId:
+        typeof driverOrTeam("car_id") === "number"
+          ? (driverOrTeam("car_id") as number)
+          : null,
+      carName:
+        typeof driverOrTeam("car_name") === "string"
+          ? (driverOrTeam("car_name") as string)
+          : null,
+      carNumber:
+        typeof team?.livery?.car_number === "string"
+          ? team.livery.car_number
+          : typeof r.livery?.car_number === "string"
+            ? r.livery.car_number
+            : null,
+      reasonOut: String(driverOrTeam("reason_out") ?? "Running"),
+      finishStatus: mapReasonOut(driverOrTeam("reason_out")),
+    };
+  };
+
+  const drivers: ParsedDriver[] = [];
+  for (const r of rows) {
+    // Case 1: solo row (the row itself is a driver).
+    if (typeof r?.cust_id === "number" && r.cust_id > 0) {
+      drivers.push(toParsedDriver(r));
+      continue;
+    }
+    // Case 2: team row containing nested driver_results.
+    if (Array.isArray(r?.driver_results) && r.driver_results.length > 0) {
+      for (const d of r.driver_results) {
+        if (typeof d?.cust_id === "number" && d.cust_id > 0) {
+          drivers.push(toParsedDriver(d, r));
+        }
+      }
+    }
+  }
   const maxLaps = drivers.reduce((m, d) => Math.max(m, d.lapsComplete), 0);
   return {
     kind,
@@ -138,8 +197,11 @@ export function parseIracingEventJson(input: unknown): ParsedEvent {
   const raceSessions = all
     .filter((s) => s?.simsession_type === 6)
     .sort((a, b) => (a.simsession_number ?? 0) - (b.simsession_number ?? 0));
-  // Qualify session = simsession_type === 4 (only one expected per event).
-  const qualifySession = all.find((s) => s?.simsession_type === 4);
+  // Qualify session: simsession_type === 4 (Lone Qualifying) OR === 5
+  // (Open Qualifying). Real-world IEC events use Open Qualifying (type 5).
+  const qualifySession = all.find(
+    (s) => s?.simsession_type === 4 || s?.simsession_type === 5
+  );
 
   const sessions: ParsedSession[] = [];
   if (qualifySession) {
