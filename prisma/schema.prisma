@@ -215,8 +215,6 @@ model Round {
 
   // RSVP system
   rsvpNotifiedAt          DateTime?
-  rsvpReminder48hAt       DateTime?
-  rsvpReminder12hAt       DateTime?
   rsvpClosedAt            DateTime?
   rsvps                   RoundRsvp[]
   rsvpDiscordMessage      RoundDiscordRsvpMessage?
