@@ -186,7 +186,7 @@ function buildDeclineOnlyPayload(
     footer: {
       text: input.closed
         ? "Registration closed"
-        : "No-shows without a Decline incur a penalty point (GT3 WCT).",
+        : "No-shows without a Decline incur a penalty point.",
     },
     ...(input.leagueLogoUrl ? { image: { url: input.leagueLogoUrl } } : {}),
   };
