@@ -100,6 +100,7 @@ export async function postRsvpForRound(
       totalRegistered: round.season._count.registrations,
       maxDrivers: round.season.maxDrivers,
       rsvpMode: round.season.league.rsvpMode,
+      embedColor: round.season.league.discordEmbedColor,
     },
     round.id
   );

@@ -41,7 +41,23 @@ export type RsvpEmbedInput = {
   maxDrivers?: number | null;      // optional grid cap; appended to the tally line when set
   rsvpMode?: RsvpMode;             // default FULL
   closed?: boolean;                // when true, render disabled buttons + "Closed"
+  embedColor?: string | null;      // hex like "#EB459E" or "EB459E"; defaults to orange
 };
+
+const DEFAULT_EMBED_COLOR = 0xff6b35; // orange
+
+/**
+ * Parse a hex color string into an integer for Discord's `color` field.
+ * Accepts "#EB459E", "EB459E", or "eb459e". Returns the default orange when
+ * input is missing or malformed.
+ */
+function parseEmbedColor(hex: string | null | undefined): number {
+  if (!hex) return DEFAULT_EMBED_COLOR;
+  const cleaned = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return DEFAULT_EMBED_COLOR;
+  const n = parseInt(cleaned, 16);
+  return Number.isFinite(n) ? n : DEFAULT_EMBED_COLOR;
+}
 
 /**
  * Discord requires absolute URLs in embeds. If the stored logoUrl is
@@ -123,7 +139,7 @@ function buildFullPayload(
     title: `🏁 RSVP — ${input.leagueName}`,
     description,
     url: input.roundUrl,
-    color: 0xff6b35,
+    color: parseEmbedColor(input.embedColor),
     fields,
     timestamp: new Date().toISOString(),
     footer: {
@@ -180,7 +196,7 @@ function buildDeclineOnlyPayload(
       `**Click Decline only if you CAN'T race.** All other drivers are assumed to be on the grid.` +
       (input.closed ? "" : ` Clicking Decline again removes it.`),
     url: input.roundUrl,
-    color: 0xff6b35,
+    color: parseEmbedColor(input.embedColor),
     fields,
     timestamp: new Date().toISOString(),
     footer: {

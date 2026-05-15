@@ -66,6 +66,14 @@ export async function updateLeague(id: string, formData: FormData) {
     String(formData.get("discordRsvpChannelId") ?? "").trim() || null;
   const discordRsvpRoleId =
     String(formData.get("discordRsvpRoleId") ?? "").trim() || null;
+  // Embed color: accept "#RRGGBB" or "RRGGBB"; reject anything else by
+  // storing null so the embed falls back to its default.
+  const embedColorRaw = String(formData.get("discordEmbedColor") ?? "").trim();
+  const discordEmbedColor = /^#?[0-9a-fA-F]{6}$/.test(embedColorRaw)
+    ? embedColorRaw.startsWith("#")
+      ? embedColorRaw
+      : "#" + embedColorRaw
+    : null;
   const daysBeforeRaw = String(formData.get("rsvpDaysBefore") ?? "").trim();
   const rsvpDaysBefore =
     daysBeforeRaw && /^\d+$/.test(daysBeforeRaw)
@@ -98,6 +106,7 @@ export async function updateLeague(id: string, formData: FormData) {
       discordGuildId,
       discordRsvpChannelId,
       discordRsvpRoleId,
+      discordEmbedColor,
       rsvpDaysBefore,
       rsvpMode,
       rsvpCloseBeforeHours,

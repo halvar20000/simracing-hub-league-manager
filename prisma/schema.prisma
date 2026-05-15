@@ -111,6 +111,9 @@ model League {
   /// Optional Discord role to @mention on the initial RSVP post.
   /// Reminders (48h / 12h) do NOT use this — they only ping silent drivers.
   discordRsvpRoleId       String?
+  /// Optional hex color (e.g. "#EB459E") used as the Discord embed's
+  /// side-bar color on RSVP posts. Defaults to orange when unset.
+  discordEmbedColor       String?
   rsvpDaysBefore          Int      @default(7)
   rsvpMode                RsvpMode @default(FULL)
   rsvpCloseBeforeHours    Int      @default(1) // Hours before race start when RSVP locks
