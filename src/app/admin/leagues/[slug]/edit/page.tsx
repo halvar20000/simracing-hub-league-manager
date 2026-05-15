@@ -118,6 +118,18 @@ export default async function EditLeaguePage({
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
               />
             </label>
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                RSVP role ID — @-mention on initial post (optional)
+              </span>
+              <input
+                name="discordRsvpRoleId"
+                type="text"
+                defaultValue={league.discordRsvpRoleId ?? ""}
+                placeholder="e.g. 1224317904145616946"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+              />
+            </label>
             <label className="block">
               <span className="mb-1 block text-xs text-zinc-400">
                 Post N days before

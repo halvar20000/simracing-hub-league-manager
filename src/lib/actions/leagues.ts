@@ -64,6 +64,8 @@ export async function updateLeague(id: string, formData: FormData) {
     String(formData.get("discordGuildId") ?? "").trim() || null;
   const discordRsvpChannelId =
     String(formData.get("discordRsvpChannelId") ?? "").trim() || null;
+  const discordRsvpRoleId =
+    String(formData.get("discordRsvpRoleId") ?? "").trim() || null;
   const daysBeforeRaw = String(formData.get("rsvpDaysBefore") ?? "").trim();
   const rsvpDaysBefore =
     daysBeforeRaw && /^\d+$/.test(daysBeforeRaw)
@@ -95,6 +97,7 @@ export async function updateLeague(id: string, formData: FormData) {
       registrationFeeCurrency,
       discordGuildId,
       discordRsvpChannelId,
+      discordRsvpRoleId,
       rsvpDaysBefore,
       rsvpMode,
       rsvpCloseBeforeHours,
