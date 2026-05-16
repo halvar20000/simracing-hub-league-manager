@@ -34,6 +34,13 @@ export default async function AdminSeasonCars({
 
   if (!season || season.league.slug !== slug) notFound();
 
+  // GT3 WCT uses "classes" for Pro/Am splits, not actual car classes. Tailor
+  // the form labels and example placeholders accordingly.
+  const isProAmLeague = slug === "cas-gt3-wct";
+  const classHeading = isProAmLeague ? "Add class (PRO, AM)" : "Add a car class";
+  const classNamePlaceholder = isProAmLeague ? "PRO" : "GT4";
+  const classShortPlaceholder = isProAmLeague ? "PRO" : "GT4";
+
   return (
     <div className="space-y-6">
       <div>
@@ -54,7 +61,7 @@ export default async function AdminSeasonCars({
       </div>
 
             <section className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-3">
-        <h2 className="text-lg font-semibold">Add a car class</h2>
+        <h2 className="text-lg font-semibold">{classHeading}</h2>
         <form action={addCarClass} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="seasonId" value={seasonId} />
           <div>
@@ -63,7 +70,7 @@ export default async function AdminSeasonCars({
               type="text"
               name="name"
               required
-              placeholder="GT4"
+              placeholder={classNamePlaceholder}
               className="w-32 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
             />
           </div>
@@ -73,21 +80,23 @@ export default async function AdminSeasonCars({
               type="text"
               name="shortCode"
               required
-              placeholder="GT4"
+              placeholder={classShortPlaceholder}
               className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
             />
           </div>
-          <div>
-            <label className="block text-xs text-zinc-400">
-              iRacing class id(s) — optional, comma-separated
-            </label>
-            <input
-              type="text"
-              name="iracingCarClassIds"
-              placeholder="74, 84"
-              className="w-40 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
-            />
-          </div>
+          {!isProAmLeague && (
+            <div>
+              <label className="block text-xs text-zinc-400">
+                iRacing class id(s) — optional, comma-separated
+              </label>
+              <input
+                type="text"
+                name="iracingCarClassIds"
+                placeholder="74, 84"
+                className="w-40 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
+              />
+            </div>
+          )}
           <button
             type="submit"
             className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
