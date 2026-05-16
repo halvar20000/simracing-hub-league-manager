@@ -9,7 +9,7 @@ import { postStreamAnnouncement } from "@/lib/notify-stream";
 import { deleteBotMessage } from "@/lib/discord-bot";
 
 const ACCEPT = ["image/png", "image/jpeg", "image/webp", "image/gif"];
-const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 
 function streamPagePath(slug: string, seasonId: string, roundId: string) {
   return `/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/stream`;
@@ -74,19 +74,35 @@ export async function saveStreamAnnouncement(formData: FormData): Promise<void> 
     if (file.size > MAX_BYTES) {
       redirect(
         streamPagePath(leagueSlug, seasonId, roundId) +
-          "?error=Image+exceeds+8+MB"
+          "?error=" +
+          encodeURIComponent(
+            `Image is ${(file.size / 1024 / 1024).toFixed(1)} MB — max is 20 MB. Compress or use JPEG.`
+          )
       );
     }
 
     // Stable filename including roundId so re-uploads can be diffed/audited
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
     const filename = `stream-posters/${roundId}.${Date.now()}.${ext}`;
-    const blob = await put(filename, file, {
-      access: "public",
-      contentType: file.type,
-      addRandomSuffix: false,
-    });
-    posterBlobUrl = blob.url;
+    try {
+      const blob = await put(filename, file, {
+        access: "public",
+        contentType: file.type,
+        addRandomSuffix: false,
+      });
+      posterBlobUrl = blob.url;
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Unknown blob upload error";
+      const hint = /BLOB_READ_WRITE_TOKEN|No token|Forbidden|401/i.test(msg)
+        ? "Vercel Blob store not configured. Create one in Vercel → Storage; BLOB_READ_WRITE_TOKEN is auto-injected."
+        : msg;
+      redirect(
+        streamPagePath(leagueSlug, seasonId, roundId) +
+          "?error=" +
+          encodeURIComponent("Poster upload failed: " + hint)
+      );
+    }
 
     // Delete the previous blob if we're replacing.
     if (existing?.posterBlobUrl && existing.posterBlobUrl !== posterBlobUrl) {

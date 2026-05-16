@@ -140,7 +140,7 @@ export default async function AdminRoundStreamPage({
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
-            Poster image (PNG/JPG/WebP, max 8 MB)
+            Poster image (PNG/JPG/WebP, max 20 MB — JPEG keeps files smaller)
           </span>
           <input
             type="file"
