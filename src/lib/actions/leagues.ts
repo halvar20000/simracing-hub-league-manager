@@ -74,6 +74,11 @@ export async function updateLeague(id: string, formData: FormData) {
       ? embedColorRaw
       : "#" + embedColorRaw
     : null;
+
+  // Twitch stream announcement bot — channel + default Twitch URL.
+  const discordStreamChannelId =
+    String(formData.get("discordStreamChannelId") ?? "").trim() || null;
+  const twitchUrl = String(formData.get("twitchUrl") ?? "").trim() || null;
   const daysBeforeRaw = String(formData.get("rsvpDaysBefore") ?? "").trim();
   const rsvpDaysBefore =
     daysBeforeRaw && /^\d+$/.test(daysBeforeRaw)
@@ -107,6 +112,8 @@ export async function updateLeague(id: string, formData: FormData) {
       discordRsvpChannelId,
       discordRsvpRoleId,
       discordEmbedColor,
+      discordStreamChannelId,
+      twitchUrl,
       rsvpDaysBefore,
       rsvpMode,
       rsvpCloseBeforeHours,

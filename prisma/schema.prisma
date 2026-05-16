@@ -117,6 +117,12 @@ model League {
   rsvpDaysBefore          Int      @default(7)
   rsvpMode                RsvpMode @default(FULL)
   rsvpCloseBeforeHours    Int      @default(1) // Hours before race start when RSVP locks
+
+  /// Per-league channel for Twitch stream announcement bot posts.
+  discordStreamChannelId  String?
+  /// Default Twitch URL for the league. Each StreamAnnouncement can
+  /// override this; if both are unset the embed has no Twitch link.
+  twitchUrl               String?
 }
 
 model Season {
@@ -221,6 +227,9 @@ model Round {
   rsvpClosedAt            DateTime?
   rsvps                   RoundRsvp[]
   rsvpDiscordMessage      RoundDiscordRsvpMessage?
+
+  // Per-round Twitch stream announcement (1:1).
+  streamAnnouncement      StreamAnnouncement?
 }
 
 model Registration {
@@ -503,6 +512,33 @@ model RoundDiscordRsvpMessage {
   postedAt        DateTime       @default(now())
   closedAt        DateTime?
   updatedAt       DateTime       @updatedAt
+}
+
+// ==========================================
+// Twitch stream announcement (per round)
+// ==========================================
+
+model StreamAnnouncement {
+  id                 String   @id @default(cuid())
+  roundId            String   @unique
+  round              Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  /// Vercel Blob URL of the uploaded poster image.
+  posterBlobUrl      String?
+  /// Per-round override of League.twitchUrl.
+  twitchUrl          String?
+  /// Optional custom body (markdown allowed).
+  messageText        String?
+  /// When the bot should post the announcement.
+  scheduledAt        DateTime
+  /// Set once the bot has posted. Used for idempotency.
+  postedAt           DateTime?
+  /// Snapshot of the channel + message so we can edit/delete later.
+  discordChannelId   String?
+  discordMessageId   String?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 // ==========================================

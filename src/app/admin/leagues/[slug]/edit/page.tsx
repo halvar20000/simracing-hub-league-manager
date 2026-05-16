@@ -142,6 +142,30 @@ export default async function EditLeaguePage({
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
               />
             </label>
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Stream channel ID (Twitch announcement bot)
+              </span>
+              <input
+                name="discordStreamChannelId"
+                type="text"
+                defaultValue={league.discordStreamChannelId ?? ""}
+                placeholder="e.g. 1234567890123456789"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+              />
+            </label>
+            <label className="block flex-1 min-w-[16rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Default Twitch URL (per-round override available)
+              </span>
+              <input
+                name="twitchUrl"
+                type="url"
+                defaultValue={league.twitchUrl ?? ""}
+                placeholder="https://twitch.tv/cas-sim-tv"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
             <label className="block">
               <span className="mb-1 block text-xs text-zinc-400">
                 Post N days before

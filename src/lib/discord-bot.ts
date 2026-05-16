@@ -21,6 +21,8 @@ type Component = {
   style?: number;
   emoji?: { name: string };
   disabled?: boolean;
+  /** Discord link buttons (style=5) require url instead of custom_id. */
+  url?: string;
 };
 
 export type EmbedField = { name: string; value: string; inline?: boolean };
