@@ -6,6 +6,7 @@ import {
   saveStreamAnnouncement,
   deleteStreamAnnouncement,
   postStreamNow,
+  refreshStreamEmbed,
 } from "@/lib/actions/stream-announcements";
 
 function toLocalInputValue(d: Date): string {
@@ -231,8 +232,30 @@ export default async function AdminRoundStreamPage({
               <button
                 type="submit"
                 className="rounded bg-orange-600 px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500"
+                title={
+                  a.postedAt
+                    ? "Posts a NEW Discord message. The previous post stays as is."
+                    : "Posts the announcement to the configured Discord channel now."
+                }
               >
                 Post now
+              </button>
+            </form>
+            <form action={refreshStreamEmbed}>
+              <input type="hidden" name="leagueSlug" value={slug} />
+              <input type="hidden" name="seasonId" value={seasonId} />
+              <input type="hidden" name="roundId" value={roundId} />
+              <button
+                type="submit"
+                disabled={!a.postedAt}
+                title={
+                  a.postedAt
+                    ? "Edits the existing Discord message in place with the current poster / message / Twitch URL / schedule time."
+                    : "No posted message to edit yet — use Post now first."
+                }
+                className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-zinc-800"
+              >
+                Refresh embed
               </button>
             </form>
             <details>

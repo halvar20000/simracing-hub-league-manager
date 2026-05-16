@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { put, del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { postStreamAnnouncement } from "@/lib/notify-stream";
+import {
+  postStreamAnnouncement,
+  refreshStreamAnnouncement,
+} from "@/lib/notify-stream";
 import { deleteBotMessage } from "@/lib/discord-bot";
 
 const ACCEPT = ["image/png", "image/jpeg", "image/webp", "image/gif"];
@@ -185,6 +188,21 @@ export async function postStreamNow(formData: FormData): Promise<void> {
   const qs = r.ok
     ? "?ok=Posted"
     : "?error=" + encodeURIComponent(`Could not post: ${r.reason}`);
+
+  revalidatePath(streamPagePath(leagueSlug, seasonId, roundId));
+  redirect(streamPagePath(leagueSlug, seasonId, roundId) + qs);
+}
+
+export async function refreshStreamEmbed(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const leagueSlug = String(formData.get("leagueSlug") ?? "");
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const roundId = String(formData.get("roundId") ?? "");
+
+  const r = await refreshStreamAnnouncement(roundId);
+  const qs = r.ok
+    ? "?ok=Embed+refreshed"
+    : "?error=" + encodeURIComponent(`Could not refresh: ${r.reason}`);
 
   revalidatePath(streamPagePath(leagueSlug, seasonId, roundId));
   redirect(streamPagePath(leagueSlug, seasonId, roundId) + qs);
