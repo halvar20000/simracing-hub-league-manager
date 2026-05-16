@@ -120,6 +120,11 @@ export async function updateSeason(
       ? Math.max(1, Math.min(999, parseInt(maxDriversRaw, 10)))
       : null;
 
+  // Season poster — used as the season-hero background and as the "Full
+  // schedule poster" link. Stored as a URL (https or app-relative path).
+  const scheduleImageUrl =
+    String(formData.get("scheduleImageUrl") ?? "").trim() || null;
+
   await prisma.season.update({
     where: { id: seasonId },
     data: {
@@ -134,6 +139,7 @@ export async function updateSeason(
       teamScoringMode,
       teamScoringBestN,
       maxDrivers,
+      scheduleImageUrl,
     },
   });
 
