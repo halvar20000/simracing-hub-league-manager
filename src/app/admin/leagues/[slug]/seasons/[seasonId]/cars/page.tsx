@@ -27,7 +27,13 @@ export default async function AdminSeasonCars({
         orderBy: { displayOrder: "asc" },
         include: {
           cars: { orderBy: { displayOrder: "asc" } },
-          _count: { select: { cars: true } },
+          _count: {
+            select: {
+              cars: true,
+              registrations: true,
+              teamResults: true,
+            },
+          },
         },
       },
     },
@@ -55,7 +61,9 @@ export default async function AdminSeasonCars({
   // GT3 WCT uses "classes" for Pro/Am splits, not actual car classes. Tailor
   // the form labels and example placeholders accordingly.
   const isProAmLeague = slug === "cas-gt3-wct";
-  const classHeading = isProAmLeague ? "Add class (PRO, AM)" : "Add a car class";
+  const classHeading = isProAmLeague
+    ? "Add driver class (PRO, AM)"
+    : "Add a car class";
   const classNamePlaceholder = isProAmLeague ? "PRO" : "GT4";
   const classShortPlaceholder = isProAmLeague ? "PRO" : "GT4";
 
@@ -182,17 +190,37 @@ export default async function AdminSeasonCars({
                 {cc.isLocked ? "🔒 Locked" : "Lock class"}
               </button>
             </form>
-            {cc._count.cars === 0 && (
-              <form action={deleteCarClass}>
+            <details className="ml-auto">
+              <summary className="cursor-pointer rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">
+                Danger zone
+              </summary>
+              <form action={deleteCarClass} className="mt-2">
                 <input type="hidden" name="carClassId" value={cc.id} />
                 <button
                   type="submit"
-                  className="rounded border border-red-900/40 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30"
+                  disabled={
+                    cc._count.registrations > 0 || cc._count.teamResults > 0
+                  }
+                  title={
+                    cc._count.registrations > 0 || cc._count.teamResults > 0
+                      ? "Cannot delete: this class has registrations or race results."
+                      : "Deletes the class and all its cars."
+                  }
+                  className="rounded border border-red-900/40 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   Delete class
                 </button>
+                {(cc._count.registrations > 0 ||
+                  cc._count.teamResults > 0) && (
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    Has {cc._count.registrations} registration
+                    {cc._count.registrations === 1 ? "" : "s"} /{" "}
+                    {cc._count.teamResults} result
+                    {cc._count.teamResults === 1 ? "" : "s"} — clear those first.
+                  </p>
+                )}
               </form>
-            )}
+            </details>
           </div>
 
           {cc.cars.length > 0 ? (
