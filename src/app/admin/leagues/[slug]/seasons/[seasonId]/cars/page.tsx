@@ -9,6 +9,7 @@ import {
   addCarClass,
   deleteCarClass,
   toggleCarClassLock,
+  copyClassesAndCarsFromPreviousSeason,
 } from "@/lib/actions/cars";
 
 export default async function AdminSeasonCars({
@@ -33,6 +34,23 @@ export default async function AdminSeasonCars({
   });
 
   if (!season || season.league.slug !== slug) notFound();
+
+  // Most recent prior season in the same league — used to label / enable
+  // the "Copy from previous season" button.
+  const previousSeason = await prisma.season.findFirst({
+    where: {
+      leagueId: season.leagueId,
+      id: { not: season.id },
+      createdAt: { lt: season.createdAt },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      year: true,
+      _count: { select: { carClasses: true } },
+    },
+  });
 
   // GT3 WCT uses "classes" for Pro/Am splits, not actual car classes. Tailor
   // the form labels and example placeholders accordingly.
@@ -59,6 +77,32 @@ export default async function AdminSeasonCars({
           after a comma.
         </p>
       </div>
+
+      {previousSeason && previousSeason._count.carClasses > 0 && (
+        <section className="rounded border border-zinc-800 bg-zinc-900 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Copy from previous season</h2>
+            <p className="text-xs text-zinc-400">
+              Copies every class and car from{" "}
+              <span className="text-zinc-200">
+                {previousSeason.name} ({previousSeason.year})
+              </span>
+              {" "}into this season. Existing classes (matched by short code)
+              and existing cars (matched by name) are skipped, so it&apos;s
+              safe to run more than once.
+            </p>
+          </div>
+          <form action={copyClassesAndCarsFromPreviousSeason}>
+            <input type="hidden" name="seasonId" value={seasonId} />
+            <button
+              type="submit"
+              className="rounded bg-orange-600 px-3 py-1.5 text-sm font-semibold hover:bg-orange-500"
+            >
+              Copy from {previousSeason.name}
+            </button>
+          </form>
+        </section>
+      )}
 
             <section className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-3">
         <h2 className="text-lg font-semibold">{classHeading}</h2>

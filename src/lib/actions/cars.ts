@@ -200,3 +200,107 @@ export async function toggleCarClassLock(formData: FormData) {
   );
 }
 
+/**
+ * Copy all CarClasses (+ their Cars) from the most recent prior season of
+ * the same league into the target season. Skips classes whose shortCode
+ * already exists in the target. Cars are skipped if a car with the same
+ * name already exists in the destination class.
+ *
+ * Triggered from a button on /admin/leagues/[slug]/seasons/[seasonId]/cars
+ * with name="seasonId" in the form body.
+ */
+export async function copyClassesAndCarsFromPreviousSeason(
+  formData: FormData
+): Promise<void> {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  if (!seasonId) throw new Error("seasonId required");
+
+  const target = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: {
+      id: true,
+      leagueId: true,
+      createdAt: true,
+      league: { select: { slug: true } },
+    },
+  });
+  if (!target) throw new Error("Target season not found");
+
+  const source = await prisma.season.findFirst({
+    where: {
+      leagueId: target.leagueId,
+      id: { not: target.id },
+      createdAt: { lt: target.createdAt },
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      carClasses: {
+        include: { cars: { orderBy: { displayOrder: "asc" } } },
+        orderBy: { displayOrder: "asc" },
+      },
+    },
+  });
+  if (!source) {
+    // Nothing to copy — silently succeed so the form submit completes.
+    revalidatePath(
+      `/admin/leagues/${target.league.slug}/seasons/${target.id}/cars`
+    );
+    return;
+  }
+
+  // Existing classes in target keyed by uppercase shortCode so we don't
+  // create duplicates.
+  const existingClasses = await prisma.carClass.findMany({
+    where: { seasonId: target.id },
+    select: { id: true, shortCode: true },
+  });
+  const existingByShort = new Map(
+    existingClasses.map((c) => [c.shortCode.toUpperCase(), c.id])
+  );
+
+  for (const sc of source.carClasses) {
+    let destClassId = existingByShort.get(sc.shortCode.toUpperCase());
+    if (!destClassId) {
+      const created = await prisma.carClass.create({
+        data: {
+          seasonId: target.id,
+          name: sc.name,
+          shortCode: sc.shortCode,
+          displayOrder: sc.displayOrder,
+          iracingCarClassId: sc.iracingCarClassId,
+          iracingCarClassIds: sc.iracingCarClassIds,
+        },
+        select: { id: true, shortCode: true },
+      });
+      destClassId = created.id;
+      existingByShort.set(created.shortCode.toUpperCase(), destClassId);
+    }
+
+    const existingCars = await prisma.car.findMany({
+      where: { carClassId: destClassId },
+      select: { name: true },
+    });
+    const have = new Set(existingCars.map((c) => c.name.toLowerCase()));
+
+    for (const car of sc.cars) {
+      if (have.has(car.name.toLowerCase())) continue;
+      await prisma.car.create({
+        data: {
+          seasonId: target.id,
+          carClassId: destClassId,
+          name: car.name,
+          shortName: car.shortName,
+          iracingCarId: car.iracingCarId,
+          displayOrder: car.displayOrder,
+        },
+      });
+      have.add(car.name.toLowerCase());
+    }
+  }
+
+  revalidatePath(
+    `/admin/leagues/${target.league.slug}/seasons/${target.id}/cars`
+  );
+}
+
