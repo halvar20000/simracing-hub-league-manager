@@ -66,6 +66,13 @@ export default async function ProfilePage({
           defaultValue={user.iracingMemberId ?? ""}
           help="Numeric ID. Find it on iracing.com → My Account → Member ID."
         />
+        <Field
+          label="Garage 61 profile URL"
+          name="garage61Url"
+          type="url"
+          defaultValue={user.garage61Url ?? ""}
+          help="Optional — paste your public Garage 61 profile URL (https://garage61.net/...). A link to it will be shown on roster pages."
+        />
 
         <button
           type="submit"

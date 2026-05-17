@@ -6,6 +6,7 @@ import { computeDriverStandings, computeTeamClassStandings } from "@/lib/standin
 import { EmptyState, CalendarIcon, UsersIcon } from "@/components/EmptyState";
 import { SeasonHero } from "@/components/SeasonHero";
 import { CountryFlag } from "@/components/CountryFlag";
+import Garage61Link from "@/components/Garage61Link";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -159,6 +160,16 @@ export default async function PublicSeasonDetail({
         registrationOpen={registrationOpen}
         hasResults={hasResults}
       />
+
+      {season.league.garage61TeamUrl && (
+        <div className="flex flex-wrap gap-2">
+          <Garage61Link
+            variant="button"
+            url={season.league.garage61TeamUrl}
+            label={`${season.league.name} on Garage 61`}
+          />
+        </div>
+      )}
 
       {isTeamEventSeason && (
         <section>

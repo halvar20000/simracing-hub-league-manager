@@ -79,6 +79,17 @@ export async function updateLeague(id: string, formData: FormData) {
   const discordStreamChannelId =
     String(formData.get("discordStreamChannelId") ?? "").trim() || null;
   const twitchUrl = String(formData.get("twitchUrl") ?? "").trim() || null;
+
+  // Garage 61 team URL (optional). Validate that it points at garage61.net
+  // so a typo doesn't go silently into the DB.
+  const garage61TeamUrlRaw = String(
+    formData.get("garage61TeamUrl") ?? ""
+  ).trim();
+  const garage61TeamUrl =
+    garage61TeamUrlRaw &&
+    /^https?:\/\/(www\.)?garage61\.net\//i.test(garage61TeamUrlRaw)
+      ? garage61TeamUrlRaw
+      : null;
   const daysBeforeRaw = String(formData.get("rsvpDaysBefore") ?? "").trim();
   const rsvpDaysBefore =
     daysBeforeRaw && /^\d+$/.test(daysBeforeRaw)
@@ -114,6 +125,7 @@ export async function updateLeague(id: string, formData: FormData) {
       discordEmbedColor,
       discordStreamChannelId,
       twitchUrl,
+      garage61TeamUrl,
       rsvpDaysBefore,
       rsvpMode,
       rsvpCloseBeforeHours,

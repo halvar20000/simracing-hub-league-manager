@@ -11,6 +11,7 @@ import {
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
 import TableFilter from "@/components/TableFilter";
+import Garage61Link from "@/components/Garage61Link";
 
 export default async function RosterPage({
   params,
@@ -225,6 +226,7 @@ export default async function RosterPage({
                               ★
                             </span>
                           )}
+                          <Garage61Link url={reg.user.garage61Url} />
                         </div>
                       </td>
                       <td className="px-4 py-3 text-zinc-400">
@@ -381,6 +383,7 @@ export default async function RosterPage({
                     ) : (
                       <>{r.user.firstName} {r.user.lastName}</>
                     )}
+                    <Garage61Link url={r.user.garage61Url} />
                   </div>
                   <div className="text-xs text-zinc-500">
                     {r.user.email ?? r.user.name}
