@@ -88,9 +88,11 @@ export default async function AdminSeasonCars({
           Cars — {season.name} {season.year}
         </h1>
         <p className="text-sm text-zinc-400">
-          Manage the list of cars drivers can pick when registering. Cars are
-          grouped by car class. Format: one car per line, optional iRacing ID
-          after a comma.
+          Manage the list of cars drivers can pick when registering. Most
+          leagues only need the <span className="text-zinc-200">Shared
+          cars</span> list below — those cars are selectable from every
+          driver class. Use a class-specific car list only when a car is
+          restricted to one class.
         </p>
       </div>
 
@@ -349,28 +351,63 @@ export default async function AdminSeasonCars({
                 </li>
               ))}
             </ul>
+          ) : sharedCars.length > 0 ? (
+            <p className="rounded border border-emerald-900/40 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-200">
+              Drivers in <span className="font-semibold">{cc.name}</span> can
+              already pick any of the {sharedCars.length} shared car
+              {sharedCars.length === 1 ? "" : "s"} above — no need to add them
+              again here.
+            </p>
           ) : (
             <p className="text-sm text-zinc-500">No cars yet for this class.</p>
           )}
 
-          <form action={addCarsBulk} className="space-y-2">
-            <input type="hidden" name="carClassId" value={cc.id} />
-            <label className="block text-sm text-zinc-300">
-              Add cars (one per line, optional iRacing ID after a comma)
-            </label>
-            <textarea
-              name="lines"
-              rows={5}
-              placeholder={"Ferrari 296 GT3, 132\nPorsche 911 GT3 R (992), 173\nBMW M4 EVO GT3"}
-              className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 font-mono text-xs"
-            />
-            <button
-              type="submit"
-              className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
-            >
-              Add to {cc.name}
-            </button>
-          </form>
+          {sharedCars.length > 0 ? (
+            <details>
+              <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+                Advanced: add a car that belongs only to {cc.name}
+              </summary>
+              <form action={addCarsBulk} className="mt-3 space-y-2">
+                <input type="hidden" name="carClassId" value={cc.id} />
+                <p className="text-xs text-zinc-500">
+                  Only needed when a car must be exclusive to this class (e.g.
+                  a BoP-restricted variant). For the normal case use the
+                  shared-cars list above instead.
+                </p>
+                <textarea
+                  name="lines"
+                  rows={3}
+                  placeholder={"Class-only car name, 999"}
+                  className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 font-mono text-xs"
+                />
+                <button
+                  type="submit"
+                  className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
+                >
+                  Add to {cc.name} only
+                </button>
+              </form>
+            </details>
+          ) : (
+            <form action={addCarsBulk} className="space-y-2">
+              <input type="hidden" name="carClassId" value={cc.id} />
+              <label className="block text-sm text-zinc-300">
+                Add cars (one per line, optional iRacing ID after a comma)
+              </label>
+              <textarea
+                name="lines"
+                rows={5}
+                placeholder={"Ferrari 296 GT3, 132\nPorsche 911 GT3 R (992), 173\nBMW M4 EVO GT3"}
+                className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 font-mono text-xs"
+              />
+              <button
+                type="submit"
+                className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
+              >
+                Add to {cc.name}
+              </button>
+            </form>
+          )}
         </section>
       ))}
     </div>
