@@ -85,7 +85,7 @@ export default async function AdminSeasonCars({
           ← Back to season
         </Link>
         <h1 className="text-2xl font-bold">
-          Cars — {season.name} {season.year}
+          Manage Driver Class and Cars — {season.name} {season.year}
         </h1>
         <p className="text-sm text-zinc-400">
           Manage the list of cars drivers can pick when registering. Most

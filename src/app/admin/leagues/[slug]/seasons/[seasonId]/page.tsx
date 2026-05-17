@@ -77,7 +77,7 @@ export default async function AdminSeasonDetail({
                   href={`/admin/leagues/${slug}/seasons/${seasonId}/cars`}
                   className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm hover:bg-zinc-700"
                 >
-                  Manage cars →
+                  Manage Driver Class and Cars →
                 </Link>
                 <Link
                   href={`/admin/leagues/${slug}/seasons/${seasonId}/pro-am`}
