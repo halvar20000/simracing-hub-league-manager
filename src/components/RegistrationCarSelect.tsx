@@ -18,7 +18,7 @@ export default function RegistrationCarSelect({
         name="carId"
         defaultValue={currentCarId ?? ""}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="w-full max-w-[16rem] rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200"
+        className="block w-full min-w-[14rem] rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200"
       >
         <option value="">— none —</option>
         {cars.map((c) => (

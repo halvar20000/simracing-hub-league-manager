@@ -291,25 +291,25 @@ export default async function RosterPage({
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
               <th className="px-4 py-3">Driver</th>
-              <th className="px-4 py-3">iRacing ID</th>
-              <th className="px-4 py-3">#</th>
-              <th className="px-4 py-3">Team</th>
-              <th className="px-4 py-3">Class</th>
-              <th className="px-4 py-3">Car</th>
-              <th className="px-4 py-3">Pro/Am</th>
-              <th className="px-4 py-3">Status</th>
+              <th className="px-2 py-3 whitespace-nowrap">iR ID</th>
+              <th className="px-2 py-3">#</th>
+              <th className="px-3 py-3">Team</th>
+              <th className="px-2 py-3">Class</th>
+              <th className="px-4 py-3 min-w-[15rem]">Car</th>
+              <th className="px-2 py-3">Pro/Am</th>
+              <th className="px-2 py-3">Status</th>
               {showFee && (
-              <th className="px-4 py-3">Fee</th>
+              <th className="px-2 py-3">Fee</th>
               )}
-              <th className="px-4 py-3">
+              <th className="px-2 py-3">
                 <div className="text-[10px] uppercase tracking-wide text-zinc-500">iRacing</div>
                 Invite
               </th>
-              <th className="px-4 py-3">
+              <th className="px-2 py-3">
                 <div className="text-[10px] uppercase tracking-wide text-zinc-500">iRacing</div>
                 Accepted
               </th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="px-3 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -335,26 +335,26 @@ export default async function RosterPage({
                     {r.user.email ?? r.user.name}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-zinc-400">
+                <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">
                   {r.user.iracingMemberId ?? "—"}
                 </td>
-                <td className="px-4 py-3 text-zinc-400">
+                <td className="px-2 py-3 text-zinc-400 tabular-nums">
                   {r.startNumber ?? "—"}
                 </td>
-                <td className="px-4 py-3 text-zinc-400">
+                <td className="px-3 py-3 text-zinc-400">
                   {r.team?.name ?? "—"}
                 </td>
-                <td className="px-4 py-3 text-zinc-400">
+                <td className="px-2 py-3 text-zinc-400">
                   {r.carClass?.name ?? "—"}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 min-w-[15rem]">
                   <RegistrationCarSelect
                     registrationId={r.id}
                     currentCarId={r.carId}
                     cars={seasonCars}
                   />
                 </td>
-                <td className="px-4 py-3 text-zinc-400">
+                <td className="px-2 py-3 text-zinc-400">
                   {r.proAmClass ?? "—"}
                 </td>
                 <td className="px-4 py-3">
