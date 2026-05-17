@@ -9,6 +9,7 @@ import {
   rejectTeamRegistrations,
 } from "@/lib/actions/admin-registrations";
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
+import RegistrationCarSelect from "@/components/RegistrationCarSelect";
 
 export default async function RosterPage({
   params,
@@ -22,6 +23,18 @@ export default async function RosterPage({
     include: { league: true },
   });
   if (!season || season.league.slug !== slug) notFound();
+
+  // Cars for this season — used to populate the inline dropdown so admins
+  // can set each driver's car from the roster page.
+  const seasonCars = await prisma.car.findMany({
+    where: { seasonId },
+    orderBy: [
+      { carClass: { displayOrder: "asc" } },
+      { displayOrder: "asc" },
+      { name: "asc" },
+    ],
+    select: { id: true, name: true },
+  });
 
   if (season.teamRegistration) {
     const teams = await prisma.team.findMany({
@@ -185,8 +198,12 @@ export default async function RosterPage({
                       <td className="px-4 py-3 text-zinc-400">
                         {reg.carClass?.name ?? "—"}
                       </td>
-                      <td className="px-4 py-3 text-zinc-400">
-                        {reg.car?.name ?? "—"}
+                      <td className="px-4 py-3">
+                        <RegistrationCarSelect
+                          registrationId={reg.id}
+                          currentCarId={reg.carId}
+                          cars={seasonCars}
+                        />
                       </td>
                       <td className="px-4 py-3 text-zinc-400">
                         {reg.user.iracingMemberId ?? "—"}
@@ -330,8 +347,12 @@ export default async function RosterPage({
                 <td className="px-4 py-3 text-zinc-400">
                   {r.carClass?.name ?? "—"}
                 </td>
-                <td className="px-4 py-3 text-zinc-400">
-                  {r.car?.name ?? "—"}
+                <td className="px-4 py-3">
+                  <RegistrationCarSelect
+                    registrationId={r.id}
+                    currentCarId={r.carId}
+                    cars={seasonCars}
+                  />
                 </td>
                 <td className="px-4 py-3 text-zinc-400">
                   {r.proAmClass ?? "—"}

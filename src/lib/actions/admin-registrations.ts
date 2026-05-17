@@ -122,6 +122,44 @@ export async function updateRegistrationFlag(formData: FormData) {
   );
 }
 
+export async function updateRegistrationCar(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const registrationId = String(formData.get("registrationId") ?? "");
+  const carIdRaw = String(formData.get("carId") ?? "");
+  if (!registrationId) throw new Error("registrationId required");
+
+  // Verify the car (if any) belongs to the same season as the registration —
+  // protects against form tampering with stray ids.
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: {
+      seasonId: true,
+      season: { include: { league: true } },
+    },
+  });
+  if (!reg) throw new Error("Registration not found");
+
+  let carId: string | null = null;
+  if (carIdRaw) {
+    const car = await prisma.car.findUnique({
+      where: { id: carIdRaw },
+      select: { id: true, seasonId: true },
+    });
+    if (!car || car.seasonId !== reg.seasonId) {
+      throw new Error("Car does not belong to this season");
+    }
+    carId = car.id;
+  }
+
+  await prisma.registration.update({
+    where: { id: registrationId },
+    data: { carId },
+  });
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+}
+
 const PROAM_VALUES = new Set(["PRO", "AM", "AUTO"]);
 
 export async function setRegistrationProAmClass(formData: FormData) {
