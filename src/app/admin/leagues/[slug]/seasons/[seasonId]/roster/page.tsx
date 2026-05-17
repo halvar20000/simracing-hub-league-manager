@@ -10,6 +10,7 @@ import {
 } from "@/lib/actions/admin-registrations";
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
+import TableFilter from "@/components/TableFilter";
 
 export default async function RosterPage({
   params,
@@ -92,8 +93,10 @@ export default async function RosterPage({
             No teams registered yet.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded border border-zinc-800">
-            <table className="w-full text-sm">
+          <>
+            <TableFilter tableId="teamRosterTable" placeholder="Filter by driver, team, car…" />
+            <div className="overflow-x-auto rounded border border-zinc-800">
+              <table id="teamRosterTable" className="w-full text-sm">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
                   <th className="px-4 py-3">Registered</th>
@@ -123,6 +126,20 @@ export default async function RosterPage({
                   team.registrations.map((reg, ri) => (
                     <tr
                       key={reg.id}
+                      data-filter={[
+                        team.name,
+                        reg.user.firstName,
+                        reg.user.lastName,
+                        reg.user.name,
+                        reg.user.iracingMemberId,
+                        reg.user.email,
+                        reg.carClass?.name,
+                        reg.car?.name,
+                        reg.status,
+                      ]
+                        .filter((x) => x != null && x !== "")
+                        .join(" ")
+                        .toLowerCase()}
                       className={
                         ri === 0
                           ? "border-t-2 border-zinc-700 bg-zinc-950/40"
@@ -240,8 +257,9 @@ export default async function RosterPage({
                   ))
                 )}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </div>
     );
@@ -286,8 +304,10 @@ export default async function RosterPage({
         </p>
       </div>
 
+      <TableFilter tableId="rosterTable" placeholder="Filter drivers by name, iRacing ID, team, car…" />
+
       <div className="overflow-x-auto rounded border border-zinc-800">
-        <table className="w-full text-sm">
+        <table id="rosterTable" className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
               <th className="px-4 py-3">Driver</th>
@@ -316,6 +336,22 @@ export default async function RosterPage({
             {registrations.map((r) => (
               <tr
                 key={r.id}
+                data-filter={[
+                  r.user.firstName,
+                  r.user.lastName,
+                  r.user.name,
+                  r.user.iracingMemberId,
+                  r.user.email,
+                  r.startNumber,
+                  r.team?.name,
+                  r.carClass?.name,
+                  r.car?.name,
+                  r.proAmClass,
+                  r.status,
+                ]
+                  .filter((x) => x != null && x !== "")
+                  .join(" ")
+                  .toLowerCase()}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
                 <td className="px-4 py-3">

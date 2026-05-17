@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
+import TableFilter from "@/components/TableFilter";
 import { applyProAmToTargetSeason } from "@/lib/actions/admin-registrations";
 
 export default async function ProAmCalculator({
@@ -198,8 +199,10 @@ export default async function ProAmCalculator({
             No drivers meet the {minStarts}-start eligibility yet.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded border border-zinc-800">
-            <table className="w-full text-sm">
+          <>
+            <TableFilter tableId="proAmEligibleTable" placeholder="Filter drivers…" />
+            <div className="overflow-x-auto rounded border border-zinc-800">
+              <table id="proAmEligibleTable" className="w-full text-sm">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
                   <th className="px-3 py-2">Rank</th>
@@ -219,6 +222,14 @@ export default async function ProAmCalculator({
                   return (
                     <tr
                       key={r.regId}
+                      data-filter={[
+                        r.firstName,
+                        r.lastName,
+                        r.iracingMemberId,
+                      ]
+                        .filter((x) => x != null && x !== "")
+                        .join(" ")
+                        .toLowerCase()}
                       className="border-t border-zinc-800 hover:bg-zinc-900"
                     >
                       <td className="px-3 py-2 text-zinc-400">{i + 1}</td>
@@ -255,8 +266,9 @@ export default async function ProAmCalculator({
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
