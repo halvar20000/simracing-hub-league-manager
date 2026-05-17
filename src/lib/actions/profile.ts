@@ -14,18 +14,6 @@ export async function updateProfile(formData: FormData) {
   const iracingMemberIdRaw = String(formData.get("iracingMemberId") ?? "").trim();
   const iracingMemberId = iracingMemberIdRaw || null;
 
-  // Garage 61 profile URL — optional, must point at garage61.net if set.
-  const garage61Raw = String(formData.get("garage61Url") ?? "").trim();
-  const garage61Url = garage61Raw || null;
-  if (
-    garage61Url &&
-    !/^https?:\/\/(www\.)?garage61\.net\//i.test(garage61Url)
-  ) {
-    redirect(
-      "/profile?error=Garage+61+URL+must+start+with+https%3A%2F%2Fgarage61.net%2F"
-    );
-  }
-
   if (iracingMemberId && !/^\d+$/.test(iracingMemberId)) {
     redirect("/profile?error=iRacing+member+ID+must+be+a+number");
   }
@@ -33,7 +21,7 @@ export async function updateProfile(formData: FormData) {
   try {
     await prisma.user.update({
       where: { id: sessionUser.id },
-      data: { firstName, lastName, email, iracingMemberId, garage61Url },
+      data: { firstName, lastName, email, iracingMemberId },
     });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("Unique constraint")) {

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import Garage61Link from "@/components/Garage61Link";
 
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
@@ -167,7 +166,6 @@ export default async function PublicSeasonRoster({
                               ★
                             </span>
                           )}
-                          <Garage61Link url={reg.user.garage61Url} />
                         </div>
                         {reg.status === "PENDING" && (
                           <div className="mt-0.5 inline-block rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
@@ -302,7 +300,6 @@ export default async function PublicSeasonRoster({
                         {r.user.firstName} {r.user.lastName}
                       </>
                     )}
-                    <Garage61Link url={r.user.garage61Url} />
                   </div>
                     {r.status === "PENDING" && (
                       <div className="mt-0.5 inline-block rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
