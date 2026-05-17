@@ -320,6 +320,9 @@ export async function copyClassesAndCarsFromPreviousSeason(
     existingClasses.map((c) => [c.shortCode.toUpperCase(), c.id])
   );
 
+  // First pass: just create the CarClasses in the destination (no cars
+  // yet). We need every dest class to exist before we can decide whether a
+  // car should be pinned to one class or promoted to shared.
   for (const sc of source.carClasses) {
     let destClassId = existingByShort.get(sc.shortCode.toUpperCase());
     if (!destClassId) {
@@ -337,26 +340,94 @@ export async function copyClassesAndCarsFromPreviousSeason(
       destClassId = created.id;
       existingByShort.set(created.shortCode.toUpperCase(), destClassId);
     }
+  }
 
-    const existingCars = await prisma.car.findMany({
-      where: { carClassId: destClassId },
-      select: { name: true },
-    });
-    const have = new Set(existingCars.map((c) => c.name.toLowerCase()));
-
+  // Second pass: walk every source car (across all classes) and bucket by
+  // lowercased name. A name that appears in 2+ source classes is the
+  // PRO/AM-style duplicated pattern → promote to a single shared car in
+  // the destination (carClassId = null). A name that appears in only one
+  // source class stays pinned to that class (e.g. IEC LMP2-only car).
+  type SourceCarRef = {
+    name: string;
+    shortName: string | null;
+    iracingCarId: number | null;
+    displayOrder: number;
+    sourceClassShortCode: string;
+  };
+  const carsByName = new Map<string, SourceCarRef[]>();
+  for (const sc of source.carClasses) {
     for (const car of sc.cars) {
-      if (have.has(car.name.toLowerCase())) continue;
+      const key = car.name.trim().toLowerCase();
+      const bucket = carsByName.get(key) ?? [];
+      bucket.push({
+        name: car.name,
+        shortName: car.shortName,
+        iracingCarId: car.iracingCarId,
+        displayOrder: car.displayOrder,
+        sourceClassShortCode: sc.shortCode,
+      });
+      carsByName.set(key, bucket);
+    }
+  }
+
+  // Pre-load what's already in the destination so re-running the copy is
+  // safe / idempotent.
+  const existingDestCars = await prisma.car.findMany({
+    where: { seasonId: target.id },
+    select: { name: true, carClassId: true },
+  });
+  const haveSharedInDest = new Set(
+    existingDestCars
+      .filter((c) => c.carClassId === null)
+      .map((c) => c.name.toLowerCase())
+  );
+  const havePinnedInDest = new Set(
+    existingDestCars
+      .filter((c) => c.carClassId !== null)
+      .map((c) => `${c.carClassId}::${c.name.toLowerCase()}`)
+  );
+
+  for (const [key, occurrences] of carsByName) {
+    // If this car is already in the destination as a shared car, skip — the
+    // shared car covers every class.
+    if (haveSharedInDest.has(key)) continue;
+
+    const first = occurrences[0]!;
+    const appearsInMultipleClasses = occurrences.length > 1;
+
+    if (appearsInMultipleClasses) {
+      // Promote to a single shared (season-wide) car in the destination.
+      await prisma.car.create({
+        data: {
+          seasonId: target.id,
+          carClassId: null,
+          name: first.name,
+          shortName: first.shortName,
+          iracingCarId: first.iracingCarId,
+          displayOrder: first.displayOrder,
+        },
+      });
+      haveSharedInDest.add(key);
+    } else {
+      // Genuinely class-specific car — keep it pinned in the destination
+      // class matching the source class's shortCode.
+      const destClassId = existingByShort.get(
+        first.sourceClassShortCode.toUpperCase()
+      );
+      if (!destClassId) continue;
+      const dupKey = `${destClassId}::${key}`;
+      if (havePinnedInDest.has(dupKey)) continue;
       await prisma.car.create({
         data: {
           seasonId: target.id,
           carClassId: destClassId,
-          name: car.name,
-          shortName: car.shortName,
-          iracingCarId: car.iracingCarId,
-          displayOrder: car.displayOrder,
+          name: first.name,
+          shortName: first.shortName,
+          iracingCarId: first.iracingCarId,
+          displayOrder: first.displayOrder,
         },
       });
-      have.add(car.name.toLowerCase());
+      havePinnedInDest.add(dupKey);
     }
   }
 
