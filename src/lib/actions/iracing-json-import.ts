@@ -36,11 +36,35 @@ async function resolveCarId(
 ): Promise<string | null> {
   if (!iracingCarId || !Number.isFinite(iracingCarId)) return null;
 
+  // 1. Exact match by (seasonId, iracingCarId).
   const existing = await prisma.car.findFirst({
     where: { seasonId, iracingCarId },
     select: { id: true },
   });
   if (existing) return existing.id;
+
+  // 2. Match by name within this season — covers cars pre-created via the
+  //    "Copy from previous season" button (which doesn't carry iracingCarId).
+  //    Backfill the iRacing id so future imports go through path (1).
+  if (carName) {
+    const byName = await prisma.car.findFirst({
+      where: { seasonId, name: carName },
+      select: { id: true, iracingCarId: true },
+    });
+    if (byName) {
+      if (byName.iracingCarId !== iracingCarId) {
+        try {
+          await prisma.car.update({
+            where: { id: byName.id },
+            data: { iracingCarId },
+          });
+        } catch {
+          /* ignore — another row may already have this iRacing id */
+        }
+      }
+      return byName.id;
+    }
+  }
 
   let classes = await prisma.carClass.findMany({
     where: { seasonId },
