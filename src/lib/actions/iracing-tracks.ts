@@ -4,37 +4,52 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { fetchAllIracingTracks } from "@/lib/iracing-api";
+import seedTracks from "@/data/iracing-tracks.json";
+
+interface SeedTrack {
+  iracingTrackId: number;
+  trackName: string;
+  configName?: string | null;
+  category?: string | null;
+}
 
 /**
- * Admin button on /admin/iracing/tracks. Pulls the full track list from
- * iRacing, upserts every row in IracingTrack, and redirects back with a
- * status query string ("ok=<count>" or "error=<msg>").
+ * Admin button on /admin/iracing/tracks. Seeds (upserts) the
+ * IracingTrack cache from src/data/iracing-tracks.json — a curated
+ * static list maintained by hand.
+ *
+ * NOTE — iRacing retired the legacy email+password /data API auth in
+ * the December 2025 season release. The OAuth2 replacement requires a
+ * registered client ID, and iRacing has paused new client registrations
+ * while they review third-party usage. Until they reopen, this static
+ * seed file is the data source. To extend the list, just edit
+ * src/data/iracing-tracks.json and click "Seed from JSON" again — it's
+ * an upsert by iracingTrackId so it's safe to run repeatedly.
  */
 export async function refreshIracingTracks(): Promise<void> {
   await requireAdmin();
 
   let imported = 0;
   try {
-    const tracks = await fetchAllIracingTracks();
+    const tracks = seedTracks as SeedTrack[];
     await prisma.$transaction(async (tx) => {
       for (const t of tracks) {
-        if (!t.track_id || !t.track_name) continue;
+        if (!t.iracingTrackId || !t.trackName) continue;
+        const configName =
+          t.configName && t.configName.length > 0 ? t.configName : null;
         await tx.iracingTrack.upsert({
-          where: { iracingTrackId: t.track_id },
+          where: { iracingTrackId: t.iracingTrackId },
           update: {
-            trackName: t.track_name,
-            configName: t.config_name ?? null,
+            trackName: t.trackName,
+            configName,
             category: t.category ?? null,
-            freeContent: !!t.free_with_subscription,
             cachedAt: new Date(),
           },
           create: {
-            iracingTrackId: t.track_id,
-            trackName: t.track_name,
-            configName: t.config_name ?? null,
+            iracingTrackId: t.iracingTrackId,
+            trackName: t.trackName,
+            configName,
             category: t.category ?? null,
-            freeContent: !!t.free_with_subscription,
           },
         });
         imported++;

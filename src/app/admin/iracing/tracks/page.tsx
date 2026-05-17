@@ -28,9 +28,13 @@ export default async function IracingTracksAdminPage({
       <div>
         <h1 className="text-2xl font-bold">iRacing track catalogue</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Cached snapshot of iRacing&apos;s /data/track/get response. Used by
-          the Add / Edit round form&apos;s track typeahead. Refresh manually
-          when iRacing adds new content, or rely on the weekly cron.
+          Track list used by the Add / Edit round form&apos;s track
+          typeahead. Currently seeded from a curated static file
+          (<code>src/data/iracing-tracks.json</code>). iRacing retired
+          legacy email+password API auth in December 2025 and paused new
+          OAuth client registrations, so a live refresh isn&apos;t
+          possible right now — to add tracks, edit the JSON file and
+          click &quot;Seed from JSON&quot; again.
         </p>
       </div>
 
@@ -62,15 +66,17 @@ export default async function IracingTracksAdminPage({
           <form action={refreshIracingTracks}>
             <SubmitWithSpinner
               className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-              label="Refresh from iRacing"
-              pendingLabel="Refreshing…"
+              label="Seed from JSON"
+              pendingLabel="Seeding…"
             />
           </form>
         </div>
         <p className="text-[11px] text-zinc-500">
-          Requires <code>IRACING_EMAIL</code> + <code>IRACING_PASSWORD</code> env
-          vars. If iRacing demands captcha / MFA, log in once via
-          members.iracing.com to clear the prompt, then retry.
+          Edit <code>src/data/iracing-tracks.json</code> in the repo to
+          add or rename tracks. The seed is an upsert keyed on
+          <code> iracingTrackId</code>, so it&apos;s safe to run
+          repeatedly — only new rows are added, existing rows refresh
+          their <code>cachedAt</code>.
         </p>
       </section>
 
