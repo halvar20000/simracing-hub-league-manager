@@ -53,13 +53,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const dn =
               (profile as { global_name?: string; username?: string } | null) ??
               {};
+            const normalise = (s: string | null | undefined) =>
+              (s ?? "")
+                .toLowerCase()
+                .replace(/\[[^\]]*\]/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
             const candidates = [
               `${justCreated.firstName ?? ""} ${justCreated.lastName ?? ""}`,
               justCreated.name ?? "",
               dn.global_name ?? "",
               dn.username ?? "",
             ]
-              .map((s) => s.trim().toLowerCase().replace(/\s+/g, " "))
+              .map(normalise)
               .filter((s) => s.length > 1);
             if (candidates.length > 0) {
               const others = await prisma.user.findMany({
@@ -71,8 +77,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   name: true,
                 },
               });
-              const normalise = (s: string | null | undefined) =>
-                (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
               const matches = others.filter((o) => {
                 const compare = [
                   normalise(`${o.firstName ?? ""} ${o.lastName ?? ""}`),
@@ -99,6 +103,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         } catch {
           // Auto-link is best-effort; never block sign-in.
+        }
+      }
+
+      // Refresh placeholder email with the real Discord email. Admins
+      // pre-register drivers with iracing-NNNN@imported.simracing-hub.com
+      // as a synthetic email. As soon as the driver logs in via Discord,
+      // we adopt their real email so notifications etc. can reach them.
+      if (account?.provider === "discord" && user?.id) {
+        try {
+          const profileEmail =
+            (profile as { email?: string } | null)?.email ?? null;
+          if (profileEmail) {
+            const current = await prisma.user.findUnique({
+              where: { id: user.id },
+              select: { email: true },
+            });
+            const PLACEHOLDER_RE =
+              /^iracing-\d+@imported\.simracing-hub\.com$/i;
+            const isPlaceholder =
+              !current?.email || PLACEHOLDER_RE.test(current.email);
+            if (isPlaceholder && current?.email !== profileEmail) {
+              // Use updateMany to avoid throwing on the unique constraint
+              // if another row somehow already has this email.
+              await prisma.user.updateMany({
+                where: { id: user.id },
+                data: { email: profileEmail },
+              });
+            }
+          }
+        } catch {
+          // best-effort
         }
       }
 

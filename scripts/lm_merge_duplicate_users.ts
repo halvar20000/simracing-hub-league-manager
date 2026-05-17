@@ -28,7 +28,31 @@ const APPLY = process.env.APPLY === "1";
 
 function normaliseName(s: string | null | undefined): string {
   if (!s) return "";
-  return s.trim().toLowerCase().replace(/\s+/g, " ");
+  return s
+    .toLowerCase()
+    .replace(/\[[^\]]*\]/g, " ") // drop "[TAG]" prefixes
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Build a small set of normalised name candidates for a user.
+ * Covers: firstName+lastName (admin-imported pattern), name (Discord
+ * display name pattern), name with [TAG] stripped.
+ */
+function nameCandidates(u: {
+  firstName: string | null;
+  lastName: string | null;
+  name: string | null;
+}): Set<string> {
+  const out = new Set<string>();
+  const add = (s: string) => {
+    const n = normaliseName(s);
+    if (n.length > 1) out.add(n);
+  };
+  add(`${u.firstName ?? ""} ${u.lastName ?? ""}`);
+  add(u.name ?? "");
+  return out;
 }
 
 async function main() {
@@ -52,37 +76,44 @@ async function main() {
 
   console.log(`Total users: ${users.length}\n`);
 
-  // Group by normalised "firstName lastName"
-  const byKey = new Map<string, typeof users>();
-  for (const u of users) {
-    const key = normaliseName(`${u.firstName ?? ""} ${u.lastName ?? ""}`);
-    if (!key) continue;
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key)!.push(u);
-  }
+  // Build a per-user candidate set. Then for each Discord-Account user,
+  // find admin (no Account) users whose candidates overlap.
+  const candidatesByUser = new Map<string, Set<string>>();
+  for (const u of users) candidatesByUser.set(u.id, nameCandidates(u));
+
+  const discordUsers = users.filter((u) => u._count.accounts > 0);
+  const adminUsers = users.filter((u) => u._count.accounts === 0);
 
   type Pair = {
     name: string;
     discordUser: (typeof users)[number];
     adminUser: (typeof users)[number];
-    note?: string;
   };
   const pairs: Pair[] = [];
   const ambiguous: string[] = [];
 
-  for (const [key, group] of byKey.entries()) {
-    if (group.length < 2) continue;
-    const withAccount = group.filter((u) => u._count.accounts > 0);
-    const withoutAccount = group.filter((u) => u._count.accounts === 0);
-    if (withAccount.length === 1 && withoutAccount.length === 1) {
-      pairs.push({
-        name: key,
-        discordUser: withAccount[0],
-        adminUser: withoutAccount[0],
-      });
-    } else if (group.length > 1) {
+  for (const d of discordUsers) {
+    const dCands = candidatesByUser.get(d.id) ?? new Set<string>();
+    if (dCands.size === 0) continue;
+    const matches: typeof adminUsers = [];
+    for (const a of adminUsers) {
+      const aCands = candidatesByUser.get(a.id) ?? new Set<string>();
+      for (const c of dCands) {
+        if (aCands.has(c)) {
+          matches.push(a);
+          break;
+        }
+      }
+    }
+    const displayName =
+      [...dCands][0] ?? d.name ?? `${d.firstName ?? ""} ${d.lastName ?? ""}`;
+    if (matches.length === 1) {
+      pairs.push({ name: displayName, discordUser: d, adminUser: matches[0] });
+    } else if (matches.length > 1) {
       ambiguous.push(
-        `${key} — ${group.length} rows, ${withAccount.length} with Account, ${withoutAccount.length} without`
+        `${displayName} — Discord user ${d.id} matches ${matches.length} admin users: ${matches
+          .map((m) => `${m.id} (${m.firstName ?? ""} ${m.lastName ?? ""}, name=${m.name ?? "—"})`)
+          .join("; ")}`
       );
     }
   }
@@ -120,10 +151,36 @@ async function main() {
     return;
   }
 
+  const PLACEHOLDER_RE = /^iracing-\d+@imported\.simracing-hub\.com$/i;
   let merged = 0;
   for (const p of pairs) {
     try {
-      await prisma.$transaction([
+      // If the admin user's email is a placeholder and the Discord user has
+      // a real one, move the real email onto the admin record.
+      const discordEmail = p.discordUser.email;
+      const adminEmail = p.adminUser.email;
+      const adminEmailIsPlaceholder =
+        !adminEmail || PLACEHOLDER_RE.test(adminEmail);
+      const shouldMoveEmail =
+        !!discordEmail &&
+        !PLACEHOLDER_RE.test(discordEmail) &&
+        adminEmailIsPlaceholder;
+
+      const ops = [
+        // Clear the Discord user's email first to free the unique constraint
+        // before we copy it onto the admin record.
+        ...(shouldMoveEmail
+          ? [
+              prisma.user.update({
+                where: { id: p.discordUser.id },
+                data: { email: null },
+              }),
+              prisma.user.update({
+                where: { id: p.adminUser.id },
+                data: { email: discordEmail },
+              }),
+            ]
+          : []),
         prisma.account.updateMany({
           where: { userId: p.discordUser.id },
           data: { userId: p.adminUser.id },
@@ -133,8 +190,11 @@ async function main() {
           data: { userId: p.adminUser.id },
         }),
         prisma.user.delete({ where: { id: p.discordUser.id } }),
-      ]);
-      console.log(`✓ Merged "${p.name}"`);
+      ];
+      await prisma.$transaction(ops);
+      console.log(
+        `✓ Merged "${p.name}"${shouldMoveEmail ? `  (email → ${discordEmail})` : ""}`
+      );
       merged++;
     } catch (e) {
       console.error(
