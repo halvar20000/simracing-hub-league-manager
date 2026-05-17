@@ -30,34 +30,38 @@ export async function refreshIracingTracks(): Promise<void> {
   await requireAdmin();
 
   let imported = 0;
+  // No transaction wrapper — each upsert is independent + idempotent,
+  // and an interactive $transaction times out at 5 s on Neon's pooler
+  // when batching ~100 sequential round-trips. Re-running on partial
+  // failure just retries the missing rows.
   try {
     const tracks = seedTracks as SeedTrack[];
-    await prisma.$transaction(async (tx) => {
-      for (const t of tracks) {
-        if (!t.iracingTrackId || !t.trackName) continue;
-        const configName =
-          t.configName && t.configName.length > 0 ? t.configName : null;
-        await tx.iracingTrack.upsert({
-          where: { iracingTrackId: t.iracingTrackId },
-          update: {
-            trackName: t.trackName,
-            configName,
-            category: t.category ?? null,
-            cachedAt: new Date(),
-          },
-          create: {
-            iracingTrackId: t.iracingTrackId,
-            trackName: t.trackName,
-            configName,
-            category: t.category ?? null,
-          },
-        });
-        imported++;
-      }
-    });
+    for (const t of tracks) {
+      if (!t.iracingTrackId || !t.trackName) continue;
+      const configName =
+        t.configName && t.configName.length > 0 ? t.configName : null;
+      await prisma.iracingTrack.upsert({
+        where: { iracingTrackId: t.iracingTrackId },
+        update: {
+          trackName: t.trackName,
+          configName,
+          category: t.category ?? null,
+          cachedAt: new Date(),
+        },
+        create: {
+          iracingTrackId: t.iracingTrackId,
+          trackName: t.trackName,
+          configName,
+          category: t.category ?? null,
+        },
+      });
+      imported++;
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    redirect(`/admin/iracing/tracks?error=${encodeURIComponent(msg)}`);
+    redirect(
+      `/admin/iracing/tracks?ok=${imported}&error=${encodeURIComponent(msg)}`
+    );
   }
 
   revalidatePath("/admin/iracing/tracks");
