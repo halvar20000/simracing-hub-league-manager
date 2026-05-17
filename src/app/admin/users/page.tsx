@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { formatDateTime } from "@/lib/date";
 import { setUserRole } from "@/lib/actions/admin-users";
 import type { Role } from "@prisma/client";
+import TableFilter from "@/components/TableFilter";
 
 export default async function AdminUsers() {
   await requireAdmin();
@@ -25,8 +26,10 @@ export default async function AdminUsers() {
         </p>
       </div>
 
+      <TableFilter tableId="usersTable" placeholder="Filter users by name, email, iRacing ID…" />
+
       <div className="overflow-hidden rounded border border-zinc-800">
-        <table className="w-full text-sm">
+        <table id="usersTable" className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
               <th className="px-3 py-2">Name</th>
@@ -41,6 +44,17 @@ export default async function AdminUsers() {
             {users.map((u) => (
               <tr
                 key={u.id}
+                data-filter={[
+                  u.firstName,
+                  u.lastName,
+                  u.name,
+                  u.email,
+                  u.iracingMemberId,
+                  u.role,
+                ]
+                  .filter((x) => x != null && x !== "")
+                  .join(" ")
+                  .toLowerCase()}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
                 <td className="px-3 py-2 font-medium">
