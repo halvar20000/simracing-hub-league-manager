@@ -787,3 +787,20 @@ model IracingTrack {
 
   @@index([trackName])
 }
+
+/// Cached snapshot of iRacing's car catalog (one row per car). Used as a
+/// reference list for the Manage Cars admin page and for matching cars
+/// at iRacing-JSON import time. Same lifecycle as IracingTrack: seeded
+/// from src/data/iracing-cars.json + admin add/delete on
+/// /admin/iracing/cars. iracingCarId values mirror iRacing's real car
+/// IDs where known (confirmed from past imports); synthetic IDs ≥ 99001
+/// are used for manually-added entries that don't have a known real ID.
+model IracingCar {
+  iracingCarId Int      @id
+  name         String
+  category     String?  // GT3 / GT4 / LMP2 / GTP / Touring / Open Wheel / ...
+  freeContent  Boolean  @default(false)
+  cachedAt     DateTime @default(now())
+
+  @@index([name])
+}

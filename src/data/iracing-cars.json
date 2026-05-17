@@ -1,0 +1,38 @@
+[
+  { "iracingCarId": 132, "name": "BMW M4 GT3 EVO", "category": "GT3" },
+  { "iracingCarId": 133, "name": "Lamborghini Huracán GT3 EVO", "category": "GT3" },
+  { "iracingCarId": 156, "name": "Mercedes-AMG GT3 2020", "category": "GT3" },
+  { "iracingCarId": 169, "name": "Porsche 911 GT3 R (992)", "category": "GT3" },
+  { "iracingCarId": 173, "name": "Ferrari 296 GT3", "category": "GT3" },
+  { "iracingCarId": 176, "name": "Audi R8 LMS EVO II GT3", "category": "GT3" },
+  { "iracingCarId": 184, "name": "Chevrolet Corvette Z06 GT3.R", "category": "GT3" },
+  { "iracingCarId": 185, "name": "Ford Mustang GT3", "category": "GT3" },
+  { "iracingCarId": 188, "name": "McLaren 720S GT3 EVO", "category": "GT3" },
+  { "iracingCarId": 206, "name": "Aston Martin Vantage GT3 EVO", "category": "GT3" },
+
+  { "iracingCarId": 119, "name": "Porsche 718 Cayman GT4 Clubsport MR", "category": "GT4" },
+  { "iracingCarId": 135, "name": "McLaren 570S GT4", "category": "GT4" },
+  { "iracingCarId": 157, "name": "Mercedes-AMG GT4", "category": "GT4" },
+
+  { "iracingCarId": 128, "name": "Dallara P217", "category": "LMP2" },
+
+  { "iracingCarId": 99001, "name": "Acura NSX GT3 EVO 22", "category": "GT3" },
+
+  { "iracingCarId": 99010, "name": "BMW M4 GT4", "category": "GT4" },
+  { "iracingCarId": 99011, "name": "Aston Martin Vantage GT4", "category": "GT4" },
+  { "iracingCarId": 99012, "name": "Toyota GR Supra GT4", "category": "GT4" },
+  { "iracingCarId": 99013, "name": "Audi RS 3 LMS TCR", "category": "Touring" },
+
+  { "iracingCarId": 99020, "name": "BMW M Hybrid V8 GTP", "category": "GTP" },
+  { "iracingCarId": 99021, "name": "Acura ARX-06 GTP", "category": "GTP" },
+  { "iracingCarId": 99022, "name": "Cadillac V-Series.R GTP", "category": "GTP" },
+  { "iracingCarId": 99023, "name": "Porsche 963 GTP", "category": "GTP" },
+
+  { "iracingCarId": 99030, "name": "Ligier JS P320 LMP3", "category": "LMP3" },
+
+  { "iracingCarId": 99040, "name": "Porsche 911 GT3 Cup (992)", "category": "Porsche Cup" },
+
+  { "iracingCarId": 99050, "name": "Super Formula SF23 Toyota", "category": "Open Wheel" },
+  { "iracingCarId": 99051, "name": "Dallara IR-18", "category": "Open Wheel" },
+  { "iracingCarId": 99052, "name": "Formula Renault 3.5", "category": "Open Wheel" }
+]
