@@ -37,6 +37,21 @@ export default async function RosterPage({
     select: { id: true, name: true },
   });
 
+  // Hide the Pro/Am column when the season's car classes are already
+  // Pro/Am tiers (e.g. GT3 WCT) — the carClass.name column shows the
+  // same information.
+  const seasonCarClasses = await prisma.carClass.findMany({
+    where: { seasonId },
+    select: { shortCode: true },
+  });
+  const proAmShortCodes = new Set(["PRO", "AM"]);
+  const proAmIsClass =
+    seasonCarClasses.length > 0 &&
+    seasonCarClasses.every((c) =>
+      proAmShortCodes.has(c.shortCode.toUpperCase())
+    );
+  const showProAmColumn = !proAmIsClass;
+
   if (season.teamRegistration) {
     const teams = await prisma.team.findMany({
       where: { seasonId },
@@ -316,7 +331,7 @@ export default async function RosterPage({
               <th className="px-3 py-3">Team</th>
               <th className="px-2 py-3">Class</th>
               <th className="px-4 py-3 min-w-[15rem]">Car</th>
-              <th className="px-2 py-3">Pro/Am</th>
+              {showProAmColumn && <th className="px-2 py-3">Pro/Am</th>}
               <th className="px-2 py-3">Status</th>
               {showFee && (
               <th className="px-2 py-3">Fee</th>
@@ -390,9 +405,11 @@ export default async function RosterPage({
                     cars={seasonCars}
                   />
                 </td>
-                <td className="px-2 py-3 text-zinc-400">
-                  {r.proAmClass ?? "—"}
-                </td>
+                {showProAmColumn && (
+                  <td className="px-2 py-3 text-zinc-400">
+                    {r.proAmClass ?? "—"}
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   <StatusBadge status={r.status} />
                 </td>
