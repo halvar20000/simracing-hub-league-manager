@@ -122,3 +122,166 @@ export async function deleteRound(
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
   redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
 }
+
+// ---------- bulkCreateRounds ----------
+//
+// One textarea, one row per round. Fields can be separated by TAB
+// (paste from Google Sheets / Excel — TSV), pipe (|), or comma.
+// We auto-detect the separator per line, in that order of preference.
+//
+// Column order (4–6 columns):
+//   1. Name           — string. If empty, defaults to "Round N — Track"
+//   2. Track          — string, REQUIRED
+//   3. Track config   — string, optional (may be empty)
+//   4. Start datetime — REQUIRED. "YYYY-MM-DD HH:MM" (local server time)
+//                       or any string Date() can parse (ISO 8601 etc.).
+//   5. Race length    — integer minutes, optional
+//   6. Counts?        — y/n / true/false / 1/0, optional (default true)
+//
+// Blank lines and lines starting with '#' are ignored.
+// All rows are validated FIRST; on any error we redirect back with the
+// errors and create nothing (atomic).
+function parseTruthy(raw: string | undefined): boolean {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (v === "") return true;
+  return ["y", "yes", "true", "1", "x"].includes(v);
+}
+function splitRow(line: string): string[] {
+  if (line.includes("\t")) return line.split("\t").map((s) => s.trim());
+  if (line.includes("|")) return line.split("|").map((s) => s.trim());
+  // comma — but track names can contain commas, so require at least 4
+  // commas before treating as CSV. Otherwise fall back to TAB only.
+  if ((line.match(/,/g) ?? []).length >= 3) {
+    return line.split(",").map((s) => s.trim());
+  }
+  return [line.trim()];
+}
+
+export async function bulkCreateRounds(
+  leagueSlug: string,
+  seasonId: string,
+  formData: FormData
+) {
+  await requireAdmin();
+
+  const raw = String(formData.get("rows") ?? "");
+  const back = (msg: string) =>
+    redirect(
+      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/bulk?error=${encodeURIComponent(
+        msg
+      )}`
+    );
+
+  if (!raw.trim()) back("Paste at least one row.");
+
+  type ParsedRow = {
+    line: number;
+    name: string;
+    track: string;
+    trackConfig: string | null;
+    startsAt: Date;
+    raceLengthMinutes: number | null;
+    countsForChampionship: boolean;
+  };
+
+  const rows: ParsedRow[] = [];
+  const errors: string[] = [];
+
+  const lines = raw.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const lineRaw = lines[i]!;
+    const trimmed = lineRaw.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const cols = splitRow(trimmed);
+    if (cols.length < 3) {
+      errors.push(
+        `Line ${i + 1}: need at least 3 columns (name, track, start datetime).`
+      );
+      continue;
+    }
+
+    const isHeader =
+      i === 0 &&
+      cols.slice(0, 3).some((c) => /name|track|date|start/i.test(c)) &&
+      !/^\d{4}-\d{2}-\d{2}/.test(cols[3] ?? "");
+    if (isHeader) continue;
+
+    // Pad to 6 columns
+    while (cols.length < 6) cols.push("");
+    const [
+      nameCol,
+      trackCol,
+      configCol,
+      whenCol,
+      lengthCol,
+      countsCol,
+    ] = cols;
+
+    if (!trackCol) {
+      errors.push(`Line ${i + 1}: track is required.`);
+      continue;
+    }
+    if (!whenCol) {
+      errors.push(`Line ${i + 1}: start datetime is required.`);
+      continue;
+    }
+    // Accept "YYYY-MM-DD HH:MM" or ISO; Date() handles both.
+    const startsAt = new Date(whenCol.replace(" ", "T"));
+    if (Number.isNaN(startsAt.getTime())) {
+      errors.push(
+        `Line ${i + 1}: could not parse start datetime "${whenCol}". Try YYYY-MM-DD HH:MM.`
+      );
+      continue;
+    }
+
+    const raceLengthMinutes =
+      lengthCol && /^\d+$/.test(lengthCol) ? parseInt(lengthCol, 10) : null;
+
+    rows.push({
+      line: i + 1,
+      name: nameCol,
+      track: trackCol,
+      trackConfig: configCol || null,
+      startsAt,
+      raceLengthMinutes,
+      countsForChampionship: parseTruthy(countsCol),
+    });
+  }
+
+  if (errors.length > 0) {
+    back(errors.slice(0, 6).join(" / "));
+  }
+  if (rows.length === 0) back("No valid rows found.");
+
+  // Auto-assign roundNumber continuing from current highest.
+  const last = await prisma.round.findFirst({
+    where: { seasonId },
+    orderBy: { roundNumber: "desc" },
+    select: { roundNumber: true },
+  });
+  let next = (last?.roundNumber ?? 0) + 1;
+
+  // Atomic: createMany inside a transaction so a mid-list failure rolls
+  // everything back.
+  await prisma.$transaction(
+    rows.map((r) =>
+      prisma.round.create({
+        data: {
+          seasonId,
+          roundNumber: next++,
+          name: r.name || `Round ${next - 1} — ${r.track}`,
+          track: r.track,
+          trackConfig: r.trackConfig,
+          startsAt: r.startsAt,
+          raceLengthMinutes: r.raceLengthMinutes,
+          countsForChampionship: r.countsForChampionship,
+        },
+      })
+    )
+  );
+
+  revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
+  revalidatePath(`/leagues/${leagueSlug}`);
+  redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
+}

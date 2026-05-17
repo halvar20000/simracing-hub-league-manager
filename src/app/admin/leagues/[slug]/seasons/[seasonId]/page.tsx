@@ -242,12 +242,21 @@ export default async function AdminSeasonDetail({
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Race calendar</h2>
-          <Link
-            href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/new`}
-            className="rounded bg-orange-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-          >
-            + Add Round
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/new`}
+              className="rounded bg-orange-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-orange-400"
+            >
+              + Add Round
+            </Link>
+            <Link
+              href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/bulk`}
+              className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+              title="Paste a full schedule (one round per line) to add many rounds at once."
+            >
+              Bulk add…
+            </Link>
+          </div>
         </div>
 
         <div className="overflow-hidden rounded border border-zinc-800">
