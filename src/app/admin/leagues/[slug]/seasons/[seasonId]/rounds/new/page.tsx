@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createRound } from "@/lib/actions/rounds";
+import TrackSelect from "@/components/TrackSelect";
+import { loadIracingTrackOptions } from "@/lib/iracing-tracks-cache";
 
 export default async function NewRoundPage({
   params,
@@ -15,10 +17,13 @@ export default async function NewRoundPage({
   const { slug, seasonId } = await params;
   const { error } = await searchParams;
 
-  const season = await prisma.season.findUnique({
-    where: { id: seasonId },
-    include: { league: true },
-  });
+  const [season, trackOptions] = await Promise.all([
+    prisma.season.findUnique({
+      where: { id: seasonId },
+      include: { league: true },
+    }),
+    loadIracingTrackOptions(),
+  ]);
   if (!season || season.league.slug !== slug) notFound();
 
   const create = createRound.bind(null, slug, seasonId);
@@ -52,26 +57,7 @@ export default async function NewRoundPage({
           />
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-sm text-zinc-300">Track</span>
-          <input
-            name="track"
-            required
-            placeholder="Spa-Francorchamps"
-            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-sm text-zinc-300">
-            Track config (optional)
-          </span>
-          <input
-            name="trackConfig"
-            placeholder="Grand Prix"
-            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
+        <TrackSelect tracks={trackOptions} required />
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">Start date and time</span>

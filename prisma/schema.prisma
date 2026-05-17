@@ -772,3 +772,18 @@ enum AdminCheckStatus {
   YES
   NO
 }
+
+/// Cached snapshot of iRacing's track catalog (one row per track *variant* —
+/// iRacing assigns a distinct track_id to each config). Populated by
+/// /admin/iracing/tracks refresh button and the weekly cron job.
+/// Used by the Add / Edit round form's TrackSelect typeahead.
+model IracingTrack {
+  iracingTrackId Int      @id
+  trackName      String
+  configName     String?
+  category       String?
+  freeContent    Boolean  @default(false)
+  cachedAt       DateTime @default(now())
+
+  @@index([trackName])
+}

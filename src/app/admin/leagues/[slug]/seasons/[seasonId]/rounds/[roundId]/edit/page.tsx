@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateRound } from "@/lib/actions/rounds";
+import TrackSelect from "@/components/TrackSelect";
+import { loadIracingTrackOptions } from "@/lib/iracing-tracks-cache";
 
 function toLocalDateTime(d: Date) {
   // Format as YYYY-MM-DDTHH:MM for datetime-local input
@@ -19,10 +21,13 @@ export default async function EditRoundPage({
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
-  const round = await prisma.round.findUnique({
-    where: { id: roundId },
-    include: { season: { include: { league: true } } },
-  });
+  const [round, trackOptions] = await Promise.all([
+    prisma.round.findUnique({
+      where: { id: roundId },
+      include: { season: { include: { league: true } } },
+    }),
+    loadIracingTrackOptions(),
+  ]);
 
   if (!round || round.seasonId !== seasonId || round.season.league.slug !== slug) {
     notFound();
@@ -52,23 +57,12 @@ export default async function EditRoundPage({
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
         </label>
-        <label className="block">
-          <span className="mb-1 block text-sm text-zinc-300">Track</span>
-          <input
-            name="track"
-            required
-            defaultValue={round.track}
-            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm text-zinc-300">Track config</span>
-          <input
-            name="trackConfig"
-            defaultValue={round.trackConfig ?? ""}
-            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-          />
-        </label>
+        <TrackSelect
+          tracks={trackOptions}
+          defaultTrack={round.track}
+          defaultConfig={round.trackConfig ?? ""}
+          required
+        />
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">Start date and time</span>
           <input
