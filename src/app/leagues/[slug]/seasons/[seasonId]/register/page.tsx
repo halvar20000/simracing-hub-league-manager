@@ -73,38 +73,66 @@ export default async function RegisterPage({
     );
   }
 
-  const [season, user, teams, carClasses, existing] = await Promise.all([
-    prisma.season.findUnique({
-      where: { id: seasonId },
-      include: {
-        league: true,
-        rounds: {
-          where: {
-            countsForChampionship: true,
-            startsAt: { lte: new Date() },
+  const [season, user, teams, carClassesRaw, sharedCars, existing] =
+    await Promise.all([
+      prisma.season.findUnique({
+        where: { id: seasonId },
+        include: {
+          league: true,
+          rounds: {
+            where: {
+              countsForChampionship: true,
+              startsAt: { lte: new Date() },
+            },
+            take: 1,
+            select: { id: true },
           },
-          take: 1,
-          select: { id: true },
         },
-      },
-    }),
-    prisma.user.findUnique({ where: { id: session.user.id } }),
-    prisma.team.findMany({
-      where: { seasonId },
-      orderBy: { name: "asc" },
-    }),
-    prisma.carClass.findMany({
-      where: { seasonId },
-      orderBy: { displayOrder: "asc" },
-      include: {
-        cars: { orderBy: { displayOrder: "asc" } },
-      },
-    }),
-    prisma.registration.findUnique({
-      where: { seasonId_userId: { seasonId, userId: session.user.id } },
-      include: { team: true },
-    }),
-  ]);
+      }),
+      prisma.user.findUnique({ where: { id: session.user.id } }),
+      prisma.team.findMany({
+        where: { seasonId },
+        orderBy: { name: "asc" },
+      }),
+      prisma.carClass.findMany({
+        where: { seasonId },
+        orderBy: { displayOrder: "asc" },
+        include: {
+          cars: { orderBy: { displayOrder: "asc" } },
+        },
+      }),
+      // Season-wide shared cars (carClassId NULL). On PRO/AM leagues these
+      // are the actual car list and should appear under every class.
+      prisma.car.findMany({
+        where: { seasonId, carClassId: null },
+        orderBy: { displayOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          shortName: true,
+          iracingCarId: true,
+          displayOrder: true,
+        },
+      }),
+      prisma.registration.findUnique({
+        where: { seasonId_userId: { seasonId, userId: session.user.id } },
+        include: { team: true },
+      }),
+    ]);
+
+  // Merge shared cars into every CarClass's cars list — admins now configure
+  // cars season-wide once and they apply to every driver class. Reduce each
+  // car to {id, name} since that's all the dropdown rendering needs.
+  const carClasses = carClassesRaw.map((cc) => {
+    const ownCars = cc.cars.map((c) => ({ id: c.id, name: c.name }));
+    const extras = sharedCars
+      .filter((sc) => !ownCars.some((c) => c.id === sc.id))
+      .map((sc) => ({ id: sc.id, name: sc.name }));
+    return {
+      ...cc,
+      cars: [...ownCars, ...extras],
+    };
+  });
 
   if (!season || season.league.slug !== slug) notFound();
 

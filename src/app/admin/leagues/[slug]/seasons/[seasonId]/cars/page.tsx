@@ -41,6 +41,14 @@ export default async function AdminSeasonCars({
 
   if (!season || season.league.slug !== slug) notFound();
 
+  // Season-wide shared cars (carClassId is NULL). These are selectable from
+  // any driver class — typically used on PRO/AM leagues where both tiers
+  // race the same cars, so we don't have to add them twice.
+  const sharedCars = await prisma.car.findMany({
+    where: { seasonId, carClassId: null },
+    orderBy: { displayOrder: "asc" },
+  });
+
   // Most recent prior season in the same league — used to label / enable
   // the "Copy from previous season" button.
   const previousSeason = await prisma.season.findFirst({
@@ -154,6 +162,84 @@ export default async function AdminSeasonCars({
             className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
           >
             Add class
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">
+            Shared cars (any class){" "}
+            <span className="text-sm text-zinc-500">
+              ({sharedCars.length} car{sharedCars.length === 1 ? "" : "s"})
+            </span>
+          </h2>
+          <p className="text-xs text-zinc-400">
+            Cars listed here are season-wide and selectable from every driver
+            class. Use this for PRO/AM leagues where both tiers race the same
+            roster of cars — no need to add the cars under each class.
+          </p>
+        </div>
+
+        {sharedCars.length > 0 && (
+          <ul className="space-y-2">
+            {sharedCars.map((car) => (
+              <li
+                key={car.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-950 px-3 py-2"
+              >
+                <span className="flex-1">{car.name}</span>
+                <form
+                  action={updateCarIracingId}
+                  className="flex items-center gap-1"
+                >
+                  <input type="hidden" name="carId" value={car.id} />
+                  <label className="text-xs text-zinc-500">iR id</label>
+                  <input
+                    type="text"
+                    name="iracingCarId"
+                    defaultValue={car.iracingCarId ?? ""}
+                    placeholder="—"
+                    className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs hover:bg-zinc-700"
+                  >
+                    Save
+                  </button>
+                </form>
+                <form action={deleteCar}>
+                  <input type="hidden" name="carId" value={car.id} />
+                  <button
+                    type="submit"
+                    className="rounded border border-red-900/40 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form action={addCarsBulk} className="space-y-2">
+          <input type="hidden" name="seasonId" value={seasonId} />
+          {/* No carClassId on purpose — creates shared (carClassId=null) cars. */}
+          <label className="block text-sm text-zinc-300">
+            Add shared cars (one per line, optional iRacing ID after a comma)
+          </label>
+          <textarea
+            name="lines"
+            rows={5}
+            placeholder={"Ferrari 296 GT3, 132\nPorsche 911 GT3 R (992), 173\nBMW M4 EVO GT3"}
+            className="w-full rounded border border-zinc-700 bg-zinc-950 p-2 font-mono text-xs"
+          />
+          <button
+            type="submit"
+            className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
+          >
+            Add shared cars
           </button>
         </form>
       </section>

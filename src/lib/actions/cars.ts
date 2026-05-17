@@ -21,40 +21,93 @@ function parseLine(raw: string): { name: string; iracingCarId: number | null } |
 
 export async function addCarsBulk(formData: FormData) {
   await requireAdmin();
-  const carClassId = String(formData.get("carClassId") ?? "");
-  if (!carClassId) throw new Error("carClassId required");
-
+  const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
+  const seasonIdFromForm = String(formData.get("seasonId") ?? "").trim();
   const lines = String(formData.get("lines") ?? "").split(/\r?\n/);
 
-  const cc = await prisma.carClass.findUnique({
-    where: { id: carClassId },
-    include: {
-      _count: { select: { cars: true } },
-      season: { include: { league: true } },
-    },
-  });
-  if (!cc) throw new Error("CarClass not found");
+  // Resolve seasonId + slug. The form supplies either a carClassId (we
+  // derive seasonId from it) or, for shared / season-wide cars, a seasonId
+  // directly with no carClassId.
+  let seasonId: string;
+  let leagueSlug: string;
+  let baseOrder = 0;
 
-  let order = cc._count.cars;
+  if (carClassId) {
+    const cc = await prisma.carClass.findUnique({
+      where: { id: carClassId },
+      include: {
+        _count: { select: { cars: true } },
+        season: { include: { league: true } },
+      },
+    });
+    if (!cc) throw new Error("CarClass not found");
+    seasonId = cc.seasonId;
+    leagueSlug = cc.season.league.slug;
+    baseOrder = cc._count.cars;
+  } else {
+    if (!seasonIdFromForm) throw new Error("seasonId required");
+    const s = await prisma.season.findUnique({
+      where: { id: seasonIdFromForm },
+      include: {
+        league: true,
+        _count: { select: { cars: true } },
+      },
+    });
+    if (!s) throw new Error("Season not found");
+    seasonId = s.id;
+    leagueSlug = s.league.slug;
+    baseOrder = s._count.cars;
+  }
+
+  let order = baseOrder;
   for (const raw of lines) {
     const parsed = parseLine(raw);
     if (!parsed) continue;
-    await prisma.car.upsert({
-      where: { carClassId_name: { carClassId, name: parsed.name } },
-      update: { iracingCarId: parsed.iracingCarId },
-      create: {
-        seasonId: cc.seasonId,
-        carClassId,
-        name: parsed.name,
-        iracingCarId: parsed.iracingCarId,
-        displayOrder: order,
-      },
-    });
+
+    if (carClassId) {
+      await prisma.car.upsert({
+        where: { carClassId_name: { carClassId, name: parsed.name } },
+        update: { iracingCarId: parsed.iracingCarId },
+        create: {
+          seasonId,
+          carClassId,
+          name: parsed.name,
+          iracingCarId: parsed.iracingCarId,
+          displayOrder: order,
+        },
+      });
+    } else {
+      // Shared / season-wide car (carClassId NULL). The compound unique
+      // (carClassId, name) doesn't enforce uniqueness for NULL in Postgres,
+      // so do a manual lookup and skip if already present.
+      const existing = await prisma.car.findFirst({
+        where: { seasonId, carClassId: null, name: parsed.name },
+        select: { id: true },
+      });
+      if (existing) {
+        if (parsed.iracingCarId !== null) {
+          await prisma.car.update({
+            where: { id: existing.id },
+            data: { iracingCarId: parsed.iracingCarId },
+          });
+        }
+      } else {
+        await prisma.car.create({
+          data: {
+            seasonId,
+            carClassId: null,
+            name: parsed.name,
+            iracingCarId: parsed.iracingCarId,
+            displayOrder: order,
+          },
+        });
+      }
+    }
     order++;
   }
 
   revalidatePath(
-    `/admin/leagues/${cc.season.league.slug}/seasons/${cc.seasonId}/cars`
+    `/admin/leagues/${leagueSlug}/seasons/${seasonId}/cars`
   );
 }
 
@@ -66,9 +119,7 @@ export async function deleteCar(formData: FormData) {
   const car = await prisma.car.findUnique({
     where: { id: carId },
     include: {
-      carClass: {
-        include: { season: { include: { league: true } } },
-      },
+      season: { include: { league: true } },
     },
   });
   if (!car) return;
@@ -76,7 +127,7 @@ export async function deleteCar(formData: FormData) {
   await prisma.car.delete({ where: { id: carId } });
 
   revalidatePath(
-    `/admin/leagues/${car.carClass.season.league.slug}/seasons/${car.carClass.seasonId}/cars`
+    `/admin/leagues/${car.season.league.slug}/seasons/${car.seasonId}/cars`
   );
 }
 
@@ -92,14 +143,12 @@ export async function updateCarIracingId(formData: FormData) {
     where: { id: carId },
     data: { iracingCarId },
     include: {
-      carClass: {
-        include: { season: { include: { league: true } } },
-      },
+      season: { include: { league: true } },
     },
   });
 
   revalidatePath(
-    `/admin/leagues/${car.carClass.season.league.slug}/seasons/${car.carClass.seasonId}/cars`
+    `/admin/leagues/${car.season.league.slug}/seasons/${car.seasonId}/cars`
   );
 }
 
@@ -249,6 +298,18 @@ export async function copyClassesAndCarsFromPreviousSeason(
     return;
   }
 
+  // Also pick up season-wide shared cars from the source (carClassId null).
+  const sourceSharedCars = await prisma.car.findMany({
+    where: { seasonId: source.id, carClassId: null },
+    orderBy: { displayOrder: "asc" },
+    select: {
+      name: true,
+      shortName: true,
+      iracingCarId: true,
+      displayOrder: true,
+    },
+  });
+
   // Existing classes in target keyed by uppercase shortCode so we don't
   // create duplicates.
   const existingClasses = await prisma.carClass.findMany({
@@ -296,6 +357,31 @@ export async function copyClassesAndCarsFromPreviousSeason(
         },
       });
       have.add(car.name.toLowerCase());
+    }
+  }
+
+  // Copy shared (season-wide, carClassId=null) cars from source into target.
+  if (sourceSharedCars.length > 0) {
+    const existingShared = await prisma.car.findMany({
+      where: { seasonId: target.id, carClassId: null },
+      select: { name: true },
+    });
+    const haveShared = new Set(
+      existingShared.map((c) => c.name.toLowerCase())
+    );
+    for (const car of sourceSharedCars) {
+      if (haveShared.has(car.name.toLowerCase())) continue;
+      await prisma.car.create({
+        data: {
+          seasonId: target.id,
+          carClassId: null,
+          name: car.name,
+          shortName: car.shortName,
+          iracingCarId: car.iracingCarId,
+          displayOrder: car.displayOrder,
+        },
+      });
+      haveShared.add(car.name.toLowerCase());
     }
   }
 

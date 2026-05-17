@@ -93,12 +93,23 @@ export async function createRegistration(
         `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Invalid+car`
       );
     }
-    if (season.isMulticlass && carClassId && car.carClassId !== carClassId) {
+    // A car is valid for the chosen class when either:
+    //  - it's pinned to that class (car.carClassId === carClassId), or
+    //  - it's a season-wide shared car (car.carClassId === null) — allowed
+    //    for every class.
+    if (
+      season.isMulticlass &&
+      carClassId &&
+      car.carClassId !== null &&
+      car.carClassId !== carClassId
+    ) {
       redirect(
         `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+does+not+belong+to+selected+class`
       );
     }
-    if (!resolvedCarClassId) {
+    // Only fall back to the car's pinned class if we don't already have one
+    // from the form (shared cars have no pinned class — keep the user's pick).
+    if (!resolvedCarClassId && car.carClassId) {
       resolvedCarClassId = car.carClassId;
     }
   }
@@ -399,7 +410,12 @@ export async function createTeamRegistration(
   }
 
   const car = await prisma.car.findUnique({ where: { id: carId } });
-  if (!car || car.seasonId !== seasonId || car.carClassId !== carClassId) {
+  // Shared cars (carClassId === null) are valid for every class.
+  if (
+    !car ||
+    car.seasonId !== seasonId ||
+    (car.carClassId !== null && car.carClassId !== carClassId)
+  ) {
     errBack("Invalid car for the selected class");
   }
 

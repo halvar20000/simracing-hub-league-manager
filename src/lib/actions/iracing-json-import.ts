@@ -12,21 +12,7 @@ import {
 } from "@/lib/iracing-json";
 
 // CAR LOOKUP — resolve a season's Car for an iRacing car_id.
-// Auto-creates Car (and a default CarClass if the season has none).
-// Tries to guess the right CarClass by matching keywords in the car's name
-// against each CarClass's name (e.g. "Radical SR8" → CarClass "Radical SR 8").
-function guessCarClassId(
-  carName: string,
-  classes: { id: string; name: string; displayOrder: number }[]
-): string {
-  const haystack = carName.toLowerCase();
-  for (const c of classes) {
-    const tokens = c.name.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
-    if (tokens.some((t) => haystack.includes(t))) return c.id;
-  }
-  // Fallback: first class by displayOrder.
-  return classes[0].id;
-}
+// Auto-creates a season-wide Car (carClassId NULL) when nothing matches.
 
 async function resolveCarId(
   seasonId: string,
@@ -66,31 +52,13 @@ async function resolveCarId(
     }
   }
 
-  let classes = await prisma.carClass.findMany({
-    where: { seasonId },
-    orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, displayOrder: true },
-  });
-
-  // No classes at all → auto-create one from the iRacing class name.
-  if (classes.length === 0) {
-    const shortCode = (carClassShortName ?? "ALL").slice(0, 8).toUpperCase();
-    const created = await prisma.carClass.create({
-      data: {
-        seasonId,
-        name: carClassShortName ?? "All Cars",
-        shortCode,
-      },
-    });
-    classes = [{ id: created.id, name: created.name, displayOrder: created.displayOrder }];
-  }
-
-  const carClassId = guessCarClassId(carName || "", classes);
-
+  // Default new cars created by the importer to season-wide (carClassId
+  // NULL) so they're selectable from every driver class. Admins can later
+  // pin them to a specific class via Manage Cars if they need to.
   const created = await prisma.car.create({
     data: {
       seasonId,
-      carClassId,
+      carClassId: null,
       name: carName || `iRacing #${iracingCarId}`,
       iracingCarId,
     },

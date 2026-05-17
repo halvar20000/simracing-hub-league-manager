@@ -738,8 +738,12 @@ model Car {
   seasonId      String
   season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
 
-  carClassId    String
-  carClass      CarClass @relation(fields: [carClassId], references: [id], onDelete: Cascade)
+  // Optional: a car pinned to a single class (legacy / class-specific).
+  // When NULL the car is season-wide and selectable across all driver
+  // classes — this is the common case for PRO/AM splits where both tiers
+  // race the same cars.
+  carClassId    String?
+  carClass      CarClass? @relation(fields: [carClassId], references: [id], onDelete: SetNull)
 
   name          String
   shortName     String?
