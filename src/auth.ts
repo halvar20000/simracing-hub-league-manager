@@ -21,6 +21,87 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "database" },
   callbacks: {
     async signIn({ user, account, profile }) {
+      // Auto-link freshly-created Discord users onto an existing
+      // admin-registered User if their first+last name matches exactly
+      // one such user that doesn't have a Discord Account yet.
+      // Prevents duplicate User rows when an admin pre-registers a driver
+      // (with iRacing ID / registration) and the driver later signs in
+      // via Discord for the first time.
+      if (account?.provider === "discord" && user?.id) {
+        try {
+          const justCreated = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: {
+              firstName: true,
+              lastName: true,
+              name: true,
+              _count: {
+                select: {
+                  registrations: true,
+                  incidentReports: true,
+                  approvedRegistrations: true,
+                },
+              },
+            },
+          });
+          const isFreshUser =
+            !!justCreated &&
+            justCreated._count.registrations === 0 &&
+            justCreated._count.incidentReports === 0 &&
+            justCreated._count.approvedRegistrations === 0;
+          if (isFreshUser) {
+            const dn =
+              (profile as { global_name?: string; username?: string } | null) ??
+              {};
+            const candidates = [
+              `${justCreated.firstName ?? ""} ${justCreated.lastName ?? ""}`,
+              justCreated.name ?? "",
+              dn.global_name ?? "",
+              dn.username ?? "",
+            ]
+              .map((s) => s.trim().toLowerCase().replace(/\s+/g, " "))
+              .filter((s) => s.length > 1);
+            if (candidates.length > 0) {
+              const others = await prisma.user.findMany({
+                where: { id: { not: user.id }, accounts: { none: {} } },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  name: true,
+                },
+              });
+              const normalise = (s: string | null | undefined) =>
+                (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+              const matches = others.filter((o) => {
+                const compare = [
+                  normalise(`${o.firstName ?? ""} ${o.lastName ?? ""}`),
+                  normalise(o.name),
+                ].filter((x) => x.length > 1);
+                return compare.some((c) => candidates.includes(c));
+              });
+              if (matches.length === 1) {
+                const target = matches[0];
+                await prisma.$transaction([
+                  prisma.account.updateMany({
+                    where: { userId: user.id },
+                    data: { userId: target.id },
+                  }),
+                  prisma.session.updateMany({
+                    where: { userId: user.id },
+                    data: { userId: target.id },
+                  }),
+                  prisma.user.delete({ where: { id: user.id } }),
+                ]);
+                user.id = target.id;
+              }
+            }
+          }
+        } catch {
+          // Auto-link is best-effort; never block sign-in.
+        }
+      }
+
       // Auto-promote whitelisted Discord usernames to ADMIN
       if (account?.provider === "discord" && user?.id) {
         const allowlist = getAdminAllowlist();
