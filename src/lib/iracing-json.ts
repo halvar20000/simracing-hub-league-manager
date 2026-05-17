@@ -29,6 +29,30 @@ export interface ParsedDriver {
   finishStatus: "CLASSIFIED" | "DNF" | "DNS" | "DSQ";
 }
 
+export interface ParsedTeam {
+  /** iRacing's team identifier — can be negative for hosted-league teams. */
+  iracingTeamId: number;
+  displayName: string;
+  carClassShortName: string | null;
+  carIracingId: number | null;
+  carName: string | null;
+  /** 1-based overall finish position (iRacing 0-based + 1). */
+  finishPosition: number;
+  /** 1-based class position, or null if unknown. */
+  classPosition: number | null;
+  /** 1-based grid position, or null if unknown. */
+  startingPosition: number | null;
+  lapsComplete: number;
+  bestLapMs: number | null;
+  /** Total race time in ms across all stints (may be null). */
+  totalTimeMs: number | null;
+  /** Sum of all stint incidents. */
+  incidents: number;
+  finishStatus: "CLASSIFIED" | "DNF" | "DNS" | "DSQ";
+  /** cust_ids of every driver who took a stint for this team. */
+  driverCustIds: number[];
+}
+
 export interface ParsedSession {
   kind: ParsedSessionKind;
   /** 1 for the only/first race, 2 for the second race in multi-race rounds */
@@ -37,6 +61,8 @@ export interface ParsedSession {
   simSessionType: number;
   simSessionNumber: number;
   drivers: ParsedDriver[];
+  /** Empty for solo events; one entry per top-level team row otherwise. */
+  teams: ParsedTeam[];
   /** Highest laps_complete in this session — used to compute distance % */
   maxLaps: number;
 }
@@ -155,6 +181,7 @@ function buildSession(
   };
 
   const drivers: ParsedDriver[] = [];
+  const teams: ParsedTeam[] = [];
   for (const r of rows) {
     // Case 1: solo row (the row itself is a driver).
     if (typeof r?.cust_id === "number" && r.cust_id > 0) {
@@ -163,10 +190,47 @@ function buildSession(
     }
     // Case 2: team row containing nested driver_results.
     if (Array.isArray(r?.driver_results) && r.driver_results.length > 0) {
+      const driverCustIds: number[] = [];
       for (const d of r.driver_results) {
         if (typeof d?.cust_id === "number" && d.cust_id > 0) {
           drivers.push(toParsedDriver(d, r));
+          driverCustIds.push(d.cust_id);
         }
+      }
+      // Capture the team-level row itself as a ParsedTeam.
+      if (typeof r?.team_id === "number") {
+        const startPosRaw = r.starting_position;
+        const startingPosition =
+          typeof startPosRaw === "number" && startPosRaw >= 0
+            ? startPosRaw + 1
+            : null;
+        teams.push({
+          iracingTeamId: r.team_id,
+          displayName: String(r.display_name ?? ""),
+          carClassShortName:
+            typeof r.car_class_short_name === "string"
+              ? r.car_class_short_name
+              : null,
+          carIracingId: typeof r.car_id === "number" ? r.car_id : null,
+          carName: typeof r.car_name === "string" ? r.car_name : null,
+          finishPosition:
+            (typeof r.finish_position === "number" ? r.finish_position : 0) + 1,
+          classPosition:
+            typeof r.finish_position_in_class === "number"
+              ? r.finish_position_in_class + 1
+              : null,
+          startingPosition,
+          lapsComplete:
+            typeof r.laps_complete === "number" ? r.laps_complete : 0,
+          bestLapMs: tenThousandthsToMs(r.best_lap_time),
+          // iRacing doesn't return a team total time directly in the
+          // event-result payload; leave null and let consumers compute
+          // from session timing if they need to.
+          totalTimeMs: null,
+          incidents: typeof r.incidents === "number" ? r.incidents : 0,
+          finishStatus: mapReasonOut(r.reason_out),
+          driverCustIds,
+        });
       }
     }
   }
@@ -178,6 +242,7 @@ function buildSession(
     simSessionType: typeof s?.simsession_type === "number" ? s.simsession_type : 0,
     simSessionNumber: typeof s?.simsession_number === "number" ? s.simsession_number : 0,
     drivers,
+    teams,
     maxLaps,
   };
 }
