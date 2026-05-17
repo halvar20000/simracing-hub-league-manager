@@ -177,6 +177,11 @@ export default async function EditLeaguePage({
                 placeholder="https://garage61.net/app/teams/..."
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
+              <span className="mt-1 block text-[11px] text-zinc-500">
+                Open your team in Garage 61, then copy the URL from the
+                address bar. Drivers must be team members for the link to
+                show anything.
+              </span>
             </label>
             <label className="block">
               <span className="mb-1 block text-xs text-zinc-400">

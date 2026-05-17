@@ -44,11 +44,6 @@ model User {
   updatedAt       DateTime  @updatedAt
   countryCode     String?
   casDiscordGuildMember Boolean   @default(false)
-
-  /// Optional public Garage 61 profile URL for the driver. Stored as
-  /// entered (with light validation: must start with https://garage61.net).
-  /// Rendered as a small "Garage 61 →" link on roster / driver pages.
-  garage61Url     String?
 }
 
 model Account {
