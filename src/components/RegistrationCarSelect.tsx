@@ -15,6 +15,7 @@ export default function RegistrationCarSelect({
     <form action={updateRegistrationCar}>
       <input type="hidden" name="registrationId" value={registrationId} />
       <select
+        key={currentCarId ?? "none"}
         name="carId"
         defaultValue={currentCarId ?? ""}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}

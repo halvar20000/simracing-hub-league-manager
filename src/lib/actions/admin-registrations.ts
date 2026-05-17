@@ -128,35 +128,19 @@ export async function updateRegistrationCar(formData: FormData): Promise<void> {
   const carIdRaw = String(formData.get("carId") ?? "");
   if (!registrationId) throw new Error("registrationId required");
 
-  // Verify the car (if any) belongs to the same season as the registration —
-  // protects against form tampering with stray ids.
-  const reg = await prisma.registration.findUnique({
-    where: { id: registrationId },
-    select: {
-      seasonId: true,
-      season: { include: { league: true } },
-    },
-  });
-  if (!reg) throw new Error("Registration not found");
+  // Empty value = clear the car (None).
+  const carId: string | null = carIdRaw ? carIdRaw : null;
 
-  let carId: string | null = null;
-  if (carIdRaw) {
-    const car = await prisma.car.findUnique({
-      where: { id: carIdRaw },
-      select: { id: true, seasonId: true },
-    });
-    if (!car || car.seasonId !== reg.seasonId) {
-      throw new Error("Car does not belong to this season");
-    }
-    carId = car.id;
-  }
-
-  await prisma.registration.update({
+  // Use the writeable update's own include so we don't read first; this
+  // surfaces any DB-level failure (FK / constraint) on the actual write.
+  const updated = await prisma.registration.update({
     where: { id: registrationId },
     data: { carId },
+    include: { season: { include: { league: true } } },
   });
+
   revalidatePath(
-    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+    `/admin/leagues/${updated.season.league.slug}/seasons/${updated.seasonId}/roster`
   );
 }
 
