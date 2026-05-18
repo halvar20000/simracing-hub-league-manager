@@ -175,8 +175,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const participationInCombined = formData.get("participationInCombined") === "on";
   const deferPenaltyPoints = formData.get("deferPenaltyPoints") === "on";
 
-  const pointsTable = readPointsTable(formData, "pos", 30);
-  const pointsTableRace2Raw = readPointsTable(formData, "posR2", 30);
+  const pointsTable = readPointsTable(formData, "pos", 40);
+  const pointsTableRace2Raw = readPointsTable(formData, "posR2", 40);
   const pointsTableRace2 =
     Object.keys(pointsTableRace2Raw).length > 0 ? pointsTableRace2Raw : null;
   const racesPerRoundRaw = formData.get("racesPerRound");
@@ -184,7 +184,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
     racesPerRoundRaw == null || String(racesPerRoundRaw).trim() === ""
       ? 1
       : Math.max(1, Math.min(4, parseInt(String(racesPerRoundRaw), 10) || 1));
-  const classPointsTableObj = readPointsTable(formData, "classPos", 30);
+  const classPointsTableObj = readPointsTable(formData, "classPos", 40);
   const classPointsTable =
     Object.keys(classPointsTableObj).length > 0 ? classPointsTableObj : null;
 

@@ -7,7 +7,7 @@ import { readCategoryPoints, PENALTY_LEVELS, PENALTY_LEVEL_LABEL } from "@/lib/p
 import { readDriverFprTiers, DEFAULT_DRIVER_FPR_TIERS } from "@/lib/driver-fpr";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
-const MAX_POS = 30;
+const MAX_POS = 40;
 
 export default async function EditScoringSystem({
   params,
