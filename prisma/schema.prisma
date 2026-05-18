@@ -44,6 +44,23 @@ model User {
   updatedAt       DateTime  @updatedAt
   countryCode     String?
   casDiscordGuildMember Boolean   @default(false)
+
+  // Latest iRating / Safety Rating / license class snapshot pulled from
+  // members-ng.iracing.com via the admin sync flow (Chrome MCP one-shot
+  // for now — see scripts/lm_*). Per-category because GT3 drivers might
+  // also race Formula and Oval in iRacing.
+  iratingSportsCar       Int?
+  iratingFormulaCar      Int?
+  iratingOval            Int?
+  safetyRatingSportsCar  Float?
+  safetyRatingFormulaCar Float?
+  safetyRatingOval       Float?
+  /// "Rookie" / "Class D" / "Class C" / "Class B" / "Class A" / "Pro"
+  licenseClassSportsCar  String?
+  licenseClassFormulaCar String?
+  licenseClassOval       String?
+  /// When the iRating block above was last refreshed. Null = never.
+  iracingLastSyncedAt    DateTime?
 }
 
 model Account {
