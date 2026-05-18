@@ -333,6 +333,39 @@ export default async function RosterPage({
       <TableFilter tableId="rosterTable" placeholder="Filter drivers by name, iRacing ID, team, car…" />
       <SortableTableEnhancer tableId="rosterTable" />
 
+      {/*
+        Freeze the first column (Driver) so it stays visible when the
+        table scrolls horizontally. position:sticky needs an opaque
+        background per cell (the thead's bg-zinc-900 doesn't paint
+        behind the sticky cell at the scroll boundary), so we set
+        explicit backgrounds here:
+          - header first cell: zinc-900 (matches the thead)
+          - body first cell:   zinc-950 (matches the page bg)
+          - body first cell on row hover: zinc-900 (matches the row's
+            hover:bg-zinc-900). Done in CSS instead of group-hover so
+            we don't have to touch every <tr>.
+        The injected filter row from SortableTableEnhancer lives in
+        the <thead> too, so its first <th> picks up the same rule.
+      */}
+      <style>{`
+        #rosterTable thead th:first-child,
+        #rosterTable tbody td:first-child {
+          position: sticky;
+          left: 0;
+        }
+        #rosterTable thead th:first-child {
+          background-color: rgb(24 24 27);  /* zinc-900 */
+          z-index: 2;
+        }
+        #rosterTable tbody td:first-child {
+          background-color: rgb(9 9 11);    /* zinc-950 */
+          z-index: 1;
+        }
+        #rosterTable tbody tr:hover td:first-child {
+          background-color: rgb(24 24 27);  /* zinc-900 — matches row hover */
+        }
+      `}</style>
+
       <div className="overflow-x-auto rounded border border-zinc-800">
         <table id="rosterTable" className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
