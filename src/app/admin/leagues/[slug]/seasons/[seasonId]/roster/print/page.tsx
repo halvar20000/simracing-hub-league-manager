@@ -25,6 +25,22 @@ export default async function PrintRosterPage({
   });
   if (!season || season.league.slug !== slug) notFound();
 
+  // Same logic as the on-screen admin roster: when every CarClass is
+  // PRO or AM (e.g. GT3 WCT) the dedicated Pro/Am column would just
+  // repeat the Class column, so we hide it. Real multiclass leagues
+  // (IEC) keep both because they're independent.
+  const seasonCarClasses = await prisma.carClass.findMany({
+    where: { seasonId },
+    select: { shortCode: true },
+  });
+  const proAmShortCodes = new Set(["PRO", "AM"]);
+  const proAmIsClass =
+    seasonCarClasses.length > 0 &&
+    seasonCarClasses.every((c) =>
+      proAmShortCodes.has(c.shortCode.toUpperCase())
+    );
+  const showProAmColumn = season.proAmEnabled && !proAmIsClass;
+
   const registrations = await prisma.registration.findMany({
     where: { seasonId },
     include: {
@@ -99,7 +115,11 @@ export default async function PrintRosterPage({
               <h2 className="mb-1.5 text-sm font-semibold uppercase tracking-wide text-zinc-700">
                 {teamName}
               </h2>
-              <RosterTable regs={regs} showTeamColumn={false} season={season} />
+              <RosterTable
+                regs={regs}
+                showTeamColumn={false}
+                showProAmColumn={showProAmColumn}
+              />
             </section>
           ))
         )
@@ -109,7 +129,7 @@ export default async function PrintRosterPage({
         <RosterTable
           regs={registrations}
           showTeamColumn={false}
-          season={season}
+          showProAmColumn={showProAmColumn}
         />
       )}
     </div>
@@ -128,14 +148,11 @@ type Reg = Awaited<
 function RosterTable({
   regs,
   showTeamColumn,
-  season,
+  showProAmColumn,
 }: {
   regs: Reg[];
   showTeamColumn: boolean;
-  season: {
-    teamRegistration: boolean;
-    proAmEnabled: boolean;
-  };
+  showProAmColumn: boolean;
 }) {
   return (
     <table className="w-full border-collapse text-xs">
@@ -147,7 +164,7 @@ function RosterTable({
           <th className="py-1.5 pr-2">iRacing ID</th>
           <th className="py-1.5 pr-2">iRating</th>
           <th className="py-1.5 pr-2">Class</th>
-          {season.proAmEnabled && <th className="py-1.5 pr-2">Pro/Am</th>}
+          {showProAmColumn && <th className="py-1.5 pr-2">Pro/Am</th>}
           <th className="py-1.5 pr-2">Car</th>
           <th className="py-1.5 pr-2">Status</th>
         </tr>
@@ -167,7 +184,7 @@ function RosterTable({
             </td>
             <td className="py-1 pr-2 tabular-nums">{r.iRating ?? ""}</td>
             <td className="py-1 pr-2">{r.carClass?.name ?? ""}</td>
-            {season.proAmEnabled && (
+            {showProAmColumn && (
               <td className="py-1 pr-2">{r.proAmClass ?? ""}</td>
             )}
             <td className="py-1 pr-2">{r.car?.name ?? ""}</td>

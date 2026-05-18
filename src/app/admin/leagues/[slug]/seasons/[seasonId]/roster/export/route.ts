@@ -49,6 +49,24 @@ export async function GET(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
+  // Hide the redundant Pro/Am column when the season's CarClasses
+  // ARE the Pro/Am tiers (e.g. GT3 WCT — classes "PRO" + "AM"). In
+  // that case the Class column already shows PRO/AM so the dedicated
+  // Pro/Am column would just repeat the value. For real multiclass
+  // leagues like IEC (LMP2/GTP/GT3/GT4 + Pro/Am tier on top) both
+  // columns stay because they carry different information.
+  const seasonCarClasses = await prisma.carClass.findMany({
+    where: { seasonId },
+    select: { shortCode: true },
+  });
+  const proAmShortCodes = new Set(["PRO", "AM"]);
+  const proAmIsClass =
+    seasonCarClasses.length > 0 &&
+    seasonCarClasses.every((c) =>
+      proAmShortCodes.has(c.shortCode.toUpperCase())
+    );
+  const showProAmColumn = season.proAmEnabled && !proAmIsClass;
+
   const registrations = await prisma.registration.findMany({
     where: { seasonId },
     include: {
@@ -77,7 +95,7 @@ export async function GET(
     "Country"
   );
   cols.push("Class");
-  if (season.proAmEnabled) cols.push("Pro/Am");
+  if (showProAmColumn) cols.push("Pro/Am");
   cols.push(
     "Car",
     "Email",
@@ -101,7 +119,7 @@ export async function GET(
       r.user.countryCode ?? ""
     );
     row.push(r.carClass?.name ?? "");
-    if (season.proAmEnabled) row.push(r.proAmClass ?? "");
+    if (showProAmColumn) row.push(r.proAmClass ?? "");
     row.push(
       r.car?.name ?? "",
       r.user.email ?? "",
