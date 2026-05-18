@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { updateRound } from "@/lib/actions/rounds";
 import TrackSelect from "@/components/TrackSelect";
 import { loadIracingTrackOptions } from "@/lib/iracing-tracks-cache";
+import { DeleteRoundButton } from "@/components/DeleteRoundButton";
 
 function toLocalDateTime(d: Date) {
   // Format as YYYY-MM-DDTHH:MM for datetime-local input
@@ -24,7 +25,17 @@ export default async function EditRoundPage({
   const [round, trackOptions] = await Promise.all([
     prisma.round.findUnique({
       where: { id: roundId },
-      include: { season: { include: { league: true } } },
+      include: {
+        season: { include: { league: true } },
+        _count: {
+          select: {
+            raceResults: true,
+            incidentReports: true,
+            rsvps: true,
+            penalties: true,
+          },
+        },
+      },
     }),
     loadIracingTrackOptions(),
   ]);
@@ -131,6 +142,26 @@ export default async function EditRoundPage({
           </Link>
         </div>
       </form>
+
+      <section className="max-w-xl rounded-lg border border-red-900/40 bg-red-950/10 p-4">
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold text-red-300">
+            Danger zone
+          </summary>
+          <div className="mt-4">
+            <DeleteRoundButton
+              leagueSlug={slug}
+              seasonId={seasonId}
+              roundId={roundId}
+              roundLabel={`R${round.roundNumber} — ${round.name}`}
+              raceResultCount={round._count.raceResults}
+              incidentReportCount={round._count.incidentReports}
+              rsvpCount={round._count.rsvps}
+              penaltyCount={round._count.penalties}
+            />
+          </div>
+        </details>
+      </section>
     </div>
   );
 }
