@@ -24,12 +24,22 @@ export default async function ScoringSystemsList({
         >
           ← Admin
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">Scoring systems</h1>
-        <p className="text-sm text-zinc-400">
-          Define how points are awarded per position, plus participation,
-          bonuses, and drop-week rules. Changes recompute every round of
-          every season using the system.
-        </p>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Scoring systems</h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              Define how points are awarded per position, plus
+              participation, bonuses, and drop-week rules. Changes
+              recompute every round of every season using the system.
+            </p>
+          </div>
+          <Link
+            href="/admin/scoring-systems/new"
+            className="rounded bg-orange-500 px-3 py-1.5 text-sm font-medium text-zinc-950 hover:bg-orange-400"
+          >
+            + New scoring system
+          </Link>
+        </div>
       </div>
 
       {saved && (

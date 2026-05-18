@@ -42,6 +42,107 @@ function readPointsTable(
   return out;
 }
 
+/**
+ * Create a new ScoringSystem. The admin supplies a name and may
+ * optionally pick a source system to copy from — in that case every
+ * field except `name` and `id` is duplicated from the source, so the
+ * admin lands on the edit page with a working starting point that
+ * they can refine.
+ *
+ * If no `copyFromId` is supplied, the new system is created with
+ * sensible empty / default values so it's editable but doesn't award
+ * points anywhere until configured.
+ *
+ * On success: redirects to the edit page for the newly-created
+ * system. On error (missing name, name collision, source not found):
+ * redirects back to /new with an error query param.
+ */
+export async function createScoringSystem(formData: FormData): Promise<void> {
+  await requireAdmin();
+
+  const name = String(formData.get("name") ?? "").trim();
+  const copyFromId = String(formData.get("copyFromId") ?? "").trim() || null;
+
+  if (!name) {
+    redirect("/admin/scoring-systems/new?error=Name+is+required");
+  }
+
+  // Name collisions on the @unique field would throw P2002 — pre-check
+  // so we can give a friendlier message instead of a Prisma stack.
+  const existing = await prisma.scoringSystem.findUnique({
+    where: { name },
+    select: { id: true },
+  });
+  if (existing) {
+    redirect(
+      `/admin/scoring-systems/new?error=${encodeURIComponent(
+        `A scoring system named "${name}" already exists`
+      )}`
+    );
+  }
+
+  let createdId: string;
+  if (copyFromId) {
+    const src = await prisma.scoringSystem.findUnique({
+      where: { id: copyFromId },
+    });
+    if (!src) {
+      redirect(
+        "/admin/scoring-systems/new?error=" +
+          encodeURIComponent("Source scoring system not found")
+      );
+    }
+    // Prisma's findUnique returns JsonValue (which includes null) for
+    // each Json column, but create() expects InputJsonValue | DbNull
+    // for nullable Json fields. Map nulls through Prisma.DbNull and
+    // cast non-null values through InputJsonValue so TS is happy.
+    const j = (v: Prisma.JsonValue | null): Prisma.InputJsonValue | typeof Prisma.DbNull =>
+      v === null ? Prisma.DbNull : (v as Prisma.InputJsonValue);
+    const copied = await prisma.scoringSystem.create({
+      data: {
+        name,
+        description: src.description,
+        pointsTable: src.pointsTable as Prisma.InputJsonValue,
+        classPointsTable: j(src.classPointsTable),
+        participationPoints: src.participationPoints,
+        participationMinDistancePct: src.participationMinDistancePct,
+        racePointsMinDistancePct: src.racePointsMinDistancePct,
+        bonusFastestLap: src.bonusFastestLap,
+        bonusPole: src.bonusPole,
+        bonusMostLapsLed: src.bonusMostLapsLed,
+        dropWorstNRounds: src.dropWorstNRounds,
+        fprEnabled: src.fprEnabled,
+        fprTiers: j(src.fprTiers),
+        fprMode: src.fprMode,
+        participationInCombined: src.participationInCombined,
+        racesPerRound: src.racesPerRound,
+        pointsTableRace2: j(src.pointsTableRace2),
+        protestWindowHours: src.protestWindowHours,
+        protestCooldownHours: src.protestCooldownHours,
+        deferPenaltyPoints: src.deferPenaltyPoints,
+        categoryPointsTable: j(src.categoryPointsTable),
+        driverFprEnabled: src.driverFprEnabled,
+        driverFprTiers: j(src.driverFprTiers),
+        driverFprMinDistancePct: src.driverFprMinDistancePct,
+      },
+    });
+    createdId = copied.id;
+  } else {
+    const blank = await prisma.scoringSystem.create({
+      data: {
+        name,
+        // Minimum required fields. Everything else takes its schema
+        // default (participationPoints=0, racesPerRound=1, etc.).
+        pointsTable: {},
+      },
+    });
+    createdId = blank.id;
+  }
+
+  revalidatePath("/admin/scoring-systems");
+  redirect(`/admin/scoring-systems/${createdId}/edit`);
+}
+
 export async function updateScoringSystem(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
