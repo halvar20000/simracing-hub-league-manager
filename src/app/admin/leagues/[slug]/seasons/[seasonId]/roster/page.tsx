@@ -11,6 +11,7 @@ import {
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
 import TableFilter from "@/components/TableFilter";
+import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 
 export default async function RosterPage({
   params,
@@ -330,27 +331,28 @@ export default async function RosterPage({
       </div>
 
       <TableFilter tableId="rosterTable" placeholder="Filter drivers by name, iRacing ID, team, car…" />
+      <SortableTableEnhancer tableId="rosterTable" />
 
       <div className="overflow-x-auto rounded border border-zinc-800">
         <table id="rosterTable" className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
-              <th className="px-4 py-3">Driver</th>
-              <th className="px-2 py-3 whitespace-nowrap">iR ID</th>
-              <th className="px-2 py-3">#</th>
-              <th className="px-3 py-3">Team</th>
-              <th className="px-2 py-3">Class</th>
-              <th className="px-4 py-3 min-w-[15rem]">Car</th>
-              {showProAmColumn && <th className="px-2 py-3">Pro/Am</th>}
-              <th className="px-2 py-3">Status</th>
+              <th data-col="name" className="px-4 py-3">Driver</th>
+              <th data-col="irid" className="px-2 py-3 whitespace-nowrap">iR ID</th>
+              <th data-col="num" className="px-2 py-3">#</th>
+              <th data-col="team" className="px-3 py-3">Team</th>
+              <th data-col="class" className="px-2 py-3">Class</th>
+              <th data-col="car" className="px-4 py-3 min-w-[15rem]">Car</th>
+              {showProAmColumn && <th data-col="proam" className="px-2 py-3">Pro/Am</th>}
+              <th data-col="status" className="px-2 py-3">Status</th>
               {showFee && (
-              <th className="px-2 py-3">Fee</th>
+              <th data-col="fee" className="px-2 py-3">Fee</th>
               )}
-              <th className="px-2 py-3">
+              <th data-col="invsent" className="px-2 py-3">
                 <div className="text-[10px] uppercase tracking-wide text-zinc-500">iRacing</div>
                 Invite
               </th>
-              <th className="px-2 py-3">
+              <th data-col="invaccepted" className="px-2 py-3">
                 <div className="text-[10px] uppercase tracking-wide text-zinc-500">iRacing</div>
                 Accepted
               </th>
@@ -377,6 +379,18 @@ export default async function RosterPage({
                   .filter((x) => x != null && x !== "")
                   .join(" ")
                   .toLowerCase()}
+                // Per-column sort/filter keys for SortableTableEnhancer.
+                data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim().toLowerCase()}
+                data-r-irid={r.user.iracingMemberId ?? ""}
+                data-r-num={r.startNumber ?? ""}
+                data-r-team={(r.team?.name ?? "").toLowerCase()}
+                data-r-class={(r.carClass?.name ?? "").toLowerCase()}
+                data-r-car={(r.car?.name ?? "").toLowerCase()}
+                data-r-proam={(r.proAmClass ?? "").toLowerCase()}
+                data-r-status={r.status.toLowerCase()}
+                data-r-fee={r.startingFeePaid.toLowerCase()}
+                data-r-invsent={r.iracingInvitationSent.toLowerCase()}
+                data-r-invaccepted={r.iracingInvitationAccepted.toLowerCase()}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
                 <td className="px-4 py-3">
