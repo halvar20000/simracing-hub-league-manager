@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
+import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
 
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
@@ -96,6 +97,10 @@ export default async function PublicSeasonRoster({
                 )}
               </p>
             </div>
+            {/* Team-mode keeps the server-side export route because
+                the team table doesn't have the SortableTableEnhancer
+                (sort would break team grouping). The client-side
+                FilteredRosterButtons requires data-r-<col> rows. */}
             <PublicRosterExportButtons slug={slug} seasonId={seasonId} />
           </div>
         </div>
@@ -256,7 +261,10 @@ export default async function PublicSeasonRoster({
               )}
             </p>
           </div>
-          <PublicRosterExportButtons slug={slug} seasonId={seasonId} />
+          <FilteredRosterButtons
+            tableId="publicRosterTable"
+            filenameBase={`roster-${slug}-${season.name.replace(/\s+/g, "-")}-${season.year}`}
+          />
         </div>
       </div>
 
@@ -293,6 +301,28 @@ export default async function PublicSeasonRoster({
             }
             #publicRosterTable tbody tr:hover td:first-child {
               background-color: rgb(24 24 27);
+            }
+            /* Print / Save-as-PDF mode: hide UI chrome, switch the
+               table to a light theme. Filtered rows already have
+               display:none, so the PDF only includes visible ones. */
+            @media print {
+              @page { size: A4 landscape; margin: 10mm; }
+              html, body { background: white !important; color: #111 !important; }
+              .no-print, nav, header { display: none !important; }
+              #publicRosterTable tr.cw-filter-row { display: none !important; }
+              #publicRosterTable .cw-sort-ind { display: none !important; }
+              #publicRosterTable, #publicRosterTable thead, #publicRosterTable tbody,
+              #publicRosterTable tr, #publicRosterTable th, #publicRosterTable td {
+                background: white !important;
+                color: #111 !important;
+                border-color: #ddd !important;
+              }
+              #publicRosterTable thead th:first-child,
+              #publicRosterTable tbody td:first-child,
+              #publicRosterTable tbody tr:hover td:first-child {
+                background: white !important;
+                position: static !important;
+              }
             }
           `}</style>
           <div className="overflow-x-auto rounded border border-zinc-800">
@@ -341,15 +371,18 @@ export default async function PublicSeasonRoster({
                       .filter((x) => x != null && x !== "")
                       .join(" ")
                       .toLowerCase()}
-                    data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim().toLowerCase()}
+                    // Display-form values for the SortableTableEnhancer
+                    // (it lowercases at compare time) + the client-side
+                    // FilteredRosterButtons CSV exporter.
+                    data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim()}
                     data-r-num={r.startNumber ?? ""}
                     data-r-irid={r.user.iracingMemberId ?? ""}
-                    data-r-team={(r.team?.name ?? "Independent").toLowerCase()}
-                    data-r-class={(r.carClass?.name ?? "").toLowerCase()}
-                    data-r-car={(r.car?.name ?? "").toLowerCase()}
-                    data-r-fee={r.startingFeePaid.toLowerCase()}
-                    data-r-invsent={r.iracingInvitationSent.toLowerCase()}
-                    data-r-invaccepted={r.iracingInvitationAccepted.toLowerCase()}
+                    data-r-team={r.team?.name ?? "Independent"}
+                    data-r-class={r.carClass?.name ?? ""}
+                    data-r-car={r.car?.name ?? ""}
+                    data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
+                    data-r-invsent={r.iracingInvitationSent === "YES" ? "Sent" : r.iracingInvitationSent === "NO" ? "Not sent" : "Pending"}
+                    data-r-invaccepted={r.iracingInvitationAccepted === "YES" ? "Accepted" : r.iracingInvitationAccepted === "NO" ? "Not accepted" : "Pending"}
                     className="border-t border-zinc-800 hover:bg-zinc-900"
                   >
                     <td className="px-4 py-3">

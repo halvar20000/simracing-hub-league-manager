@@ -12,6 +12,7 @@ import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
+import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
 
 export default async function RosterPage({
   params,
@@ -326,7 +327,11 @@ export default async function RosterPage({
               )}
             </p>
           </div>
-          <RosterExportButtons slug={slug} seasonId={seasonId} />
+          <FilteredRosterButtons
+            tableId="rosterTable"
+            filenameBase={`roster-${slug}-${season.name.replace(/\s+/g, "-")}-${season.year}`}
+            extraColumns={[{ label: "Email", attr: "data-email" }]}
+          />
         </div>
       </div>
 
@@ -363,6 +368,32 @@ export default async function RosterPage({
         }
         #rosterTable tbody tr:hover td:first-child {
           background-color: rgb(24 24 27);  /* zinc-900 — matches row hover */
+        }
+        /* Print / Save-as-PDF mode: hide UI chrome, switch to a clean
+           light-theme table so the output is print-friendly. Rows that
+           are already filtered out keep their display:none, so the PDF
+           contains only the visible rows. */
+        @media print {
+          @page { size: A4 landscape; margin: 10mm; }
+          html, body { background: white !important; color: #111 !important; }
+          .no-print, nav, header { display: none !important; }
+          /* Hide the SortableTableEnhancer's filter row + sort
+             indicators — they're UI affordances, not data. */
+          #rosterTable tr.cw-filter-row { display: none !important; }
+          #rosterTable .cw-sort-ind { display: none !important; }
+          /* Light-theme table. */
+          #rosterTable, #rosterTable thead, #rosterTable tbody,
+          #rosterTable tr, #rosterTable th, #rosterTable td {
+            background: white !important;
+            color: #111 !important;
+            border-color: #ddd !important;
+          }
+          #rosterTable thead th:first-child,
+          #rosterTable tbody td:first-child,
+          #rosterTable tbody tr:hover td:first-child {
+            background: white !important;
+            position: static !important;
+          }
         }
       `}</style>
 
@@ -412,18 +443,23 @@ export default async function RosterPage({
                   .filter((x) => x != null && x !== "")
                   .join(" ")
                   .toLowerCase()}
-                // Per-column sort/filter keys for SortableTableEnhancer.
-                data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim().toLowerCase()}
+                // Per-column sort / filter / CSV-export keys for
+                // SortableTableEnhancer + FilteredRosterButtons. Stored
+                // in display form (mixed case, friendly enum labels) —
+                // the enhancer lowercases both sides at compare time so
+                // the filter is still case-insensitive.
+                data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim()}
                 data-r-irid={r.user.iracingMemberId ?? ""}
                 data-r-num={r.startNumber ?? ""}
-                data-r-team={(r.team?.name ?? "").toLowerCase()}
-                data-r-class={(r.carClass?.name ?? "").toLowerCase()}
-                data-r-car={(r.car?.name ?? "").toLowerCase()}
-                data-r-proam={(r.proAmClass ?? "").toLowerCase()}
-                data-r-status={r.status.toLowerCase()}
-                data-r-fee={r.startingFeePaid.toLowerCase()}
-                data-r-invsent={r.iracingInvitationSent.toLowerCase()}
-                data-r-invaccepted={r.iracingInvitationAccepted.toLowerCase()}
+                data-r-team={r.team?.name ?? ""}
+                data-r-class={r.carClass?.name ?? ""}
+                data-r-car={r.car?.name ?? ""}
+                data-r-proam={r.proAmClass ?? ""}
+                data-r-status={r.status}
+                data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
+                data-r-invsent={r.iracingInvitationSent === "YES" ? "Sent" : r.iracingInvitationSent === "NO" ? "Not sent" : "Pending"}
+                data-r-invaccepted={r.iracingInvitationAccepted === "YES" ? "Accepted" : r.iracingInvitationAccepted === "NO" ? "Not accepted" : "Pending"}
+                data-email={r.user.email ?? ""}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
                 <td className="px-4 py-3">

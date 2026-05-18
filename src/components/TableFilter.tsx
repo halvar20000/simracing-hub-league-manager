@@ -37,7 +37,7 @@ export default function TableFilter({
 
   return (
     <>
-      <div className={`flex items-center gap-2 ${className}`}>
+      <div className={`flex items-center gap-2 no-print ${className}`}>
         <input
           type="search"
           value={q}
