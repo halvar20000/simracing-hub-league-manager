@@ -47,6 +47,39 @@ export default async function EditLeaguePage({
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
           />
         </label>
+
+        <div className="space-y-2">
+          <span className="mb-1 block text-sm text-zinc-300">Logo</span>
+          {league.logoUrl && (
+            <div className="flex items-center gap-3 rounded border border-zinc-800 bg-zinc-900 p-2">
+              {/* Use plain <img> so SVG / Blob URLs work without Next/Image
+                  config for those domains. */}
+              <img
+                src={league.logoUrl}
+                alt={`${league.name} logo`}
+                className="h-12 w-12 rounded object-contain bg-zinc-950"
+              />
+              <span className="flex-1 truncate text-xs text-zinc-500">
+                {league.logoUrl}
+              </span>
+              <label className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                <input type="checkbox" name="removeLogo" value="1" />
+                Remove on save
+              </label>
+            </div>
+          )}
+          <input
+            type="file"
+            name="logoFile"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+            className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-sm file:text-zinc-200 hover:file:bg-zinc-700"
+          />
+          <span className="block text-xs text-zinc-500">
+            PNG / JPG / WebP / SVG / GIF · max 5 MB. Upload to replace
+            the current logo, or tick &quot;Remove on save&quot; to clear
+            it without uploading a new one.
+          </span>
+        </div>
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
             Email recipients for new registrations (one per line)

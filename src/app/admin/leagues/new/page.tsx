@@ -36,6 +36,22 @@ export default async function NewLeaguePage({
           textarea
           placeholder="Optional description shown on the public league page"
         />
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">
+            Logo (optional)
+          </span>
+          <input
+            type="file"
+            name="logoFile"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+            className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-sm file:text-zinc-200 hover:file:bg-zinc-700"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            PNG / JPG / WebP / SVG / GIF · max 5 MB. SVG recommended for
+            sharpness on big screens. Square or close-to-square aspect
+            ratio works best.
+          </span>
+        </label>
         <div className="flex gap-2">
           <button
             type="submit"
