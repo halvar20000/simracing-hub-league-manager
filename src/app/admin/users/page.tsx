@@ -35,6 +35,12 @@ export default async function AdminUsers() {
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Email</th>
               <th className="px-3 py-2">iRacing ID</th>
+              <th className="px-3 py-2" title="Sports Car iRating (from members-ng.iracing.com sync)">SC iR</th>
+              <th className="px-3 py-2" title="Sports Car Safety Rating">SC SR</th>
+              <th className="px-3 py-2" title="Sports Car license class">SC Lic</th>
+              <th className="px-3 py-2" title="Formula Car iRating">FC iR</th>
+              <th className="px-3 py-2" title="Oval iRating">Oval iR</th>
+              <th className="px-3 py-2" title="Last refresh of the iRacing data block">Synced</th>
               <th className="px-3 py-2">Role</th>
               <th className="px-3 py-2">Joined</th>
               <th className="px-3 py-2 text-right">Set role</th>
@@ -51,6 +57,8 @@ export default async function AdminUsers() {
                   u.email,
                   u.iracingMemberId,
                   u.role,
+                  u.iratingSportsCar,
+                  u.licenseClassSportsCar,
                 ]
                   .filter((x) => x != null && x !== "")
                   .join(" ")
@@ -63,6 +71,35 @@ export default async function AdminUsers() {
                 <td className="px-3 py-2 text-zinc-400">{u.email ?? "—"}</td>
                 <td className="px-3 py-2 text-zinc-400 tabular-nums">
                   {u.iracingMemberId ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-zinc-200 tabular-nums">
+                  {u.iratingSportsCar ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                  {u.safetyRatingSportsCar != null
+                    ? u.safetyRatingSportsCar.toFixed(2)
+                    : "—"}
+                </td>
+                <td className="px-3 py-2 text-xs">
+                  <LicenseBadge cls={u.licenseClassSportsCar} />
+                </td>
+                <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                  {u.iratingFormulaCar ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                  {u.iratingOval ?? "—"}
+                </td>
+                <td
+                  className="px-3 py-2 text-[11px] text-zinc-500 whitespace-nowrap"
+                  title={
+                    u.iracingLastSyncedAt
+                      ? new Date(u.iracingLastSyncedAt).toLocaleString()
+                      : "Never synced"
+                  }
+                >
+                  {u.iracingLastSyncedAt
+                    ? new Date(u.iracingLastSyncedAt).toLocaleDateString()
+                    : "—"}
                 </td>
                 <td className="px-3 py-2">
                   <RoleBadge role={u.role} />
@@ -111,6 +148,32 @@ function RoleSelector({
         </form>
       ))}
     </div>
+  );
+}
+
+/**
+ * Small coloured pill for the iRacing Sports Car license class. Empty
+ * (or Rookie) gets a muted style so the column still scans cleanly when
+ * a driver hasn't raced Sports Car yet.
+ */
+function LicenseBadge({ cls }: { cls: string | null }) {
+  if (!cls) return <span className="text-zinc-600">—</span>;
+  const styles: Record<string, string> = {
+    "Class A": "bg-emerald-900/40 text-emerald-200 border-emerald-700/50",
+    "Class B": "bg-blue-900/40 text-blue-200 border-blue-700/50",
+    "Class C": "bg-amber-900/40 text-amber-200 border-amber-700/50",
+    "Class D": "bg-orange-900/40 text-orange-200 border-orange-700/50",
+    Rookie: "bg-zinc-800 text-zinc-400 border-zinc-700",
+    Pro: "bg-fuchsia-900/40 text-fuchsia-200 border-fuchsia-700/50",
+  };
+  return (
+    <span
+      className={`inline-block rounded border px-1.5 py-0.5 text-[10px] ${
+        styles[cls] ?? "bg-zinc-800 text-zinc-400 border-zinc-700"
+      }`}
+    >
+      {cls}
+    </span>
   );
 }
 

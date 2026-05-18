@@ -130,6 +130,39 @@ export default async function DriverPage({
         </p>
       </div>
 
+      {user.iracingLastSyncedAt && (
+        <section>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+              Current iRacing licenses
+            </h2>
+            <span className="text-[11px] text-zinc-500">
+              synced {new Date(user.iracingLastSyncedAt).toLocaleDateString()}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <IracingCard
+              label="Sports Car"
+              irating={user.iratingSportsCar}
+              safetyRating={user.safetyRatingSportsCar}
+              licenseClass={user.licenseClassSportsCar}
+            />
+            <IracingCard
+              label="Formula Car"
+              irating={user.iratingFormulaCar}
+              safetyRating={user.safetyRatingFormulaCar}
+              licenseClass={user.licenseClassFormulaCar}
+            />
+            <IracingCard
+              label="Oval"
+              irating={user.iratingOval}
+              safetyRating={user.safetyRatingOval}
+              licenseClass={user.licenseClassOval}
+            />
+          </div>
+        </section>
+      )}
+
       <section>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="Seasons" value={user.registrations.length} />
@@ -245,6 +278,66 @@ function Stat({
         {value}
       </div>
       <div className="text-xs text-zinc-400">{label}</div>
+    </div>
+  );
+}
+
+/**
+ * Per-category licence card on the driver profile. Empty / Rookie cards
+ * are muted; cards with an iRating are highlighted. Safety Rating is
+ * rendered to two decimals (iRacing's native format, e.g. "4.99").
+ */
+function IracingCard({
+  label,
+  irating,
+  safetyRating,
+  licenseClass,
+}: {
+  label: string;
+  irating: number | null;
+  safetyRating: number | null;
+  licenseClass: string | null;
+}) {
+  const hasData = irating != null;
+  const cls = licenseClass ?? "—";
+  const licenseColor: Record<string, string> = {
+    "Class A": "text-emerald-300",
+    "Class B": "text-blue-300",
+    "Class C": "text-amber-300",
+    "Class D": "text-orange-300",
+    Rookie: "text-zinc-500",
+    Pro: "text-fuchsia-300",
+  };
+  return (
+    <div
+      className={`rounded border p-4 ${
+        hasData
+          ? "border-zinc-700 bg-zinc-900"
+          : "border-zinc-800 bg-zinc-900/40"
+      }`}
+    >
+      <div className="text-xs uppercase tracking-wide text-zinc-500">
+        {label}
+      </div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span
+          className={`text-2xl font-bold tabular-nums ${
+            hasData ? "text-zinc-100" : "text-zinc-600"
+          }`}
+        >
+          {irating ?? "—"}
+        </span>
+        <span className="text-xs text-zinc-500">iR</span>
+      </div>
+      <div className="mt-1 flex items-center gap-3 text-xs text-zinc-400">
+        <span className="tabular-nums">
+          SR{" "}
+          <span className="text-zinc-200">
+            {safetyRating != null ? safetyRating.toFixed(2) : "—"}
+          </span>
+        </span>
+        <span className={licenseColor[cls] ?? "text-zinc-500"}>{cls}</span>
+      </div>
     </div>
   );
 }
