@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import TableFilter from "@/components/TableFilter";
+import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
@@ -79,18 +81,23 @@ export default async function PublicSeasonRoster({
           >
             ← {season.league.name} {season.name} {season.year}
           </Link>
-          <h1 className="mt-2 text-2xl font-bold">Team roster</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            {teamsWithRegs.length} team
-            {teamsWithRegs.length === 1 ? "" : "s"}
-            {" · "}
-            {driverTotal} driver{driverTotal === 1 ? "" : "s"}
-            {pendingTotal > 0 && (
-              <span className="ml-1 text-zinc-500">
-                ({pendingTotal} pending)
-              </span>
-            )}
-          </p>
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Team roster</h1>
+              <p className="mt-1 text-sm text-zinc-400">
+                {teamsWithRegs.length} team
+                {teamsWithRegs.length === 1 ? "" : "s"}
+                {" · "}
+                {driverTotal} driver{driverTotal === 1 ? "" : "s"}
+                {pendingTotal > 0 && (
+                  <span className="ml-1 text-zinc-500">
+                    ({pendingTotal} pending)
+                  </span>
+                )}
+              </p>
+            </div>
+            <PublicRosterExportButtons slug={slug} seasonId={seasonId} />
+          </div>
         </div>
 
         {teamsWithRegs.length === 0 ? (
@@ -236,16 +243,21 @@ export default async function PublicSeasonRoster({
         >
           ← {season.league.name} {season.name} {season.year}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">Roster</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          {registrations.length}{" "}
-          {registrations.length === 1 ? "driver" : "drivers"}
-          {pendingCount > 0 && (
-            <span className="ml-1 text-zinc-500">
-              ({pendingCount} pending)
-            </span>
-          )}
-        </p>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Roster</h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              {registrations.length}{" "}
+              {registrations.length === 1 ? "driver" : "drivers"}
+              {pendingCount > 0 && (
+                <span className="ml-1 text-zinc-500">
+                  ({pendingCount} pending)
+                </span>
+              )}
+            </p>
+          </div>
+          <PublicRosterExportButtons slug={slug} seasonId={seasonId} />
+        </div>
       </div>
 
       {registrations.length === 0 ? (
@@ -253,100 +265,192 @@ export default async function PublicSeasonRoster({
           No drivers registered yet.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded border border-zinc-800">
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-900 text-left text-zinc-400">
-              <tr>
-                <th className="px-4 py-3">#</th>
-                <th className="px-4 py-3">Driver</th>
-                <th className="px-4 py-3">iRacing ID</th>
-                <th className="px-4 py-3">Team</th>
-                {showClass && <th className="px-4 py-3">Class</th>}
-                <th className="px-4 py-3">Car</th>
-                {showFee && (
-                  <th className="px-4 py-3">Fee</th>
-                )}
-                <th className="px-4 py-3">
-                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-                    iRacing
-                  </div>
-                  Invite
-                </th>
-                <th className="px-4 py-3">
-                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-                    iRacing
-                  </div>
-                  Accepted
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {registrations.map((r) => (
-                <tr key={r.id} className="border-t border-zinc-800 hover:bg-zinc-900">
-                  <td className="px-4 py-3 text-zinc-400">
-                    {r.startNumber ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium">
-                    {r.user.iracingMemberId ? (
-                      <Link
-                        href={`/drivers/${r.user.iracingMemberId}`}
-                        className="hover:text-orange-400"
-                      >
-                        {r.user.firstName} {r.user.lastName}
-                      </Link>
-                    ) : (
-                      <>
-                        {r.user.firstName} {r.user.lastName}
-                      </>
-                    )}
-                  </div>
-                    {r.status === "PENDING" && (
-                      <div className="mt-0.5 inline-block rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                        Pending
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {r.user.iracingMemberId ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {r.team?.name ?? "Independent"}
-                  </td>
-                  {showClass && (
-                    <td className="px-4 py-3 text-zinc-400">
-                      {r.carClass?.name ?? "—"}
-                    </td>
-                  )}
-                  <td className="px-4 py-3 text-zinc-400">
-                    {r.car?.name ?? "—"}
-                  </td>
+        <>
+          <TableFilter
+            tableId="publicRosterTable"
+            placeholder="Filter drivers by name, iRacing ID, team, car…"
+          />
+          <SortableTableEnhancer tableId="publicRosterTable" />
+          {/* Freeze the first (Driver) column when scrolling
+              horizontally. position: sticky needs an opaque background
+              per cell, so we set explicit bgs here (zinc-900 for header,
+              zinc-950 for body, zinc-900 on row hover). The filter row
+              injected by SortableTableEnhancer lives in <thead> too, so
+              its first <th> picks up the same rule automatically. */}
+          <style>{`
+            #publicRosterTable thead th:first-child,
+            #publicRosterTable tbody td:first-child {
+              position: sticky;
+              left: 0;
+            }
+            #publicRosterTable thead th:first-child {
+              background-color: rgb(24 24 27);
+              z-index: 2;
+            }
+            #publicRosterTable tbody td:first-child {
+              background-color: rgb(9 9 11);
+              z-index: 1;
+            }
+            #publicRosterTable tbody tr:hover td:first-child {
+              background-color: rgb(24 24 27);
+            }
+          `}</style>
+          <div className="overflow-x-auto rounded border border-zinc-800">
+            <table id="publicRosterTable" className="w-full text-sm">
+              <thead className="bg-zinc-900 text-left text-zinc-400">
+                <tr>
+                  {/* Driver first so the sticky-first-column freeze
+                      pins the driver name as you scroll right. */}
+                  <th data-col="name" className="px-4 py-3">Driver</th>
+                  <th data-col="num" className="px-4 py-3">#</th>
+                  <th data-col="irid" className="px-4 py-3">iRacing ID</th>
+                  <th data-col="team" className="px-4 py-3">Team</th>
+                  {showClass && <th data-col="class" className="px-4 py-3">Class</th>}
+                  <th data-col="car" className="px-4 py-3">Car</th>
                   {showFee && (
-                  <td className="px-4 py-3">
-                    <FlagBadge
-                      value={r.startingFeePaid}
-                      labels={{ YES: "Paid", NO: "Not paid" }}
-                    />
-                  </td>
+                    <th data-col="fee" className="px-4 py-3">Fee</th>
                   )}
-                  <td className="px-4 py-3">
-                    <FlagBadge
-                      value={r.iracingInvitationSent}
-                      labels={{ YES: "Sent", NO: "Not sent" }}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <FlagBadge
-                      value={r.iracingInvitationAccepted}
-                      labels={{ YES: "Accepted", NO: "Not accepted" }}
-                    />
-                  </td>
+                  <th data-col="invsent" className="px-4 py-3">
+                    <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+                      iRacing
+                    </div>
+                    Invite
+                  </th>
+                  <th data-col="invaccepted" className="px-4 py-3">
+                    <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+                      iRacing
+                    </div>
+                    Accepted
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {registrations.map((r) => (
+                  <tr
+                    key={r.id}
+                    data-filter={[
+                      r.user.firstName,
+                      r.user.lastName,
+                      r.user.name,
+                      r.user.iracingMemberId,
+                      r.startNumber,
+                      r.team?.name,
+                      r.carClass?.name,
+                      r.car?.name,
+                    ]
+                      .filter((x) => x != null && x !== "")
+                      .join(" ")
+                      .toLowerCase()}
+                    data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim().toLowerCase()}
+                    data-r-num={r.startNumber ?? ""}
+                    data-r-irid={r.user.iracingMemberId ?? ""}
+                    data-r-team={(r.team?.name ?? "Independent").toLowerCase()}
+                    data-r-class={(r.carClass?.name ?? "").toLowerCase()}
+                    data-r-car={(r.car?.name ?? "").toLowerCase()}
+                    data-r-fee={r.startingFeePaid.toLowerCase()}
+                    data-r-invsent={r.iracingInvitationSent.toLowerCase()}
+                    data-r-invaccepted={r.iracingInvitationAccepted.toLowerCase()}
+                    className="border-t border-zinc-800 hover:bg-zinc-900"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-medium">
+                        {r.user.iracingMemberId ? (
+                          <Link
+                            href={`/drivers/${r.user.iracingMemberId}`}
+                            className="hover:text-orange-400"
+                          >
+                            {r.user.firstName} {r.user.lastName}
+                          </Link>
+                        ) : (
+                          <>
+                            {r.user.firstName} {r.user.lastName}
+                          </>
+                        )}
+                      </div>
+                      {r.status === "PENDING" && (
+                        <div className="mt-0.5 inline-block rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                          Pending
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-400">
+                      {r.startNumber ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-400">
+                      {r.user.iracingMemberId ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-400">
+                      {r.team?.name ?? "Independent"}
+                    </td>
+                    {showClass && (
+                      <td className="px-4 py-3 text-zinc-400">
+                        {r.carClass?.name ?? "—"}
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-zinc-400">
+                      {r.car?.name ?? "—"}
+                    </td>
+                    {showFee && (
+                      <td className="px-4 py-3">
+                        <FlagBadge
+                          value={r.startingFeePaid}
+                          labels={{ YES: "Paid", NO: "Not paid" }}
+                        />
+                      </td>
+                    )}
+                    <td className="px-4 py-3">
+                      <FlagBadge
+                        value={r.iracingInvitationSent}
+                        labels={{ YES: "Sent", NO: "Not sent" }}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <FlagBadge
+                        value={r.iracingInvitationAccepted}
+                        labels={{ YES: "Accepted", NO: "Not accepted" }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Public-side roster export buttons. CSV is a plain anchor that hits
+ * the public GET export route (no auth gate). Print opens the public
+ * printable view in a new tab.
+ */
+function PublicRosterExportButtons({
+  slug,
+  seasonId,
+}: {
+  slug: string;
+  seasonId: string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <a
+        href={`/leagues/${slug}/seasons/${seasonId}/roster/export`}
+        className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+        title="Comma-separated values. Opens in Google Sheets, Excel, Numbers."
+      >
+        Download CSV
+      </a>
+      <a
+        href={`/leagues/${slug}/seasons/${seasonId}/roster/print`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+        title="Print-friendly view in a new tab. Use the browser's print dialog → 'Save as PDF'."
+      >
+        Print / Save as PDF
+      </a>
     </div>
   );
 }
