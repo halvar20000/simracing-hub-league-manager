@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
 import CopyTextButton from "@/components/CopyTextButton";
 import { regenerateRegistrationToken, clearRegistrationToken, toggleSeasonTeamRegistration } from "@/lib/actions/seasons";
+import { DeleteSeasonButton } from "@/components/DeleteSeasonButton";
 
 export default async function AdminSeasonDetail({
   params,
@@ -50,6 +51,10 @@ export default async function AdminSeasonDetail({
       releasedAt: null,
       round: { seasonId },
     },
+  });
+  // Used by the Danger zone delete confirmation.
+  const seasonRaceResultCount = await prisma.raceResult.count({
+    where: { round: { seasonId } },
   });
 
   return (
@@ -337,6 +342,25 @@ export default async function AdminSeasonDetail({
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="rounded-lg border border-red-900/40 bg-red-950/10 p-4">
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold text-red-300">
+            Danger zone
+          </summary>
+          <div className="mt-4">
+            <DeleteSeasonButton
+              leagueSlug={slug}
+              seasonId={seasonId}
+              seasonName={season.name}
+              seasonYear={season.year}
+              roundCount={season.rounds.length}
+              registrationCount={season._count.registrations}
+              raceResultCount={seasonRaceResultCount}
+            />
+          </div>
+        </details>
       </section>
     </div>
   );
