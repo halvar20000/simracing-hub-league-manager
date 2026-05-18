@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
   addCarsBulk,
+  addCarsFromCatalog,
   deleteCar,
   updateCarIracingId,
   addCarClass,
@@ -48,6 +49,29 @@ export default async function AdminSeasonCars({
     where: { seasonId, carClassId: null },
     orderBy: { displayOrder: "asc" },
   });
+
+  // iRacing car catalogue (cached snapshot from members-ng.iracing.com,
+  // populated by the "Seed from JSON" button on /admin/iracing/cars).
+  // Used to power the "Pick from iRacing catalogue" multi-select below.
+  const catalogCars = await prisma.iracingCar.findMany({
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+    select: { iracingCarId: true, name: true, category: true },
+  });
+  const catalogByCategory = new Map<string, typeof catalogCars>();
+  for (const c of catalogCars) {
+    const k = c.category ?? "Other";
+    if (!catalogByCategory.has(k)) catalogByCategory.set(k, []);
+    catalogByCategory.get(k)!.push(c);
+  }
+  // Which iRacing IDs are already added to this season (so we can show
+  // them as already-checked / disabled in the picker).
+  const alreadyAddedIracingIds = new Set<number>();
+  for (const c of [
+    ...sharedCars,
+    ...season.carClasses.flatMap((cc) => cc.cars),
+  ]) {
+    if (c.iracingCarId) alreadyAddedIracingIds.add(c.iracingCarId);
+  }
 
   // Most recent prior season in the same league — used to label / enable
   // the "Copy from previous season" button.
@@ -166,6 +190,128 @@ export default async function AdminSeasonCars({
             Add class
           </button>
         </form>
+      </section>
+
+      <section className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">
+            Pick from iRacing catalogue{" "}
+            <span className="text-sm text-zinc-500">
+              ({catalogCars.length} cars cached)
+            </span>
+          </h2>
+          <p className="text-xs text-zinc-400">
+            Pulled from members-ng.iracing.com (cars with their real iRacing
+            IDs). Tick the cars you want and choose where to add them. Cars
+            already added to this season are pre-ticked and disabled so you
+            can&apos;t add them twice. If the list is empty or stale, go to{" "}
+            <Link
+              href="/admin/iracing/cars"
+              className="text-orange-400 hover:underline"
+            >
+              /admin/iracing/cars
+            </Link>{" "}
+            and click <em>Seed from JSON</em>.
+          </p>
+        </div>
+
+        {catalogCars.length === 0 ? (
+          <p className="rounded border border-amber-900/40 bg-amber-950/30 p-2 text-xs text-amber-200">
+            The iRacing car catalogue is empty. Seed it on{" "}
+            <Link
+              href="/admin/iracing/cars"
+              className="font-semibold underline"
+            >
+              /admin/iracing/cars
+            </Link>{" "}
+            first.
+          </p>
+        ) : (
+          <form
+            action={addCarsFromCatalog}
+            className="space-y-3"
+          >
+            <input type="hidden" name="seasonId" value={seasonId} />
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs text-zinc-400">
+                  Add selected as
+                </span>
+                <select
+                  name="carClassId"
+                  defaultValue=""
+                  className="rounded border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                >
+                  <option value="">Shared (any class)</option>
+                  {season.carClasses.map((cc) => (
+                    <option key={cc.id} value={cc.id}>
+                      Pinned to {cc.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="submit"
+                className="rounded bg-emerald-700 px-3 py-2 text-sm font-semibold hover:bg-emerald-600"
+              >
+                Add selected
+              </button>
+            </div>
+
+            <details className="rounded border border-zinc-800 bg-zinc-950">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-900">
+                Show catalogue
+              </summary>
+              <div className="max-h-[28rem] overflow-y-auto p-3 space-y-3">
+                {[...catalogByCategory.entries()]
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([category, cars]) => (
+                    <div key={category}>
+                      <h3 className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        {category}{" "}
+                        <span className="text-zinc-600">({cars.length})</span>
+                      </h3>
+                      <div className="grid grid-cols-1 gap-x-4 gap-y-1 md:grid-cols-2">
+                        {cars.map((car) => {
+                          const already = alreadyAddedIracingIds.has(
+                            car.iracingCarId
+                          );
+                          return (
+                            <label
+                              key={car.iracingCarId}
+                              className={`flex items-center gap-2 rounded px-1 text-xs ${
+                                already
+                                  ? "text-zinc-500"
+                                  : "text-zinc-200 hover:bg-zinc-900"
+                              }`}
+                              title={
+                                already
+                                  ? "Already added to this season"
+                                  : `iRacing ID ${car.iracingCarId}`
+                              }
+                            >
+                              <input
+                                type="checkbox"
+                                name="iracingCarIds"
+                                value={car.iracingCarId}
+                                defaultChecked={already}
+                                disabled={already}
+                                className="h-3.5 w-3.5"
+                              />
+                              <span className="truncate">{car.name}</span>
+                              <span className="ml-auto font-mono text-[10px] text-zinc-600">
+                                #{car.iracingCarId}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </details>
+          </form>
+        )}
       </section>
 
       <section className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-4">

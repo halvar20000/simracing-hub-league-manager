@@ -33,6 +33,103 @@ function parseLine(raw: string): { name: string; iracingCarId: number | null } |
   return { name: line, iracingCarId: null };
 }
 
+/**
+ * Add one or more cars from the IracingCar catalogue (the cached
+ * snapshot from members-ng.iracing.com — populated by the
+ * "Seed from JSON" button on /admin/iracing/cars) into the given
+ * season's car list.
+ *
+ * Form payload:
+ *   - seasonId           : target season
+ *   - carClassId         : optional. When empty, cars are added as
+ *                          season-wide shared (carClassId NULL) — the
+ *                          default for new admins clicking the
+ *                          "Pick from catalogue" button.
+ *   - iracingCarIds      : repeated <input name="iracingCarIds"> from
+ *                          checked checkboxes in the form.
+ *
+ * Dedup is by (seasonId, name) — re-running the same selection is
+ * harmless; existing rows get their iracingCarId backfilled if it
+ * happens to be missing.
+ */
+export async function addCarsFromCatalog(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  const carClassIdRaw = String(formData.get("carClassId") ?? "").trim();
+  const carClassId = carClassIdRaw || null;
+  const ids = formData
+    .getAll("iracingCarIds")
+    .map((v) => parseInt(String(v), 10))
+    .filter((n) => Number.isFinite(n));
+
+  if (!seasonId) throw new Error("seasonId required");
+  if (ids.length === 0) {
+    // Nothing selected — silently no-op so an accidental empty submit
+    // doesn't error out.
+    return;
+  }
+
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: {
+      league: true,
+      _count: { select: { cars: true } },
+    },
+  });
+  if (!season) throw new Error("Season not found");
+
+  const catalog = await prisma.iracingCar.findMany({
+    where: { iracingCarId: { in: ids } },
+    select: { iracingCarId: true, name: true },
+  });
+
+  // Pre-load existing cars by lowercased name so we can dedupe across
+  // both class-pinned and shared rows. addCarsBulk uses the same
+  // normaliseCarName so the behaviour is consistent.
+  const existingShared = await prisma.car.findMany({
+    where: { seasonId, carClassId: null },
+    select: { id: true, name: true, iracingCarId: true },
+  });
+  const existingByName = new Map(
+    existingShared.map((c) => [normaliseCarName(c.name), c])
+  );
+
+  let order = season._count.cars;
+  for (const cat of catalog) {
+    const key = normaliseCarName(cat.name);
+    const existing = existingByName.get(key);
+    if (existing) {
+      // Already added — make sure the iracingCarId is set on the row
+      // so future imports match cleanly.
+      if (existing.iracingCarId !== cat.iracingCarId) {
+        try {
+          await prisma.car.update({
+            where: { id: existing.id },
+            data: { iracingCarId: cat.iracingCarId },
+          });
+        } catch {
+          /* another row already claimed this id; ignore */
+        }
+      }
+      continue;
+    }
+    await prisma.car.create({
+      data: {
+        seasonId,
+        carClassId,
+        name: cat.name,
+        iracingCarId: cat.iracingCarId,
+        displayOrder: order,
+      },
+    });
+    order++;
+  }
+
+  revalidatePath(
+    `/admin/leagues/${season.league.slug}/seasons/${seasonId}/cars`
+  );
+}
+
 export async function addCarsBulk(formData: FormData) {
   await requireAdmin();
   const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
