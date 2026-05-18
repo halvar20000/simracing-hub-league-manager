@@ -89,18 +89,23 @@ export default async function RosterPage({
           >
             ← {season.name} {season.year}
           </Link>
-          <h1 className="mt-2 text-2xl font-bold">Team roster</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            {teamsWithRegs.length} team
-            {teamsWithRegs.length === 1 ? "" : "s"}
-            {" · "}
-            {driverTotal} driver{driverTotal === 1 ? "" : "s"}
-            {pendingTotal > 0 && (
-              <span className="ml-2 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
-                {pendingTotal} pending
-              </span>
-            )}
-          </p>
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Team roster</h1>
+              <p className="mt-1 text-sm text-zinc-400">
+                {teamsWithRegs.length} team
+                {teamsWithRegs.length === 1 ? "" : "s"}
+                {" · "}
+                {driverTotal} driver{driverTotal === 1 ? "" : "s"}
+                {pendingTotal > 0 && (
+                  <span className="ml-2 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
+                    {pendingTotal} pending
+                  </span>
+                )}
+              </p>
+            </div>
+            <RosterExportButtons slug={slug} seasonId={seasonId} />
+          </div>
         </div>
 
         {teamsWithRegs.length === 0 ? (
@@ -307,16 +312,21 @@ export default async function RosterPage({
         >
           ← {season.name} {season.year}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">Roster</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          {registrations.length} registration
-          {registrations.length === 1 ? "" : "s"}
-          {pendingCount > 0 && (
-            <span className="ml-2 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
-              {pendingCount} pending
-            </span>
-          )}
-        </p>
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Roster</h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              {registrations.length} registration
+              {registrations.length === 1 ? "" : "s"}
+              {pendingCount > 0 && (
+                <span className="ml-2 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
+                  {pendingCount} pending
+                </span>
+              )}
+            </p>
+          </div>
+          <RosterExportButtons slug={slug} seasonId={seasonId} />
+        </div>
       </div>
 
       <TableFilter tableId="rosterTable" placeholder="Filter drivers by name, iRacing ID, team, car…" />
@@ -483,6 +493,41 @@ export default async function RosterPage({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * "Download CSV" + "Print / Save as PDF" buttons. CSV is a plain anchor
+ * hitting the export GET route (browser triggers a download via the
+ * Content-Disposition header). Print opens the printable view in a new
+ * tab so the admin can fire Cmd+P → Save as PDF.
+ */
+function RosterExportButtons({
+  slug,
+  seasonId,
+}: {
+  slug: string;
+  seasonId: string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <a
+        href={`/admin/leagues/${slug}/seasons/${seasonId}/roster/export`}
+        className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+        title="Comma-separated values. Opens in Google Sheets, Excel, Numbers."
+      >
+        Download CSV
+      </a>
+      <a
+        href={`/admin/leagues/${slug}/seasons/${seasonId}/roster/print`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+        title="Opens a print-friendly view in a new tab. Use the browser's print dialog → 'Save as PDF'."
+      >
+        Print / Save as PDF
+      </a>
     </div>
   );
 }
