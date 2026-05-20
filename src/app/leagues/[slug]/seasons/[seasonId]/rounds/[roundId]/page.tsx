@@ -17,16 +17,6 @@ import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams";
 const TEAM_BEST_N = 2;
 
-function ptsOf(r: {
-  rawPointsAwarded: number;
-  participationPointsAwarded: number;
-  manualPenaltyPoints: number;
-}) {
-  return (
-    r.rawPointsAwarded + r.participationPointsAwarded - r.manualPenaltyPoints
-  );
-}
-
 function sortByFinish<R extends { finishStatus: string; finishPosition: number }>(
   rows: R[]
 ): R[] {
@@ -306,6 +296,58 @@ export default async function PublicRoundResults({
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
 
+  // ---- Pro/Am class-relative race points -------------------------------
+  // For Pro/Am seasons (GT3 WCT), championship race points come from the
+  // driver's position WITHIN their Pro/Am class, NOT their overall
+  // finishing position. The stored RaceResult.rawPointsAwarded reflects
+  // the overall position, so the round result tables would otherwise
+  // disagree with the standings page (which recomputes class-relative
+  // points). Replicate the standings logic here so the numbers match.
+  //
+  //   classRacePointsByResult: resultId -> race points (before
+  //   participation / penalty). null when the season isn't Pro/Am — in
+  //   that case rawPointsAwarded is already correct.
+  let classRacePointsByResult: Map<string, number> | null = null;
+  if (proAmEnabled) {
+    classRacePointsByResult = new Map<string, number>();
+    const minPct =
+      round.season.scoringSystem.racePointsMinDistancePct ?? 50;
+    // Same eligibility filter + ranking as src/lib/standings.ts: only
+    // non-DSQ/DNS results above the distance threshold are ranked,
+    // sorted by overall finish position, then numbered per class.
+    const classified = [...allRows]
+      .filter(
+        (r) =>
+          r.finishStatus !== "DSQ" &&
+          r.finishStatus !== "DNS" &&
+          r.raceDistancePct >= minPct
+      )
+      .sort((a, b) => a.finishPosition - b.finishPosition);
+    let proRank = 0;
+    let amRank = 0;
+    for (const r of classified) {
+      const cls = r.registration.proAmClass;
+      let rank: number | null = null;
+      if (cls === "PRO") rank = ++proRank;
+      else if (cls === "AM") rank = ++amRank;
+      if (rank != null) {
+        classRacePointsByResult.set(
+          r.id,
+          seasonPointsTable[String(rank)] ?? 0
+        );
+      }
+    }
+  }
+  // Race points for a single result — class-relative when Pro/Am,
+  // otherwise the stored overall-position value. Fallback to
+  // rawPointsAwarded when a result has no class rank (matches the
+  // standings engine: e.g. a classified driver with no Pro/Am class
+  // assigned still scores their overall-position points).
+  const racePointsOf = (r: { id: string; rawPointsAwarded: number }): number =>
+    classRacePointsByResult
+      ? classRacePointsByResult.get(r.id) ?? r.rawPointsAwarded
+      : r.rawPointsAwarded;
+
   // For multi-race rounds, the per-race row sets
   const race1Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 1));
   const race2Rows = sortByFinish(allRows.filter((r) => r.raceNumber === 2));
@@ -340,7 +382,7 @@ export default async function PublicRoundResults({
     }
     a.rows.push(r);
     a.raceResultsByNumber.set(r.raceNumber, r);
-    a.racePoints += r.rawPointsAwarded;
+    a.racePoints += racePointsOf(r);
     a.participationPoints += r.participationPointsAwarded;
     a.penaltyPoints += r.manualPenaltyPoints;
     a.incidents += r.incidents;
@@ -605,6 +647,7 @@ export default async function PublicRoundResults({
             isMulticlass={isMulticlass}
             renumberWithinGroup={false}
             heading="Race 1"
+            classRacePoints={classRacePointsByResult}
           />
         ) : cls === "race2" ? (
           <ResultsTable
@@ -612,24 +655,28 @@ export default async function PublicRoundResults({
             isMulticlass={isMulticlass}
             renumberWithinGroup={false}
             heading="Race 2"
+            classRacePoints={classRacePointsByResult}
           />
         ) : cls === "pro" ? (
           <ResultsTable
             rows={proRows}
             isMulticlass={false}
             renumberWithinGroup
+            classRacePoints={classRacePointsByResult}
           />
         ) : cls === "am" ? (
           <ResultsTable
             rows={amRows}
             isMulticlass={false}
             renumberWithinGroup
+            classRacePoints={classRacePointsByResult}
           />
         ) : isMultiRace ? (
           <CombinedMultiRaceTable
             rows={aggRows}
             isMulticlass={isMulticlass}
             racesPerRound={racesPerRound}
+            classRacePoints={classRacePointsByResult}
           />
         ) : (
           <ResultsTable
@@ -637,6 +684,7 @@ export default async function PublicRoundResults({
             isMulticlass={isMulticlass}
             renumberWithinGroup={false}
             winnerTotalTimeMs={combinedWinner?.totalTimeMs ?? null}
+            classRacePoints={classRacePointsByResult}
           />
         )}
       </section>
@@ -725,12 +773,17 @@ function ResultsTable({
   renumberWithinGroup,
   winnerTotalTimeMs = null,
   heading = null,
+  classRacePoints = null,
 }: {
   rows: Row[];
   isMulticlass: boolean;
   renumberWithinGroup: boolean;
   winnerTotalTimeMs?: number | null;
   heading?: string | null;
+  /** Pro/Am class-relative race points by result id. When provided,
+   * the Pts column uses these instead of the stored (overall-position)
+   * rawPointsAwarded so it matches the standings. */
+  classRacePoints?: Map<string, number> | null;
 }) {
   const groupWinnerTotalTimeMs = renumberWithinGroup
     ? rows.find(
@@ -764,7 +817,11 @@ function ResultsTable({
         </thead>
         <tbody>
           {rows.map((r) => {
-            const total = ptsOf(r);
+            const racePts = classRacePoints
+              ? classRacePoints.get(r.id) ?? r.rawPointsAwarded
+              : r.rawPointsAwarded;
+            const total =
+              racePts + r.participationPointsAwarded - r.manualPenaltyPoints;
             const gap =
               groupWinnerTotalTimeMs && r.totalTimeMs
                 ? r.totalTimeMs - groupWinnerTotalTimeMs
@@ -856,10 +913,13 @@ function CombinedMultiRaceTable({
   rows,
   isMulticlass,
   racesPerRound,
+  classRacePoints = null,
 }: {
   rows: Agg[];
   isMulticlass: boolean;
   racesPerRound: number;
+  /** Pro/Am class-relative race points by result id (see ResultsTable). */
+  classRacePoints?: Map<string, number> | null;
 }) {
   const raceNumbers = Array.from({ length: racesPerRound }, (_, i) => i + 1);
   return (
@@ -942,7 +1002,11 @@ function CombinedMultiRaceTable({
                       key={`p${n}`}
                       className="px-3 py-2 text-right text-zinc-300 tabular-nums"
                     >
-                      {r ? r.rawPointsAwarded : 0}
+                      {r
+                        ? classRacePoints
+                          ? classRacePoints.get(r.id) ?? r.rawPointsAwarded
+                          : r.rawPointsAwarded
+                        : 0}
                     </td>
                   );
                 })}
