@@ -56,3 +56,49 @@ export async function updateProfile(formData: FormData) {
   revalidatePath("/profile");
   redirect("/profile?success=1");
 }
+
+export type IracingLookupResult =
+  | { status: "new" }
+  | { status: "self" }
+  | { status: "orphan"; firstName: string; lastName: string }
+  | { status: "conflict"; firstName: string; lastName: string };
+
+/**
+ * Live lookup used by the profile form: given an iRacing ID, report whether
+ * it already belongs to an account. Lets the form greet a returning driver
+ * by name and pre-fill it. Auth-gated — only signed-in users can call it.
+ *
+ *  - "new"      no account holds this ID
+ *  - "self"     the signed-in user already holds this ID
+ *  - "orphan"   another account holds it but has no Discord login — it will
+ *               be merged into the signed-in account on save
+ *  - "conflict" another account holds it AND has its own Discord login —
+ *               a real clash that needs an admin
+ */
+export async function lookupIracingId(
+  iracingMemberId: string
+): Promise<IracingLookupResult> {
+  const sessionUser = await requireAuth();
+  const id = String(iracingMemberId ?? "").trim();
+  if (!/^\d+$/.test(id)) return { status: "new" };
+
+  const holder = await prisma.user.findUnique({
+    where: { iracingMemberId: id },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      _count: { select: { accounts: true } },
+    },
+  });
+  if (!holder) return { status: "new" };
+  if (holder.id === sessionUser.id) return { status: "self" };
+
+  const name = {
+    firstName: holder.firstName ?? "",
+    lastName: holder.lastName ?? "",
+  };
+  return holder._count.accounts > 0
+    ? { status: "conflict", ...name }
+    : { status: "orphan", ...name };
+}
