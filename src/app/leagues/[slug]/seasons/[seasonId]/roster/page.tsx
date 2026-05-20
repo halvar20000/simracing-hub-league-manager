@@ -234,7 +234,20 @@ export default async function PublicSeasonRoster({
     ],
   });
 
-  const showClass = season.isMulticlass;
+  const seasonCarClasses = await prisma.carClass.findMany({
+    where: { seasonId },
+    select: { shortCode: true },
+  });
+  const proAmShortCodes = new Set(["PRO", "AM"]);
+  const proAmIsClass =
+    seasonCarClasses.length > 0 &&
+    seasonCarClasses.every((c) =>
+      proAmShortCodes.has(c.shortCode.toUpperCase())
+    );
+  // Driver Class (Pro/Am) column for Pro/Am seasons; the car-class "Class"
+  // column only for genuine multi-car-class seasons (e.g. IEC).
+  const showProAm = season.proAmEnabled || proAmIsClass;
+  const showClass = season.isMulticlass && !proAmIsClass;
   const pendingCount = registrations.filter((r) => r.status === "PENDING").length;
   const showFee =
     !!season.league.registrationFee && season.league.registrationFee > 0;
@@ -336,6 +349,7 @@ export default async function PublicSeasonRoster({
                   <th data-col="irid" className="px-4 py-3">iRacing ID</th>
                   <th data-col="team" className="px-4 py-3">Team</th>
                   {showClass && <th data-col="class" className="px-4 py-3">Class</th>}
+                  {showProAm && <th data-col="proam" className="px-4 py-3">Pro/Am</th>}
                   <th data-col="car" className="px-4 py-3">Car</th>
                   {showFee && (
                     <th data-col="fee" className="px-4 py-3">Fee</th>
@@ -366,6 +380,7 @@ export default async function PublicSeasonRoster({
                       r.startNumber,
                       r.team?.name,
                       r.carClass?.name,
+                      r.proAmClass,
                       r.car?.name,
                     ]
                       .filter((x) => x != null && x !== "")
@@ -379,6 +394,7 @@ export default async function PublicSeasonRoster({
                     data-r-irid={r.user.iracingMemberId ?? ""}
                     data-r-team={r.team?.name ?? "Independent"}
                     data-r-class={r.carClass?.name ?? ""}
+                    data-r-proam={r.proAmClass ?? ""}
                     data-r-car={r.car?.name ?? ""}
                     data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
                     data-r-invsent={r.iracingInvitationSent === "YES" ? "Sent" : r.iracingInvitationSent === "NO" ? "Not sent" : "Pending"}
@@ -418,6 +434,11 @@ export default async function PublicSeasonRoster({
                     {showClass && (
                       <td className="px-4 py-3 text-zinc-400">
                         {r.carClass?.name ?? "—"}
+                      </td>
+                    )}
+                    {showProAm && (
+                      <td className="px-4 py-3 text-zinc-400">
+                        {r.proAmClass ?? "—"}
                       </td>
                     )}
                     <td className="px-4 py-3 text-zinc-400">
