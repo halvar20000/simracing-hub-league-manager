@@ -23,6 +23,10 @@ export async function createRegistration(
     redirect("/leagues");
   }
 
+  // GT3 WCT: the driver never picks a class — an admin allocates the Pro/Am
+  // tier after registration, so the registration form omits the class field.
+  const isGt3Wct = season.league.slug === "cas-gt3-wct";
+
   if (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE") {
     redirect(
       `/leagues/${leagueSlug}/seasons/${seasonId}?error=Registration+is+not+open`
@@ -75,7 +79,7 @@ export async function createRegistration(
     }
   }
 
-  if (season.isMulticlass && !carClassId) {
+  if (season.isMulticlass && !isGt3Wct && !carClassId) {
     redirect(
       `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Class+is+required+for+multiclass+seasons`
     );
@@ -129,6 +133,13 @@ export async function createRegistration(
   const existing = await prisma.registration.findUnique({
     where: { seasonId_userId: { seasonId, userId: user.id } },
   });
+
+  // GT3 WCT: never derive the class from the chosen car and never wipe an
+  // allocation the admin already made — keep whatever is on the existing
+  // registration (null for a brand-new one) so only an admin can set it.
+  if (isGt3Wct) {
+    resolvedCarClassId = existing?.carClassId ?? null;
+  }
 
   if (existing && existing.status === "APPROVED") {
     redirect(

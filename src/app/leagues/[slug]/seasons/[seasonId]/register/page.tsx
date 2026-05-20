@@ -414,7 +414,24 @@ export default async function RegisterPage({
     );
   }
 
-
+  // GT3 WCT: the driver does not choose a class — an admin allocates the
+  // Pro/Am tier after registration. Hide the class dropdown and present the
+  // car picker as a single flat list (deduped: shared cars are merged into
+  // every class above, so flattening carClasses would repeat them).
+  const isGt3Wct = season.league.slug === "cas-gt3-wct";
+  const gt3WctCars = (() => {
+    const seen = new Set<string>();
+    const flat: { id: string; name: string }[] = [];
+    for (const cc of carClasses) {
+      for (const c of cc.cars) {
+        if (!seen.has(c.id)) {
+          seen.add(c.id);
+          flat.push(c);
+        }
+      }
+    }
+    return flat;
+  })();
 
   return (
     <div className="max-w-xl space-y-6">
@@ -519,6 +536,7 @@ export default async function RegisterPage({
         </fieldset>
 
         {season.isMulticlass &&
+          !isGt3Wct &&
           (carClasses.length > 0 ? (
             <label className="block">
               <span className="mb-1 block text-sm text-zinc-300">
@@ -572,7 +590,13 @@ export default async function RegisterPage({
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               >
                 <option value="">Select car…</option>
-                {season.isMulticlass
+                {isGt3Wct
+                  ? gt3WctCars.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))
+                  : season.isMulticlass
                   ? carClasses
                       .filter((cc) => cc.cars.length > 0)
                       .map((cc) => (
