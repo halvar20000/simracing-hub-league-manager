@@ -8,6 +8,7 @@
  */
 
 import type { MessagePayload } from "@/lib/discord-bot";
+import { discordTimestamp } from "@/lib/timezone";
 
 export type StreamEmbedInput = {
   leagueName: string;
@@ -36,8 +37,10 @@ function parseEmbedColor(hex: string | null | undefined): number {
 }
 
 export function buildStreamEmbed(input: StreamEmbedInput): MessagePayload {
-  const streamTs = Math.floor(input.scheduledStreamAt.getTime() / 1000);
-  const raceTs = Math.floor(input.startsAt.getTime() / 1000);
+  // discordTimestamp() corrects the wall-clock-stored-as-UTC quirk so
+  // <t:…> renders the right local time on Discord — see src/lib/timezone.ts.
+  const streamTs = discordTimestamp(input.scheduledStreamAt);
+  const raceTs = discordTimestamp(input.startsAt);
   const trackLine = input.trackConfig
     ? `${input.track} — ${input.trackConfig}`
     : input.track;

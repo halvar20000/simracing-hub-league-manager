@@ -10,6 +10,7 @@
 
 import type { Embed, MessagePayload } from "@/lib/discord-bot";
 import type { RsvpStatus, RsvpMode } from "@prisma/client";
+import { discordTimestamp } from "@/lib/timezone";
 
 // Discord component types
 const ROW = 1;
@@ -99,7 +100,9 @@ function bulletList(names: string[], limit = 25): string {
 }
 
 export function buildRsvpEmbed(input: RsvpEmbedInput, roundId: string): MessagePayload {
-  const ts = Math.floor(input.startsAt.getTime() / 1000);
+  // discordTimestamp() corrects the wall-clock-stored-as-UTC quirk so
+  // <t:…> renders the right local time on Discord — see src/lib/timezone.ts.
+  const ts = discordTimestamp(input.startsAt);
   const trackLine = input.trackConfig
     ? `${input.track} — ${input.trackConfig}`
     : input.track;
