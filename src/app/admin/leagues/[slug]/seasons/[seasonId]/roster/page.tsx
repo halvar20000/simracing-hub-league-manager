@@ -10,6 +10,7 @@ import {
 } from "@/lib/actions/admin-registrations";
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
+import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
@@ -39,9 +40,9 @@ export default async function RosterPage({
     select: { id: true, name: true },
   });
 
-  // Hide the Pro/Am column when the season's car classes are already
-  // Pro/Am tiers (e.g. GT3 WCT) — the carClass.name column shows the
-  // same information.
+  // A season whose "car classes" are really just the Pro/Am tiers (legacy
+  // GT3 WCT). When that is the case the car-class "Class" column duplicates
+  // the dedicated Pro/Am column and is hidden.
   const seasonCarClasses = await prisma.carClass.findMany({
     where: { seasonId },
     select: { shortCode: true },
@@ -52,7 +53,11 @@ export default async function RosterPage({
     seasonCarClasses.every((c) =>
       proAmShortCodes.has(c.shortCode.toUpperCase())
     );
-  const showProAmColumn = !proAmIsClass;
+  // Driver Class (Pro/Am) — shown and editable inline for Pro/Am seasons so
+  // admins can set each driver's tier straight from the roster.
+  const showProAmColumn = season.proAmEnabled || proAmIsClass;
+  // Car Class — hidden when the car classes are merely the Pro/Am tiers.
+  const showClassColumn = !proAmIsClass;
 
   if (season.teamRegistration) {
     const teams = await prisma.team.findMany({
@@ -405,7 +410,9 @@ export default async function RosterPage({
               <th data-col="irid" className="px-2 py-3 whitespace-nowrap">iR ID</th>
               <th data-col="num" className="px-2 py-3">#</th>
               <th data-col="team" className="px-3 py-3">Team</th>
-              <th data-col="class" className="px-2 py-3">Class</th>
+              {showClassColumn && (
+                <th data-col="class" className="px-2 py-3">Class</th>
+              )}
               <th data-col="car" className="px-4 py-3 min-w-[15rem]">Car</th>
               {showProAmColumn && <th data-col="proam" className="px-2 py-3">Pro/Am</th>}
               <th data-col="status" className="px-2 py-3">Status</th>
@@ -488,9 +495,11 @@ export default async function RosterPage({
                 <td className="px-3 py-3 text-zinc-400">
                   {r.team?.name ?? "—"}
                 </td>
-                <td className="px-2 py-3 text-zinc-400">
-                  {r.carClass?.name ?? "—"}
-                </td>
+                {showClassColumn && (
+                  <td className="px-2 py-3 text-zinc-400">
+                    {r.carClass?.name ?? "—"}
+                  </td>
+                )}
                 <td className="px-4 py-3 min-w-[15rem]">
                   <RegistrationCarSelect
                     registrationId={r.id}
@@ -499,8 +508,11 @@ export default async function RosterPage({
                   />
                 </td>
                 {showProAmColumn && (
-                  <td className="px-2 py-3 text-zinc-400">
-                    {r.proAmClass ?? "—"}
+                  <td className="px-2 py-3">
+                    <ProAmOverrideSelect
+                      registrationId={r.id}
+                      value={r.proAmClass}
+                    />
                   </td>
                 )}
                 <td className="px-4 py-3">

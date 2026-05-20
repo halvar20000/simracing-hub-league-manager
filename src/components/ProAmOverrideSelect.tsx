@@ -16,8 +16,9 @@ export default function ProAmOverrideSelect({
   registrationId: string;
   // current stored value: "PRO" | "AM" | null. Null is "Auto".
   value: "PRO" | "AM" | null;
-  // for admin reference; not submitted
-  suggested: "PRO" | "AM" | "UNRANKED";
+  // for admin reference; not submitted. Optional — omitted on the roster
+  // where there is no algorithm suggestion to show.
+  suggested?: "PRO" | "AM" | "UNRANKED";
 }) {
   const current = value ?? "AUTO";
   const cls = COLOR[current] ?? COLOR.AUTO;
@@ -28,7 +29,7 @@ export default function ProAmOverrideSelect({
         name="value"
         defaultValue={current}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        title={`Algorithm suggests: ${suggested}`}
+        title={suggested ? `Algorithm suggests: ${suggested}` : undefined}
         className={`rounded border px-2 py-1 text-xs ${cls}`}
       >
         <option value="AUTO">Auto</option>
