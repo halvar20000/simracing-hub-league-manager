@@ -161,15 +161,15 @@ export default async function EditSeasonPage({
           </span>
           <input
             name="scheduleImageUrl"
-            type="url"
+            type="text"
             defaultValue={season.scheduleImageUrl ?? ""}
-            placeholder="https://… or /seasons/your-poster.jpg"
+            placeholder="https://… or /schedules/your-poster.png"
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
           <span className="mt-1 block text-xs text-zinc-500">
             Used as the background of the season page and linked as
             &quot;Full schedule poster&quot;. Either a full https URL or an
-            app-relative path (e.g. <code>/seasons/wct12.jpg</code>).
+            app-relative path (e.g. <code>/schedules/cas-gt3-wct-season-13.png</code>).
           </span>
           {season.scheduleImageUrl && (
             <div className="mt-2 inline-block overflow-hidden rounded border border-zinc-700">
