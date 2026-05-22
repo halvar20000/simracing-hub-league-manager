@@ -108,6 +108,19 @@ export default async function EditSeasonPage({
           Pro/Am split enabled
         </label>
 
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            name="gdcEnabled"
+            defaultChecked={season.gdcEnabled}
+          />
+          Gentleman Driver Class (GDC) enabled
+        </label>
+        <p className="-mt-2 text-xs text-zinc-500">
+          A parallel, opt-in class scored alongside Pro/Am. Flag drivers into
+          it on the roster; configure its points table on the scoring system.
+        </p>
+
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
             Team scoring mode

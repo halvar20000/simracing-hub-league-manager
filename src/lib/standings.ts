@@ -13,6 +13,7 @@ export interface RoundPoints {
   correctionPoints: number;
   combinedPoints: number;     // = rawPoints + (participation if enabled) - penalty
   classPoints: number;        // = classRawPoints + participation - penalty
+  gdcRawPoints: number;       // GDC-position race points (rank within the GDC cohort)
   hasResult: boolean;
   dropped: boolean;          // true when this round is one of the worst-N drop weeks
 }
@@ -28,12 +29,15 @@ export interface DriverStanding {
   carClassId: string | null;
   carClassName: string | null;
   proAmClass: "PRO" | "AM" | null;
+  inGdc: boolean;
   rawPoints: number;
   classRawPoints: number;
   participationPoints: number;
   manualPenalties: number;
   combinedTotal: number;
   classTotal: number;
+  gdcRawPoints: number;       // season GDC race points (0 for non-GDC drivers)
+  gdcTotal: number;           // season GDC total — mirrors classTotal (0 for non-GDC)
   totalIncidents: number;
   iRating: number | null;
   excludedAt: Date | null;
@@ -65,6 +69,11 @@ export async function computeDriverStandings(
     number
   >;
   const proAmEnabled = !!season?.proAmEnabled;
+  const gdcEnabled = !!season?.gdcEnabled;
+  const gdcPointsTable = (season?.scoringSystem?.gdcPointsTable ?? {}) as Record<
+    string,
+    number
+  >;
 
   const [registrations, rounds] = await Promise.all([
     prisma.registration.findMany({
@@ -103,9 +112,12 @@ export async function computeDriverStandings(
     }),
   ]);
 
-  // Compute "class position" per result (rank within Pro or AM only)
+  // Compute "class position" per result (rank within Pro or AM only) and
+  // "GDC position" (rank within the opt-in Gentleman Driver Class cohort).
+  // Both are class-relative rankings derived from the same finishing order.
   const classPositionByResult = new Map<string, number>();
-  if (proAmEnabled) {
+  const gdcPositionByResult = new Map<string, number>();
+  if (proAmEnabled || gdcEnabled) {
     const roundsWithResults = await prisma.round.findMany({
       where: {
         seasonId,
@@ -116,16 +128,16 @@ export async function computeDriverStandings(
       include: {
         raceResults: {
           include: {
-            registration: { select: { proAmClass: true } },
+            registration: { select: { proAmClass: true, inGdc: true } },
           },
         },
       },
     });
 
+    // Include any driver who'd earn position points (above the
+    // racePointsMinDistancePct threshold and not DSQ/DNS).
+    const minPct = season?.scoringSystem.racePointsMinDistancePct ?? 50;
     for (const round of roundsWithResults) {
-      // Include any driver who'd earn position points (above the
-      // racePointsMinDistancePct threshold and not DSQ/DNS).
-      const minPct = season?.scoringSystem.racePointsMinDistancePct ?? 50;
       const classified = round.raceResults
         .filter(
           (r) =>
@@ -137,14 +149,21 @@ export async function computeDriverStandings(
 
       let proRank = 0;
       let amRank = 0;
+      let gdcRank = 0;
       for (const r of classified) {
-        const cls = r.registration.proAmClass;
-        if (cls === "PRO") {
-          proRank++;
-          classPositionByResult.set(r.id, proRank);
-        } else if (cls === "AM") {
-          amRank++;
-          classPositionByResult.set(r.id, amRank);
+        if (proAmEnabled) {
+          const cls = r.registration.proAmClass;
+          if (cls === "PRO") {
+            proRank++;
+            classPositionByResult.set(r.id, proRank);
+          } else if (cls === "AM") {
+            amRank++;
+            classPositionByResult.set(r.id, amRank);
+          }
+        }
+        if (gdcEnabled && r.registration.inGdc) {
+          gdcRank++;
+          gdcPositionByResult.set(r.id, gdcRank);
         }
       }
     }
@@ -161,6 +180,7 @@ export async function computeDriverStandings(
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
     let classRaw = 0;
+    let gdcRaw = 0;
     let participation = 0;
     let penalty = 0;
     let correction = 0;
@@ -183,6 +203,16 @@ export async function computeDriverStandings(
         }
       } else {
         classRaw += r.rawPointsAwarded;
+      }
+
+      // GDC race points: rank within the GDC cohort, scored off the
+      // separate gdcPointsTable. A GDC driver with no GDC position for a
+      // race (DSQ/DNS/below min distance) earns 0 GDC points there.
+      if (gdcEnabled && reg.inGdc) {
+        const gdcPos = gdcPositionByResult.get(r.id);
+        if (gdcPos != null) {
+          gdcRaw += gdcPointsTable[String(gdcPos)] ?? 0;
+        }
       }
     }
 
@@ -237,6 +267,7 @@ export async function computeDriverStandings(
           correctionPoints: 0,
           combinedPoints: 0,
           classPoints: 0,
+          gdcRawPoints: 0,
           hasResult: false,
           dropped: false,
         };
@@ -263,6 +294,15 @@ export async function computeDriverStandings(
           }
         }
       }
+      let rGdcRaw = 0;
+      if (gdcEnabled && reg.inGdc) {
+        for (const r of results) {
+          const gdcPos = gdcPositionByResult.get(r.id);
+          if (gdcPos != null) {
+            rGdcRaw += gdcPointsTable[String(gdcPos)] ?? 0;
+          }
+        }
+      }
       return {
         roundId: round.id,
         roundNumber: round.roundNumber,
@@ -276,6 +316,7 @@ export async function computeDriverStandings(
         correctionPoints: rCorrection,
         combinedPoints: rRaw + (includeParticipationInCombined ? rPart : 0) - rPen + rCorrection,
         classPoints: rClassRaw + rPart - rPen + rCorrection,
+        gdcRawPoints: rGdcRaw,
         hasResult: true,
         dropped: false,
       };
@@ -302,6 +343,7 @@ export async function computeDriverStandings(
           if (rp.hasResult) {
             raw -= rp.rawPoints;
             classRaw -= rp.classRawPoints;
+            gdcRaw -= rp.gdcRawPoints;
             participation -= rp.participationPoints;
             // penalty stays — penalties always count, even when the round is dropped
           }
@@ -321,6 +363,7 @@ export async function computeDriverStandings(
       carClassId: reg.carClassId,
       carClassName: reg.carClass?.name ?? null,
       proAmClass: reg.proAmClass as "PRO" | "AM" | null,
+      inGdc: reg.inGdc,
       rawPoints: raw,
       classRawPoints: classRaw,
       participationPoints: participation,
@@ -328,6 +371,11 @@ export async function computeDriverStandings(
       fprPoints: fprTotal,
       combinedTotal: raw + (includeParticipationInCombined ? participation : 0) - penalty + correction + fprTotal,
       classTotal: classRaw + participation - penalty + correction + fprTotal,
+      gdcRawPoints: gdcEnabled && reg.inGdc ? gdcRaw : 0,
+      gdcTotal:
+        gdcEnabled && reg.inGdc
+          ? gdcRaw + participation - penalty + correction + fprTotal
+          : 0,
       totalIncidents,
       iRating,
       excludedAt: reg.excludedAt ?? null,
@@ -347,6 +395,32 @@ export async function computeDriverStandings(
   );
 
   return standings;
+}
+
+// ============================================================================
+// GDC STANDINGS (Gentleman Driver Class)
+// A parallel, opt-in class that runs alongside Pro/Am. Drivers flagged with
+// Registration.inGdc earn class-relative points from ScoringSystem.gdcPointsTable
+// and get their own ranking. GDC points never touch the combined / Pro / Am
+// standings — this is purely a separate championship. The whole season counts:
+// flagging a driver mid-season retroactively includes their earlier rounds.
+// ============================================================================
+export async function computeGdcStandings(
+  prisma: PrismaClient,
+  seasonId: string,
+  excludeRoundIds: string[] = []
+): Promise<DriverStanding[]> {
+  const all = await computeDriverStandings(prisma, seasonId, excludeRoundIds);
+  return all
+    .filter((s) => s.inGdc)
+    .sort(
+      (a, b) =>
+        b.gdcTotal - a.gdcTotal ||
+        a.totalIncidents - b.totalIncidents ||
+        b.gdcRawPoints - a.gdcRawPoints ||
+        b.roundsCompleted - a.roundsCompleted ||
+        (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
+    );
 }
 
 export async function computeTeamStandings(

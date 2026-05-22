@@ -101,6 +101,7 @@ export async function updateSeason(
   const status = String(formData.get("status") ?? "DRAFT") as SeasonStatus;
   const isMulticlass = formData.get("isMulticlass") === "on";
   const proAmEnabled = formData.get("proAmEnabled") === "on";
+  const gdcEnabled = formData.get("gdcEnabled") === "on";
   const teamScoringMode = String(
     formData.get("teamScoringMode") ?? "NONE"
   ) as TeamScoringMode;
@@ -136,6 +137,7 @@ export async function updateSeason(
       status,
       isMulticlass,
       proAmEnabled,
+      gdcEnabled,
       teamScoringMode,
       teamScoringBestN,
       maxDrivers,

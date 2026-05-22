@@ -34,6 +34,8 @@ export default async function EditScoringSystem({
   const driverFprTiers = readDriverFprTiers(ss.driverFprTiers);
   const classPoints = (ss.classPointsTable as Record<string, number> | null) ?? {};
   const hasClass = Object.keys(classPoints).length > 0;
+  const gdcPoints = (ss.gdcPointsTable as Record<string, number> | null) ?? {};
+  const hasGdc = Object.keys(gdcPoints).length > 0;
 
   return (
     <div className="space-y-6">
@@ -102,6 +104,19 @@ export default async function EditScoringSystem({
             values={classPoints}
             placeholder="(no pts)"
           />
+        </Section>
+
+        <Section title={hasGdc ? "GDC points table (Gentleman Driver Class)" : "GDC points table (currently empty — fill to score the GDC championship)"}>
+          <PointsGrid
+            prefix="gdcPos"
+            values={gdcPoints}
+            placeholder="(no pts)"
+          />
+          <p className="mt-2 text-xs text-zinc-500">
+            Points by finishing order among the GDC-flagged drivers in each
+            race (P1 = best-placed GDC driver). Only applied on seasons with
+            GDC enabled; never affects the combined / Pro / Am standings.
+          </p>
         </Section>
 
         <Section title={teamMode ? "Participation (team-based)" : "Participation"}>

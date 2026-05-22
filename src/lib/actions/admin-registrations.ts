@@ -167,6 +167,31 @@ export async function setRegistrationProAmClass(formData: FormData) {
   );
 }
 
+/**
+ * Toggle a driver into / out of the Gentleman Driver Class (GDC). This is a
+ * parallel, opt-in class — it never touches proAmClass or any other field.
+ */
+export async function setRegistrationGdc(formData: FormData) {
+  await requireAdmin();
+  const registrationId = String(formData.get("registrationId") ?? "");
+  const value = String(formData.get("value") ?? "");
+  if (!registrationId) throw new Error("registrationId required");
+  if (value !== "YES" && value !== "NO") throw new Error("Invalid value");
+
+  const reg = await prisma.registration.update({
+    where: { id: registrationId },
+    data: { inGdc: value === "YES" },
+    include: { season: { include: { league: true } } },
+  });
+
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+  revalidatePath(
+    `/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/standings`
+  );
+}
+
 export async function applyProAmToTargetSeason(formData: FormData) {
   await requireAdmin();
   const sourceSeasonId = String(formData.get("sourceSeasonId") ?? "");

@@ -104,6 +104,7 @@ export async function createScoringSystem(formData: FormData): Promise<void> {
         description: src.description,
         pointsTable: src.pointsTable as Prisma.InputJsonValue,
         classPointsTable: j(src.classPointsTable),
+        gdcPointsTable: j(src.gdcPointsTable),
         participationPoints: src.participationPoints,
         participationMinDistancePct: src.participationMinDistancePct,
         racePointsMinDistancePct: src.racePointsMinDistancePct,
@@ -187,6 +188,9 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const classPointsTableObj = readPointsTable(formData, "classPos", 40);
   const classPointsTable =
     Object.keys(classPointsTableObj).length > 0 ? classPointsTableObj : null;
+  const gdcPointsTableObj = readPointsTable(formData, "gdcPos", 40);
+  const gdcPointsTable =
+    Object.keys(gdcPointsTableObj).length > 0 ? gdcPointsTableObj : null;
 
   await prisma.scoringSystem.update({
     where: { id },
@@ -197,6 +201,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
         classPointsTable === null
           ? Prisma.DbNull
           : classPointsTable,
+      gdcPointsTable:
+        gdcPointsTable === null ? Prisma.DbNull : gdcPointsTable,
       participationPoints,
       participationMinDistancePct,
       racePointsMinDistancePct,

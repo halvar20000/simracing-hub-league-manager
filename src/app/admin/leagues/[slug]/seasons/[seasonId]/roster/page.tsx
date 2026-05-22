@@ -11,6 +11,7 @@ import {
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
 import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
+import GdcToggle from "@/components/GdcToggle";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
@@ -58,6 +59,8 @@ export default async function RosterPage({
   const showProAmColumn = season.proAmEnabled || proAmIsClass;
   // Car Class — hidden when the car classes are merely the Pro/Am tiers.
   const showClassColumn = !proAmIsClass;
+  // GDC (Gentleman Driver Class) — opt-in parallel class, toggled per driver.
+  const showGdcColumn = season.gdcEnabled;
 
   if (season.teamRegistration) {
     const teams = await prisma.team.findMany({
@@ -415,6 +418,7 @@ export default async function RosterPage({
               )}
               <th data-col="car" className="px-4 py-3 min-w-[15rem]">Car</th>
               {showProAmColumn && <th data-col="proam" className="px-2 py-3">Pro/Am</th>}
+              {showGdcColumn && <th data-col="gdc" className="px-2 py-3">GDC</th>}
               <th data-col="status" className="px-2 py-3">Status</th>
               {showFee && (
               <th data-col="fee" className="px-2 py-3">Fee</th>
@@ -462,6 +466,7 @@ export default async function RosterPage({
                 data-r-class={r.carClass?.name ?? ""}
                 data-r-car={r.car?.name ?? ""}
                 data-r-proam={r.proAmClass ?? ""}
+                data-r-gdc={r.inGdc ? "GDC" : ""}
                 data-r-status={r.status}
                 data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
                 data-r-invsent={r.iracingInvitationSent === "YES" ? "Sent" : r.iracingInvitationSent === "NO" ? "Not sent" : "Pending"}
@@ -513,6 +518,11 @@ export default async function RosterPage({
                       registrationId={r.id}
                       value={r.proAmClass}
                     />
+                  </td>
+                )}
+                {showGdcColumn && (
+                  <td className="px-2 py-3">
+                    <GdcToggle registrationId={r.id} value={r.inGdc} />
                   </td>
                 )}
                 <td className="px-4 py-3">
@@ -578,7 +588,7 @@ export default async function RosterPage({
             {registrations.length === 0 && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={13}
                   className="px-4 py-6 text-center text-zinc-500"
                 >
                   No registrations yet.

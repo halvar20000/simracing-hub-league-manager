@@ -55,12 +55,13 @@ export default async function StandingsPage({
   const { slug, seasonId } = await params;
   const { view: viewRaw, cls: clsRaw } = await searchParams;
   const view: ViewMode = viewRaw === "races" ? "races" : "list";
-  type Cls = "combined" | "pro" | "am" | "team" | "car";
+  type Cls = "combined" | "pro" | "am" | "gdc" | "team" | "car";
   // IEC: collapse all tabs to team view (no driver/per-car views).
   const clsForTeamEvent = (raw: string | undefined): Cls => "team";
   const cls: Cls =
     clsRaw === "pro" ? "pro" :
     clsRaw === "am" ? "am" :
+    clsRaw === "gdc" ? "gdc" :
     clsRaw === "team" ? "team" :
     clsRaw === "car" ? "car" : "combined";
   const viewSuffix = view === "races" ? "&view=races" : "";
@@ -111,6 +112,21 @@ export default async function StandingsPage({
   const previousPro = previousDrivers?.filter((d) => d.proAmClass === "PRO") ?? null;
   const amDrivers = drivers.filter((d) => d.proAmClass === "AM");
   const previousAm = previousDrivers?.filter((d) => d.proAmClass === "AM") ?? null;
+
+  // GDC — parallel, opt-in class. Filter the already-computed driver
+  // standings by the inGdc flag and sort by the GDC total.
+  const sortByGdc = (a: DriverStanding, b: DriverStanding) =>
+    b.gdcTotal - a.gdcTotal ||
+    a.totalIncidents - b.totalIncidents ||
+    b.gdcRawPoints - a.gdcRawPoints ||
+    (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "");
+  const gdcDrivers = season.gdcEnabled
+    ? [...drivers].filter((d) => d.inGdc).sort(sortByGdc)
+    : [];
+  const previousGdc =
+    season.gdcEnabled && previousDrivers
+      ? [...previousDrivers].filter((d) => d.inGdc).sort(sortByGdc)
+      : null;
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/standings`;
 
@@ -171,6 +187,9 @@ export default async function StandingsPage({
             <Link href={`${baseHref}?cls=pro${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Pro</Link>
             <Link href={`${baseHref}?cls=am${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Am</Link>
           </>)}
+          {season.gdcEnabled && (
+            <Link href={`${baseHref}?cls=gdc${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "gdc" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>GDC</Link>
+          )}
           <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Team</Link>
           <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>By Car</Link>
         </div>
@@ -214,6 +233,18 @@ export default async function StandingsPage({
           ) : (
             <DriversTable rows={amDrivers} previousRows={previousAm} kind="class" showTeam />
           )}
+        </section>
+      )}
+
+      {!isTeamEventSeason && cls === "gdc" && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold">Gentleman Driver Class</h2>
+          <p className="mb-3 text-xs text-zinc-500">
+            A parallel championship for GDC-flagged drivers, scored off the
+            separate GDC points table. These points never affect the Combined,
+            Pro or Am standings.
+          </p>
+          <GdcTable rows={gdcDrivers} previousRows={previousGdc} />
         </section>
       )}
 
@@ -678,6 +709,90 @@ function RaceByRaceTable({
                 })}
                 <td className="px-2 py-1.5 text-right text-zinc-400 tabular-nums">{r.totalIncidents}</td>
                 <td className="px-2 py-1.5 text-right text-zinc-400 tabular-nums">{r.iRating ?? "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GdcTable({
+  rows,
+  previousRows,
+}: {
+  rows: DriverStanding[];
+  previousRows: DriverStanding[] | null;
+}) {
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={<ChartIcon />}
+        title="No GDC drivers yet"
+        description="Flag drivers into the Gentleman Driver Class on the admin roster — they'll appear here with their own ranking once they have results."
+      />
+    );
+  }
+  const previousMap = new Map(
+    previousRows?.map((d) => [d.registrationId, d]) ?? []
+  );
+  const previousPositions = new Map(
+    previousRows?.map((d, i) => [d.registrationId, i + 1]) ?? []
+  );
+  return (
+    <div className="overflow-hidden rounded border border-zinc-800">
+      <table className="w-full text-sm">
+        <thead className="bg-zinc-900 text-left text-zinc-400">
+          <tr>
+            <th className="px-3 py-2">Pos</th>
+            <th className="px-3 py-2">#</th>
+            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2 text-right">Rounds</th>
+            <th className="px-3 py-2 text-right">Inc</th>
+            <th className="px-3 py-2 text-right">GDC race pts</th>
+            <th className="px-3 py-2 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, idx) => {
+            const prev = previousMap.get(r.registrationId);
+            const prevPos = previousPositions.get(r.registrationId) ?? null;
+            const positionDelta = prevPos != null ? prevPos - (idx + 1) : null;
+            const totalDelta = prev ? r.gdcTotal - prev.gdcTotal : null;
+            return (
+              <tr
+                key={r.registrationId}
+                className="border-t border-zinc-800 hover:bg-zinc-900"
+              >
+                <td className="px-3 py-2 font-medium tabular-nums">
+                  <PosCell pos={idx + 1} delta={positionDelta} />
+                </td>
+                <td className="px-3 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
+                <td
+                  className={`px-3 py-2 font-medium ${
+                    r.excludedAt
+                      ? "text-zinc-500 line-through decoration-red-500/60"
+                      : ""
+                  }`}
+                >
+                  <CountryFlag code={r.countryCode} />
+                  {r.driverFirstName} {r.driverLastName}
+                </td>
+                <td className="px-3 py-2 text-zinc-400">{r.teamName ?? "—"}</td>
+                <td className="px-3 py-2 text-right text-zinc-400">
+                  {r.roundsCompleted}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {r.totalIncidents}
+                </td>
+                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                  {r.gdcRawPoints}
+                </td>
+                <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums">
+                  <ValueCell value={r.gdcTotal} delta={totalDelta} width="w-12" />
+                </td>
               </tr>
             );
           })}

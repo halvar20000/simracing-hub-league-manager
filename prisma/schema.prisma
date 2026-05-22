@@ -158,6 +158,7 @@ model Season {
   endsOn              DateTime?
   isMulticlass        Boolean         @default(false)
   proAmEnabled        Boolean         @default(false)
+  gdcEnabled          Boolean         @default(false)
 
   scoringSystemId     String
   scoringSystem       ScoringSystem   @relation(fields: [scoringSystemId], references: [id])
@@ -271,6 +272,7 @@ model Registration {
   carId           String?
   car             Car?                @relation(fields: [carId], references: [id])
   proAmClass      ProAmClass?
+  inGdc           Boolean             @default(false)
 
   notes           String?
   approvedById    String?
@@ -336,6 +338,7 @@ model ScoringSystem {
   description                   String?
   pointsTable                   Json
   classPointsTable              Json?
+  gdcPointsTable                Json?
   participationPoints           Int       @default(0)
   participationMinDistancePct   Int       @default(75)
   racePointsMinDistancePct      Int       @default(50)
