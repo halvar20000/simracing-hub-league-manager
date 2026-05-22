@@ -7,6 +7,7 @@ import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 import type { Metadata } from "next";
 import { pageMetadataLarge } from "@/lib/og";
@@ -402,12 +403,10 @@ export default async function RegisterPage({
           )}
 
           <div className="flex gap-2">
-            <button
-              type="submit"
+            <SubmitWithSpinner
+              label={activeRegistration ? "Update team registration" : "Submit team registration"}
               className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-            >
-              {activeRegistration ? "Update team registration" : "Submit team registration"}
-            </button>
+            />
           </div>
         </form>
       </div>
@@ -640,12 +639,10 @@ export default async function RegisterPage({
         )}
 
         <div className="flex gap-2">
-          <button
-            type="submit"
+          <SubmitWithSpinner
+            label={isUpdate ? "Update registration" : "Submit registration"}
             className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-          >
-            {isUpdate ? "Update registration" : "Submit registration"}
-          </button>
+          />
           <Link
             href={`/leagues/${slug}/seasons/${seasonId}`}
             className="rounded border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"

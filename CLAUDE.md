@@ -54,6 +54,31 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 | `cas-combined-cup` | CAS Combined Cup | Solo |
 | `cas-sfl-cup` | CAS SFL Cup | Solo |
 
+## Car Class vs Driver Class
+
+Two **independent** concepts — never conflate them:
+
+- **Car Class** — the car *category*. Schema: `CarClass` model, `Season.isMulticlass`, `Registration.carClassId`, `TeamResult.carClassId`. Real multi-class racing only. `computeTeamClassStandings` runs a per-class championship off `TeamResult.carClassId`.
+- **Driver Class** — the driver's *Pro/Am tier*. Schema: `Season.proAmEnabled`, `Registration.proAmClass` (`PRO | AM`). Admin-assigned — drivers never pick it. `computeDriverStandings` derives Pro/Am class-relative points purely from `proAmClass`.
+
+Target per-season config:
+
+| League | isMulticlass | proAmEnabled | Notes |
+|---|---|---|---|
+| GT3 WCT | false | true | one car class ("GT3"); Pro/Am via `proAmClass` |
+| IEC | true | false | team picks a car class at registration |
+| Combined Cup | false | false | car class varies per round — kept in the round name, not modelled |
+| TSS GT4 / SFL Cup / PCCD / Nascar | false | false | single car class or none |
+
+**Legacy note:** the *current* GT3 WCT season predates this model — it is `isMulticlass=true` with two `CarClass` rows named "Pro"/"Am" (Pro/Am stored as fake car classes, duplicated with `proAmClass`). Left as-is until it ends; only new GT3 WCT seasons use the clean config. Hardcoded `slug === "cas-gt3-wct"` shims in the registration form/action exist only for this transition and can be removed once the legacy season is over.
+
+**Cleanup plan (UI reads Driver Class from `proAmClass`, not car class):**
+1. Round results page (`rounds/[roundId]/page.tsx`) — Pro/Am tabs + class-relative points filter on `registration.proAmClass`, not `carClass.shortCode`. Pro/Am column gated on `proAmEnabled`; car-class "Class" column stays gated on `isMulticlass`.
+2. Roster pages (admin + public) — drop the `proAmIsClass` hack; show a Pro/Am column when `proAmEnabled` (from `proAmClass`) and a Car Class column when `isMulticlass` (from `carClass`).
+3. `league-templates.ts` — `endurance-pro-am` template set to `isMulticlass=false` so new GT3 WCT seasons start clean.
+4. Admin season-edit page — relabel the two checkboxes to "Multiclass season (multiple car classes)" and "Pro/Am driver split".
+5. No data migration: the legacy GT3 WCT season is untouched; these changes are safe for it because its `proAmClass` is already populated.
+
 ## URL structure
 
 - `/admin/leagues/[slug]/seasons/[seasonId]/...` — admin views, gated by `requireAdmin()` / `requireSteward()`
@@ -148,7 +173,7 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
   - **Orange `#ff6b35`** — primary CTA
 - Tab nav: pattern uses `pillBase` + `pillOn` / `pillOff` class triplet (see the round results page for the canonical example).
 - Tables: `tabular-nums`, `border-t border-zinc-800` rows, `hover:bg-zinc-900/60`.
-- Forms: `SubmitWithSpinner` component (`@/components/SubmitWithSpinner`) for submit buttons.
+- Forms: every `<form action>` submit button MUST use `SubmitWithSpinner` (`@/components/SubmitWithSpinner`) — never a raw `<button type="submit">`. It disables the button while the server action is in flight; a raw button lets impatient users click repeatedly, double-firing non-idempotent side effects (e.g. duplicate registration notification emails).
 - Destructive actions: wrap in a `<details>` "Danger zone" so the button is only visible after expanding. See the report-delete pattern.
 
 ## Common gotchas
