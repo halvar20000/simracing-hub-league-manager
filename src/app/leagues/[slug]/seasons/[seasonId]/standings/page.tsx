@@ -241,8 +241,9 @@ export default async function StandingsPage({
           <h2 className="mb-1 text-lg font-semibold">Gentleman Driver Class</h2>
           <p className="mb-3 text-xs text-zinc-500">
             A parallel championship for GDC-flagged drivers, scored off the
-            separate GDC points table. These points never affect the Combined,
-            Pro or Am standings.
+            separate GDC points table. Every race counts — drop-weeks do not
+            apply here. These points never affect the Combined, Pro or Am
+            standings.
           </p>
           <GdcTable rows={gdcDrivers} previousRows={previousGdc} />
         </section>

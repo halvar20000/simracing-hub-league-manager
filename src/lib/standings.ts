@@ -322,9 +322,16 @@ export async function computeDriverStandings(
       };
     });
 
+    // GDC ignores drop-weeks entirely — every race counts. Snapshot the
+    // full-season participation here, BEFORE the drop block reduces it, so
+    // gdcTotal is always built from undropped values. (raw race points stay
+    // full for GDC because the drop block below no longer touches gdcRaw;
+    // penalties/corrections/FPR are never dropped, so they need no snapshot.)
+    const gdcParticipation = participation;
+
     // --- Drop worst N rounds (per ScoringSystem.dropWorstNRounds) ---
     // Priority: missed rounds (no result) first, then lowest combinedPoints.
-    // Penalties are NEVER dropped — they always count.
+    // Penalties are NEVER dropped — they always count. GDC is NOT dropped.
     const dropN = season?.scoringSystem.dropWorstNRounds ?? 0;
     if (dropN > 0 && roundPoints.length > 0) {
       const sorted = [...roundPoints].sort((a, b) => {
@@ -343,9 +350,9 @@ export async function computeDriverStandings(
           if (rp.hasResult) {
             raw -= rp.rawPoints;
             classRaw -= rp.classRawPoints;
-            gdcRaw -= rp.gdcRawPoints;
             participation -= rp.participationPoints;
             // penalty stays — penalties always count, even when the round is dropped
+            // gdcRaw stays too — the GDC class ignores drop-weeks entirely.
           }
           // Missed rounds contribute 0, so nothing to subtract.
         }
@@ -374,7 +381,7 @@ export async function computeDriverStandings(
       gdcRawPoints: gdcEnabled && reg.inGdc ? gdcRaw : 0,
       gdcTotal:
         gdcEnabled && reg.inGdc
-          ? gdcRaw + participation - penalty + correction + fprTotal
+          ? gdcRaw + gdcParticipation - penalty + correction + fprTotal
           : 0,
       totalIncidents,
       iRating,
@@ -402,8 +409,12 @@ export async function computeDriverStandings(
 // A parallel, opt-in class that runs alongside Pro/Am. Drivers flagged with
 // Registration.inGdc earn class-relative points from ScoringSystem.gdcPointsTable
 // and get their own ranking. GDC points never touch the combined / Pro / Am
-// standings — this is purely a separate championship. The whole season counts:
-// flagging a driver mid-season retroactively includes their earlier rounds.
+// standings — this is purely a separate championship.
+//
+// Two GDC-specific rules: (1) drop-weeks never apply — every race a driver
+// enters counts, even on seasons where Pro/Am drops its worst N rounds;
+// (2) the whole season counts — flagging a driver mid-season retroactively
+// includes their earlier rounds.
 // ============================================================================
 export async function computeGdcStandings(
   prisma: PrismaClient,
