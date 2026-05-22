@@ -5,19 +5,17 @@ import { prisma } from "@/lib/prisma";
 export default async function Nav() {
   const session = await auth();
 
-  let role: string | null = null;
+  // session.user.role is already populated by the NextAuth session callback
+  // (the database session strategy loads the User row on every request), so
+  // there is no need for a separate prisma.user lookup here.
+  const role =
+    (session?.user as { role?: string } | undefined)?.role ?? null;
+
   let pendingReports = 0;
-  if (session?.user?.id) {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true },
+  if (role === "ADMIN" || role === "STEWARD") {
+    pendingReports = await prisma.incidentReport.count({
+      where: { status: "SUBMITTED" },
     });
-    role = user?.role ?? null;
-    if (role === "ADMIN" || role === "STEWARD") {
-      pendingReports = await prisma.incidentReport.count({
-        where: { status: "SUBMITTED" },
-      });
-    }
   }
   const isFullAdmin = role === "ADMIN";
   const isSteward = role === "ADMIN" || role === "STEWARD";
