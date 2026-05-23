@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-helpers";
 import { postDiscordWebhook } from "@/lib/discord-webhook";
 import { sendResendEmail } from "@/lib/resend-email";
+import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 
 export async function createRegistration(
   leagueSlug: string,
@@ -60,6 +61,40 @@ export async function createRegistration(
   const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
   const carId = String(formData.get("carId") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  const iRatingRaw = String(formData.get("iRating") ?? "").trim();
+
+  // SFL Cup: enforce the iRating cap. New drivers are capped at the gate's
+  // maxIRating; drivers who raced in the most recent prior SFL Cup season are
+  // exempt. getSflIRatingGate is a no-op (applies=false) for other leagues.
+  let iRatingValue: number | null = null;
+  if (iRatingRaw) {
+    if (!/^\d+$/.test(iRatingRaw)) {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+          "iRating must be a whole number"
+        )}`
+      );
+    }
+    iRatingValue = parseInt(iRatingRaw, 10);
+  }
+
+  const sflGate = await getSflIRatingGate(season, user.id);
+  if (sflGate.applies) {
+    if (iRatingValue == null) {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+          "Your current iRating is required"
+        )}`
+      );
+    }
+    if (!sflGate.exempt && iRatingValue > sflGate.maxIRating) {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+          `This season is capped at ${sflGate.maxIRating} iRating. Only drivers who raced in the previous SFL Cup season may register above it.`
+        )}`
+      );
+    }
+  }
 
   // Resolve team:
   //   - If newTeamName is provided, find or create that team (it wins)
@@ -178,6 +213,9 @@ export async function createRegistration(
         carClassId: resolvedCarClassId,
         carId,
         notes,
+        // Only overwrite iRating when the form actually submitted one, so a
+        // league without the iRating field never wipes an existing value.
+        ...(iRatingValue != null ? { iRating: iRatingValue } : {}),
         approvedById: null,
         approvedAt: null,
       },
@@ -193,6 +231,7 @@ export async function createRegistration(
         carClassId: resolvedCarClassId,
         carId,
         notes,
+        iRating: iRatingValue,
       },
     });
   }
@@ -219,6 +258,8 @@ export async function createRegistration(
         { name: "Team", value: teamLabel, inline: true },
       ];
       if (className) fields.push({ name: "Class", value: className, inline: true });
+      if (iRatingValue != null)
+        fields.push({ name: "iRating", value: String(iRatingValue), inline: true });
       if (notes) fields.push({ name: "Notes", value: notes, inline: false });
       await postDiscordWebhook(webhookUrl, {
         username: "CLS Registrations",
@@ -284,6 +325,7 @@ export async function createRegistration(
             <tr><td style="padding: 6px 0; color: #71717a;">Start #</td><td>${startNumber != null ? "#" + escape(startNumber) : "—"}</td></tr>
             <tr><td style="padding: 6px 0; color: #71717a;">Team</td><td>${escape(teamLabel2)}</td></tr>
             ${className2 ? `<tr><td style="padding: 6px 0; color: #71717a;">Class</td><td>${escape(className2)}</td></tr>` : ""}
+            ${iRatingValue != null ? `<tr><td style="padding: 6px 0; color: #71717a;">iRating</td><td>${escape(iRatingValue)}</td></tr>` : ""}
             ${notes ? `<tr><td style="padding: 6px 0; color: #71717a; vertical-align: top;">Notes</td><td>${escape(notes)}</td></tr>` : ""}
           </table>
           <p style="margin-top: 20px;">
@@ -301,6 +343,7 @@ export async function createRegistration(
         `Start #: ${startNumber != null ? "#" + startNumber : "—"}`,
         `Team: ${teamLabel2}`,
         className2 ? `Class: ${className2}` : null,
+        iRatingValue != null ? `iRating: ${iRatingValue}` : null,
         notes ? `Notes: ${notes}` : null,
         "",
         `Open roster: ${rosterUrl}`,

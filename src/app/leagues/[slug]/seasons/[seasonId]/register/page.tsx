@@ -6,8 +6,10 @@ import { createRegistration, createTeamRegistration } from "@/lib/actions/regist
 import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
+import SoloIRatingValidator from "@/components/SoloIRatingValidator";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 
 import type { Metadata } from "next";
 import { pageMetadataLarge } from "@/lib/og";
@@ -432,6 +434,11 @@ export default async function RegisterPage({
     return flat;
   })();
 
+  // SFL Cup: iRating cap for new drivers — drivers who raced in the most
+  // recent prior SFL Cup season are exempt. getSflIRatingGate returns
+  // applies=false for every other league, so this is a no-op elsewhere.
+  const sflGate = await getSflIRatingGate(season, user.id);
+
   return (
     <div className="max-w-xl space-y-6">
       <div>
@@ -493,6 +500,37 @@ export default async function RegisterPage({
             Subject to availability — admin may assign a different number.
           </span>
         </label>
+
+        {sflGate.applies && (
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">
+              Your current iRating <span className="text-orange-400">*</span>
+            </span>
+            <input
+              name="iRating"
+              type="number"
+              min={1}
+              max={20000}
+              required
+              inputMode="numeric"
+              defaultValue={existing?.iRating ?? ""}
+              placeholder="e.g. 2400"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+            {sflGate.exempt ? (
+              <span className="mt-1 block text-xs text-emerald-400">
+                ✓ You raced in the previous SFL Cup season — the{" "}
+                {sflGate.maxIRating} iRating cap does not apply to you.
+              </span>
+            ) : (
+              <span className="mt-1 block text-xs text-zinc-500">
+                New drivers must be at or below {sflGate.maxIRating} iRating.
+                Drivers who raced in the previous SFL Cup season may register
+                at any iRating.
+              </span>
+            )}
+          </label>
+        )}
 
         <fieldset className="space-y-2 rounded border border-zinc-800 bg-zinc-900/50 p-4">
           <legend className="px-2 text-sm text-zinc-300">Team</legend>
@@ -633,6 +671,13 @@ export default async function RegisterPage({
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
         </label>
+
+        {sflGate.applies && (
+          <SoloIRatingValidator
+            maxIRating={sflGate.maxIRating}
+            exempt={sflGate.exempt}
+          />
+        )}
 
         {paymentInfo && (
           <PaymentNotice payment={paymentInfo} variant="preview" />
