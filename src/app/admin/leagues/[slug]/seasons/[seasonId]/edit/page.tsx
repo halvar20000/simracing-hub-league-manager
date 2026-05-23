@@ -68,8 +68,14 @@ export default async function EditSeasonPage({
             <option value="DRAFT">Draft</option>
             <option value="OPEN_REGISTRATION">Open registration</option>
             <option value="ACTIVE">Active</option>
+            <option value="PAUSED">Paused (on hold)</option>
             <option value="COMPLETED">Completed</option>
           </select>
+          <span className="mt-1 block text-xs text-zinc-500">
+            <strong>Paused</strong> keeps the season and all its data, but stops
+            reporting-window and RSVP Discord announcements and closes
+            registration. Switch back to <strong>Active</strong> to resume.
+          </span>
         </label>
 
         <label className="block">

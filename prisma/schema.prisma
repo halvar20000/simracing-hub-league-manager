@@ -580,6 +580,7 @@ enum SeasonStatus {
   DRAFT
   OPEN_REGISTRATION
   ACTIVE
+  PAUSED
   COMPLETED
 }
 

@@ -6,6 +6,7 @@ const STATUS_TONE: Record<string, string> = {
   OPEN_REGISTRATION:
     "border-emerald-700/40 bg-emerald-950/30 text-emerald-200",
   ACTIVE: "border-blue-700/40 bg-blue-950/30 text-blue-200",
+  PAUSED: "border-amber-700/40 bg-amber-950/30 text-amber-200",
   COMPLETED: "border-zinc-700 bg-zinc-900/50 text-zinc-400",
   ARCHIVED: "border-zinc-800 bg-zinc-950 text-zinc-500",
 };
@@ -13,6 +14,7 @@ const STATUS_TONE: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   OPEN_REGISTRATION: "OPEN",
   ACTIVE: "ACTIVE",
+  PAUSED: "ON HOLD",
   COMPLETED: "DONE",
   ARCHIVED: "ARCHIVED",
 };

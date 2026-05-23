@@ -54,6 +54,12 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 | `cas-combined-cup` | CAS Combined Cup | Solo |
 | `cas-sfl-cup` | CAS SFL Cup | Solo |
 
+## Season status
+
+`SeasonStatus` enum: `DRAFT | OPEN_REGISTRATION | ACTIVE | PAUSED | COMPLETED`.
+
+`PAUSED` = put a season on hold without deleting it. The reporting-window and RSVP crons (`/api/cron/notify-reporting-open`, `/api/cron/post-rsvp`) only fire for `OPEN_REGISTRATION`/`ACTIVE`, so a `PAUSED` season stops all Discord announcements; registration also closes (the open-registration guards check for `OPEN_REGISTRATION`/`ACTIVE`). Switch back to `ACTIVE` to resume. Set via the admin season-edit page. The `{ in: ["OPEN_REGISTRATION","ACTIVE"] }` "currently running" filters deliberately exclude `PAUSED`.
+
 ## Car Class vs Driver Class
 
 Two **independent** concepts — never conflate them:

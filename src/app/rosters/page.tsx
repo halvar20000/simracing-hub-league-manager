@@ -113,6 +113,7 @@ function StatusBadge({ status }: { status: string }) {
     DRAFT: "bg-zinc-800 text-zinc-400",
     OPEN_REGISTRATION: "bg-emerald-900 text-emerald-200",
     ACTIVE: "bg-blue-900 text-blue-200",
+    PAUSED: "bg-amber-900 text-amber-200",
     COMPLETED: "bg-zinc-800 text-zinc-400",
     ARCHIVED: "bg-zinc-800 text-zinc-500",
   };
