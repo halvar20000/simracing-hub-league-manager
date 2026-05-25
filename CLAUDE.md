@@ -47,7 +47,7 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 
 | Slug | Name | Mode |
 |---|---|---|
-| `cas-gt3-wct` | CAS GT3 WCT | Solo + penalty pool auto-forgiveness (GT3 WCT only feature) |
+| `cas-gt3-wct` | CAS GT3 WCT | Solo + penalty pool auto-forgiveness; teams hard-capped at 3 drivers (`src/lib/team-limit.ts`) — both GT3 WCT only |
 | `cas-iec` | CAS IEC | Team mode (`Season.teamRegistration=true`) |
 | `cas-tss-gt4` | CAS TSS GT4 | Solo |
 | `cas-pccd` | CAS PCCD | Solo |

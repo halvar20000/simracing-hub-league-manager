@@ -9,6 +9,8 @@ import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 import SoloIRatingValidator from "@/components/SoloIRatingValidator";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import TeamPicker from "@/components/TeamPicker";
+import { GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 
 import type { Metadata } from "next";
@@ -76,8 +78,15 @@ export default async function RegisterPage({
     );
   }
 
-  const [season, user, teams, carClassesRaw, sharedCars, existing] =
-    await Promise.all([
+  const [
+    season,
+    user,
+    teams,
+    carClassesRaw,
+    sharedCars,
+    existing,
+    teamCountGroups,
+  ] = await Promise.all([
       prisma.season.findUnique({
         where: { id: seasonId },
         include: {
@@ -120,6 +129,18 @@ export default async function RegisterPage({
       prisma.registration.findUnique({
         where: { seasonId_userId: { seasonId, userId: session.user.id } },
         include: { team: true },
+      }),
+      // Per-team driver counts (PENDING + APPROVED, not excluded) — used by
+      // the GT3 WCT team picker to mark teams that are already full.
+      prisma.registration.groupBy({
+        by: ["teamId"],
+        where: {
+          seasonId,
+          teamId: { not: null },
+          status: { in: ["PENDING", "APPROVED"] },
+          excludedAt: null,
+        },
+        _count: true,
       }),
     ]);
 
@@ -434,6 +455,16 @@ export default async function RegisterPage({
     return flat;
   })();
 
+  // Per-team driver counts for the GT3 WCT team picker.
+  const countByTeamId = new Map(
+    teamCountGroups.map((g) => [g.teamId, g._count] as const)
+  );
+  const teamsWithCounts = teams.map((tm) => ({
+    id: tm.id,
+    name: tm.name,
+    memberCount: countByTeamId.get(tm.id) ?? 0,
+  }));
+
   // SFL Cup: iRating cap for new drivers — drivers who raced in the most
   // recent prior SFL Cup season are exempt. getSflIRatingGate returns
   // applies=false for every other league, so this is a no-op elsewhere.
@@ -532,45 +563,53 @@ export default async function RegisterPage({
           </label>
         )}
 
-        <fieldset className="space-y-2 rounded border border-zinc-800 bg-zinc-900/50 p-4">
-          <legend className="px-2 text-sm text-zinc-300">Team</legend>
+        {isGt3Wct ? (
+          <TeamPicker
+            teams={teamsWithCounts}
+            limit={GT3_WCT_TEAM_LIMIT}
+            currentTeamId={existing?.teamId ?? null}
+          />
+        ) : (
+          <fieldset className="space-y-2 rounded border border-zinc-800 bg-zinc-900/50 p-4">
+            <legend className="px-2 text-sm text-zinc-300">Team</legend>
 
-          <label className="block">
-            <span className="mb-1 block text-xs text-zinc-400">
-              Pick an existing team
-            </span>
-            <select
-              name="teamId"
-              defaultValue={existing?.teamId ?? ""}
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            >
-              <option value="">No team / Independent</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Pick an existing team
+              </span>
+              <select
+                name="teamId"
+                defaultValue={existing?.teamId ?? ""}
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">No team / Independent</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <div className="text-center text-xs text-zinc-500">— or —</div>
+            <div className="text-center text-xs text-zinc-500">— or —</div>
 
-          <label className="block">
-            <span className="mb-1 block text-xs text-zinc-400">
-              Create a new team
-            </span>
-            <input
-              name="newTeamName"
-              placeholder="Type a new team name to create it"
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
-            <span className="mt-1 block text-xs text-zinc-500">
-              If filled, this creates a new team for the season and overrides
-              the dropdown above. Leave empty if you picked from the dropdown
-              or are racing independently.
-            </span>
-          </label>
-        </fieldset>
+            <label className="block">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Create a new team
+              </span>
+              <input
+                name="newTeamName"
+                placeholder="Type a new team name to create it"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+              <span className="mt-1 block text-xs text-zinc-500">
+                If filled, this creates a new team for the season and overrides
+                the dropdown above. Leave empty if you picked from the dropdown
+                or are racing independently.
+              </span>
+            </label>
+          </fieldset>
+        )}
 
         {season.isMulticlass &&
           !isGt3Wct &&

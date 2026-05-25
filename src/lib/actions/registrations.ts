@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { postDiscordWebhook } from "@/lib/discord-webhook";
 import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
+import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 
 export async function createRegistration(
   leagueSlug: string,
@@ -101,8 +102,10 @@ export async function createRegistration(
   //   - Otherwise use the team from the dropdown
   let teamId: string | null = teamIdFromDropdown;
   if (newTeamName) {
-    const existingTeam = await prisma.team.findUnique({
-      where: { seasonId_name: { seasonId, name: newTeamName } },
+    // Case-insensitive match so "cas racing" never creates a near-duplicate
+    // of an existing "CAS Racing" — team names exist only once per season.
+    const existingTeam = await prisma.team.findFirst({
+      where: { seasonId, name: { equals: newTeamName, mode: "insensitive" } },
     });
     if (existingTeam) {
       teamId = existingTeam.id;
@@ -111,6 +114,21 @@ export async function createRegistration(
         data: { seasonId, name: newTeamName },
       });
       teamId = created.id;
+    }
+  }
+
+  // GT3 WCT: each team is capped at 3 drivers. The picker hides full teams,
+  // but re-check server-side in case the request was crafted. The current
+  // user is excluded so re-registering on their own team always works.
+  const teamLimit = teamSizeLimit(season.league.slug);
+  if (teamLimit != null && teamId) {
+    const occupied = await countTeamMembers(teamId, user.id);
+    if (occupied >= teamLimit) {
+      redirect(
+        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+          `That team is already full — it has the maximum of ${teamLimit} drivers. Pick another team or create your own.`
+        )}`
+      );
     }
   }
 

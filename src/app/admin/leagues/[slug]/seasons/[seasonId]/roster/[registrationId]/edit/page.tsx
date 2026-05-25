@@ -3,20 +3,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateRegistration } from "@/lib/actions/admin-registrations";
+import { teamSizeLimit } from "@/lib/team-limit";
 
 export default async function EditRegistrationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{
     slug: string;
     seasonId: string;
     registrationId: string;
   }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   await requireAdmin();
   const { slug, seasonId, registrationId } = await params;
+  const { error } = await searchParams;
 
-  const [registration, teams, classes] = await Promise.all([
+  const [registration, teams, classes, teamCountGroups] = await Promise.all([
     prisma.registration.findUnique({
       where: { id: registrationId },
       include: {
@@ -31,6 +35,18 @@ export default async function EditRegistrationPage({
     prisma.carClass.findMany({
       where: { seasonId },
       orderBy: { displayOrder: "asc" },
+    }),
+    // Per-team driver counts (PENDING + APPROVED, not excluded) so the team
+    // dropdown can disable teams that are already at the cap.
+    prisma.registration.groupBy({
+      by: ["teamId"],
+      where: {
+        seasonId,
+        teamId: { not: null },
+        status: { in: ["PENDING", "APPROVED"] },
+        excludedAt: null,
+      },
+      _count: true,
     }),
   ]);
 
@@ -48,6 +64,19 @@ export default async function EditRegistrationPage({
     seasonId,
     registrationId
   );
+
+  // GT3 WCT team cap — used to disable full teams in the dropdown. The
+  // registration's own team is never counted as full (the driver may stay).
+  const teamLimit = teamSizeLimit(registration.season.league.slug);
+  const currentTeamId = registration.teamId;
+  const teamCount = new Map(
+    teamCountGroups.map((g) => [g.teamId, g._count] as const)
+  );
+  const teamIsFull = (teamId: string): boolean => {
+    if (teamLimit == null) return false;
+    const c = teamCount.get(teamId) ?? 0;
+    return c - (teamId === currentTeamId ? 1 : 0) >= teamLimit;
+  };
 
   return (
     <div className="space-y-6">
@@ -69,6 +98,12 @@ export default async function EditRegistrationPage({
           {registration.user.email ?? registration.user.name}
         </p>
       </div>
+
+      {error && (
+        <div className="max-w-xl rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
 
       <form action={update} className="max-w-xl space-y-4">
         <label className="block">
@@ -105,11 +140,15 @@ export default async function EditRegistrationPage({
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           >
             <option value="">No team / Independent</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
+            {teams.map((t) => {
+              const full = teamIsFull(t.id);
+              return (
+                <option key={t.id} value={t.id} disabled={full}>
+                  {t.name}
+                  {full ? `  — full (${teamLimit} drivers)` : ""}
+                </option>
+              );
+            })}
           </select>
         </label>
 

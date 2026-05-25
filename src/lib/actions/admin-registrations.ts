@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 import type { RegistrationStatus, ProAmClass } from "@prisma/client";
 
 export async function approveRegistration(registrationId: string) {
@@ -78,6 +79,27 @@ export async function updateRegistration(
     status === "APPROVED"
       ? { ...baseData, approvedById: admin.id, approvedAt: new Date() }
       : { ...baseData, approvedById: null, approvedAt: null };
+
+  // GT3 WCT hard cap: a team holds at most 3 drivers — this applies to admins
+  // too. Exclude this registration's own driver from the count so re-saving a
+  // driver who is already on the team is never blocked.
+  if (teamId) {
+    const limit = teamSizeLimit(leagueSlug);
+    if (limit != null) {
+      const reg = await prisma.registration.findUnique({
+        where: { id: registrationId },
+        select: { userId: true },
+      });
+      const occupied = await countTeamMembers(teamId, reg?.userId);
+      if (occupied >= limit) {
+        redirect(
+          `/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster/${registrationId}/edit?error=${encodeURIComponent(
+            `That team already has the maximum of ${limit} drivers.`
+          )}`
+        );
+      }
+    }
+  }
 
   await prisma.registration.update({
     where: { id: registrationId },
