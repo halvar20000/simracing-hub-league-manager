@@ -28,8 +28,8 @@ export default async function AdminUsers() {
 
       <TableFilter tableId="usersTable" placeholder="Filter users by name, email, iRacing ID…" />
 
-      <div className="overflow-hidden rounded border border-zinc-800">
-        <table id="usersTable" className="w-full text-sm">
+      <div className="overflow-x-auto rounded border border-zinc-800">
+        <table id="usersTable" className="w-full min-w-[1100px] text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
               <th className="px-3 py-2">Name</th>
