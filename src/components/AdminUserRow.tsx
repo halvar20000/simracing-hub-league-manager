@@ -48,9 +48,16 @@ const inputCls =
 export default function AdminUserRow({
   user,
   isSelf,
+  accountDiscordId,
 }: {
   user: AdminUserRowData;
   isSelf: boolean;
+  /**
+   * Discord ID from the OAuth Account (set when the driver signed in to the
+   * website with Discord). Distinct from the admin-set `User.discordId` — a
+   * driver linked this way has a working link even with no `discordId`.
+   */
+  accountDiscordId: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -131,6 +138,7 @@ export default function AdminUserRow({
     fields.email,
     fields.iracingMemberId,
     fields.discordId,
+    accountDiscordId,
     fields.countryCode,
     user.role,
     user.isActive ? "active" : "inactive",
@@ -215,22 +223,37 @@ export default function AdminUserRow({
           )}
         </td>
 
-        {/* Discord ID */}
+        {/* Discord ID — the admin-set User.discordId, or the ID from the
+            driver's Discord login if they have no admin-set value. */}
         <td className="px-3 py-2 text-zinc-400 tabular-nums">
           {editing ? (
-            <input
-              aria-label="Discord ID"
-              inputMode="numeric"
-              value={draft.discordId}
-              onChange={(e) =>
-                setDraft({ ...draft, discordId: e.target.value })
-              }
-              placeholder="Discord user ID"
-              disabled={pending}
-              className={`${inputCls} w-40`}
-            />
+            <div className="space-y-1">
+              <input
+                aria-label="Discord ID"
+                inputMode="numeric"
+                value={draft.discordId}
+                onChange={(e) =>
+                  setDraft({ ...draft, discordId: e.target.value })
+                }
+                placeholder="Discord user ID"
+                disabled={pending}
+                className={`${inputCls} w-40`}
+              />
+              {accountDiscordId && (
+                <div className="text-[11px] text-zinc-500">
+                  Linked via Discord login: {accountDiscordId}
+                </div>
+              )}
+            </div>
+          ) : fields.discordId ? (
+            fields.discordId
+          ) : accountDiscordId ? (
+            <span>
+              {accountDiscordId}{" "}
+              <span className="text-[11px] text-zinc-600">· login</span>
+            </span>
           ) : (
-            fields.discordId || "—"
+            "—"
           )}
         </td>
 

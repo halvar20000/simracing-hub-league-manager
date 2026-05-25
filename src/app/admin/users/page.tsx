@@ -16,6 +16,14 @@ export default async function AdminUsers() {
       { lastName: "asc" },
       { firstName: "asc" },
     ],
+    include: {
+      // The Discord ID from a website login lives on the OAuth Account, not
+      // on User.discordId — pull it so the table can show it too.
+      accounts: {
+        where: { provider: "discord" },
+        select: { providerAccountId: true },
+      },
+    },
   });
 
   const adminCount = users.filter((u) => u.role === "ADMIN").length;
@@ -62,7 +70,7 @@ export default async function AdminUsers() {
               <th className="px-3 py-2">iRacing ID</th>
               <th
                 className="px-3 py-2"
-                title="Discord user ID — lets the RSVP bot recognise a driver before their first website login"
+                title="Discord user ID. Editable values are admin-set; '· login' marks an ID that came from the driver signing in with Discord."
               >
                 Discord ID
               </th>
@@ -99,7 +107,12 @@ export default async function AdminUsers() {
           </thead>
           <tbody>
             {users.map((u) => (
-              <AdminUserRow key={u.id} user={u} isSelf={u.id === myId} />
+              <AdminUserRow
+                key={u.id}
+                user={u}
+                isSelf={u.id === myId}
+                accountDiscordId={u.accounts[0]?.providerAccountId ?? null}
+              />
             ))}
           </tbody>
         </table>
