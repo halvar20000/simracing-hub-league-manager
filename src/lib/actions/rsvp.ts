@@ -196,3 +196,63 @@ export async function refreshRsvpMessageAction(formData: FormData): Promise<void
     );
   }
 }
+
+/**
+ * Admin: set or clear ANY driver's RSVP for a round, straight from the admin
+ * round RSVP page. Used when a driver can't use the Discord / website button
+ * themselves (e.g. they've never linked their Discord account).
+ *
+ * Called programmatically from the AdminRsvpControl client component, so it
+ * takes plain args (not FormData) and returns void.
+ *
+ * - status "ACCEPTED" | "DECLINED" | "TENTATIVE" → upsert the RoundRsvp row,
+ *   stamped with source=ADMIN so the page shows it was an admin override.
+ * - status "CLEAR" → delete the RoundRsvp row (back to "silent").
+ *
+ * Deliberately does NOT check the RSVP close window — an admin override is
+ * meant to work even after the deadline. It also does not re-run the GT3 WCT
+ * no-show penalty; that stays tied to saving the round itself.
+ */
+export async function adminSetRsvpAction(
+  roundId: string,
+  registrationId: string,
+  status: "ACCEPTED" | "DECLINED" | "TENTATIVE" | "CLEAR"
+): Promise<void> {
+  await requireAdmin();
+  if (!roundId || !registrationId) {
+    throw new Error("roundId and registrationId required");
+  }
+
+  if (status === "CLEAR") {
+    // deleteMany so a no-op (no existing row) doesn't throw.
+    await prisma.roundRsvp.deleteMany({ where: { roundId, registrationId } });
+  } else {
+    await prisma.roundRsvp.upsert({
+      where: { roundId_registrationId: { roundId, registrationId } },
+      create: { roundId, registrationId, status, source: "ADMIN" },
+      update: { status, source: "ADMIN", respondedAt: new Date() },
+    });
+  }
+
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: { season: { include: { league: true } } },
+  });
+  if (round) {
+    revalidatePath(
+      `/admin/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}/rsvp`
+    );
+    revalidatePath(
+      `/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}`
+    );
+  }
+
+  // Keep the Discord embed in sync; run it after the response.
+  after(async () => {
+    try {
+      await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
+  });
+}

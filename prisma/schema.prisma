@@ -674,6 +674,7 @@ enum RsvpStatus {
 enum RsvpSource {
   DISCORD
   WEBSITE
+  ADMIN     // set by an admin on the round RSVP page, not by the driver
 }
 
 enum RsvpMode {

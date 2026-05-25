@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getRoundRsvpSummary } from "@/lib/rsvp";
 import { formatDateTime } from "@/lib/date";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import AdminRsvpControl from "@/components/AdminRsvpControl";
 import {
   postRsvpManually,
   refreshRsvpMessageAction,
@@ -238,34 +239,55 @@ export default async function AdminRoundRsvp({
         />
       </div>
 
-      {/* Full table */}
-      <div className="overflow-hidden rounded border border-zinc-800">
-        <table className="w-full text-sm tabular-nums">
-          <thead className="bg-zinc-900 text-xs uppercase tracking-wider text-zinc-400">
-            <tr>
-              <th className="px-3 py-2 text-left">Driver</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">Source</th>
-              <th className="px-3 py-2 text-left">Responded</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.registrationId} className="border-t border-zinc-800 hover:bg-zinc-900/60">
-                <td className="px-3 py-2">{r.displayName}</td>
-                <td className="px-3 py-2">
-                  {r.status ? STATUS_LABEL[r.status] : <span className="text-zinc-500">— silent —</span>}
-                </td>
-                <td className="px-3 py-2 text-zinc-400">
-                  {r.source ? r.source.toLowerCase() : "—"}
-                </td>
-                <td className="px-3 py-2 text-zinc-400">
-                  {r.respondedAt ? formatDateTime(r.respondedAt) : "—"}
-                </td>
+      {/* Full table with per-driver admin override */}
+      <div className="space-y-2">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            All drivers
+          </h2>
+          <p className="text-xs text-zinc-500">
+            Use the override buttons to set or clear a driver&apos;s RSVP — handy
+            when a driver can&apos;t use the Discord button themselves. Changes
+            are stamped <span className="text-zinc-300">admin</span> and the
+            Discord embed refreshes automatically.
+          </p>
+        </div>
+        <div className="overflow-x-auto rounded border border-zinc-800">
+          <table className="w-full min-w-[760px] text-sm tabular-nums">
+            <thead className="bg-zinc-900 text-xs uppercase tracking-wider text-zinc-400">
+              <tr>
+                <th className="px-3 py-2 text-left">Driver</th>
+                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Source</th>
+                <th className="px-3 py-2 text-left">Responded</th>
+                <th className="px-3 py-2 text-left">Admin override</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.registrationId} className="border-t border-zinc-800 hover:bg-zinc-900/60">
+                  <td className="px-3 py-2">{r.displayName}</td>
+                  <td className="px-3 py-2">
+                    {r.status ? STATUS_LABEL[r.status] : <span className="text-zinc-500">— silent —</span>}
+                  </td>
+                  <td className="px-3 py-2 text-zinc-400">
+                    {r.source ? r.source.toLowerCase() : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-zinc-400">
+                    {r.respondedAt ? formatDateTime(r.respondedAt) : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <AdminRsvpControl
+                      roundId={round.id}
+                      registrationId={r.registrationId}
+                      currentStatus={r.status}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
