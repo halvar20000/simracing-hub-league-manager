@@ -50,55 +50,76 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             justCreated._count.incidentReports === 0 &&
             justCreated._count.approvedRegistrations === 0;
           if (isFreshUser) {
-            const dn =
-              (profile as { global_name?: string; username?: string } | null) ??
-              {};
-            const normalise = (s: string | null | undefined) =>
-              (s ?? "")
-                .toLowerCase()
-                .replace(/\[[^\]]*\]/g, " ")
-                .replace(/\s+/g, " ")
-                .trim();
-            const candidates = [
-              `${justCreated.firstName ?? ""} ${justCreated.lastName ?? ""}`,
-              justCreated.name ?? "",
-              dn.global_name ?? "",
-              dn.username ?? "",
-            ]
-              .map(normalise)
-              .filter((s) => s.length > 1);
-            if (candidates.length > 0) {
-              const others = await prisma.user.findMany({
-                where: { id: { not: user.id }, accounts: { none: {} } },
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  name: true,
+            let target: { id: string } | null = null;
+
+            // 1. Strongest signal: an admin pre-set this exact Discord ID on
+            //    a registered-but-never-logged-in driver. Link onto them.
+            const discordId = account.providerAccountId;
+            if (discordId) {
+              target = await prisma.user.findFirst({
+                where: {
+                  id: { not: user.id },
+                  discordId,
+                  accounts: { none: {} },
                 },
+                select: { id: true },
               });
-              const matches = others.filter((o) => {
-                const compare = [
-                  normalise(`${o.firstName ?? ""} ${o.lastName ?? ""}`),
-                  normalise(o.name),
-                ].filter((x) => x.length > 1);
-                return compare.some((c) => candidates.includes(c));
-              });
-              if (matches.length === 1) {
-                const target = matches[0];
-                await prisma.$transaction([
-                  prisma.account.updateMany({
-                    where: { userId: user.id },
-                    data: { userId: target.id },
-                  }),
-                  prisma.session.updateMany({
-                    where: { userId: user.id },
-                    data: { userId: target.id },
-                  }),
-                  prisma.user.delete({ where: { id: user.id } }),
-                ]);
-                user.id = target.id;
+            }
+
+            // 2. Fallback: match by normalised name against accountless users.
+            if (!target) {
+              const dn =
+                (profile as
+                  | { global_name?: string; username?: string }
+                  | null) ?? {};
+              const normalise = (s: string | null | undefined) =>
+                (s ?? "")
+                  .toLowerCase()
+                  .replace(/\[[^\]]*\]/g, " ")
+                  .replace(/\s+/g, " ")
+                  .trim();
+              const candidates = [
+                `${justCreated.firstName ?? ""} ${justCreated.lastName ?? ""}`,
+                justCreated.name ?? "",
+                dn.global_name ?? "",
+                dn.username ?? "",
+              ]
+                .map(normalise)
+                .filter((s) => s.length > 1);
+              if (candidates.length > 0) {
+                const others = await prisma.user.findMany({
+                  where: { id: { not: user.id }, accounts: { none: {} } },
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    name: true,
+                  },
+                });
+                const matches = others.filter((o) => {
+                  const compare = [
+                    normalise(`${o.firstName ?? ""} ${o.lastName ?? ""}`),
+                    normalise(o.name),
+                  ].filter((x) => x.length > 1);
+                  return compare.some((c) => candidates.includes(c));
+                });
+                if (matches.length === 1) target = matches[0];
               }
+            }
+
+            if (target) {
+              await prisma.$transaction([
+                prisma.account.updateMany({
+                  where: { userId: user.id },
+                  data: { userId: target.id },
+                }),
+                prisma.session.updateMany({
+                  where: { userId: user.id },
+                  data: { userId: target.id },
+                }),
+                prisma.user.delete({ where: { id: user.id } }),
+              ]);
+              user.id = target.id;
             }
           }
         } catch {

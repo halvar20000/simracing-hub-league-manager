@@ -44,6 +44,7 @@ export async function updateUserProfile(
     email: string;
     iracingMemberId: string;
     countryCode: string;
+    discordId: string;
   }
 ): Promise<UpdateUserResult> {
   await requireAdmin();
@@ -53,6 +54,7 @@ export async function updateUserProfile(
   const email = input.email.trim() || null;
   const iracingMemberId = input.iracingMemberId.trim() || null;
   const countryCode = input.countryCode.trim().toUpperCase() || null;
+  const discordId = input.discordId.trim() || null;
 
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return { ok: false, error: "That email address looks invalid." };
@@ -66,20 +68,36 @@ export async function updateUserProfile(
       error: "Country must be a 2–3 letter code (e.g. DE, FR, CH).",
     };
   }
+  if (discordId && !/^\d{17,20}$/.test(discordId)) {
+    return {
+      ok: false,
+      error:
+        "Discord ID must be the numeric user ID (17–20 digits). In Discord: " +
+        "enable Developer Mode, then right-click the user → Copy User ID.",
+    };
+  }
 
   try {
     await prisma.user.update({
       where: { id: userId },
-      data: { firstName, lastName, email, iracingMemberId, countryCode },
+      data: {
+        firstName,
+        lastName,
+        email,
+        iracingMemberId,
+        countryCode,
+        discordId,
+      },
     });
   } catch (e: unknown) {
-    // email and iracingMemberId are both @unique — a clash means the value
-    // already belongs to another account.
+    // email, iracingMemberId and discordId are all @unique — a clash means
+    // the value already belongs to another account.
     if (e instanceof Error && e.message.includes("Unique constraint")) {
       return {
         ok: false,
         error:
-          "That email or iRacing member ID is already used by another account.",
+          "That email, iRacing member ID or Discord ID is already used by " +
+          "another account.",
       };
     }
     throw e;

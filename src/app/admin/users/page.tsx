@@ -39,7 +39,9 @@ export default async function AdminUsers() {
         </p>
         <p className="mt-1 text-xs text-zinc-500">
           <span className="text-zinc-300">Edit</span> changes a driver&apos;s
-          name, email, iRacing ID or country.{" "}
+          name, email, iRacing ID, Discord ID or country. Setting a{" "}
+          <span className="text-zinc-300">Discord ID</span> lets the RSVP bot
+          recognise a driver who hasn&apos;t signed in to the website yet.{" "}
           <span className="text-zinc-300">Delete</span> is a soft delete — it
           deactivates the account and can be reversed with{" "}
           <span className="text-zinc-300">Restore</span>.
@@ -52,12 +54,18 @@ export default async function AdminUsers() {
       />
 
       <div className="overflow-x-auto rounded border border-zinc-800">
-        <table id="usersTable" className="w-full min-w-[1300px] text-sm">
+        <table id="usersTable" className="w-full min-w-[1480px] text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Email</th>
               <th className="px-3 py-2">iRacing ID</th>
+              <th
+                className="px-3 py-2"
+                title="Discord user ID — lets the RSVP bot recognise a driver before their first website login"
+              >
+                Discord ID
+              </th>
               <th className="px-3 py-2">Country</th>
               <th
                 className="px-3 py-2"

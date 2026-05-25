@@ -27,18 +27,39 @@ export type UpsertRsvpResult =
     };
 
 /**
- * Look up a User by their Discord ID (Account.providerAccountId where provider=discord).
- * Returns null if no User has that Discord ID linked.
+ * Look up a User by their Discord ID. Two resolution paths:
+ *
+ *  1. `Account.providerAccountId` (provider=discord) — set automatically the
+ *     first time the driver signs in to the website with Discord.
+ *  2. `User.discordId` — set manually by an admin on a pre-registered driver
+ *     who has NOT logged in yet. Lets the RSVP bot resolve their clicks
+ *     before that first login.
+ *
+ * Returns null if no User has that Discord ID by either path.
  */
 export async function findUserByDiscordId(discordId: string) {
+  const select = {
+    id: true,
+    name: true,
+    firstName: true,
+    lastName: true,
+  } as const;
+
   const account = await prisma.account.findFirst({
     where: { provider: "discord", providerAccountId: discordId },
     select: { userId: true },
   });
-  if (!account) return null;
+  if (account) {
+    return prisma.user.findUnique({
+      where: { id: account.userId },
+      select,
+    });
+  }
+
+  // Fallback: admin pre-linked the Discord ID directly on the User row.
   return prisma.user.findUnique({
-    where: { id: account.userId },
-    select: { id: true, name: true, firstName: true, lastName: true },
+    where: { discordId },
+    select,
   });
 }
 

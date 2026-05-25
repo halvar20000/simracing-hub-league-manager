@@ -45,6 +45,12 @@ model User {
   countryCode     String?
   casDiscordGuildMember Boolean   @default(false)
 
+  /// Discord user ID (snowflake). For drivers who signed in via Discord this
+  /// is also held in Account.providerAccountId; admins can pre-set it here on
+  /// a pre-registered driver who has NOT logged in yet, so the RSVP bot can
+  /// resolve their button clicks before their first website login.
+  discordId       String?   @unique
+
   // Latest iRating / Safety Rating / license class snapshot pulled from
   // members-ng.iracing.com via the admin sync flow (Chrome MCP one-shot
   // for now — see scripts/lm_*). Per-category because GT3 drivers might

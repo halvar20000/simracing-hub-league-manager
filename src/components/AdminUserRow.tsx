@@ -25,6 +25,7 @@ export type AdminUserRowData = {
   name: string | null;
   email: string | null;
   iracingMemberId: string | null;
+  discordId: string | null;
   countryCode: string | null;
   role: Role;
   isActive: boolean;
@@ -39,7 +40,7 @@ export type AdminUserRowData = {
 
 const ROLES: Role[] = ["ADMIN", "STEWARD", "DRIVER"];
 /** Keep in sync with the <thead> in users/page.tsx. */
-const COL_COUNT = 14;
+const COL_COUNT = 15;
 
 const inputCls =
   "rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-sm text-zinc-100";
@@ -63,6 +64,7 @@ export default function AdminUserRow({
     lastName: user.lastName ?? "",
     email: user.email ?? "",
     iracingMemberId: user.iracingMemberId ?? "",
+    discordId: user.discordId ?? "",
     countryCode: user.countryCode ?? "",
   });
   const [draft, setDraft] = useState(fields);
@@ -89,6 +91,7 @@ export default function AdminUserRow({
           lastName: draft.lastName.trim(),
           email: draft.email.trim(),
           iracingMemberId: draft.iracingMemberId.trim(),
+          discordId: draft.discordId.trim(),
           countryCode: draft.countryCode.trim().toUpperCase(),
         });
         setEditing(false);
@@ -127,6 +130,7 @@ export default function AdminUserRow({
     user.name,
     fields.email,
     fields.iracingMemberId,
+    fields.discordId,
     fields.countryCode,
     user.role,
     user.isActive ? "active" : "inactive",
@@ -208,6 +212,25 @@ export default function AdminUserRow({
             />
           ) : (
             fields.iracingMemberId || "—"
+          )}
+        </td>
+
+        {/* Discord ID */}
+        <td className="px-3 py-2 text-zinc-400 tabular-nums">
+          {editing ? (
+            <input
+              aria-label="Discord ID"
+              inputMode="numeric"
+              value={draft.discordId}
+              onChange={(e) =>
+                setDraft({ ...draft, discordId: e.target.value })
+              }
+              placeholder="Discord user ID"
+              disabled={pending}
+              className={`${inputCls} w-40`}
+            />
+          ) : (
+            fields.discordId || "—"
           )}
         </td>
 
