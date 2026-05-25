@@ -158,6 +158,12 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - Trigger: `src/lib/actions/rounds.ts:updateRound` runs the helper on every save. When status flips to `COMPLETED`: drivers with no `RaceResult` AND no `RoundRsvp` row at all get a `Penalty(source=NO_RSVP_NO_SHOW, type=POINTS_DEDUCTION, pointsValue=1, reason="No RSVP and no-show")`. When status flips back away from `COMPLETED`: auto-penalties are deleted.
 - Pool integration: `src/lib/penalty-pool.ts` walks rounds where the driver entered OR carries a penalty, so `NO_RSVP_NO_SHOW` correctly resets the clean-race counter even though the driver didn't enter that round.
 
+## Discord community stats
+
+- Admin page `/admin/discord-stats` — 30-day activity snapshot of the CAS Discord server: per member, chat activity (messages), league activity (raced/RSVP'd), join recency, CLS-link status.
+- Builder: `src/lib/discord-stats.ts:buildDiscordStats()` — bot REST API: lists guild members, scans every readable text channel's last-30-day message history (time-budgeted, ~45s), joins CLS data. `saveDiscordStatsSnapshot()` persists the result to the `DiscordStatsSnapshot` table (one JSON row per refresh). Slow — never call from a page render.
+- Refresh: daily cron `/api/cron/discord-stats` + `.github/workflows/cron-discord-stats.yml` (04:30 UTC); manual "Refresh" button on the page → `refreshDiscordStatsAction`. The page reads the latest snapshot only.
+
 ## Logos
 
 - `public/logos/site-logo.png` — top nav logo (CAS LEAGUE SCORING SYSTEM)

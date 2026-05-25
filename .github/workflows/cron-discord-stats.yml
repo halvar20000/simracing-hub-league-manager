@@ -1,0 +1,27 @@
+name: Refresh Discord stats
+
+on:
+  schedule:
+    # Once a day at 04:30 UTC (quiet hours). The admin page also has a
+    # manual Refresh button.
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call cron endpoint
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS --max-time 120 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            https://league.simracing-hub.com/api/cron/discord-stats)
+          echo "$response"
+          status=$(echo "$response" | tail -1 | sed 's/HTTP_STATUS://')
+          if [ "$status" != "200" ]; then
+            echo "::error::Endpoint returned HTTP $status"
+            exit 1
+          fi

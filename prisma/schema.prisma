@@ -665,6 +665,16 @@ enum PenaltySource {
   NO_RSVP_NO_SHOW
 }
 
+/// One refresh of the Discord community statistics (admin → Discord page).
+/// `data` holds the whole computed snapshot as JSON — shape is DiscordStatsData
+/// in src/lib/discord-stats.ts. Each refresh inserts a new row; the page reads
+/// the most recent one.
+model DiscordStatsSnapshot {
+  id          String   @id @default(cuid())
+  generatedAt DateTime @default(now())
+  data        Json
+}
+
 enum RsvpStatus {
   ACCEPTED
   DECLINED

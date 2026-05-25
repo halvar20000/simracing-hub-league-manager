@@ -46,6 +46,12 @@ export default function AdminTabs({
             Teams
           </Tab>
           <Tab
+            href="/admin/discord-stats"
+            active={isActive("/admin/discord-stats")}
+          >
+            Discord
+          </Tab>
+          <Tab
             href="/admin/scoring-systems"
             active={isActive("/admin/scoring-systems")}
           >
