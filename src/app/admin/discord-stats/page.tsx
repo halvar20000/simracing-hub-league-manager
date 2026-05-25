@@ -4,7 +4,7 @@ import { formatDate, formatDateTime } from "@/lib/date";
 import TableFilter from "@/components/TableFilter";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { refreshDiscordStatsAction } from "@/lib/actions/discord-stats";
-import type { DiscordStatsData } from "@/lib/discord-stats";
+import type { DiscordStatsData, MonthlyRow } from "@/lib/discord-stats";
 
 // The Refresh action scans Discord message history — give the route room.
 export const maxDuration = 60;
@@ -12,9 +12,21 @@ export const maxDuration = 60;
 export default async function AdminDiscordStatsPage() {
   await requireAdmin();
 
-  const snapshot = await prisma.discordStatsSnapshot.findFirst({
-    orderBy: { generatedAt: "desc" },
-  });
+  const [snapshot, monthlyDesc] = await Promise.all([
+    prisma.discordStatsSnapshot.findFirst({
+      orderBy: { generatedAt: "desc" },
+    }),
+    prisma.discordMonthlyActivity.findMany({
+      orderBy: { month: "desc" },
+      take: 24,
+    }),
+  ]);
+  // Oldest → newest for the trend chart.
+  const monthly: MonthlyRow[] = [...monthlyDesc].reverse().map((r) => ({
+    month: r.month,
+    messageCount: r.messageCount,
+    activeMembers: r.activeMembers,
+  }));
 
   return (
     <div className="space-y-6">
@@ -34,6 +46,8 @@ export default async function AdminDiscordStatsPage() {
           />
         </form>
       </div>
+
+      <TrendChart months={monthly} />
 
       {!snapshot ? (
         <div className="rounded border border-zinc-800 bg-zinc-900 p-6 text-sm text-zinc-400">
@@ -210,5 +224,152 @@ function Dot({ on }: { on: boolean }) {
       }`}
       aria-label={on ? "yes" : "no"}
     />
+  );
+}
+
+/**
+ * Monthly chat-activity trend: message-volume bars + an active-members line.
+ * Server-rendered static SVG — the data is a plain monthly array.
+ */
+function TrendChart({ months }: { months: MonthlyRow[] }) {
+  if (months.length === 0) {
+    return (
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-6 text-sm text-zinc-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          Chat activity trend
+        </h2>
+        <p className="mt-2">
+          No trend history yet. Run the one-time backfill —{" "}
+          <code className="rounded bg-zinc-800 px-1 text-xs">
+            outputs/run_backfill_discord_activity.sh
+          </code>{" "}
+          — to load up to 24 months of monthly chat activity.
+        </p>
+      </div>
+    );
+  }
+
+  const W = 760;
+  const H = 260;
+  const padL = 8;
+  const padR = 8;
+  const padT = 18;
+  const padB = 28;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const n = months.length;
+  const colW = chartW / n;
+  const baseY = padT + chartH;
+  const maxMsg = Math.max(1, ...months.map((m) => m.messageCount));
+  const maxActive = Math.max(1, ...months.map((m) => m.activeMembers));
+  const barW = Math.min(30, colW * 0.6);
+  const labelEvery = n > 14 ? 3 : n > 7 ? 2 : 1;
+
+  const linePts = months.map((m, i) => ({
+    m,
+    cx: padL + colW * i + colW / 2,
+    cy: padT + chartH - (m.activeMembers / maxActive) * chartH,
+  }));
+
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          Chat activity trend — last {n} month{n === 1 ? "" : "s"}
+        </h2>
+        <div className="flex items-center gap-3 text-xs text-zinc-400">
+          <span className="flex items-center gap-1">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-sm"
+              style={{ background: "#ff6b35" }}
+            />
+            Messages
+          </span>
+          <span className="flex items-center gap-1">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ background: "#34d399" }}
+            />
+            Active members
+          </span>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
+        <line
+          x1={padL}
+          y1={baseY}
+          x2={W - padR}
+          y2={baseY}
+          stroke="#3f3f46"
+          strokeWidth="1"
+        />
+        {months.map((m, i) => {
+          const h = (m.messageCount / maxMsg) * chartH;
+          const cx = padL + colW * i + colW / 2;
+          const inProgress = i === n - 1;
+          return (
+            <rect
+              key={m.month}
+              x={cx - barW / 2}
+              y={baseY - h}
+              width={barW}
+              height={h}
+              fill="#ff6b35"
+              opacity={inProgress ? 0.4 : 0.85}
+            >
+              <title>
+                {`${m.month}: ${m.messageCount.toLocaleString()} messages, ${m.activeMembers} active members${
+                  inProgress ? " (month in progress)" : ""
+                }`}
+              </title>
+            </rect>
+          );
+        })}
+        <polyline
+          points={linePts.map((p) => `${p.cx},${p.cy}`).join(" ")}
+          fill="none"
+          stroke="#34d399"
+          strokeWidth="2"
+        />
+        {linePts.map((p) => (
+          <circle key={p.m.month} cx={p.cx} cy={p.cy} r="3" fill="#34d399">
+            <title>{`${p.m.month}: ${p.m.activeMembers} active members`}</title>
+          </circle>
+        ))}
+        {months.map((m, i) =>
+          i % labelEvery === 0 ? (
+            <text
+              key={m.month}
+              x={padL + colW * i + colW / 2}
+              y={H - 9}
+              textAnchor="middle"
+              fontSize="10"
+              fill="#71717a"
+            >
+              {m.month.slice(2)}
+            </text>
+          ) : null
+        )}
+        <text x={padL} y={padT - 6} fontSize="10" fill="#a1a1aa">
+          peak {maxMsg.toLocaleString()} msgs
+        </text>
+        <text
+          x={W - padR}
+          y={padT - 6}
+          fontSize="10"
+          fill="#a1a1aa"
+          textAnchor="end"
+        >
+          peak {maxActive} active
+        </text>
+      </svg>
+
+      <p className="mt-1 text-xs text-zinc-500">
+        Bars: messages posted per month. Line: distinct members who posted that
+        month. The faded last bar is the month still in progress. Hover any bar
+        for exact numbers.
+      </p>
+    </div>
   );
 }

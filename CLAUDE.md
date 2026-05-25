@@ -163,6 +163,7 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - Admin page `/admin/discord-stats` — 30-day activity snapshot of the CAS Discord server: per member, chat activity (messages), league activity (raced/RSVP'd), join recency, CLS-link status.
 - Builder: `src/lib/discord-stats.ts:buildDiscordStats()` — bot REST API: lists guild members, scans every readable text channel's last-30-day message history (time-budgeted, ~45s), joins CLS data. `saveDiscordStatsSnapshot()` persists the result to the `DiscordStatsSnapshot` table (one JSON row per refresh). Slow — never call from a page render.
 - Refresh: daily cron `/api/cron/discord-stats` + `.github/workflows/cron-discord-stats.yml` (04:30 UTC); manual "Refresh" button on the page → `refreshDiscordStatsAction`. The page reads the latest snapshot only.
+- Trend chart: `DiscordMonthlyActivity` (one row per `YYYY-MM`) holds per-month message + active-member counts. `buildMonthlyActivity(monthsBack)` scans far-back history; the one-time backfill `scripts/lm_backfill_discord_activity.ts` populates ~24 months. Past months are immutable, so `saveDiscordStatsSnapshot` rewrites only the current month on each refresh. The page renders the last 24 months as an SVG chart (message bars + active-members line).
 
 ## Logos
 

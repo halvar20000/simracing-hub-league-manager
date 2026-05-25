@@ -675,6 +675,17 @@ model DiscordStatsSnapshot {
   data        Json
 }
 
+/// Per-month Discord chat-activity buckets for the trend chart. One row per
+/// calendar month (`month` = "YYYY-MM"). Past months are immutable once
+/// scanned — the one-time backfill populates the history, the daily refresh
+/// only re-writes the current month.
+model DiscordMonthlyActivity {
+  month         String   @id
+  messageCount  Int      @default(0)
+  activeMembers Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
 enum RsvpStatus {
   ACCEPTED
   DECLINED

@@ -1,17 +1,21 @@
 /**
  * Discord community statistics builder.
  *
- * buildDiscordStats() fetches the CAS Discord server's member list and recent
- * message history via the bot REST API, joins it against CLS data
- * (registrations, race results, RSVPs), and returns a snapshot describing how
- * active each member has been over the last 30 days.
+ * Two products, both fed by scanning the bot-readable channels:
+ *   1. buildDiscordStats() — a 30-day snapshot: per-member chat / league /
+ *      join activity joined with CLS data. Drives the /admin/discord-stats
+ *      headline tiles + member table.
+ *   2. buildMonthlyActivity() — per-month message + active-member tallies for
+ *      the long-range trend chart. Past months are immutable once scanned, so
+ *      the heavy 24-month scan is a one-time backfill; the daily refresh only
+ *      rewrites the current month.
  *
- * It is slow — it scans channel message history — so it must NEVER be called
- * during a page render. It is driven by the daily cron and the admin
- * "Refresh" button, both of which persist the result to the
- * DiscordStatsSnapshot table; the admin page only reads that table.
+ * Scanning message history is slow — never call these during a page render.
+ * The daily cron and the admin "Refresh" button drive buildDiscordStats via
+ * saveDiscordStatsSnapshot(); the backfill script drives buildMonthlyActivity.
  *
- * Not a "use server" module — imported by the cron route and the action.
+ * Not a "use server" module — imported by the cron route, the action and the
+ * backfill script.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -19,25 +23,36 @@ import type { Prisma } from "@prisma/client";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const WINDOW_DAYS = 30;
-/** Stop scanning message history after this long so a refresh never runs away. */
-const SCAN_BUDGET_MS = 45_000;
+/** Time budget for the 30-day snapshot scan so a refresh never runs away. */
+const SNAPSHOT_BUDGET_MS = 45_000;
+/** Generous budget for the one-time backfill (runs as a script, no timeout). */
+const BACKFILL_BUDGET_MS = 9 * 60_000;
 
 export type DiscordMemberStat = {
   discordId: string;
-  /** Best display name (global name, nickname or username). */
   name: string;
   joinedAt: string | null;
   joinedInWindow: boolean;
-  /** Messages posted in the window. */
   messages: number;
   chatActive: boolean;
-  /** Linked to a CLS user (Discord login or admin-set ID). */
   linked: boolean;
   clsName: string | null;
-  /** Linked AND has at least one registration. */
   registered: boolean;
-  /** Raced or RSVP'd in the window. */
   leagueActive: boolean;
+};
+
+export type MonthlyRow = {
+  /** "YYYY-MM" */
+  month: string;
+  messageCount: number;
+  activeMembers: number;
+};
+
+type ScanInfo = {
+  channelsScanned: number;
+  channelsSkipped: number;
+  messagesScanned: number;
+  partial: boolean;
 };
 
 export type DiscordStatsData = {
@@ -53,13 +68,9 @@ export type DiscordStatsData = {
     joinedInWindow: number;
     lurkers: number;
   };
-  scan: {
-    channelsScanned: number;
-    channelsSkipped: number;
-    messagesScanned: number;
-    /** True when the time budget was hit before every channel was scanned. */
-    partial: boolean;
-  };
+  scan: ScanInfo;
+  /** This calendar month's running tally — fed into the trend table. */
+  currentMonth: MonthlyRow;
   members: DiscordMemberStat[];
   errors: string[];
 };
@@ -85,6 +96,28 @@ type DiscordMessage = {
 
 function botHeaders(token: string) {
   return { Authorization: `Bot ${token}` };
+}
+
+function monthKey(d: Date): string {
+  return d.toISOString().slice(0, 7);
+}
+
+async function resolveGuilds(): Promise<
+  { token: string; guildIds: string[] } | { error: string }
+> {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) return { error: "DISCORD_BOT_TOKEN is not configured on the server." };
+  const leagues = await prisma.league.findMany({
+    where: { discordGuildId: { not: null } },
+    select: { discordGuildId: true },
+  });
+  const guildIds = [
+    ...new Set(leagues.map((l) => l.discordGuildId!).filter(Boolean)),
+  ];
+  if (guildIds.length === 0) {
+    return { error: "No Discord guild ID is configured on any league." };
+  }
+  return { token, guildIds };
 }
 
 async function fetchAllMembers(
@@ -126,13 +159,17 @@ async function fetchTextChannels(
   return all.filter((c) => c.type === 0 || c.type === 5);
 }
 
-/** Scan one channel's messages back to `cutoff`, tallying non-bot author ids. */
-async function scanChannel(
+/**
+ * Page back through one channel's messages until older than `since`, invoking
+ * `onMessage` for each non-bot message. Returns `ok: false` when the bot
+ * can't read the channel (403/404) so the caller can count it as skipped.
+ */
+async function scanChannelMessages(
   channelId: string,
   token: string,
-  cutoff: Date,
-  counts: Map<string, number>,
-  deadline: number
+  since: Date,
+  deadline: number,
+  onMessage: (authorId: string, ts: Date) => void
 ): Promise<{ scanned: number; ok: boolean }> {
   let before: string | null = null;
   let scanned = 0;
@@ -142,7 +179,6 @@ async function scanChannel(
       `${DISCORD_API}/channels/${channelId}/messages?limit=100` +
       (before ? `&before=${before}` : "");
     const res = await fetch(url, { headers: botHeaders(token) });
-    // 403/404 — the bot can't read this channel; skip it.
     if (res.status === 403 || res.status === 404) return { scanned, ok: false };
     if (res.status === 429) {
       const body = (await res.json().catch(() => ({}))) as {
@@ -156,82 +192,31 @@ async function scanChannel(
     if (msgs.length === 0) return { scanned, ok: true };
     let reachedCutoff = false;
     for (const m of msgs) {
-      // Messages are newest-first; the first one older than the cutoff means
+      // Messages are newest-first; the first one older than `since` means
       // every remaining message is older too.
-      if (new Date(m.timestamp) < cutoff) {
+      const ts = new Date(m.timestamp);
+      if (ts < since) {
         reachedCutoff = true;
         break;
       }
       scanned++;
-      if (m.author && !m.author.bot) {
-        counts.set(m.author.id, (counts.get(m.author.id) ?? 0) + 1);
-      }
+      if (m.author && !m.author.bot) onMessage(m.author.id, ts);
     }
     if (reachedCutoff || msgs.length < 100) return { scanned, ok: true };
     before = msgs[msgs.length - 1].id;
   }
 }
 
-export async function buildDiscordStats(): Promise<DiscordStatsData> {
-  const errors: string[] = [];
-  const now = new Date();
-  const cutoff = new Date(now.getTime() - WINDOW_DAYS * 86_400_000);
-
-  const empty = (): DiscordStatsData => ({
-    generatedAt: now.toISOString(),
-    windowDays: WINDOW_DAYS,
-    totals: {
-      members: 0,
-      linked: 0,
-      registeredDrivers: 0,
-      chatActive: 0,
-      leagueActive: 0,
-      activeEither: 0,
-      joinedInWindow: 0,
-      lurkers: 0,
-    },
-    scan: { channelsScanned: 0, channelsSkipped: 0, messagesScanned: 0, partial: false },
-    members: [],
-    errors,
-  });
-
-  const token = process.env.DISCORD_BOT_TOKEN;
-  if (!token) {
-    errors.push("DISCORD_BOT_TOKEN is not configured on the server.");
-    return empty();
-  }
-
-  const leagues = await prisma.league.findMany({
-    where: { discordGuildId: { not: null } },
-    select: { discordGuildId: true },
-  });
-  const guildIds = [
-    ...new Set(leagues.map((l) => l.discordGuildId!).filter(Boolean)),
-  ];
-  if (guildIds.length === 0) {
-    errors.push("No Discord guild ID is configured on any league.");
-    return empty();
-  }
-
-  // 1. Member list (bots excluded — they aren't community members).
-  const memberById = new Map<string, GuildMember>();
-  for (const gid of guildIds) {
-    try {
-      for (const m of await fetchAllMembers(gid, token)) {
-        if (m.user?.id && !m.user.bot && !memberById.has(m.user.id)) {
-          memberById.set(m.user.id, m);
-        }
-      }
-    } catch (e) {
-      errors.push(
-        `Members for guild ${gid}: ${e instanceof Error ? e.message : String(e)}`
-      );
-    }
-  }
-
-  // 2. Message scan — every readable text channel, last 30 days, time-budgeted.
-  const msgCounts = new Map<string, number>();
-  const deadline = Date.now() + SCAN_BUDGET_MS;
+/** Scan every readable text channel of every guild, back to `since`. */
+async function scanAllChannels(
+  guildIds: string[],
+  token: string,
+  since: Date,
+  budgetMs: number,
+  onMessage: (authorId: string, ts: Date) => void,
+  errors: string[]
+): Promise<ScanInfo> {
+  const deadline = Date.now() + budgetMs;
   let channelsScanned = 0;
   let channelsSkipped = 0;
   let messagesScanned = 0;
@@ -250,7 +235,7 @@ export async function buildDiscordStats(): Promise<DiscordStatsData> {
         partial = true;
         break;
       }
-      const r = await scanChannel(ch.id, token, cutoff, msgCounts, deadline);
+      const r = await scanChannelMessages(ch.id, token, since, deadline, onMessage);
       messagesScanned += r.scanned;
       if (r.ok) channelsScanned++;
       else channelsSkipped++;
@@ -258,10 +243,80 @@ export async function buildDiscordStats(): Promise<DiscordStatsData> {
     if (partial) break;
   }
   if (Date.now() > deadline) partial = true;
+  return { channelsScanned, channelsSkipped, messagesScanned, partial };
+}
+
+export async function buildDiscordStats(): Promise<DiscordStatsData> {
+  const errors: string[] = [];
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - WINDOW_DAYS * 86_400_000);
+  const curMonth = monthKey(now);
+
+  const empty = (): DiscordStatsData => ({
+    generatedAt: now.toISOString(),
+    windowDays: WINDOW_DAYS,
+    totals: {
+      members: 0,
+      linked: 0,
+      registeredDrivers: 0,
+      chatActive: 0,
+      leagueActive: 0,
+      activeEither: 0,
+      joinedInWindow: 0,
+      lurkers: 0,
+    },
+    scan: { channelsScanned: 0, channelsSkipped: 0, messagesScanned: 0, partial: false },
+    currentMonth: { month: curMonth, messageCount: 0, activeMembers: 0 },
+    members: [],
+    errors,
+  });
+
+  const ctx = await resolveGuilds();
+  if ("error" in ctx) {
+    errors.push(ctx.error);
+    return empty();
+  }
+  const { token, guildIds } = ctx;
+
+  // 1. Member list (bots excluded — they aren't community members).
+  const memberById = new Map<string, GuildMember>();
+  for (const gid of guildIds) {
+    try {
+      for (const m of await fetchAllMembers(gid, token)) {
+        if (m.user?.id && !m.user.bot && !memberById.has(m.user.id)) {
+          memberById.set(m.user.id, m);
+        }
+      }
+    } catch (e) {
+      errors.push(
+        `Members for guild ${gid}: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+  }
+
+  // 2. Message scan — last 30 days. A 30-day scan always fully covers the
+  //    current calendar month, so the current-month trend bucket is taken
+  //    from the same pass.
+  const msgCounts = new Map<string, number>();
+  const curMonthAuthors = new Set<string>();
+  let curMonthMessages = 0;
+  const scan = await scanAllChannels(
+    guildIds,
+    token,
+    cutoff,
+    SNAPSHOT_BUDGET_MS,
+    (authorId, ts) => {
+      msgCounts.set(authorId, (msgCounts.get(authorId) ?? 0) + 1);
+      if (monthKey(ts) === curMonth) {
+        curMonthMessages++;
+        curMonthAuthors.add(authorId);
+      }
+    },
+    errors
+  );
 
   // 3. Join CLS data.
   const discordIds = [...memberById.keys()];
-
   const [accounts, usersByDiscordId] = await Promise.all([
     prisma.account.findMany({
       where: { provider: "discord", providerAccountId: { in: discordIds } },
@@ -330,8 +385,6 @@ export async function buildDiscordStats(): Promise<DiscordStatsData> {
     const joinedInWindow = joinedAt ? new Date(joinedAt) >= cutoff : false;
     const messages = msgCounts.get(discordId) ?? 0;
     const userId = userIdByDiscordId.get(discordId) ?? null;
-    const registered = userId != null && registeredUserIds.has(userId);
-    const leagueActive = userId != null && leagueActiveUserIds.has(userId);
     members.push({
       discordId,
       name,
@@ -341,8 +394,8 @@ export async function buildDiscordStats(): Promise<DiscordStatsData> {
       chatActive: messages > 0,
       linked: userId != null,
       clsName: userId ? userName.get(userId) ?? null : null,
-      registered,
-      leagueActive,
+      registered: userId != null && registeredUserIds.has(userId),
+      leagueActive: userId != null && leagueActiveUserIds.has(userId),
     });
   }
   members.sort((a, b) => b.messages - a.messages);
@@ -362,15 +415,95 @@ export async function buildDiscordStats(): Promise<DiscordStatsData> {
     generatedAt: now.toISOString(),
     windowDays: WINDOW_DAYS,
     totals,
-    scan: { channelsScanned, channelsSkipped, messagesScanned, partial },
+    scan,
+    currentMonth: {
+      month: curMonth,
+      messageCount: curMonthMessages,
+      activeMembers: curMonthAuthors.size,
+    },
     members,
     errors,
   };
 }
 
 /**
- * Build a fresh snapshot and persist it to DiscordStatsSnapshot. Shared by the
- * daily cron and the admin "Refresh" action. Returns the snapshot it stored.
+ * Scan `monthsBack` calendar months of message history and tally messages +
+ * distinct active members per month. Used by the one-time backfill script.
+ */
+export async function buildMonthlyActivity(monthsBack: number): Promise<{
+  rows: MonthlyRow[];
+  scan: ScanInfo;
+  errors: string[];
+}> {
+  const errors: string[] = [];
+  const ctx = await resolveGuilds();
+  if ("error" in ctx) {
+    errors.push(ctx.error);
+    return {
+      rows: [],
+      scan: { channelsScanned: 0, channelsSkipped: 0, messagesScanned: 0, partial: false },
+      errors,
+    };
+  }
+  const { token, guildIds } = ctx;
+
+  const now = new Date();
+  // First day of the month `monthsBack - 1` months before the current one.
+  const since = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (monthsBack - 1), 1)
+  );
+
+  const monthly = new Map<string, { messages: number; authors: Set<string> }>();
+  const scan = await scanAllChannels(
+    guildIds,
+    token,
+    since,
+    BACKFILL_BUDGET_MS,
+    (authorId, ts) => {
+      const key = monthKey(ts);
+      let b = monthly.get(key);
+      if (!b) {
+        b = { messages: 0, authors: new Set() };
+        monthly.set(key, b);
+      }
+      b.messages++;
+      b.authors.add(authorId);
+    },
+    errors
+  );
+
+  const rows: MonthlyRow[] = [...monthly.entries()]
+    .map(([month, b]) => ({
+      month,
+      messageCount: b.messages,
+      activeMembers: b.authors.size,
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+
+  return { rows, scan, errors };
+}
+
+/** Upsert monthly trend rows (idempotent — safe to re-run). */
+export async function saveMonthlyActivity(rows: MonthlyRow[]): Promise<void> {
+  for (const r of rows) {
+    await prisma.discordMonthlyActivity.upsert({
+      where: { month: r.month },
+      create: {
+        month: r.month,
+        messageCount: r.messageCount,
+        activeMembers: r.activeMembers,
+      },
+      update: { messageCount: r.messageCount, activeMembers: r.activeMembers },
+    });
+  }
+}
+
+/**
+ * Build a fresh 30-day snapshot, persist it, and refresh the current month's
+ * trend bucket. Shared by the daily cron and the admin "Refresh" action.
+ *
+ * The current-month bucket is only written when the scan completed in full —
+ * a partial scan would undercount and must not overwrite a good value.
  */
 export async function saveDiscordStatsSnapshot(): Promise<DiscordStatsData> {
   const data = await buildDiscordStats();
@@ -379,6 +512,17 @@ export async function saveDiscordStatsSnapshot(): Promise<DiscordStatsData> {
     // type doesn't accept a typed interface directly, hence the cast.
     data: { data: data as unknown as Prisma.InputJsonValue },
   });
+  if (!data.scan.partial) {
+    const cm = data.currentMonth;
+    await prisma.discordMonthlyActivity.upsert({
+      where: { month: cm.month },
+      create: {
+        month: cm.month,
+        messageCount: cm.messageCount,
+        activeMembers: cm.activeMembers,
+      },
+      update: { messageCount: cm.messageCount, activeMembers: cm.activeMembers },
+    });
+  }
   return data;
 }
-
