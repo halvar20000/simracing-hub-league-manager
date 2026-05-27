@@ -111,7 +111,7 @@ export default async function PublicSeasonRoster({
           </p>
         ) : (
           <div className="overflow-x-auto rounded border border-zinc-800">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm freeze-driver-col">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
                   <th className="px-4 py-3">Registered</th>

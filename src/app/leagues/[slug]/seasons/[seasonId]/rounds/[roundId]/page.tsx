@@ -816,13 +816,13 @@ function ResultsTable({
     : winnerTotalTimeMs;
   let classifiedCount = 0;
   return (
-    <div className="overflow-hidden rounded border border-zinc-800">
+    <div className="overflow-x-auto rounded border border-zinc-800">
       {heading && (
         <div className="bg-zinc-900 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-300">
           {heading}
         </div>
       )}
-      <table className="w-full text-sm">
+      <table className="w-full text-sm freeze-driver-col">
         <thead className="bg-zinc-900 text-left text-zinc-400">
           <tr>
             <th className="px-3 py-2">Pos</th>
@@ -950,7 +950,7 @@ function CombinedMultiRaceTable({
   const raceNumbers = Array.from({ length: racesPerRound }, (_, i) => i + 1);
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm freeze-driver-col">
         <thead className="bg-zinc-900 text-left text-zinc-400">
           <tr>
             <th className="px-3 py-2">Pos</th>
@@ -1099,7 +1099,8 @@ function TeamView({
               Top {TEAM_BEST_N}: {team.topNTotal} pts
             </span>
           </summary>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm freeze-driver-col">
             <thead className="bg-zinc-950 text-left text-xs text-zinc-500">
               <tr>
                 <th className="px-3 py-1.5 driver-col">Driver</th>
@@ -1165,6 +1166,7 @@ function TeamView({
               })}
             </tbody>
           </table>
+          </div>
         </details>
       ))}
     </div>
@@ -1217,8 +1219,8 @@ function QualifyingTable({
   const pole = drivers[0]?.qualifyingTimeMs ?? null;
 
   return (
-    <div className="overflow-hidden rounded border border-zinc-800">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded border border-zinc-800">
+      <table className="w-full text-sm freeze-driver-col">
         <thead className="bg-zinc-900 text-left text-zinc-400">
           <tr>
             <th className="px-3 py-2">Pos</th>
@@ -1428,8 +1430,8 @@ function ByCarSection({
                 {drivers.length} driver{drivers.length === 1 ? "" : "s"}
               </span>
             </summary>
-            <div className="border-t border-zinc-800">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto border-t border-zinc-800">
+              <table className="w-full text-sm freeze-driver-col">
                 <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
                   <tr>
                     <th className="px-3 py-2 w-10">Pos</th>
@@ -1940,7 +1942,7 @@ function RoundTeamRaceTable({
   const leader = sorted[0];
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
-      <table className="min-w-full text-sm">
+      <table className="min-w-full text-sm freeze-driver-col">
         <TeamTableHead />
         <tbody>
           {sorted.map((s, i) => (
@@ -2015,7 +2017,7 @@ function RoundTeamQualiTable({
 
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
-      <table className="min-w-full text-sm">
+      <table className="min-w-full text-sm freeze-driver-col">
         <thead className="bg-zinc-900 text-left text-zinc-400">
           <tr>
             <th className="px-3 py-2">Pos.</th>

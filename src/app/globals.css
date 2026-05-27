@@ -56,3 +56,49 @@ body {
 .driver-col {
   box-shadow: inset -3px 0 0 0 var(--accent-orange);
 }
+
+/*
+ * Freeze the Driver/Team column horizontally.
+ *
+ * Add `freeze-driver-col` to any <table> that lives inside an
+ * overflow-x-auto wrapper and has `.driver-col` on its Driver/Team cells.
+ * The Driver/Team column then pins to the left edge of the scroll
+ * container so the identity column stays visible as the user scrolls
+ * right through the numeric columns.
+ *
+ * position:sticky needs an opaque background per cell — the table's
+ * thead background does not paint behind a sticky cell at the scroll
+ * boundary, so we set bgs explicitly:
+ *   - header cell: zinc-900 (matches the standard thead bg)
+ *   - body cell:   zinc-950 (matches the page bg)
+ *   - body cell on row hover: zinc-900 (matches `hover:bg-zinc-900`)
+ *
+ * The orange accent from `.driver-col` already renders on top of the
+ * cell background via inset box-shadow, so it survives stacking.
+ *
+ * Print: drop the freeze so the printed table flows naturally.
+ */
+.freeze-driver-col thead .driver-col,
+.freeze-driver-col tbody .driver-col {
+  position: sticky;
+  left: 0;
+}
+.freeze-driver-col thead .driver-col {
+  background-color: rgb(24 24 27); /* zinc-900 */
+  z-index: 2;
+}
+.freeze-driver-col tbody .driver-col {
+  background-color: rgb(9 9 11); /* zinc-950 */
+  z-index: 1;
+}
+.freeze-driver-col tbody tr:hover .driver-col {
+  background-color: rgb(24 24 27); /* zinc-900 — matches the row hover */
+}
+@media print {
+  .freeze-driver-col thead .driver-col,
+  .freeze-driver-col tbody .driver-col,
+  .freeze-driver-col tbody tr:hover .driver-col {
+    position: static !important;
+    background: transparent !important;
+  }
+}
