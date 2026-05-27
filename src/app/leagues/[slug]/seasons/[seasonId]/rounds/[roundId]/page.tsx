@@ -38,7 +38,7 @@ export async function generateMetadata({
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
-      season: { include: { league: true } },
+      season: { include: { league: true, scoringSystem: true } },
       raceResults: {
         include: { registration: { include: { user: true } } },
       },
@@ -51,6 +51,11 @@ export async function generateMetadata({
   ) {
     return { title: "Round not found" };
   }
+
+  // Mirror standings.ts: participation only counts toward combined when the
+  // scoring-system flag is on (e.g. GT3 WCT has it off).
+  const includeParticipationInCombinedMeta =
+    round.season.scoringSystem.participationInCombined ?? true;
 
   // Compute top 3 by aggregated round total (handles multi-race)
   type Agg = {
@@ -70,7 +75,7 @@ export async function generateMetadata({
     }
     a.total +=
       r.rawPointsAwarded +
-      r.participationPointsAwarded -
+      (includeParticipationInCombinedMeta ? r.participationPointsAwarded : 0) -
       r.manualPenaltyPoints +
       (r.correctionPoints ?? 0);
     if (r.finishStatus === "CLASSIFIED") a.classified = true;
@@ -167,6 +172,12 @@ export default async function PublicRoundResults({
 
   const isMulticlass = round.season.isMulticlass;
   const proAmEnabled = round.season.proAmEnabled;
+  // Mirror standings.ts: when participationInCombined is false (e.g. GT3 WCT),
+  // participation points are EXCLUDED from the Combined / Race 1 / Race 2 /
+  // By Car totals. Pro/Am tabs still include participation because the
+  // standings engine's classTotal is not gated by this flag.
+  const includeParticipationInCombined =
+    round.season.scoringSystem.participationInCombined ?? true;
   const teamResultsForRound = await prisma.teamResult.findMany({
     where: { roundId: round.id },
     include: {
@@ -388,7 +399,10 @@ export default async function PublicRoundResults({
     a.incidents += r.incidents;
   }
   for (const a of aggMap.values()) {
-    a.totalPoints = a.racePoints + a.participationPoints - a.penaltyPoints;
+    a.totalPoints =
+      a.racePoints +
+      (includeParticipationInCombined ? a.participationPoints : 0) -
+      a.penaltyPoints;
   }
   const aggRows = [...aggMap.values()].sort(
     (a, b) => b.totalPoints - a.totalPoints
@@ -648,6 +662,7 @@ export default async function PublicRoundResults({
             renumberWithinGroup={false}
             heading="Race 1"
             classRacePoints={classRacePointsByResult}
+            includeParticipation={includeParticipationInCombined}
           />
         ) : cls === "race2" ? (
           <ResultsTable
@@ -656,6 +671,7 @@ export default async function PublicRoundResults({
             renumberWithinGroup={false}
             heading="Race 2"
             classRacePoints={classRacePointsByResult}
+            includeParticipation={includeParticipationInCombined}
           />
         ) : cls === "pro" ? (
           <ResultsTable
@@ -663,6 +679,7 @@ export default async function PublicRoundResults({
             isMulticlass={false}
             renumberWithinGroup
             classRacePoints={classRacePointsByResult}
+            includeParticipation={true}
           />
         ) : cls === "am" ? (
           <ResultsTable
@@ -670,6 +687,7 @@ export default async function PublicRoundResults({
             isMulticlass={false}
             renumberWithinGroup
             classRacePoints={classRacePointsByResult}
+            includeParticipation={true}
           />
         ) : isMultiRace ? (
           <CombinedMultiRaceTable
@@ -685,6 +703,7 @@ export default async function PublicRoundResults({
             renumberWithinGroup={false}
             winnerTotalTimeMs={combinedWinner?.totalTimeMs ?? null}
             classRacePoints={classRacePointsByResult}
+            includeParticipation={includeParticipationInCombined}
           />
         )}
       </section>
@@ -774,6 +793,7 @@ function ResultsTable({
   winnerTotalTimeMs = null,
   heading = null,
   classRacePoints = null,
+  includeParticipation = true,
 }: {
   rows: Row[];
   isMulticlass: boolean;
@@ -784,6 +804,10 @@ function ResultsTable({
    * the Pts column uses these instead of the stored (overall-position)
    * rawPointsAwarded so it matches the standings. */
   classRacePoints?: Map<string, number> | null;
+  /** When false, participation points are excluded from the Pts column.
+   * Mirrors ScoringSystem.participationInCombined. Pro/Am tabs always
+   * pass true (matches standings classTotal). */
+  includeParticipation?: boolean;
 }) {
   const groupWinnerTotalTimeMs = renumberWithinGroup
     ? rows.find(
@@ -821,7 +845,9 @@ function ResultsTable({
               ? classRacePoints.get(r.id) ?? r.rawPointsAwarded
               : r.rawPointsAwarded;
             const total =
-              racePts + r.participationPointsAwarded - r.manualPenaltyPoints;
+              racePts +
+              (includeParticipation ? r.participationPointsAwarded : 0) -
+              r.manualPenaltyPoints;
             const gap =
               groupWinnerTotalTimeMs && r.totalTimeMs
                 ? r.totalTimeMs - groupWinnerTotalTimeMs
@@ -1330,9 +1356,12 @@ interface ByCarRow {
 function ByCarSection({
   allRows,
   isMultiRace,
+  includeParticipation = true,
 }: {
   allRows: ByCarRow[];
   isMultiRace: boolean;
+  /** Mirrors ScoringSystem.participationInCombined. */
+  includeParticipation?: boolean;
 }) {
   // Group results by carId. Drivers without a carId go into "Unassigned".
   const byCar = new Map<string, { carName: string; rows: ByCarRow[] }>();
@@ -1376,7 +1405,7 @@ function ByCarSection({
               (sum, r) =>
                 sum +
                 r.rawPointsAwarded +
-                r.participationPointsAwarded -
+                (includeParticipation ? r.participationPointsAwarded : 0) -
                 r.manualPenaltyPoints,
               0
             );

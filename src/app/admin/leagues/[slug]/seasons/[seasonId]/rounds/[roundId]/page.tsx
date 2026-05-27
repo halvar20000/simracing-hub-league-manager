@@ -190,6 +190,9 @@ export default async function AdminRoundResults({
             seasonId={seasonId}
             roundId={roundId}
             isMulticlass={round.season.isMulticlass}
+            participationInCombined={
+              round.season.scoringSystem.participationInCombined ?? true
+            }
           />
         )}
       </section>
@@ -203,10 +206,14 @@ function ResultRow({
   roundId,
   reg,
   isMulticlass,
+  includeParticipation = true,
 }: {
   slug: string;
   seasonId: string;
   roundId: string;
+  /** When false, the displayed total excludes participation (matches the
+   * standings combinedTotal for seasons with participationInCombined off). */
+  includeParticipation?: boolean;
   reg: {
     id: string;
     startNumber: number | null;
@@ -240,7 +247,7 @@ function ResultRow({
 
   const totalPoints = result
     ? result.rawPointsAwarded +
-      result.participationPointsAwarded -
+      (includeParticipation ? result.participationPointsAwarded : 0) -
       result.manualPenaltyPoints
     : 0;
 
@@ -272,7 +279,12 @@ function ResultRow({
             Points:{" "}
             <span className="font-bold text-orange-400">{totalPoints}</span>
             <span className="ml-1 text-zinc-600">
-              ({result.rawPointsAwarded}+{result.participationPointsAwarded}
+              ({result.rawPointsAwarded}
+              {includeParticipation
+                ? `+${result.participationPointsAwarded}`
+                : result.participationPointsAwarded > 0
+                  ? `, +${result.participationPointsAwarded} part. excl.`
+                  : ""}
               {result.manualPenaltyPoints > 0 &&
                 `−${result.manualPenaltyPoints}`}
               )
@@ -444,6 +456,7 @@ function AdminRegList({
   seasonId,
   roundId,
   isMulticlass,
+  participationInCombined,
 }: {
   registrations: Array<Parameters<typeof ResultRow>[0]["reg"]>;
   cls: "combined" | "pro" | "am" | "team";
@@ -451,7 +464,15 @@ function AdminRegList({
   seasonId: string;
   roundId: string;
   isMulticlass: boolean;
+  /** Mirrors ScoringSystem.participationInCombined. Pro/Am tabs always
+   * include participation (match standings classTotal); Combined/Team
+   * respect the flag (match standings combinedTotal). */
+  participationInCombined: boolean;
 }) {
+  // Pro/Am tabs match the standings classTotal which always includes
+  // participation. Combined/Team match combinedTotal which is gated.
+  const includeParticipation =
+    cls === "pro" || cls === "am" ? true : participationInCombined;
   // Class filter
   let filtered = registrations;
   if (cls === "pro") {
@@ -480,6 +501,7 @@ function AdminRegList({
             roundId={roundId}
             reg={reg}
             isMulticlass={isMulticlass}
+            includeParticipation={includeParticipation}
           />
         ))}
       </div>
@@ -524,6 +546,7 @@ function AdminRegList({
                 roundId={roundId}
                 reg={reg}
                 isMulticlass={isMulticlass}
+                includeParticipation={includeParticipation}
               />
             ))}
           </div>
