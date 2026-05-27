@@ -1,9 +1,16 @@
 import { prisma } from "@/lib/prisma";
 
 /**
- * Penalty Pool — auto-forgiveness engine for CAS GT3 WCT.
+ * Penalty Pool — auto-forgiveness engine.
  *
- * Rule (per registration, per season):
+ * Gating: ScoringSystem.penaltyPoolMode must be FULL for this engine to run.
+ * Other modes are no-ops:
+ *   - OFF          → no pool at all
+ *   - NO_SHOW_ONLY → SFL Cup style: NO_RSVP_NO_SHOW penalties appear in a
+ *                    pool view but no forgiveness is applied; nothing to
+ *                    recompute, so we return early.
+ *
+ * Rule (when FULL):
  *   - Penalty points from each finalized IncidentDecision go into the driver's pool.
  *   - For every 2 COMPLETED rounds the driver entered WITHOUT new penalty points,
  *     1 point is forgiven from the oldest non-fully-forgiven penalty.
@@ -29,8 +36,6 @@ import { prisma } from "@/lib/prisma";
  * drift. Manual forgiveness (admin) lives in forgivenPoints and is untouched.
  */
 
-const GT3_WCT_SLUG = "cas-gt3-wct";
-
 export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
   ran: boolean;
   reason?: string;
@@ -39,11 +44,19 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
 }> {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
-    include: { league: { select: { slug: true } } },
+    include: {
+      league: { select: { slug: true } },
+      scoringSystem: { select: { penaltyPoolMode: true } },
+    },
   });
   if (!season) return { ran: false, reason: "season not found", registrationsProcessed: 0, pointsForgiven: 0 };
-  if (season.league.slug !== GT3_WCT_SLUG) {
-    return { ran: false, reason: `not GT3 WCT (slug=${season.league.slug})`, registrationsProcessed: 0, pointsForgiven: 0 };
+  if (season.scoringSystem.penaltyPoolMode !== "FULL") {
+    return {
+      ran: false,
+      reason: `penaltyPoolMode=${season.scoringSystem.penaltyPoolMode} — auto-forgiveness only runs in FULL mode`,
+      registrationsProcessed: 0,
+      pointsForgiven: 0,
+    };
   }
 
   const rounds = await prisma.round.findMany({

@@ -258,6 +258,76 @@ export default async function EditScoringSystem({
           </label>
         </Section>
 
+        <Section title="Penalty pool & no-show penalty">
+          <fieldset className="space-y-3 text-sm text-zinc-200">
+            <label className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="penaltyPoolMode"
+                value="OFF"
+                defaultChecked={ss.penaltyPoolMode === "OFF"}
+                className="mt-1 h-4 w-4 accent-orange-500"
+              />
+              <span>
+                <span className="font-medium">Off</span>
+                <span className="ml-1 block text-xs text-zinc-500">
+                  No penalty pool. No automatic no-show penalty. Standings still
+                  reflect any manually-issued penalties as usual.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="penaltyPoolMode"
+                value="FULL"
+                defaultChecked={ss.penaltyPoolMode === "FULL"}
+                className="mt-1 h-4 w-4 accent-orange-500"
+              />
+              <span>
+                <span className="font-medium">Full (GT3 WCT)</span>
+                <span className="ml-1 block text-xs text-zinc-500">
+                  All POINTS_DEDUCTION penalties feed the pool. Auto-forgiveness
+                  applies: every 2 clean completed rounds the driver entered →
+                  1 point forgiven from the oldest active penalty. No-show
+                  penalties are recorded but never auto-forgiven.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="penaltyPoolMode"
+                value="NO_SHOW_ONLY"
+                defaultChecked={ss.penaltyPoolMode === "NO_SHOW_ONLY"}
+                className="mt-1 h-4 w-4 accent-orange-500"
+              />
+              <span>
+                <span className="font-medium">No-show only (SFL)</span>
+                <span className="ml-1 block text-xs text-zinc-500">
+                  Apply the no-show penalty when a round completes. The pool
+                  view lists only no-show penalties. No auto-forgiveness.
+                  Reporting / steward penalties still hit standings directly
+                  but do not appear in the pool view.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+          <div className="mt-4 max-w-xs">
+            <Field
+              label="No-show penalty points per round"
+              name="noRsvpNoShowPenaltyPoints"
+              type="number"
+              defaultValue={String(ss.noRsvpNoShowPenaltyPoints ?? 1)}
+              min={0}
+              max={50}
+            />
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Only applied when the mode above is Full or No-show only.
+            </p>
+          </div>
+        </Section>
+
         <Section title={teamMode ? "Team Fair Play Rating (incident-based)" : "Driver Fair Play Rating (incident-based)"}>
           <label className="flex items-start gap-3 text-sm text-zinc-200">
             <input

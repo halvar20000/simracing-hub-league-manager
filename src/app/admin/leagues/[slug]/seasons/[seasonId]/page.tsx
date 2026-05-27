@@ -160,17 +160,21 @@ export default async function AdminSeasonDetail({
           )}
           )
         </Link>
-        <Link
-          href={`/admin/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
-          className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-        >
-          Penalty pool
-          {pendingPenaltyCount > 0 && (
-            <span className="ml-1.5 inline-block min-w-[1.25rem] rounded-full bg-amber-500 px-1.5 text-center text-[10px] font-bold leading-5 text-zinc-950">
-              {pendingPenaltyCount}
-            </span>
-          )}
-        </Link>
+        {season.scoringSystem.penaltyPoolMode !== "OFF" && (
+          <Link
+            href={`/admin/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
+            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            {season.scoringSystem.penaltyPoolMode === "NO_SHOW_ONLY"
+              ? "No-show register"
+              : "Penalty pool"}
+            {pendingPenaltyCount > 0 && (
+              <span className="ml-1.5 inline-block min-w-[1.25rem] rounded-full bg-amber-500 px-1.5 text-center text-[10px] font-bold leading-5 text-zinc-950">
+                {pendingPenaltyCount}
+              </span>
+            )}
+          </Link>
+        )}
         <Link
           href={`/admin/leagues/${slug}/seasons/${seasonId}/classes`}
           className="rounded px-3 py-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"

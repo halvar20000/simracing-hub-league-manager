@@ -151,6 +151,20 @@ model League {
   /// small "Garage 61 team →" link on league / season pages so members
   /// can jump straight to the shared setups + practice laps.
   garage61TeamUrl         String?
+
+  /// Discord channel for the automatic after-race results post. Null = the
+  /// results-post feature is off for this league. See src/lib/notify-results.ts.
+  discordResultsChannelId String?
+
+  /// Discord channel for the daily new-member welcome post. Null = the
+  /// welcome feature is off. See src/lib/notify-welcome.ts.
+  discordWelcomeChannelId String?
+  /// Optional custom welcome message. "{names}" is replaced with the new
+  /// members' names; if absent the names are appended. Null = a default.
+  discordWelcomeMessage   String?
+  /// Watermark — only members who joined after this are welcomed. Set to
+  /// "now" on first run so existing members are never bulk-welcomed.
+  discordWelcomeAfter     DateTime?
 }
 
 model Season {
@@ -256,6 +270,10 @@ model Round {
   rsvpClosedAt            DateTime?
   rsvps                   RoundRsvp[]
   rsvpDiscordMessage      RoundDiscordRsvpMessage?
+
+  /// Set when the after-race results were posted to Discord — idempotency
+  /// flag for src/lib/notify-results.ts.
+  resultsPostedAt         DateTime?
 
   // Per-round Twitch stream announcement (1:1).
   streamAnnouncement      StreamAnnouncement?
@@ -367,6 +385,17 @@ model ScoringSystem {
   driverFprEnabled         Boolean @default(false)
   driverFprTiers           Json?
   driverFprMinDistancePct  Int     @default(90)
+
+  // Penalty-pool behaviour for the season(s) using this scoring system:
+  //   OFF           — no penalty pool, no no-show penalties (default for most leagues)
+  //   FULL          — GT3 WCT mode: all POINTS_DEDUCTION penalties feed the pool;
+  //                   auto-forgiveness engine runs (every 2 clean rounds → -1 pool pt)
+  //   NO_SHOW_ONLY  — SFL Cup mode: NO_RSVP_NO_SHOW penalties only appear in the
+  //                   pool view; no auto-forgiveness; report-driven penalties still
+  //                   hit standings directly but skip the pool view
+  penaltyPoolMode          PenaltyPoolMode @default(OFF)
+  // Points deducted for each no-show (when penaltyPoolMode is FULL or NO_SHOW_ONLY).
+  noRsvpNoShowPenaltyPoints Int             @default(1)
 }
 
 model FPRAward {
@@ -663,6 +692,12 @@ enum PenaltySource {
   ADMIN_MANUAL
   IRACECONTROL_IMPORT
   NO_RSVP_NO_SHOW
+}
+
+enum PenaltyPoolMode {
+  OFF
+  FULL
+  NO_SHOW_ONLY
 }
 
 /// One refresh of the Discord community statistics (admin → Discord page).

@@ -22,6 +22,11 @@ export default async function PenaltyPoolAdminPage({
     include: { league: true, scoringSystem: true },
   });
   if (!season || season.league.slug !== slug) notFound();
+  if (season.scoringSystem.penaltyPoolMode === "OFF") notFound();
+
+  const poolMode = season.scoringSystem.penaltyPoolMode;
+  const isNoShowOnly = poolMode === "NO_SHOW_ONLY";
+  const isFull = poolMode === "FULL";
 
   const registrations = await prisma.registration.findMany({
     where: { seasonId },
@@ -42,6 +47,9 @@ export default async function PenaltyPoolAdminPage({
     where: {
       type: "POINTS_DEDUCTION",
       round: { seasonId },
+      // NO_SHOW_ONLY: reporting/steward penalties stay out of this view (they
+      // hit standings directly). Only no-show entries appear in the pool.
+      ...(isNoShowOnly ? { source: "NO_RSVP_NO_SHOW" as const } : {}),
     },
     select: {
       id: true,
@@ -140,11 +148,15 @@ export default async function PenaltyPoolAdminPage({
         >
           ← {season.name} {season.year}
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">Penalty pool</h1>
+        <h1 className="mt-2 text-2xl font-bold">
+          {isNoShowOnly ? "No-show register" : "Penalty pool"}
+        </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          {season.scoringSystem.deferPenaltyPoints
-            ? "Pending penalty points stay in the pool until you release them. Releasing applies them to the championship standings."
-            : "Penalty points apply IMMEDIATELY to standings on this scoring system. This view is informational."}
+          {isNoShowOnly
+            ? "No-show points apply IMMEDIATELY to standings. Reporting / steward penalties are recorded against the driver too but are not shown in this view."
+            : season.scoringSystem.deferPenaltyPoints
+              ? "Pending penalty points stay in the pool until you release them. Releasing applies them to the championship standings."
+              : "Penalty points apply IMMEDIATELY to standings on this scoring system. This view is informational."}
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <span className="rounded bg-amber-900/40 px-2 py-1 text-amber-200">
@@ -162,7 +174,7 @@ export default async function PenaltyPoolAdminPage({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        {season.league.slug === "cas-gt3-wct" && (
+        {isFull && (
           <form action={recomputePenaltyPoolAction}>
             <input type="hidden" name="seasonId" value={seasonId} />
             <input type="hidden" name="leagueSlug" value={slug} />
@@ -202,10 +214,12 @@ export default async function PenaltyPoolAdminPage({
                   R{r.roundNumber}
                 </th>
               ))}
-              <th className="px-2 py-2 text-right">Forgiven</th>
-              <th className="px-2 py-2 text-right">Pool</th>
-              <th className="px-2 py-2 text-right">Released</th>
-              <th className="px-2 py-2 text-right">Action</th>
+              {isFull && <th className="px-2 py-2 text-right">Forgiven</th>}
+              <th className="px-2 py-2 text-right">
+                {isNoShowOnly ? "Total" : "Pool"}
+              </th>
+              {isFull && <th className="px-2 py-2 text-right">Released</th>}
+              {isFull && <th className="px-2 py-2 text-right">Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -234,7 +248,7 @@ export default async function PenaltyPoolAdminPage({
                     const entered =
                       enteredByReg.get(d.registrationId)?.has(r.id) ?? false;
                     const cleanCompleted =
-                      pts === 0 && entered && r.status === "COMPLETED";
+                      isFull && pts === 0 && entered && r.status === "COMPLETED";
                     return (
                       <td
                         key={r.id}
@@ -252,31 +266,37 @@ export default async function PenaltyPoolAdminPage({
                       </td>
                     );
                   })}
-                  <td className="px-2 py-2 text-right tabular-nums text-cyan-300">
-                    {d.autoForgiven > 0 ? `−${d.autoForgiven}` : ""}
-                  </td>
+                  {isFull && (
+                    <td className="px-2 py-2 text-right tabular-nums text-cyan-300">
+                      {d.autoForgiven > 0 ? `−${d.autoForgiven}` : ""}
+                    </td>
+                  )}
                   <td className="px-2 py-2 text-right tabular-nums font-semibold">
                     {d.activePool > 0 ? d.activePool : (
                       <span className="text-zinc-600">0</span>
                     )}
                   </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-red-300">
-                    {d.released > 0 ? d.released : ""}
-                  </td>
-                  <td className="px-2 py-2 text-right">
-                    {d.hasPending && season.scoringSystem.deferPenaltyPoints ? (
-                      <form action={releaseDriver}>
-                        <button
-                          className="rounded bg-red-700 px-2 py-1 text-xs text-white hover:bg-red-600"
-                          title="Release this driver's pending pool points to the standings"
-                        >
-                          Release pool
-                        </button>
-                      </form>
-                    ) : (
-                      ""
-                    )}
-                  </td>
+                  {isFull && (
+                    <td className="px-2 py-2 text-right tabular-nums text-red-300">
+                      {d.released > 0 ? d.released : ""}
+                    </td>
+                  )}
+                  {isFull && (
+                    <td className="px-2 py-2 text-right">
+                      {d.hasPending && season.scoringSystem.deferPenaltyPoints ? (
+                        <form action={releaseDriver}>
+                          <button
+                            className="rounded bg-red-700 px-2 py-1 text-xs text-white hover:bg-red-600"
+                            title="Release this driver's pending pool points to the standings"
+                          >
+                            Release pool
+                          </button>
+                        </form>
+                      ) : (
+                        ""
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}

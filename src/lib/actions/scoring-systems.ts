@@ -125,6 +125,8 @@ export async function createScoringSystem(formData: FormData): Promise<void> {
         driverFprEnabled: src.driverFprEnabled,
         driverFprTiers: j(src.driverFprTiers),
         driverFprMinDistancePct: src.driverFprMinDistancePct,
+        penaltyPoolMode: src.penaltyPoolMode,
+        noRsvpNoShowPenaltyPoints: src.noRsvpNoShowPenaltyPoints,
       },
     });
     createdId = copied.id;
@@ -175,6 +177,18 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const protestCooldownHours = readIntOrNull(formData.get("protestCooldownHours"));
   const participationInCombined = formData.get("participationInCombined") === "on";
   const deferPenaltyPoints = formData.get("deferPenaltyPoints") === "on";
+  // Penalty pool mode: radio buttons send the value of the selected option.
+  const penaltyPoolModeRaw = String(formData.get("penaltyPoolMode") ?? "OFF");
+  const penaltyPoolMode: "OFF" | "FULL" | "NO_SHOW_ONLY" =
+    penaltyPoolModeRaw === "FULL"
+      ? "FULL"
+      : penaltyPoolModeRaw === "NO_SHOW_ONLY"
+        ? "NO_SHOW_ONLY"
+        : "OFF";
+  const noRsvpNoShowPenaltyPoints = Math.max(
+    0,
+    Math.min(50, readIntOrNull(formData.get("noRsvpNoShowPenaltyPoints")) ?? 1)
+  );
 
   const pointsTable = readPointsTable(formData, "pos", 40);
   const pointsTableRace2Raw = readPointsTable(formData, "posR2", 40);
@@ -214,6 +228,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       protestCooldownHours,
       participationInCombined,
       deferPenaltyPoints,
+      penaltyPoolMode,
+      noRsvpNoShowPenaltyPoints,
       categoryPointsTable,
       driverFprEnabled,
       driverFprMinDistancePct,
