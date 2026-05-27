@@ -300,7 +300,7 @@ export default async function StandingsPage({
                     <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
                       <tr>
                         <th className="px-3 py-2 w-10">Pos</th>
-                        <th className="px-3 py-2">Driver</th>
+                        <th className="px-3 py-2 driver-col">Driver</th>
                         <th className="px-3 py-2">Team</th>
                         <th className="px-3 py-2 text-right">Rounds</th>
                         <th className="px-3 py-2 text-right">Total</th>
@@ -310,7 +310,7 @@ export default async function StandingsPage({
                       {driversInClass.map((d, i) => (
                         <tr key={d.registrationId} className="border-t border-zinc-800">
                           <td className="px-3 py-2 font-medium">{i + 1}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 driver-col">
                             <span className="inline-flex items-center gap-2">
                               <CountryFlag code={d.countryCode} />
                               {d.startNumber != null && (
@@ -373,7 +373,7 @@ export default async function StandingsPage({
                     <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
                       <tr>
                         <th className="px-3 py-2 w-10">Pos</th>
-                        <th className="px-3 py-2">Driver</th>
+                        <th className="px-3 py-2 driver-col">Driver</th>
                         <th className="px-3 py-2">Team</th>
                         <th className="px-3 py-2 text-right">Rounds</th>
                         <th className="px-3 py-2 text-right">Total</th>
@@ -383,7 +383,7 @@ export default async function StandingsPage({
                       {car.drivers.map((d, i) => (
                         <tr key={d.registrationId} className="border-t border-zinc-800">
                           <td className="px-3 py-2 font-medium">{i + 1}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 driver-col">
                             <span className="inline-flex items-center gap-2">
                               <CountryFlag code={d.countryCode} />
                               {d.startNumber != null && (
@@ -539,7 +539,7 @@ function DriversTable({
           <tr>
             <th className="px-3 py-2">Pos</th>
             <th className="px-3 py-2">#</th>
-            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2 driver-col">Driver</th>
             {showTeam && <th className="px-3 py-2">Team</th>}
             {showClass && <th className="px-3 py-2">Class</th>}
             <th className="px-3 py-2 text-right">Rounds</th>
@@ -577,7 +577,7 @@ function DriversTable({
               >
                 <td className="px-3 py-2 font-medium tabular-nums"><PosCell pos={idx + 1} delta={positionDelta} /></td>
                 <td className="px-3 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
-                <td className={`px-3 py-2 font-medium ${r.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
+                <td className={`px-3 py-2 font-medium driver-col ${r.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                   <CountryFlag code={r.countryCode} />{r.driverFirstName} {r.driverLastName}
                   {r.excludedAt && (
                     <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
@@ -644,7 +644,7 @@ function RaceByRaceTable({
           <tr>
             <th rowSpan={2} className="sticky left-0 top-0 z-40 bg-zinc-900 px-2 py-2 text-left">Pos</th>
             <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left">#</th>
-            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left">Driver</th>
+            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left driver-col">Driver</th>
             <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">Total</th>
             {rounds.map((r) => (
               <th
@@ -682,7 +682,7 @@ function RaceByRaceTable({
               >
                 <td className="sticky left-0 z-10 bg-zinc-950 px-2 py-1.5 font-medium">{idx + 1}</td>
                 <td className="px-2 py-1.5 text-zinc-500">{r.startNumber ?? "—"}</td>
-                <td className="px-2 py-1.5 font-medium whitespace-nowrap">
+                <td className="px-2 py-1.5 font-medium whitespace-nowrap driver-col">
                   <CountryFlag code={r.countryCode} />{r.driverFirstName} {r.driverLastName}
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-orange-400 tabular-nums">{seasonTotal}</td>
@@ -748,7 +748,7 @@ function GdcTable({
           <tr>
             <th className="px-3 py-2">Pos</th>
             <th className="px-3 py-2">#</th>
-            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2 driver-col">Driver</th>
             <th className="px-3 py-2">Team</th>
             <th className="px-3 py-2 text-right">Rounds</th>
             <th className="px-3 py-2 text-right">Inc</th>
@@ -772,7 +772,7 @@ function GdcTable({
                 </td>
                 <td className="px-3 py-2 text-zinc-500">{r.startNumber ?? "—"}</td>
                 <td
-                  className={`px-3 py-2 font-medium ${
+                  className={`px-3 py-2 font-medium driver-col ${
                     r.excludedAt
                       ? "text-zinc-500 line-through decoration-red-500/60"
                       : ""
@@ -810,7 +810,7 @@ function TeamsTable({ rows }: { rows: TeamStanding[] }) {
         <thead className="bg-zinc-900 text-left text-zinc-400">
           <tr>
             <th className="px-3 py-2">Pos</th>
-            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2 driver-col">Team</th>
             <th className="px-3 py-2 text-right">Drivers</th>
             <th className="px-3 py-2 text-right">Race pts</th>
             <th className="px-3 py-2 text-right">Total</th>
@@ -820,7 +820,7 @@ function TeamsTable({ rows }: { rows: TeamStanding[] }) {
           {rows.map((r, idx) => (
             <tr key={r.teamId} className="border-t border-zinc-800 hover:bg-zinc-900">
               <td className="px-3 py-2 font-medium">{idx + 1}</td>
-              <td className="px-3 py-2 font-medium">{r.teamName}</td>
+              <td className="px-3 py-2 font-medium driver-col">{r.teamName}</td>
               <td className="px-3 py-2 text-right text-zinc-400">{r.driversCount}</td>
               <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
                 {r.scoringPoints}
@@ -851,7 +851,7 @@ function TeamClassTable({
           <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
             <tr>
               <th className="px-3 py-2 w-10">Pos</th>
-              <th className="px-3 py-2">Team</th>
+              <th className="px-3 py-2 driver-col">Team</th>
               <th className="px-3 py-2 text-right">Best</th>
               <th className="px-3 py-2 text-right">Rounds</th>
               <th className="px-3 py-2 text-right">Incidents</th>
@@ -862,7 +862,7 @@ function TeamClassTable({
             {group.teams.map((t, i) => (
               <tr key={t.teamId} className="border-t border-zinc-800">
                 <td className="px-3 py-2 font-medium">{i + 1}</td>
-                <td className="px-3 py-2 font-medium">{t.teamName}</td>
+                <td className="px-3 py-2 font-medium driver-col">{t.teamName}</td>
                 <td className="px-3 py-2 text-right text-zinc-300">
                   {t.bestClassFinish != null ? "P" + t.bestClassFinish : "—"}
                 </td>
@@ -892,7 +892,7 @@ function TeamClassTable({
         <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
           <tr>
             <th className="px-3 py-2 sticky left-0 bg-zinc-900/50 z-10 w-10">Pos</th>
-            <th className="px-3 py-2 sticky left-10 bg-zinc-900/50 z-10">Team</th>
+            <th className="px-3 py-2 sticky left-10 bg-zinc-900/50 z-10 driver-col">Team</th>
             {roundsList.map((r) => (
               <th key={r.roundId} className="px-3 py-2 text-center min-w-[3.5rem]" title={r.name}>
                 R{r.number}
@@ -907,7 +907,7 @@ function TeamClassTable({
             return (
               <tr key={t.teamId} className="border-t border-zinc-800">
                 <td className="px-3 py-2 font-medium sticky left-0 bg-zinc-900/30 z-10">{i + 1}</td>
-                <td className="px-3 py-2 font-medium sticky left-10 bg-zinc-900/30 z-10">{t.teamName}</td>
+                <td className="px-3 py-2 font-medium sticky left-10 bg-zinc-900/30 z-10 driver-col">{t.teamName}</td>
                 {roundsList.map((r) => {
                   const cell = byRound.get(r.roundId);
                   if (!cell) return <td key={r.roundId} className="px-3 py-2 text-center text-zinc-600">—</td>;

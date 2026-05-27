@@ -116,7 +116,7 @@ export default async function PublicSeasonRoster({
                 <tr>
                   <th className="px-4 py-3">Registered</th>
                   <th className="px-4 py-3">Team</th>
-                  <th className="px-4 py-3">Driver</th>
+                  <th className="px-4 py-3 driver-col">Driver</th>
                   <th className="px-4 py-3">Class</th>
                   <th className="px-4 py-3">Car</th>
                   <th className="px-4 py-3">iRacing ID</th>
@@ -156,7 +156,7 @@ export default async function PublicSeasonRoster({
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 driver-col">
                         <div className="font-medium">
                           {reg.user.iracingMemberId ? (
                             <Link
@@ -344,7 +344,7 @@ export default async function PublicSeasonRoster({
                 <tr>
                   {/* Driver first so the sticky-first-column freeze
                       pins the driver name as you scroll right. */}
-                  <th data-col="name" className="px-4 py-3">Driver</th>
+                  <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
                   <th data-col="num" className="px-4 py-3">#</th>
                   <th data-col="irid" className="px-4 py-3">iRacing ID</th>
                   <th data-col="team" className="px-4 py-3">Team</th>
@@ -401,7 +401,7 @@ export default async function PublicSeasonRoster({
                     data-r-invaccepted={r.iracingInvitationAccepted === "YES" ? "Accepted" : r.iracingInvitationAccepted === "NO" ? "Not accepted" : "Pending"}
                     className="border-t border-zinc-800 hover:bg-zinc-900"
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 driver-col">
                       <div className="font-medium">
                         {r.user.iracingMemberId ? (
                           <Link

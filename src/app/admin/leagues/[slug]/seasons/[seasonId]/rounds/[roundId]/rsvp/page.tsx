@@ -256,7 +256,7 @@ export default async function AdminRoundRsvp({
           <table className="w-full min-w-[760px] text-sm tabular-nums">
             <thead className="bg-zinc-900 text-xs uppercase tracking-wider text-zinc-400">
               <tr>
-                <th className="px-3 py-2 text-left">Driver</th>
+                <th className="px-3 py-2 text-left driver-col">Driver</th>
                 <th className="px-3 py-2 text-left">Status</th>
                 <th className="px-3 py-2 text-left">Source</th>
                 <th className="px-3 py-2 text-left">Responded</th>
@@ -266,7 +266,7 @@ export default async function AdminRoundRsvp({
             <tbody>
               {rows.map((r) => (
                 <tr key={r.registrationId} className="border-t border-zinc-800 hover:bg-zinc-900/60">
-                  <td className="px-3 py-2">{r.displayName}</td>
+                  <td className="px-3 py-2 driver-col">{r.displayName}</td>
                   <td className="px-3 py-2">
                     {r.status ? STATUS_LABEL[r.status] : <span className="text-zinc-500">— silent —</span>}
                   </td>

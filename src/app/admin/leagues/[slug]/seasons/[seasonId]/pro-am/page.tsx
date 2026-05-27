@@ -206,7 +206,7 @@ export default async function ProAmCalculator({
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
                   <th className="px-3 py-2">Rank</th>
-                  <th className="px-3 py-2">Driver</th>
+                  <th className="px-3 py-2 driver-col">Driver</th>
                   <th className="px-3 py-2">iRacing ID</th>
                   <th className="px-3 py-2">Starts</th>
                   <th className="px-3 py-2">Raw avg</th>
@@ -233,7 +233,7 @@ export default async function ProAmCalculator({
                       className="border-t border-zinc-800 hover:bg-zinc-900"
                     >
                       <td className="px-3 py-2 text-zinc-400">{i + 1}</td>
-                      <td className="px-3 py-2 font-medium">
+                      <td className="px-3 py-2 font-medium driver-col">
                         {r.firstName} {r.lastName}
                       </td>
                       <td className="px-3 py-2 text-zinc-400">
@@ -281,7 +281,7 @@ export default async function ProAmCalculator({
             <table className="w-full text-sm">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
-                  <th className="px-3 py-2">Driver</th>
+                  <th className="px-3 py-2 driver-col">Driver</th>
                   <th className="px-3 py-2">iRacing ID</th>
                   <th className="px-3 py-2">Starts</th>
                   <th className="px-3 py-2">Raw avg</th>
@@ -295,7 +295,7 @@ export default async function ProAmCalculator({
                     key={r.regId}
                     className="border-t border-zinc-800 hover:bg-zinc-900"
                   >
-                    <td className="px-3 py-2 font-medium">
+                    <td className="px-3 py-2 font-medium driver-col">
                       {r.firstName} {r.lastName}
                     </td>
                     <td className="px-3 py-2 text-zinc-400">

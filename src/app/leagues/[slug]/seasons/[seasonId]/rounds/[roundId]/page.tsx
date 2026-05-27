@@ -712,7 +712,7 @@ export default async function PublicRoundResults({
             <table className="w-full text-sm">
               <thead className="bg-zinc-900 text-left text-zinc-400">
                 <tr>
-                  <th className="px-3 py-2">Team</th>
+                  <th className="px-3 py-2 driver-col">Team</th>
                   {isMulticlass && <th className="px-3 py-2">Class</th>}
                   <th className="px-3 py-2 text-right">Team incidents</th>
                   <th className="px-3 py-2 text-right">FPR pts</th>
@@ -721,7 +721,7 @@ export default async function PublicRoundResults({
               <tbody>
                 {round.fprAwards.map((a) => (
                   <tr key={a.id} className="border-t border-zinc-800">
-                    <td className="px-3 py-2 font-medium">{a.team.name}</td>
+                    <td className="px-3 py-2 font-medium driver-col">{a.team.name}</td>
                     {isMulticlass && (
                       <td className="px-3 py-2 text-zinc-400">
                         {a.carClass?.name ?? "—"}
@@ -804,7 +804,7 @@ function ResultsTable({
             <th className="px-3 py-2">Pos</th>
             <th className="px-3 py-2">Grid</th>
             <th className="px-3 py-2">#</th>
-            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2 driver-col">Driver</th>
             <th className="px-3 py-2">Team</th>
             {isMulticlass && <th className="px-3 py-2">Class</th>}
             <th className="px-3 py-2 text-right">Laps</th>
@@ -848,7 +848,7 @@ function ResultsTable({
                   {r.registration.startNumber ?? "—"}
                 </td>
                 <td
-                  className={`px-3 py-2 ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                  className={`px-3 py-2 driver-col ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
                   <CountryFlag code={r.registration.user.countryCode} />
                   {r.registration.user.firstName}{" "}
@@ -929,7 +929,7 @@ function CombinedMultiRaceTable({
           <tr>
             <th className="px-3 py-2">Pos</th>
             <th className="px-3 py-2">#</th>
-            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2 driver-col">Driver</th>
             <th className="px-3 py-2">Team</th>
             {isMulticlass && <th className="px-3 py-2">Class</th>}
             {raceNumbers.map((n) => (
@@ -961,7 +961,7 @@ function CombinedMultiRaceTable({
                   {sample.registration.startNumber ?? "—"}
                 </td>
                 <td
-                  className={`px-3 py-2 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                  className={`px-3 py-2 driver-col ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
                   <CountryFlag code={sample.registration.user.countryCode} />
                   {sample.registration.user.firstName}{" "}
@@ -1076,7 +1076,7 @@ function TeamView({
           <table className="w-full text-sm">
             <thead className="bg-zinc-950 text-left text-xs text-zinc-500">
               <tr>
-                <th className="px-3 py-1.5">Driver</th>
+                <th className="px-3 py-1.5 driver-col">Driver</th>
                 {isMulticlass && <th className="px-3 py-1.5">Class</th>}
                 <th className="px-3 py-1.5 text-right">Inc</th>
                 <th className="px-3 py-1.5 text-right">Race pts</th>
@@ -1096,7 +1096,7 @@ function TeamView({
                     className="border-t border-zinc-800"
                   >
                     <td
-                      className={`px-3 py-1.5 ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                      className={`px-3 py-1.5 driver-col ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                     >
                       <CountryFlag code={sample.registration.user.countryCode} />
                       {sample.registration.user.firstName}{" "}
@@ -1197,7 +1197,7 @@ function QualifyingTable({
           <tr>
             <th className="px-3 py-2">Pos</th>
             <th className="px-3 py-2">#</th>
-            <th className="px-3 py-2">Driver</th>
+            <th className="px-3 py-2 driver-col">Driver</th>
             <th className="px-3 py-2">Team</th>
             {isMulticlass && <th className="px-3 py-2">Class</th>}
             <th className="px-3 py-2 text-right">Quali time</th>
@@ -1222,7 +1222,7 @@ function QualifyingTable({
                   {d.startNumber ?? "—"}
                 </td>
                 <td
-                  className={`px-3 py-2 ${d.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                  className={`px-3 py-2 driver-col ${d.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
                   <CountryFlag code={d.countryCode} />
                   {d.firstName} {d.lastName}
@@ -1404,7 +1404,7 @@ function ByCarSection({
                 <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
                   <tr>
                     <th className="px-3 py-2 w-10">Pos</th>
-                    <th className="px-3 py-2">Driver</th>
+                    <th className="px-3 py-2 driver-col">Driver</th>
                     {isMultiRace ? (
                       <>
                         <th className="px-3 py-2 text-center">R1</th>
@@ -1432,7 +1432,7 @@ function ByCarSection({
                         className="border-t border-zinc-800"
                       >
                         <td className="px-3 py-2 font-medium">{i + 1}</td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 driver-col">
                           <span className="inline-flex items-center gap-2">
                             {d.head.startNumber != null && (
                               <span className="text-xs text-zinc-500">
@@ -1758,7 +1758,7 @@ function TeamTableHead() {
     <thead className="bg-zinc-900 text-left text-zinc-400">
       <tr>
         <th className="px-3 py-2">Pos.</th>
-        <th className="px-3 py-2">Team</th>
+        <th className="px-3 py-2 driver-col">Team</th>
         <th className="px-3 py-2 text-right">Qualy Lap</th>
         <th className="px-3 py-2 text-right">Fastest Lap</th>
         <th className="px-3 py-2 text-right">Avg. Lap</th>
@@ -1819,7 +1819,7 @@ function TeamRowCells({
   return (
     <>
       <td className="px-3 py-2 font-medium tabular-nums">{pos}.</td>
-      <td className="px-3 py-2 font-medium">
+      <td className="px-3 py-2 font-medium driver-col">
         {s.teamName}
         {s.finishStatus !== "CLASSIFIED" && (
           <span className="ml-2 rounded bg-red-900/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-red-200">
@@ -1990,7 +1990,7 @@ function RoundTeamQualiTable({
         <thead className="bg-zinc-900 text-left text-zinc-400">
           <tr>
             <th className="px-3 py-2">Pos.</th>
-            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2 driver-col">Team</th>
             <th className="px-3 py-2 text-right">Qualy Lap</th>
             <th className="px-3 py-2 text-right">Interval</th>
           </tr>
@@ -2009,7 +2009,7 @@ function RoundTeamQualiTable({
                 <td className="px-3 py-2 font-medium tabular-nums">
                   {s.bestQualiMs != null ? `${i + 1}.` : "—"}
                 </td>
-                <td className="px-3 py-2 font-medium">{s.teamName}</td>
+                <td className="px-3 py-2 font-medium driver-col">{s.teamName}</td>
                 <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
                   {formatMsToTime(s.bestQualiMs) || "—"}
                 </td>

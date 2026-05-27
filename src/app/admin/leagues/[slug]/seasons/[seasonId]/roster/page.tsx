@@ -131,7 +131,7 @@ export default async function RosterPage({
                 <tr>
                   <th className="px-4 py-3">Registered</th>
                   <th className="px-4 py-3">Team</th>
-                  <th className="px-4 py-3">Driver</th>
+                  <th className="px-4 py-3 driver-col">Driver</th>
                   <th className="px-4 py-3">Class</th>
                   <th className="px-4 py-3">Car</th>
                   <th className="px-4 py-3">iRacing ID</th>
@@ -220,7 +220,7 @@ export default async function RosterPage({
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 driver-col">
                         <div className="font-medium">
                           {reg.user.iracingMemberId ? (
                             <Link
@@ -409,7 +409,7 @@ export default async function RosterPage({
         <table id="rosterTable" className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
-              <th data-col="name" className="px-4 py-3">Driver</th>
+              <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
               <th data-col="irid" className="px-2 py-3 whitespace-nowrap">iR ID</th>
               <th data-col="num" className="px-2 py-3">#</th>
               <th data-col="team" className="px-3 py-3">Team</th>
@@ -474,7 +474,7 @@ export default async function RosterPage({
                 data-email={r.user.email ?? ""}
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 driver-col">
                   <div className="font-medium">
                     {r.user.iracingMemberId ? (
                       <Link

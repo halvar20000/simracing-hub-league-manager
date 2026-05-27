@@ -148,7 +148,7 @@ export default async function PenaltyPoolPublicPage({
         <table className="min-w-full text-sm">
           <thead className="bg-zinc-900 text-xs uppercase tracking-wider text-zinc-400">
             <tr>
-              <th className="px-3 py-2 text-left">Driver</th>
+              <th className="px-3 py-2 text-left driver-col">Driver</th>
               {rounds.map((r) => (
                 <th
                   key={r.id}
@@ -169,7 +169,7 @@ export default async function PenaltyPoolPublicPage({
                 key={i}
                 className="border-t border-zinc-800"
               >
-                <td className="px-3 py-2 whitespace-nowrap">
+                <td className="px-3 py-2 whitespace-nowrap driver-col">
                   {d.startNumber != null && (
                     <span className="text-zinc-500 text-xs mr-2">
                       #{d.startNumber}

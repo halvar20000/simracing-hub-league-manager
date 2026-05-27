@@ -38,3 +38,21 @@ body {
 .tag-red    { background: rgba(230, 57, 70, 0.15); color: var(--accent-red); }
 .tag-yellow { background: rgba(255, 214, 10, 0.15); color: var(--accent-yellow); }
 .tag-zinc   { background: rgba(160, 160, 170, 0.12); color: var(--text-secondary); }
+
+/*
+ * Driver/Team column accent bar.
+ *
+ * Apply `driver-col` to the <th> AND every <td> in the Driver (or Team, in
+ * team-event tables) column of any results / standings / roster / penalty
+ * pool table. It draws a 3px orange bar on the right edge of the cell that
+ * visually anchors the driver/team identity column and separates it from
+ * the numeric columns to its right.
+ *
+ * Implementation note: uses an inset box-shadow rather than border-right
+ * so it does not affect cell width or shift layout. Renders on top of the
+ * cell background (including the row's :hover state) without being covered
+ * by sticky-column z-index stacking.
+ */
+.driver-col {
+  box-shadow: inset -3px 0 0 0 var(--accent-orange);
+}
