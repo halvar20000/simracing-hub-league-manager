@@ -199,10 +199,18 @@ export default async function StandingsPage({
         <section>
         <h2 className="mb-1 text-lg font-semibold">Combined Driver Championship</h2>
         <p className="mb-3 text-xs text-zinc-500">
-          Race points − penalties. Participation points are not included in this view.
+          {season.scoringSystem.participationInCombined
+            ? "Race points + participation − penalties."
+            : "Race points − penalties. Participation points are not included in this view."}
         </p>
         {view === "races" ? (
-          <RaceByRaceTable rows={combined} kind="combined" />
+          <RaceByRaceTable
+            rows={combined}
+            kind="combined"
+            participationInCombined={
+              season.scoringSystem.participationInCombined ?? true
+            }
+          />
         ) : (
           <DriversTable
             rows={combined}
@@ -219,7 +227,13 @@ export default async function StandingsPage({
         <section>
           <h2 className="mb-1 text-lg font-semibold">Pro</h2>
           {view === "races" ? (
-            <RaceByRaceTable rows={proDrivers} kind="class" />
+            <RaceByRaceTable
+              rows={proDrivers}
+              kind="class"
+              participationInCombined={
+                season.scoringSystem.participationInCombined ?? true
+              }
+            />
           ) : (
             <DriversTable rows={proDrivers} previousRows={previousPro} kind="class" showTeam />
           )}
@@ -229,7 +243,13 @@ export default async function StandingsPage({
         <section>
           <h2 className="mb-1 text-lg font-semibold">Am</h2>
           {view === "races" ? (
-            <RaceByRaceTable rows={amDrivers} kind="class" />
+            <RaceByRaceTable
+              rows={amDrivers}
+              kind="class"
+              participationInCombined={
+                season.scoringSystem.participationInCombined ?? true
+              }
+            />
           ) : (
             <DriversTable rows={amDrivers} previousRows={previousAm} kind="class" showTeam />
           )}
@@ -614,13 +634,23 @@ function DriversTable({
 function RaceByRaceTable({
   rows,
   kind,
+  participationInCombined,
 }: {
   rows: DriverStanding[];
   kind: StandingsKind;
+  /** Mirrors ScoringSystem.participationInCombined. Drives whether the
+   * per-round Bonus (participation) sub-column renders in the Combined
+   * view. The Pro/Am ("class") view always renders it because
+   * classTotal in standings.ts always includes participation. */
+  participationInCombined: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyState icon={<ChartIcon />} title="No standings to show yet" description="Standings will appear after the first round results are imported." />;
   }
+  // Combined view: hide the Bonus column when participation doesn't count
+  // toward combinedTotal (e.g. GT3 WCT). Pro/Am view: always show it.
+  const showParticipationCol = kind === "class" || participationInCombined;
+  const subColsPerRound = showParticipationCol ? 4 : 3;
   const rounds = rows[0].roundPoints;
   const sorted = [...rows].sort((a, b) => {
     const at = kind === "combined" ? a.combinedTotal : a.classTotal;
@@ -649,7 +679,7 @@ function RaceByRaceTable({
             {rounds.map((r) => (
               <th
                 key={r.roundId}
-                colSpan={4}
+                colSpan={subColsPerRound}
                 className="border-l border-zinc-800 bg-zinc-900 px-2 py-2 text-center whitespace-nowrap"
               >
                 <div className="flex flex-col items-center leading-tight">
@@ -666,7 +696,9 @@ function RaceByRaceTable({
               <Fragment key={r.roundId}>
                 <th className="border-l border-zinc-800 bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-400">Total</th>
                 <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">R</th>
-                <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">B</th>
+                {showParticipationCol && (
+                  <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">B</th>
+                )}
                 <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">P</th>
               </Fragment>
             ))}
@@ -699,9 +731,11 @@ function RaceByRaceTable({
                           ? (kind === "combined" ? rp.rawPoints : rp.classRawPoints)
                           : dash}
                       </td>
-                      <td className={`px-1.5 py-1.5 text-right tabular-nums text-emerald-400${rp.dropped ? " line-through opacity-60" : ""}`}>
-                        {rp.hasResult && rp.participationPoints !== 0 ? rp.participationPoints : dash}
-                      </td>
+                      {showParticipationCol && (
+                        <td className={`px-1.5 py-1.5 text-right tabular-nums text-emerald-400${rp.dropped ? " line-through opacity-60" : ""}`}>
+                          {rp.hasResult && rp.participationPoints !== 0 ? rp.participationPoints : dash}
+                        </td>
+                      )}
                       <td className="px-1.5 py-1.5 text-right tabular-nums text-red-400">
                         {rp.hasResult && rp.penaltyPoints !== 0 ? `−${rp.penaltyPoints}` : dash}
                       </td>
