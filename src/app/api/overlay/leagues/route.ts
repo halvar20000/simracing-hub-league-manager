@@ -42,3 +42,19 @@ export async function GET() {
       },
     },
   });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      generatedAt: new Date().toISOString(),
+      leagues: leagues
+        .filter((l) => l.seasons.length > 0)
+        .map((l) => ({
+          slug: l.slug,
+          name: l.name,
+          seasons: l.seasons,
+        })),
+    },
+    { headers: CORS_HEADERS }
+  );
+}
