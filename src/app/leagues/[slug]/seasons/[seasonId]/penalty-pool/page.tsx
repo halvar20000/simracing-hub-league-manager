@@ -16,7 +16,7 @@ export async function generateMetadata({
   });
   if (!season) return {};
   return pageMetadata({
-    title: `Penalty pool — ${season.league.name} ${season.name} ${season.year}`,
+    title: `Penalty Pool — ${season.league.name} ${season.name} ${season.year}`,
     description: `Penalty points incurred per round, auto-forgiveness and current pool balance for every driver in ${season.league.name} ${season.name} ${season.year}.`,
     url: `/leagues/${slug}/seasons/${seasonId}/penalty-pool`,
   });
@@ -147,7 +147,7 @@ export default async function PenaltyPoolPublicPage({
           ← {season.league.name} {season.name} {season.year}
         </Link>
         <h1 className="mt-2 text-2xl font-bold">
-          {isNoShowOnly ? "No-show register" : "Penalty pool"}
+          Penalty Pool
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
           {isNoShowOnly

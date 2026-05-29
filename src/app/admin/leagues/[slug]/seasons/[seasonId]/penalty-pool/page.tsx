@@ -149,7 +149,7 @@ export default async function PenaltyPoolAdminPage({
           ← {season.name} {season.year}
         </Link>
         <h1 className="mt-2 text-2xl font-bold">
-          {isNoShowOnly ? "No-show register" : "Penalty pool"}
+          Penalty Pool
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
           {isNoShowOnly

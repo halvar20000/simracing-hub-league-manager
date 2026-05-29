@@ -165,9 +165,7 @@ export default async function AdminSeasonDetail({
             href={`/admin/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
             className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
           >
-            {season.scoringSystem.penaltyPoolMode === "NO_SHOW_ONLY"
-              ? "No-show register"
-              : "Penalty pool"}
+            Penalty Pool
             {pendingPenaltyCount > 0 && (
               <span className="ml-1.5 inline-block min-w-[1.25rem] rounded-full bg-amber-500 px-1.5 text-center text-[10px] font-bold leading-5 text-zinc-950">
                 {pendingPenaltyCount}

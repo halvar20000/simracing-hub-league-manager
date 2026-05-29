@@ -148,9 +148,7 @@ export default async function StandingsPage({
             href={`/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
             className="inline-block rounded bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-600"
           >
-            {season.scoringSystem.penaltyPoolMode === "NO_SHOW_ONLY"
-              ? "View no-show register →"
-              : "View penalty pool →"}
+            View Penalty Pool →
           </Link>
         </div>
       )}

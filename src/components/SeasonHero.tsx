@@ -32,9 +32,9 @@ export type SeasonHeroProps = {
   } | null;
   registrationOpen: boolean;
   hasResults: boolean;
-  /** Scoring system penalty pool mode — drives whether the "Penalty pool" /
-   * "No-show register" CTA renders. Independent from hasResults so the button
-   * is visible from day one of a season. */
+  /** Scoring system penalty pool mode — drives whether the "Penalty Pool"
+   * CTA renders. Independent from hasResults so the button is visible from
+   * day one of a season. */
   penaltyPoolMode?: "OFF" | "FULL" | "NO_SHOW_ONLY";
   classLeaders?: Array<{
     shortCode: string;
@@ -219,9 +219,7 @@ export function SeasonHero(p: SeasonHeroProps) {
               href={`/leagues/${p.slug}/seasons/${p.seasonId}/penalty-pool`}
               className="rounded border border-cyan-600 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-900/30"
             >
-              {p.penaltyPoolMode === "NO_SHOW_ONLY"
-                ? "No-show register →"
-                : "Penalty pool →"}
+              Penalty Pool →
             </Link>
           )}
           {p.registrationOpen && (
