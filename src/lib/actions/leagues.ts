@@ -156,6 +156,14 @@ export async function updateLeague(id: string, formData: FormData) {
     String(formData.get("discordStreamChannelId") ?? "").trim() || null;
   const twitchUrl = String(formData.get("twitchUrl") ?? "").trim() || null;
 
+  // Discord results-post + new-member welcome bot config.
+  const discordResultsChannelId =
+    String(formData.get("discordResultsChannelId") ?? "").trim() || null;
+  const discordWelcomeChannelId =
+    String(formData.get("discordWelcomeChannelId") ?? "").trim() || null;
+  const discordWelcomeMessage =
+    String(formData.get("discordWelcomeMessage") ?? "").trim() || null;
+
   // Garage 61 team URL (optional). Validate that it points at garage61.net
   // so a typo doesn't go silently into the DB.
   const garage61TeamUrlRaw = String(
@@ -235,6 +243,9 @@ export async function updateLeague(id: string, formData: FormData) {
       discordEmbedColor,
       discordStreamChannelId,
       twitchUrl,
+      discordResultsChannelId,
+      discordWelcomeChannelId,
+      discordWelcomeMessage,
       garage61TeamUrl,
       rsvpDaysBefore,
       rsvpMode,

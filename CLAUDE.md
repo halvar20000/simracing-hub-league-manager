@@ -165,6 +165,12 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - Refresh: daily cron `/api/cron/discord-stats` + `.github/workflows/cron-discord-stats.yml` (04:30 UTC); manual "Refresh" button on the page → `refreshDiscordStatsAction`. The page reads the latest snapshot only.
 - Trend chart: `DiscordMonthlyActivity` (one row per `YYYY-MM`) holds per-month message + active-member counts. `buildMonthlyActivity(monthsBack)` scans far-back history; the one-time backfill `scripts/lm_backfill_discord_activity.ts` populates ~24 months. Past months are immutable, so `saveDiscordStatsSnapshot` rewrites only the current month on each refresh. The page renders the last 24 months as an SVG chart (message bars + active-members line).
 
+## Discord results post + new-member welcome
+
+- After-race results: `src/lib/notify-results.ts:postRoundResults(roundId)` posts a podium embed (+ links to the full classification and standings) to `League.discordResultsChannelId`. Triggered from `updateRound` (via `after()`) when a round flips to `COMPLETED`; idempotent through `Round.resultsPostedAt`; a no-op when the channel is unset or results aren't imported yet, so it retries on the next round save.
+- New-member welcome: the REST bot has no gateway, so a daily cron (`/api/cron/discord-welcome` + `.github/workflows/cron-discord-welcome.yml`, 16:00 UTC) runs `src/lib/notify-welcome.ts:runWelcome()` — it lists guild members, batches everyone who joined since the `League.discordWelcomeAfter` watermark, and posts ONE message to `League.discordWelcomeChannelId` naming them (no @mention; `allowed_mentions.parse=[]`). The first run just sets the watermark so existing members aren't bulk-welcomed. `League.discordWelcomeMessage` is an optional template (`{names}` placeholder).
+- Both features are off until their channel IDs are set on the admin league-edit page.
+
 ## Logos
 
 - `public/logos/site-logo.png` — top nav logo (CAS LEAGUE SCORING SYSTEM)
@@ -195,6 +201,13 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - **Prisma in API routes** needs `export const runtime = "nodejs"` (not edge).
 - **Multi-step user merges** must clear unique-constrained fields on the dupe before copying to the survivor; see the auth section.
 - **Server actions used as `<form action>`** must return `void | Promise<void>`.
+
+## Public overlay API (consumed by iRacing OBS overlay)
+
+- `GET /api/overlay/standings?league=<slug>[&season=<id>]` — pre-race championship for a league, plus the scoring tables and per-driver `User.iracingMemberId` for telemetry matching. If `season` is omitted, picks the most recent `ACTIVE`/`OPEN_REGISTRATION` season. Reuses `computeDriverStandings`.
+- `GET /api/overlay/leagues` — list of leagues + their runnable seasons; used by the overlay's config picker.
+- **Public, CORS-open** (`Access-Control-Allow-Origin: *`), edge-cached briefly. No auth — these are read-only and expose only already-public standings data, never iRating/team/email/penalties beyond what the public site shows.
+- Consumed by `iracing_championship.py` in the iRacing-overlays project (`~/Nextcloud/iRacing/python/files/`).
 
 ## Editing this file
 

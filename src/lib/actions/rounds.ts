@@ -2,10 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
 import { applyNoRsvpNoShowPenalties } from "@/lib/no-rsvp-penalty";
+import { postRoundResults } from "@/lib/notify-results";
 import type { RoundStatus } from "@prisma/client";
 
 export async function createRound(
@@ -105,6 +107,17 @@ export async function updateRound(
   // Penalty pool: recompute auto-forgiveness when a round is marked complete
   if (status === "COMPLETED") {
     await recomputePenaltyPoolForSeason(seasonId);
+    // Post the results to Discord after the response is sent. Idempotent
+    // (Round.resultsPostedAt) and a no-op when the league has no results
+    // channel or the round has no results imported yet — so it naturally
+    // retries on the next save until both are true.
+    after(async () => {
+      try {
+        await postRoundResults(roundId);
+      } catch {
+        /* never block a round save on a Discord hiccup */
+      }
+    });
   }
 
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);

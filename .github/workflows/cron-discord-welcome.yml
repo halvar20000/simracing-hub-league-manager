@@ -1,0 +1,26 @@
+name: Welcome new Discord members
+
+on:
+  schedule:
+    # Once a day at 16:00 UTC — batches up everyone who joined that day.
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call cron endpoint
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS --max-time 90 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            https://league.simracing-hub.com/api/cron/discord-welcome)
+          echo "$response"
+          status=$(echo "$response" | tail -1 | sed 's/HTTP_STATUS://')
+          if [ "$status" != "200" ]; then
+            echo "::error::Endpoint returned HTTP $status"
+            exit 1
+          fi

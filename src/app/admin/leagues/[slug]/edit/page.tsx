@@ -216,6 +216,43 @@ export default async function EditLeaguePage({
                 show anything.
               </span>
             </label>
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Results channel ID — auto-post after each race (optional)
+              </span>
+              <input
+                name="discordResultsChannelId"
+                type="text"
+                defaultValue={league.discordResultsChannelId ?? ""}
+                placeholder="e.g. 234567890123456789"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+              />
+            </label>
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Welcome channel ID — daily new-member greeting (optional)
+              </span>
+              <input
+                name="discordWelcomeChannelId"
+                type="text"
+                defaultValue={league.discordWelcomeChannelId ?? ""}
+                placeholder="e.g. 234567890123456789"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+              />
+            </label>
+            <label className="block w-full">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Welcome message (optional) — write {"{names}"} where the new
+                members&apos; names should appear; leave blank for a default
+              </span>
+              <textarea
+                name="discordWelcomeMessage"
+                rows={3}
+                defaultValue={league.discordWelcomeMessage ?? ""}
+                placeholder="Welcome to the CAS community, {names}! …"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
             <label className="block">
               <span className="mb-1 block text-xs text-zinc-400">
                 Post N days before

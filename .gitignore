@@ -48,3 +48,23 @@ next-env.d.ts
 .env.production
 .env.*.local
 .env*.local
+
+# Personal working files (see CLAUDE.md "Scripts directory"):
+# outputs/ holds replayable shell scripts the user runs on their Mac;
+# scripts/lm_* are one-off TS helpers from past Claude sessions.
+# Both are regenerable and don't need version control.
+/outputs/
+/scripts/lm_*
+
+# Personal CAS league assets (posters, roster CSVs, recruitment kits, etc.)
+/CAS_Leagues/
+
+# Loose root-level docs/dumps not part of the codebase
+/*.docx
+
+# SSH keys — never commit. *.pem above already covers PEM, but OpenSSH
+# keys come without an extension or as .pub, so spell those out.
+unraid
+unraid.pub
+id_ed25519*
+id_rsa*
