@@ -178,6 +178,30 @@ export default async function CalendarPage({
           Every planned race across CAS leagues. Tap a chip to open the round
           page.
         </p>
+
+        {/* Subscribe / download CTAs.
+            • Subscribe uses webcal:// so Apple Calendar, Outlook desktop, and
+              Google Calendar (when imported as URL) all auto-refresh on a
+              schedule — no manual re-import when rounds get added.
+            • Download grabs a one-shot .ics for users who prefer a static
+              import. */}
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <a
+            href="webcal://league.simracing-hub.com/api/calendar"
+            className="rounded border border-cyan-600 px-3 py-1.5 font-medium text-cyan-300 hover:bg-cyan-900/30"
+            title="Subscribe in Apple Calendar / Outlook / Google Calendar — auto-refreshes"
+          >
+            Subscribe (Outlook / Google / Apple) →
+          </a>
+          <a
+            href="/api/calendar"
+            download="cas-calendar.ics"
+            className="rounded border border-zinc-700 px-3 py-1.5 font-medium text-zinc-300 hover:bg-zinc-800"
+            title="One-shot .ics download — won't refresh automatically"
+          >
+            Download .ics
+          </a>
+        </div>
       </div>
 
       {/* Controls */}
