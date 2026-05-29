@@ -32,6 +32,10 @@ export type SeasonHeroProps = {
   } | null;
   registrationOpen: boolean;
   hasResults: boolean;
+  /** Scoring system penalty pool mode — drives whether the "Penalty pool" /
+   * "No-show register" CTA renders. Independent from hasResults so the button
+   * is visible from day one of a season. */
+  penaltyPoolMode?: "OFF" | "FULL" | "NO_SHOW_ONLY";
   classLeaders?: Array<{
     shortCode: string;
     className: string;
@@ -202,12 +206,22 @@ export function SeasonHero(p: SeasonHeroProps) {
 
         {/* CTAs */}
         <div className="mt-5 flex flex-wrap gap-1.5">
-          {p.hasResults && (
+          {/* Always show Standings — the standings page renders an empty
+              state before the first results, which is useful information. */}
+          <Link
+            href={`/leagues/${p.slug}/seasons/${p.seasonId}/standings`}
+            className="rounded bg-[#ff6b35] px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-[#ff8550]"
+          >
+            Standings →
+          </Link>
+          {p.penaltyPoolMode && p.penaltyPoolMode !== "OFF" && (
             <Link
-              href={`/leagues/${p.slug}/seasons/${p.seasonId}/standings`}
-              className="rounded bg-[#ff6b35] px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-[#ff8550]"
+              href={`/leagues/${p.slug}/seasons/${p.seasonId}/penalty-pool`}
+              className="rounded border border-cyan-600 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-900/30"
             >
-              Standings →
+              {p.penaltyPoolMode === "NO_SHOW_ONLY"
+                ? "No-show register →"
+                : "Penalty pool →"}
             </Link>
           )}
           {p.registrationOpen && (

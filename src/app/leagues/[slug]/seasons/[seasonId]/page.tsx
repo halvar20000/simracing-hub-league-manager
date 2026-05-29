@@ -159,6 +159,7 @@ export default async function PublicSeasonDetail({
         }
         registrationOpen={registrationOpen}
         hasResults={hasResults}
+        penaltyPoolMode={season.scoringSystem.penaltyPoolMode}
       />
 
       {season.league.garage61TeamUrl && (
