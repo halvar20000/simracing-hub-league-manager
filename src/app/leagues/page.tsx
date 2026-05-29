@@ -52,9 +52,15 @@ export default async function PublicLeaguesList() {
         <section className="rounded border border-amber-700/50 bg-amber-950/20 p-4">
           <div className="mb-2 flex items-center gap-2">
             <span className="text-base">⚑</span>
-            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-amber-200">
-              Open for incident reporting
-            </h2>
+            <Link
+              href="/reporting"
+              className="group font-display text-sm font-semibold uppercase tracking-widest text-amber-200 hover:text-amber-100"
+            >
+              <h2 className="inline">Open for incident reporting</h2>
+              <span className="ml-2 text-xs font-normal normal-case tracking-normal text-amber-300/70 group-hover:text-amber-200">
+                view all →
+              </span>
+            </Link>
           </div>
           <p className="mb-3 text-xs text-zinc-400">
             Recently-completed rounds. Click to file a steward report.
