@@ -114,7 +114,11 @@ export default async function CalendarPage({
   const rounds = await prisma.round.findMany({
     where: {
       startsAt: { gte: windowStart, lt: windowEnd },
-      season: { status: { in: ["ACTIVE", "OPEN_REGISTRATION"] } },
+      // DRAFT included intentionally — the calendar treats a published-but-
+      // not-yet-flipped season the same as an active one, so new seasons
+      // appear as soon as their rounds are scheduled. PAUSED stays excluded
+      // (that status is the explicit "hide everywhere" signal).
+      season: { status: { in: ["DRAFT", "OPEN_REGISTRATION", "ACTIVE"] } },
     },
     include: {
       season: {

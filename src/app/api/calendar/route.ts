@@ -85,7 +85,11 @@ export async function GET() {
   const rounds = await prisma.round.findMany({
     where: {
       startsAt: { gte: windowStart, lt: windowEnd },
-      season: { status: { in: ["ACTIVE", "OPEN_REGISTRATION"] } },
+      // DRAFT included intentionally — matches the /calendar page filter so
+      // subscribed clients see new seasons as soon as their rounds are
+      // scheduled. PAUSED stays excluded (that status hides a season
+      // everywhere).
+      season: { status: { in: ["DRAFT", "OPEN_REGISTRATION", "ACTIVE"] } },
     },
     include: {
       season: {
