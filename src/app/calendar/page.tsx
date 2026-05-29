@@ -31,6 +31,7 @@ type RoundRow = {
   leagueName: string;
   leagueSlug: string;
   leagueColor: string;
+  leagueLogoUrl: string | null;
 };
 
 const DEFAULT_LEAGUE_COLOR = "#ff6b35";
@@ -123,6 +124,7 @@ export default async function CalendarPage({
               name: true,
               slug: true,
               discordEmbedColor: true,
+              logoUrl: true,
             },
           },
         },
@@ -145,6 +147,7 @@ export default async function CalendarPage({
     leagueName: r.season.league.name,
     leagueSlug: r.season.league.slug,
     leagueColor: r.season.league.discordEmbedColor ?? DEFAULT_LEAGUE_COLOR,
+    leagueLogoUrl: r.season.league.logoUrl,
   }));
 
   // Bucket by YYYY-MM-DD for fast lookup in the month grid.
@@ -365,19 +368,41 @@ function MonthGrid({
 }
 
 function DayChip({ r }: { r: RoundRow }) {
+  // Two-line chip:
+  //   row 1: league logo (or short name fallback) + start time
+  //   row 2: track name, truncated
+  // The whole chip uses the league's discordEmbedColor as a soft background
+  // tint instead of saturating the cell — keeps the day readable when many
+  // races sit on the same day.
+  const tint = `${r.leagueColor}33`; // ~20% alpha hex shortcut
   return (
     <Link
       href={`/leagues/${r.leagueSlug}/seasons/${r.seasonId}/rounds/${r.id}`}
-      className="block truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-950 hover:opacity-90"
-      style={{ backgroundColor: r.leagueColor }}
-      title={`${r.leagueName} R${r.roundNumber} ${r.name} — ${r.track}${
+      className="block overflow-hidden rounded border border-transparent px-1.5 py-1 text-[10px] font-medium text-zinc-100 transition-colors hover:border-zinc-700"
+      style={{ backgroundColor: tint, borderLeftColor: r.leagueColor, borderLeftWidth: 2 }}
+      title={`${r.leagueName} · R${r.roundNumber} ${r.name} — ${r.track}${
         r.trackConfig ? ` (${r.trackConfig})` : ""
       } · ${fmtTime(r.startsAt)}`}
     >
-      <span className="mr-1 tabular-nums opacity-80">
-        {fmtTime(r.startsAt)}
+      <span className="flex items-center justify-between gap-1">
+        {r.leagueLogoUrl ? (
+          <img
+            src={r.leagueLogoUrl}
+            alt={r.leagueName}
+            className="h-3.5 w-auto max-w-[60%] object-contain"
+          />
+        ) : (
+          <span className="truncate text-[10px] font-semibold text-zinc-200">
+            {shortLeague(r.leagueName)}
+          </span>
+        )}
+        <span className="tabular-nums text-[10px] text-zinc-300">
+          {fmtTime(r.startsAt)}
+        </span>
       </span>
-      <span className="opacity-95">{shortLeague(r.leagueName)}</span>
+      <span className="mt-0.5 block truncate text-[10px] text-zinc-400">
+        {r.track}
+      </span>
     </Link>
   );
 }
@@ -463,9 +488,18 @@ function WeeksView({
                         <span className="w-14 text-xs tabular-nums text-zinc-300">
                           {fmtTime(r.startsAt)}
                         </span>
-                        <span className="text-xs font-medium text-zinc-200">
-                          {shortLeague(r.leagueName)}
-                        </span>
+                        {r.leagueLogoUrl ? (
+                          <img
+                            src={r.leagueLogoUrl}
+                            alt={r.leagueName}
+                            title={r.leagueName}
+                            className="h-5 w-auto max-w-[5rem] object-contain"
+                          />
+                        ) : (
+                          <span className="text-xs font-medium text-zinc-200">
+                            {shortLeague(r.leagueName)}
+                          </span>
+                        )}
                         <span className="text-xs text-zinc-500">·</span>
                         <span className="text-xs text-zinc-300">
                           R{r.roundNumber} {r.name}
@@ -529,8 +563,18 @@ function RecentlyCompleted({
                   month: "short",
                 })}
               </span>
+              {r.leagueLogoUrl ? (
+                <img
+                  src={r.leagueLogoUrl}
+                  alt={r.leagueName}
+                  title={r.leagueName}
+                  className="h-4 w-auto max-w-[4rem] object-contain"
+                />
+              ) : (
+                <span className="text-xs">{shortLeague(r.leagueName)}</span>
+              )}
               <span className="text-xs">
-                {shortLeague(r.leagueName)} · R{r.roundNumber} {r.name}
+                R{r.roundNumber} {r.name} — {r.track}
               </span>
             </Link>
           </li>
