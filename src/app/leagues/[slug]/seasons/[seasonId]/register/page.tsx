@@ -223,6 +223,16 @@ export default async function RegisterPage({
   const lockedCar = lockedCarId
     ? carClasses.flatMap((cc) => cc.cars).find((c) => c.id === lockedCarId) ?? null
     : null;
+  // Single-car convenience: when the season has exactly one car (e.g. SFL has
+  // only "Super Formula Lights") and the driver doesn't already have a car
+  // assigned, pre-select that single car in the dropdown so the field isn't
+  // visually empty. The select stays `required`, but the user just sees the
+  // right value already chosen.
+  const allCars = carClasses.flatMap((cc) => cc.cars);
+  const uniqueCarIds = new Set(allCars.map((c) => c.id));
+  const soloDefaultCarId =
+    uniqueCarIds.size === 1 ? [...uniqueCarIds][0] : null;
+  const carSelectDefault = existing?.carId ?? soloDefaultCarId ?? "";
   if (season.teamRegistration) {
     const createTeam = createTeamRegistration.bind(
       null,
@@ -662,7 +672,7 @@ export default async function RegisterPage({
               <select
                 name="carId"
                 required
-                defaultValue={existing?.carId ?? ""}
+                defaultValue={carSelectDefault}
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               >
                 <option value="">Select car…</option>
