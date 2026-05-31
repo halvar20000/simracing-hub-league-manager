@@ -80,11 +80,18 @@ export async function updateRegistration(
       ? { ...baseData, approvedById: admin.id, approvedAt: new Date() }
       : { ...baseData, approvedById: null, approvedAt: null };
 
-  // GT3 WCT hard cap: a team holds at most 3 drivers — this applies to admins
-  // too. Exclude this registration's own driver from the count so re-saving a
-  // driver who is already on the team is never blocked.
+  // Per-team driver cap — applies to admins too. Exclude this registration's
+  // own driver from the count so re-saving a driver who is already on the
+  // team is never blocked.
   if (teamId) {
-    const limit = teamSizeLimit(leagueSlug);
+    const season = await prisma.season.findUnique({
+      where: { id: seasonId },
+      select: { teamMaxDrivers: true },
+    });
+    const limit = teamSizeLimit({
+      leagueSlug,
+      teamMaxDrivers: season?.teamMaxDrivers ?? null,
+    });
     if (limit != null) {
       const reg = await prisma.registration.findUnique({
         where: { id: registrationId },

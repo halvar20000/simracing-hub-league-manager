@@ -117,10 +117,13 @@ export async function createRegistration(
     }
   }
 
-  // GT3 WCT: each team is capped at 3 drivers. The picker hides full teams,
-  // but re-check server-side in case the request was crafted. The current
-  // user is excluded so re-registering on their own team always works.
-  const teamLimit = teamSizeLimit(season.league.slug);
+  // Re-check the per-team cap server-side (the picker hides full teams, but
+  // a crafted POST could bypass it). The current user is excluded so
+  // re-registering on their own team always works.
+  const teamLimit = teamSizeLimit({
+    leagueSlug: season.league.slug,
+    teamMaxDrivers: season.teamMaxDrivers,
+  });
   if (teamLimit != null && teamId) {
     const occupied = await countTeamMembers(teamId, user.id);
     if (occupied >= teamLimit) {
@@ -545,6 +548,14 @@ export async function createTeamRegistration(
   });
 
   // ---------- teammates ----------
+  // Cap how many teammate rows we accept. The leader counts as one driver, so
+  // `maxTeammates = teamLimit - 1` when a cap is configured (IEC: cap 3 → 2
+  // teammate rows). Uncapped seasons keep the historical 4-row limit.
+  const teamLimit = teamSizeLimit({
+    leagueSlug: season.league.slug,
+    teamMaxDrivers: season.teamMaxDrivers,
+  });
+  const maxTeammates = teamLimit != null ? Math.max(0, teamLimit - 1) : 4;
   type TM = { name: string; iracingId: string; email: string; iRating: number };
   const teammates: TM[] = [];
   for (let i = 1; i <= 4; i++) {
@@ -569,6 +580,14 @@ export async function createTeamRegistration(
       errBack(`Teammate row ${i}: LMP2 requires iRating ${LMP2_MIN_IRATING} or higher (entered ${tIrating})`);
     }
     teammates.push({ name, iracingId, email, iRating: tIrating });
+  }
+
+  // Enforce the per-team driver cap server-side. The form only renders
+  // `maxTeammates` rows but a crafted POST could still submit more.
+  if (teammates.length > maxTeammates) {
+    errBack(
+      `This season caps teams at ${teamLimit} drivers (team leader + ${maxTeammates} teammates). You submitted ${teammates.length} teammates — remove the extra rows.`
+    );
   }
 
   const teammateNames: string[] = [];

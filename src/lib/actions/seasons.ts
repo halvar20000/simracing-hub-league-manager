@@ -121,6 +121,12 @@ export async function updateSeason(
       ? Math.max(1, Math.min(999, parseInt(maxDriversRaw, 10)))
       : null;
 
+  const teamMaxDriversRaw = String(formData.get("teamMaxDrivers") ?? "").trim();
+  const teamMaxDrivers =
+    teamMaxDriversRaw && /^\d+$/.test(teamMaxDriversRaw)
+      ? Math.max(1, Math.min(20, parseInt(teamMaxDriversRaw, 10)))
+      : null;
+
   // Season poster — used as the season-hero background and as the "Full
   // schedule poster" link. Stored as a URL (https or app-relative path).
   const scheduleImageUrl =
@@ -141,6 +147,7 @@ export async function updateSeason(
       teamScoringMode,
       teamScoringBestN,
       maxDrivers,
+      teamMaxDrivers,
       scheduleImageUrl,
     },
   });

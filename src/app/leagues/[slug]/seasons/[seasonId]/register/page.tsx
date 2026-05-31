@@ -10,7 +10,7 @@ import SoloIRatingValidator from "@/components/SoloIRatingValidator";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import TeamPicker from "@/components/TeamPicker";
-import { GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
+import { teamSizeLimit, GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 
 import type { Metadata } from "next";
@@ -241,6 +241,18 @@ export default async function RegisterPage({
       t ?? ""
     );
 
+    // Per-team driver cap from the season (e.g. IEC: 3 = leader + 2). When
+    // unset (uncapped), keep the historical 4-teammate row maximum.
+    const teamLimit = teamSizeLimit({
+      leagueSlug: season.league.slug,
+      teamMaxDrivers: season.teamMaxDrivers,
+    });
+    const maxTeammates = teamLimit != null ? Math.max(0, teamLimit - 1) : 4;
+    const teammateRowIndices = Array.from(
+      { length: maxTeammates },
+      (_, i) => i + 1
+    );
+
     // Pre-fill teammate rows from existing team if user is the leader.
     const leaderTeamId = activeRegistration?.teamId ?? null;
     const teammateRegs = leaderTeamId
@@ -271,9 +283,9 @@ export default async function RegisterPage({
               : "Register your team"}
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Multiclass team season. Add up to 4 teammates — they&apos;ll show
-            on the roster automatically. Each driver gets their own iRacing
-            invitation tracked.
+            Multiclass team season. Add up to {maxTeammates} teammates —
+            they&apos;ll show on the roster automatically. Each driver gets
+            their own iRacing invitation tracked.
           </p>
         </div>
 
@@ -342,12 +354,18 @@ export default async function RegisterPage({
 
           <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
             <legend className="px-2 text-sm text-zinc-300">
-              Register teammates (up to 4)
+              Register teammates (up to {maxTeammates})
             </legend>
             <p className="text-xs text-zinc-500">
               Provide each teammate&apos;s iRacing display name and ID. Email
               is optional but helps if they later want to log in to manage
               their own profile. Empty rows are ignored.
+              {teamLimit != null && (
+                <>
+                  {" "}This season caps teams at <strong>{teamLimit} drivers</strong> total
+                  (team leader + {maxTeammates} teammates).
+                </>
+              )}
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -360,7 +378,7 @@ export default async function RegisterPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {[1, 2, 3, 4].map((i) => {
+                  {teammateRowIndices.map((i) => {
                     const pre = tmRow(i - 1);
                     const preName = pre
                       ? `${pre.user.firstName ?? ""} ${pre.user.lastName ?? ""}`.trim()
@@ -576,7 +594,12 @@ export default async function RegisterPage({
         {isGt3Wct ? (
           <TeamPicker
             teams={teamsWithCounts}
-            limit={GT3_WCT_TEAM_LIMIT}
+            limit={
+              teamSizeLimit({
+                leagueSlug: season.league.slug,
+                teamMaxDrivers: season.teamMaxDrivers,
+              }) ?? GT3_WCT_TEAM_LIMIT
+            }
             currentTeamId={existing?.teamId ?? null}
           />
         ) : (

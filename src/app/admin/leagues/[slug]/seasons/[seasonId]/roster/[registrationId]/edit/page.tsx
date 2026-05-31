@@ -65,9 +65,12 @@ export default async function EditRegistrationPage({
     registrationId
   );
 
-  // GT3 WCT team cap — used to disable full teams in the dropdown. The
+  // Per-team driver cap — used to disable full teams in the dropdown. The
   // registration's own team is never counted as full (the driver may stay).
-  const teamLimit = teamSizeLimit(registration.season.league.slug);
+  const teamLimit = teamSizeLimit({
+    leagueSlug: registration.season.league.slug,
+    teamMaxDrivers: registration.season.teamMaxDrivers,
+  });
   const currentTeamId = registration.teamId;
   const teamCount = new Map(
     teamCountGroups.map((g) => [g.teamId, g._count] as const)

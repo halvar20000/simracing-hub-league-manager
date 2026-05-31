@@ -156,6 +156,28 @@ export default async function EditSeasonPage({
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
+            Maximum drivers per team (optional)
+          </span>
+          <input
+            name="teamMaxDrivers"
+            type="number"
+            min={1}
+            max={20}
+            step={1}
+            defaultValue={season.teamMaxDrivers ?? ""}
+            placeholder="e.g. 3 (team leader + 2 teammates)"
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            Hard cap on drivers per team — counts the team leader. IEC uses 3
+            (leader + 2 teammates). Leave blank for no per-team cap (CAS GT3
+            WCT seasons stay capped at 3 via the legacy slug rule even when
+            this field is blank).
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">
             Maximum drivers (grid cap, optional)
           </span>
           <input

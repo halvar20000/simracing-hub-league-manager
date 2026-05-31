@@ -200,6 +200,10 @@ model Season {
   registrationToken String? @unique
   teamRegistration  Boolean  @default(false)
   maxDrivers        Int?
+  /// Per-team driver cap (e.g. 3 for IEC: team leader + 2 teammates).
+  /// Null = uncapped at the season level; the league-slug shim in
+  /// src/lib/team-limit.ts still applies (currently GT3 WCT only).
+  teamMaxDrivers    Int?
 }
 
 model CarClass {
