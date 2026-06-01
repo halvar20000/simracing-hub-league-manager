@@ -69,8 +69,11 @@ export default async function RosterPage({
   // Driver Class (Pro/Am) — shown and editable inline for Pro/Am seasons so
   // admins can set each driver's tier straight from the roster.
   const showProAmColumn = season.proAmEnabled || proAmIsClass;
-  // Car Class — hidden when the car classes are merely the Pro/Am tiers.
-  const showClassColumn = !proAmIsClass;
+  // Car Class — hidden when (a) the car classes are merely the Pro/Am
+  // tiers (legacy GT3 WCT) or (b) the season is not multiclass at all
+  // (SFL Cup, PCCD, TSS GT4, Combined Cup) so every row would just be
+  // "—".
+  const showClassColumn = season.isMulticlass && !proAmIsClass;
   // GDC (Gentleman Driver Class) — opt-in parallel class, toggled per driver.
   const showGdcColumn = season.gdcEnabled;
 
