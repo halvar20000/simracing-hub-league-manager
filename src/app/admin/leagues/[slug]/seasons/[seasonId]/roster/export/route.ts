@@ -115,7 +115,7 @@ export async function GET(
       r.user.firstName ?? "",
       r.user.lastName ?? "",
       r.user.iracingMemberId ?? "",
-      r.iRating ?? "",
+      r.user.iratingSportsCar ?? r.iRating ?? "",
       r.user.countryCode ?? ""
     );
     row.push(r.carClass?.name ?? "");

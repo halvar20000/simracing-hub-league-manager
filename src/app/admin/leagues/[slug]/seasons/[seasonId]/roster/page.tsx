@@ -411,6 +411,7 @@ export default async function RosterPage({
             <tr>
               <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
               <th data-col="irid" className="px-2 py-3 whitespace-nowrap">iR ID</th>
+              <th data-col="irating" className="px-2 py-3 whitespace-nowrap">iRating</th>
               <th data-col="num" className="px-2 py-3">#</th>
               <th data-col="team" className="px-3 py-3">Team</th>
               {showClassColumn && (
@@ -443,6 +444,8 @@ export default async function RosterPage({
                   r.user.lastName,
                   r.user.name,
                   r.user.iracingMemberId,
+                  r.user.iratingSportsCar,
+                  r.iRating,
                   r.user.email,
                   r.startNumber,
                   r.team?.name,
@@ -461,6 +464,7 @@ export default async function RosterPage({
                 // the filter is still case-insensitive.
                 data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim()}
                 data-r-irid={r.user.iracingMemberId ?? ""}
+                data-r-irating={r.user.iratingSportsCar ?? r.iRating ?? ""}
                 data-r-num={r.startNumber ?? ""}
                 data-r-team={r.team?.name ?? ""}
                 data-r-class={r.carClass?.name ?? ""}
@@ -493,6 +497,9 @@ export default async function RosterPage({
                 </td>
                 <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">
                   {r.user.iracingMemberId ?? "—"}
+                </td>
+                <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">
+                  {r.user.iratingSportsCar ?? r.iRating ?? "—"}
                 </td>
                 <td className="px-2 py-3 text-zinc-400 tabular-nums">
                   {r.startNumber ?? "—"}
@@ -588,7 +595,7 @@ export default async function RosterPage({
             {registrations.length === 0 && (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={14}
                   className="px-4 py-6 text-center text-zinc-500"
                 >
                   No registrations yet.

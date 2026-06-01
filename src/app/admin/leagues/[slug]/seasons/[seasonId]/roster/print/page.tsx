@@ -139,7 +139,7 @@ export default async function PrintRosterPage({
 type Reg = Awaited<
   ReturnType<typeof prisma.registration.findMany>
 >[number] & {
-  user: { firstName: string | null; lastName: string | null; iracingMemberId: string | null; countryCode: string | null; email: string | null };
+  user: { firstName: string | null; lastName: string | null; iracingMemberId: string | null; iratingSportsCar: number | null; countryCode: string | null; email: string | null };
   team: { name: string } | null;
   carClass: { name: string } | null;
   car: { name: string } | null;
@@ -182,7 +182,7 @@ function RosterTable({
             <td className="py-1 pr-2 tabular-nums">
               {r.user.iracingMemberId ?? ""}
             </td>
-            <td className="py-1 pr-2 tabular-nums">{r.iRating ?? ""}</td>
+            <td className="py-1 pr-2 tabular-nums">{r.user.iratingSportsCar ?? r.iRating ?? ""}</td>
             <td className="py-1 pr-2">{r.carClass?.name ?? ""}</td>
             {showProAmColumn && (
               <td className="py-1 pr-2">{r.proAmClass ?? ""}</td>
