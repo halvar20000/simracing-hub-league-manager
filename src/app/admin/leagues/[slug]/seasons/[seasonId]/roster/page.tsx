@@ -142,7 +142,7 @@ export default async function RosterPage({
             <TableFilter tableId="teamRosterTable" placeholder="Filter by driver, team, car…" />
             <div className="overflow-x-auto rounded border border-zinc-800">
               <table id="teamRosterTable" className="w-full text-sm">
-              <thead className="bg-zinc-900 text-left text-zinc-400">
+              <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
                   <th className="px-4 py-3">Registered</th>
                   <th className="px-4 py-3">Team</th>
@@ -422,7 +422,7 @@ export default async function RosterPage({
 
       <div className="overflow-x-auto rounded border border-zinc-800">
         <table id="rosterTable" className="w-full text-sm">
-          <thead className="bg-zinc-900 text-left text-zinc-400">
+          <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
             <tr>
               <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
               <th data-col="irid" className="px-2 py-3 whitespace-nowrap">iR ID</th>

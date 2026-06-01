@@ -112,7 +112,7 @@ export default async function PublicSeasonRoster({
         ) : (
           <div className="overflow-x-auto rounded border border-zinc-800">
             <table className="w-full text-sm freeze-driver-col">
-              <thead className="bg-zinc-900 text-left text-zinc-400">
+              <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
                   <th className="px-4 py-3">Registered</th>
                   <th className="px-4 py-3">Team</th>
@@ -340,7 +340,7 @@ export default async function PublicSeasonRoster({
           `}</style>
           <div className="overflow-x-auto rounded border border-zinc-800">
             <table id="publicRosterTable" className="w-full text-sm">
-              <thead className="bg-zinc-900 text-left text-zinc-400">
+              <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
                   {/* Driver first so the sticky-first-column freeze
                       pins the driver name as you scroll right. */}
