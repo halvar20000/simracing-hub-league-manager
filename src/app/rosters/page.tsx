@@ -61,7 +61,22 @@ export default async function PublicRostersIndex() {
               {league.seasons.length === 0 ? (
                 <p className="text-sm text-zinc-500">No seasons.</p>
               ) : (
-                <div className="overflow-hidden rounded border border-zinc-800">
+                <div className="relative overflow-hidden rounded border border-zinc-800">
+                  {/*
+                    Right-side league-logo watermark. ~10% opacity so it
+                    reads as texture, not as a competing image. Sits behind
+                    the table via z-0 + the table wrapped in a relative
+                    container above. pointer-events-none so it never eats
+                    clicks on the "Open roster →" link below.
+                  */}
+                  {league.logoUrl && (
+                    <img
+                      src={league.logoUrl}
+                      alt=""
+                      aria-hidden
+                      className="pointer-events-none absolute inset-y-0 right-4 my-auto h-[80%] w-auto select-none object-contain opacity-10"
+                    />
+                  )}
                   {/*
                     table-fixed + colgroup so each league's table picks
                     identical column widths. Otherwise auto-layout sizes
