@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PrintTrigger } from "@/components/PrintTrigger";
+import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 
 /**
  * Printable roster view. Light theme, compact table, no nav chrome —
@@ -119,6 +120,7 @@ export default async function PrintRosterPage({
                 regs={regs}
                 showTeamColumn={false}
                 showProAmColumn={showProAmColumn}
+                leagueSlug={slug}
               />
             </section>
           ))
@@ -130,6 +132,7 @@ export default async function PrintRosterPage({
           regs={registrations}
           showTeamColumn={false}
           showProAmColumn={showProAmColumn}
+          leagueSlug={slug}
         />
       )}
     </div>
@@ -139,7 +142,7 @@ export default async function PrintRosterPage({
 type Reg = Awaited<
   ReturnType<typeof prisma.registration.findMany>
 >[number] & {
-  user: { firstName: string | null; lastName: string | null; iracingMemberId: string | null; iratingSportsCar: number | null; countryCode: string | null; email: string | null };
+  user: { firstName: string | null; lastName: string | null; iracingMemberId: string | null; iratingSportsCar: number | null; iratingFormulaCar: number | null; iratingOval: number | null; countryCode: string | null; email: string | null };
   team: { name: string } | null;
   carClass: { name: string } | null;
   car: { name: string } | null;
@@ -149,10 +152,12 @@ function RosterTable({
   regs,
   showTeamColumn,
   showProAmColumn,
+  leagueSlug,
 }: {
   regs: Reg[];
   showTeamColumn: boolean;
   showProAmColumn: boolean;
+  leagueSlug: string;
 }) {
   return (
     <table className="w-full border-collapse text-xs">
@@ -182,7 +187,7 @@ function RosterTable({
             <td className="py-1 pr-2 tabular-nums">
               {r.user.iracingMemberId ?? ""}
             </td>
-            <td className="py-1 pr-2 tabular-nums">{r.user.iratingSportsCar ?? r.iRating ?? ""}</td>
+            <td className="py-1 pr-2 tabular-nums">{getUserLiveIratingForLeague(r.user, leagueSlug) ?? r.iRating ?? ""}</td>
             <td className="py-1 pr-2">{r.carClass?.name ?? ""}</td>
             {showProAmColumn && (
               <td className="py-1 pr-2">{r.proAmClass ?? ""}</td>

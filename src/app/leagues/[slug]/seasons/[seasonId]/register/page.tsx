@@ -12,6 +12,11 @@ import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import TeamPicker from "@/components/TeamPicker";
 import { teamSizeLimit, GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
+import {
+  getLeagueIratingCategory,
+  iratingCategoryShortLabel,
+  getUserLiveIratingForLeague,
+} from "@/lib/league-irating-category";
 
 import type { Metadata } from "next";
 import { pageMetadataLarge } from "@/lib/og";
@@ -560,36 +565,56 @@ export default async function RegisterPage({
           </span>
         </label>
 
-        {sflGate.applies && (
-          <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">
-              Your current iRating <span className="text-orange-400">*</span>
-            </span>
-            <input
-              name="iRating"
-              type="number"
-              min={1}
-              max={20000}
-              required
-              inputMode="numeric"
-              defaultValue={existing?.iRating ?? ""}
-              placeholder="e.g. 2400"
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
-            {sflGate.exempt ? (
-              <span className="mt-1 block text-xs text-emerald-400">
-                ✓ You raced in the previous SFL Cup season — the{" "}
-                {sflGate.maxIRating} iRating cap does not apply to you.
+        {sflGate.applies && (() => {
+          // SFL Cup is a formula league — drivers must enter their
+          // Formula Car iRating, not the Sports Car number most people
+          // quote by default. Pre-fill with the live synced value when
+          // we have it so they don't have to guess.
+          const categoryLabel = iratingCategoryShortLabel(
+            getLeagueIratingCategory(season.league.slug)
+          );
+          const liveIrating = user
+            ? getUserLiveIratingForLeague(user, season.league.slug)
+            : null;
+          return (
+            <label className="block">
+              <span className="mb-1 block text-sm text-zinc-300">
+                Your current {categoryLabel} iRating{" "}
+                <span className="text-orange-400">*</span>
               </span>
-            ) : (
-              <span className="mt-1 block text-xs text-zinc-500">
-                New drivers must be at or below {sflGate.maxIRating} iRating.
-                Drivers who raced in the previous SFL Cup season may register
-                at any iRating.
-              </span>
-            )}
-          </label>
-        )}
+              <input
+                name="iRating"
+                type="number"
+                min={1}
+                max={20000}
+                required
+                inputMode="numeric"
+                defaultValue={existing?.iRating ?? liveIrating ?? ""}
+                placeholder="e.g. 2400"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+              {liveIrating != null && existing?.iRating == null && (
+                <span className="mt-1 block text-xs text-zinc-500">
+                  Pre-filled from your live iRacing {categoryLabel} iRating
+                  ({liveIrating}). Edit if out of date.
+                </span>
+              )}
+              {sflGate.exempt ? (
+                <span className="mt-1 block text-xs text-emerald-400">
+                  ✓ You raced in the previous SFL Cup season — the{" "}
+                  {sflGate.maxIRating} {categoryLabel} iRating cap does
+                  not apply to you.
+                </span>
+              ) : (
+                <span className="mt-1 block text-xs text-zinc-500">
+                  New drivers must be at or below {sflGate.maxIRating}{" "}
+                  {categoryLabel} iRating. Drivers who raced in the
+                  previous SFL Cup season may register at any iRating.
+                </span>
+              )}
+            </label>
+          );
+        })()}
 
         {isGt3Wct ? (
           <TeamPicker

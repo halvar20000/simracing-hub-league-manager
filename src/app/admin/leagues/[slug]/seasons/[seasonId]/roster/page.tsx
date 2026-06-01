@@ -10,6 +10,11 @@ import {
 } from "@/lib/actions/admin-registrations";
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
+import {
+  getLeagueIratingCategory,
+  iratingCategoryShortLabel,
+  getUserLiveIratingForLeague,
+} from "@/lib/league-irating-category";
 import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
 import GdcToggle from "@/components/GdcToggle";
 import TableFilter from "@/components/TableFilter";
@@ -28,6 +33,13 @@ export default async function RosterPage({
     include: { league: true },
   });
   if (!season || season.league.slug !== slug) notFound();
+
+  // Per-league iRating category: SFL Cup uses Formula Car, every other
+  // league uses Sports Car. The column resolves the right User.irating*
+  // field accordingly so the SFL Cup roster doesn't show road numbers.
+  const iratingCategoryLabel = iratingCategoryShortLabel(
+    getLeagueIratingCategory(season.league.slug)
+  );
 
   // Cars for this season — used to populate the inline dropdown so admins
   // can set each driver's car from the roster page.
@@ -411,7 +423,7 @@ export default async function RosterPage({
             <tr>
               <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
               <th data-col="irid" className="px-2 py-3 whitespace-nowrap">iR ID</th>
-              <th data-col="irating" className="px-2 py-3 whitespace-nowrap">iRating</th>
+              <th data-col="irating" className="px-2 py-3 whitespace-nowrap" title={`${iratingCategoryLabel} iRating (live synced, falls back to registration value)`}>iRating</th>
               <th data-col="num" className="px-2 py-3">#</th>
               <th data-col="team" className="px-3 py-3">Team</th>
               {showClassColumn && (
@@ -444,7 +456,7 @@ export default async function RosterPage({
                   r.user.lastName,
                   r.user.name,
                   r.user.iracingMemberId,
-                  r.user.iratingSportsCar,
+                  getUserLiveIratingForLeague(r.user, season.league.slug),
                   r.iRating,
                   r.user.email,
                   r.startNumber,
@@ -464,7 +476,7 @@ export default async function RosterPage({
                 // the filter is still case-insensitive.
                 data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim()}
                 data-r-irid={r.user.iracingMemberId ?? ""}
-                data-r-irating={r.user.iratingSportsCar ?? r.iRating ?? ""}
+                data-r-irating={getUserLiveIratingForLeague(r.user, season.league.slug) ?? r.iRating ?? ""}
                 data-r-num={r.startNumber ?? ""}
                 data-r-team={r.team?.name ?? ""}
                 data-r-class={r.carClass?.name ?? ""}
@@ -499,7 +511,7 @@ export default async function RosterPage({
                   {r.user.iracingMemberId ?? "—"}
                 </td>
                 <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">
-                  {r.user.iratingSportsCar ?? r.iRating ?? "—"}
+                  {getUserLiveIratingForLeague(r.user, season.league.slug) ?? r.iRating ?? "—"}
                 </td>
                 <td className="px-2 py-3 text-zinc-400 tabular-nums">
                   {r.startNumber ?? "—"}

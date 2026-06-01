@@ -7,6 +7,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { postDiscordWebhook } from "@/lib/discord-webhook";
 import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
+import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 
 export async function createRegistration(
@@ -94,6 +95,21 @@ export async function createRegistration(
           `This season is capped at ${sflGate.maxIRating} iRating. Only drivers who raced in the previous SFL Cup season may register above it.`
         )}`
       );
+    }
+    // Belt-and-braces: the user-typed value is unverified. If we have a
+    // live synced iRating for this league's category (Formula Car for
+    // SFL Cup) and it exceeds the cap, reject regardless of what they
+    // typed. Closes the "type a lower number than your real iRating"
+    // loophole the form would otherwise allow.
+    if (!sflGate.exempt) {
+      const liveIrating = getUserLiveIratingForLeague(user, season.league.slug);
+      if (liveIrating != null && liveIrating > sflGate.maxIRating) {
+        redirect(
+          `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+            `Your live iRating (${liveIrating}) is above the ${sflGate.maxIRating} cap for new SFL Cup drivers. Only drivers who raced in the previous SFL Cup season may register above it.`
+          )}`
+        );
+      }
     }
   }
 

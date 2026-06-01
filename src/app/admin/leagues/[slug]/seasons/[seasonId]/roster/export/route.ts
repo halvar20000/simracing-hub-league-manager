@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -115,7 +116,7 @@ export async function GET(
       r.user.firstName ?? "",
       r.user.lastName ?? "",
       r.user.iracingMemberId ?? "",
-      r.user.iratingSportsCar ?? r.iRating ?? "",
+      getUserLiveIratingForLeague(r.user, season.league.slug) ?? r.iRating ?? "",
       r.user.countryCode ?? ""
     );
     row.push(r.carClass?.name ?? "");
