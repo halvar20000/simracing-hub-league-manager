@@ -62,7 +62,19 @@ export default async function PublicRostersIndex() {
                 <p className="text-sm text-zinc-500">No seasons.</p>
               ) : (
                 <div className="overflow-hidden rounded border border-zinc-800">
-                  <table className="w-full text-sm">
+                  {/*
+                    table-fixed + colgroup so each league's table picks
+                    identical column widths. Otherwise auto-layout sizes
+                    columns from each table's body text, and the Status /
+                    Drivers / link columns drift between league sections.
+                  */}
+                  <table className="w-full table-fixed text-sm">
+                    <colgroup>
+                      <col />
+                      <col className="w-44" />
+                      <col className="w-24" />
+                      <col className="w-40" />
+                    </colgroup>
                     <thead className="bg-zinc-900 text-left text-zinc-400">
                       <tr>
                         <th className="px-4 py-2">Season</th>
@@ -83,7 +95,7 @@ export default async function PublicRostersIndex() {
                           <td className="px-4 py-2">
                             <StatusBadge status={season.status} />
                           </td>
-                          <td className="px-4 py-2 text-zinc-400">
+                          <td className="px-4 py-2 tabular-nums text-zinc-400">
                             {approvedCount.get(season.id) ?? 0}
                           </td>
                           <td className="px-4 py-2 text-right">
