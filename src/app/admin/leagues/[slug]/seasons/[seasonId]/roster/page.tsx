@@ -140,30 +140,58 @@ export default async function RosterPage({
         ) : (
           <>
             <TableFilter tableId="teamRosterTable" placeholder="Filter by driver, team, car…" />
+            {/*
+              Freeze the Driver column so the row stays readable when the
+              table scrolls horizontally. Same pattern as the solo roster.
+              Driver is the 3rd column here; we don't freeze Team because
+              the Team cell rowspans (rendered only on the first row of
+              each team) and a sticky empty cell looks broken.
+            */}
+            <style>{`
+              #teamRosterTable thead th:nth-child(3),
+              #teamRosterTable tbody td:nth-child(3) {
+                position: sticky;
+                left: 0;
+              }
+              #teamRosterTable thead th:nth-child(3) {
+                background-color: rgb(24 24 27);  /* zinc-900 */
+                z-index: 2;
+              }
+              #teamRosterTable tbody td:nth-child(3) {
+                background-color: rgb(9 9 11);    /* zinc-950 */
+                z-index: 1;
+              }
+              #teamRosterTable tbody tr.team-leader-row td:nth-child(3) {
+                background-color: rgb(15 15 18);  /* matches team-leader bg */
+              }
+              #teamRosterTable tbody tr:hover td:nth-child(3) {
+                background-color: rgb(24 24 27);  /* matches row hover */
+              }
+            `}</style>
             <div className="overflow-x-auto rounded border border-zinc-800">
-              <table id="teamRosterTable" className="w-full text-sm">
+              <table id="teamRosterTable" className="min-w-full text-sm">
               <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
-                  <th className="px-4 py-3">Registered</th>
-                  <th className="px-4 py-3">Team</th>
-                  <th className="px-4 py-3 driver-col">Driver</th>
-                  <th className="px-4 py-3">Class</th>
-                  <th className="px-4 py-3">Car</th>
-                  <th className="px-4 py-3">iRacing ID</th>
-                  <th className="px-4 py-3">iRating</th>
-                  <th className="px-4 py-3">
+                  <th className="px-3 py-3 whitespace-nowrap w-28">Registered</th>
+                  <th className="px-3 py-3 min-w-[10rem]">Team</th>
+                  <th className="px-3 py-3 driver-col whitespace-nowrap">Driver</th>
+                  <th className="px-2 py-3 whitespace-nowrap">Class</th>
+                  <th className="px-3 py-3 min-w-[14rem]">Car</th>
+                  <th className="px-2 py-3 whitespace-nowrap">iRacing ID</th>
+                  <th className="px-2 py-3 whitespace-nowrap">iRating</th>
+                  <th className="px-2 py-3 whitespace-nowrap">
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                       iRacing
                     </div>
                     Invite
                   </th>
-                  <th className="px-4 py-3">
+                  <th className="px-2 py-3 whitespace-nowrap">
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                       iRacing
                     </div>
                     Accepted
                   </th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-2 py-3 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,14 +215,14 @@ export default async function RosterPage({
                         .toLowerCase()}
                       className={
                         ri === 0
-                          ? "border-t-2 border-zinc-700 bg-zinc-950/40"
+                          ? "team-leader-row border-t-2 border-zinc-700 bg-zinc-950/40"
                           : "border-t border-zinc-800 hover:bg-zinc-900"
                       }
                     >
-                      <td className="px-4 py-3 align-top text-zinc-400">
+                      <td className="px-3 py-3 align-top text-zinc-400 whitespace-nowrap">
                         {ri === 0 ? fmtDate(team.createdAt) : ""}
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-3 py-3 align-top">
                         {ri === 0 && (
                           <div className="space-y-1.5">
                             <div className="font-semibold text-zinc-100">
@@ -235,7 +263,7 @@ export default async function RosterPage({
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 driver-col">
+                      <td className="px-3 py-3 driver-col whitespace-nowrap">
                         <div className="font-medium">
                           {reg.user.iracingMemberId ? (
                             <Link
@@ -257,35 +285,35 @@ export default async function RosterPage({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-zinc-400">
+                      <td className="px-2 py-3 text-zinc-400 whitespace-nowrap">
                         {reg.carClass?.name ?? "—"}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3">
                         <RegistrationCarSelect
                           registrationId={reg.id}
                           currentCarId={reg.carId}
                           cars={seasonCars}
                         />
                       </td>
-                      <td className="px-4 py-3 text-zinc-400">
+                      <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">
                         {reg.user.iracingMemberId ?? "—"}
                       </td>
-                      <td className="px-4 py-3 text-zinc-400">{reg.iRating ?? "—"}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">{reg.iRating ?? "—"}</td>
+                      <td className="px-2 py-3">
                         <RegistrationFlagSelect
                           registrationId={reg.id}
                           field="iracingInvitationSent"
                           value={reg.iracingInvitationSent}
                         />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-3">
                         <RegistrationFlagSelect
                           registrationId={reg.id}
                           field="iracingInvitationAccepted"
                           value={reg.iracingInvitationAccepted}
                         />
                       </td>
-                      <td className="px-4 py-3 text-xs">
+                      <td className="px-2 py-3 text-xs whitespace-nowrap">
                         <span
                           className={
                             reg.status === "APPROVED"
