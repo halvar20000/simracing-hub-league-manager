@@ -361,6 +361,30 @@ export default async function RegisterPage({
             <legend className="px-2 text-sm text-zinc-300">
               Register teammates (up to {maxTeammates})
             </legend>
+            <div className="rounded border border-orange-700/60 bg-orange-950/30 p-3 text-sm space-y-2">
+              <p className="font-bold text-white">
+                Every driver of a team must be registered with his real name on
+                our CAS Discord Channel. This is mandatory to get the Team
+                approved for the Season.
+              </p>
+              <p className="font-bold text-white">
+                Jeder Fahrer eines Teams muss mit seinem echten Namen auf
+                unserem CAS Discord Channel registriert sein. Dies ist
+                Voraussetzung dafür, dass das Team für die Saison zugelassen
+                wird.
+              </p>
+              <p className="text-xs text-zinc-300">
+                Discord invite (copy &amp; forward to your teammates):{" "}
+                <a
+                  href="https://discord.gg/DFzazSxj"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono font-semibold text-orange-300 underline hover:text-orange-200"
+                >
+                  https://discord.gg/DFzazSxj
+                </a>
+              </p>
+            </div>
             <p className="text-xs text-zinc-500">
               Provide each teammate&apos;s iRacing display name and ID. Email
               is optional but helps if they later want to log in to manage
