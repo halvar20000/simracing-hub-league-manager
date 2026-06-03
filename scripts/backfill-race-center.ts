@@ -22,6 +22,13 @@
  *   $HOME/Nextcloud/AI/SimRacing-News/races/<slug>-r<N>-{chart-*,replay,poster}.{png,mp4,jpg}
  */
 
+// Load env vars from .env.local then .env (later loads don't overwrite earlier).
+// Without this, `tsx scripts/...` doesn't see DATABASE_URL / BLOB_READ_WRITE_TOKEN
+// from the .env files — only Next.js's runtime does, not raw tsx.
+import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local", override: true });
+
 import { PrismaClient } from "@prisma/client";
 import { put } from "@vercel/blob";
 import * as cheerio from "cheerio";
