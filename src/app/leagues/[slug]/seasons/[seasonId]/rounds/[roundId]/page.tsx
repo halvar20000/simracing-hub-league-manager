@@ -13,8 +13,9 @@ import { RoundPodium } from "@/components/RoundPodium";
 import { RsvpWidget } from "@/components/RsvpWidget";
 import { isRsvpClosed } from "@/lib/rsvp-window";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
+import { RaceCenterView } from "@/components/RaceCenterView";
 
-type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams";
+type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams" | "race-center";
 const TEAM_BEST_N = 2;
 
 function sortByFinish<R extends { finishStatus: string; finishPosition: number }>(
@@ -140,6 +141,12 @@ export default async function PublicRoundResults({
         ],
       },
       fprAwards: { include: { team: true, carClass: true } },
+      raceCenter: {
+        include: {
+          charts: { orderBy: { sortOrder: "asc" } },
+          comebackUser: { select: { id: true, firstName: true, lastName: true, name: true, countryCode: true } },
+        },
+      },
     },
   });
   if (
@@ -302,7 +309,9 @@ export default async function PublicRoundResults({
                     ? "car"
                     : clsRaw === "teams"
                       ? "teams"
-                      : defaultCls;
+                      : clsRaw === "race-center"
+                        ? "race-center"
+                        : defaultCls;
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
@@ -609,6 +618,14 @@ export default async function PublicRoundResults({
             </Link>
           </>
         )}
+        {round.raceCenter?.publishedAt && (
+          <Link
+            href={`${baseHref}?cls=race-center`}
+            className={`${pillBase} ${cls === "race-center" ? pillOn : pillOff} border border-red-700/40 text-red-200`}
+          >
+            📝 Race Center
+          </Link>
+        )}
         <span className="mx-2 text-zinc-700" aria-hidden="true">|</span>
         <Link
           href={`/leagues/${slug}/seasons/${seasonId}/standings`}
@@ -618,7 +635,17 @@ export default async function PublicRoundResults({
         </Link>
       </div>
 
-      {!hasTeamData && cls === "combined" && podium.length > 0 && (
+      {cls === "race-center" && round.raceCenter && round.raceCenter.publishedAt && (
+        <RaceCenterView
+          raceCenter={round.raceCenter}
+          raceResults={round.raceResults}
+          roundName={round.name}
+          roundNumber={round.roundNumber}
+          startsAt={round.startsAt}
+        />
+      )}
+
+      {cls !== "race-center" && !hasTeamData && cls === "combined" && podium.length > 0 && (
         <RoundPodium
           drivers={podium}
           isMultiRace={isMultiRace}

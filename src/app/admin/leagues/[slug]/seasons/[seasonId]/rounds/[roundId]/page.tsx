@@ -104,6 +104,12 @@ export default async function AdminRoundResults({
               📡 Stream announcement
             </Link>
             <Link
+              href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/race-center`}
+              className="rounded border border-red-700/60 bg-red-950/30 px-3 py-1.5 text-sm text-red-200 hover:bg-red-900/40"
+            >
+              📝 Race Center
+            </Link>
+            <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/edit`}
               className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
             >
