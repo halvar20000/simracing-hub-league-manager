@@ -374,14 +374,26 @@ export default async function PublicRoundResults({
 
   // Aggregate per driver for the Combined / Team views (works for both
   // single-race and multi-race rounds).
+  //
+  // Two parallel race-point totals per driver:
+  //   racePoints / totalPoints       — class-relative for Pro/Am (matches
+  //                                    the driver championship)
+  //   combinedRacePoints /
+  //   combinedTotalPoints            — overall-position points (raw
+  //                                    rawPointsAwarded). Team scoring uses
+  //                                    these so the team championship is
+  //                                    driven by combined results, not
+  //                                    by Pro/Am rank.
   type Agg = {
     registrationId: string;
     rows: typeof allRows;
     raceResultsByNumber: Map<number, (typeof allRows)[number]>;
-    racePoints: number;            // sum of rawPointsAwarded
+    racePoints: number;                  // class-relative for Pro/Am, else overall
+    combinedRacePoints: number;          // always overall (rawPointsAwarded)
     participationPoints: number;
     penaltyPoints: number;
-    totalPoints: number;
+    totalPoints: number;                 // total using class-relative race pts
+    combinedTotalPoints: number;         // total using combined race pts
     incidents: number;
   };
   const aggMap = new Map<string, Agg>();
@@ -393,9 +405,11 @@ export default async function PublicRoundResults({
         rows: [],
         raceResultsByNumber: new Map(),
         racePoints: 0,
+        combinedRacePoints: 0,
         participationPoints: 0,
         penaltyPoints: 0,
         totalPoints: 0,
+        combinedTotalPoints: 0,
         incidents: 0,
       };
       aggMap.set(r.registrationId, a);
@@ -403,6 +417,7 @@ export default async function PublicRoundResults({
     a.rows.push(r);
     a.raceResultsByNumber.set(r.raceNumber, r);
     a.racePoints += racePointsOf(r);
+    a.combinedRacePoints += r.rawPointsAwarded;
     a.participationPoints += r.participationPointsAwarded;
     a.penaltyPoints += r.manualPenaltyPoints;
     a.incidents += r.incidents;
@@ -410,6 +425,10 @@ export default async function PublicRoundResults({
   for (const a of aggMap.values()) {
     a.totalPoints =
       a.racePoints +
+      (includeParticipationInCombined ? a.participationPoints : 0) -
+      a.penaltyPoints;
+    a.combinedTotalPoints =
+      a.combinedRacePoints +
       (includeParticipationInCombined ? a.participationPoints : 0) -
       a.penaltyPoints;
   }
@@ -443,9 +462,15 @@ export default async function PublicRoundResults({
   }
   const teamRows: TeamRow[] = [...byTeam.entries()]
     .map(([teamName, drivers]) => {
-      const byPts = [...drivers].sort((a, b) => b.totalPoints - a.totalPoints);
+      // Team scoring uses COMBINED race points (overall finish), not the
+      // class-relative Pro/Am points. Matches computeTeamStandings in
+      // src/lib/standings.ts and keeps round-level and season-level team
+      // totals consistent.
+      const byPts = [...drivers].sort(
+        (a, b) => b.combinedTotalPoints - a.combinedTotalPoints
+      );
       const topN = byPts.slice(0, TEAM_BEST_N);
-      const topNTotal = topN.reduce((s, d) => s + d.totalPoints, 0);
+      const topNTotal = topN.reduce((s, d) => s + d.combinedTotalPoints, 0);
       const classifieds = drivers.flatMap((d) =>
         d.rows.filter((r) => r.finishStatus === "CLASSIFIED")
       );
@@ -960,9 +985,11 @@ type Agg = {
   rows: Row[];
   raceResultsByNumber: Map<number, Row>;
   racePoints: number;
+  combinedRacePoints: number;     // overall-position race points (always)
   participationPoints: number;
   penaltyPoints: number;
   totalPoints: number;
+  combinedTotalPoints: number;    // total using combinedRacePoints
   incidents: number;
 };
 
@@ -1105,8 +1132,10 @@ function TeamView({
   return (
     <div className="space-y-2">
       <p className="text-xs text-zinc-500">
-        Team total = sum of the top {TEAM_BEST_N} drivers&apos; round totals
-        {isMultiRace && " (race 1 + race 2 + bonus − penalty)"}.
+        Team total = sum of the top {TEAM_BEST_N} drivers&apos; round totals,
+        scored on COMBINED (overall) finishing position — not Pro/Am class
+        rank. Matches the season Team championship.
+        {isMultiRace && " (race 1 + race 2 + bonus − penalty)"}{" "}
         Click a team to expand its drivers.
       </p>
       {teams.map((team, i) => (
@@ -1174,7 +1203,7 @@ function TeamView({
                       {a.incidents}
                     </td>
                     <td className="px-3 py-1.5 text-right text-zinc-300 tabular-nums">
-                      {a.racePoints}
+                      {a.combinedRacePoints}
                     </td>
                     <td className="px-3 py-1.5 text-right text-emerald-400 tabular-nums">
                       {a.participationPoints || ""}
@@ -1183,7 +1212,7 @@ function TeamView({
                       {a.penaltyPoints ? `−${a.penaltyPoints}` : ""}
                     </td>
                     <td className="px-3 py-1.5 text-right font-semibold text-orange-400 tabular-nums">
-                      {a.totalPoints}
+                      {a.combinedTotalPoints}
                     </td>
                     <td className="px-3 py-1.5 text-right">
                       {inTopN ? (
