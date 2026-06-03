@@ -653,6 +653,8 @@ export default async function PublicRoundResults({
         />
       )}
 
+      {cls !== "race-center" && (
+      <>
       <section>
         <h2 className="mb-3 text-lg font-semibold">Race results</h2>
         {allRows.length === 0 && !hasTeamData ? (
@@ -785,6 +787,8 @@ export default async function PublicRoundResults({
             </table>
           </div>
         </section>
+      )}
+      </>
       )}
     </div>
   );
