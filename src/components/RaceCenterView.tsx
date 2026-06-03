@@ -103,31 +103,21 @@ export function RaceCenterView({
 
   return (
     <div className="space-y-6">
-      {/* === Hero === */}
-      <section className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
-        {raceCenter.posterBlobUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={raceCenter.posterBlobUrl}
-            alt={`${roundName} race center poster`}
-            className="w-full max-h-72 object-cover"
-          />
-        )}
-        <div className="space-y-2 p-5">
-          <div className="text-xs uppercase tracking-wider text-zinc-500">
-            Round {roundNumber} · {startsAt.toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })}
-          </div>
-          <h2 className="text-2xl font-bold leading-tight text-zinc-100">
-            {raceCenter.headline ?? roundName}
-          </h2>
-          {raceCenter.headline && (
-            <div className="text-sm text-zinc-400">{roundName}</div>
-          )}
+      {/* === Hero — text only, the poster is reused as the <video> thumbnail below === */}
+      <section className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+        <div className="text-xs uppercase tracking-wider text-zinc-500">
+          Round {roundNumber} · {startsAt.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })}
         </div>
+        <h2 className="text-2xl font-bold leading-tight text-zinc-100">
+          {raceCenter.headline ?? roundName}
+        </h2>
+        {raceCenter.headline && raceCenter.headline !== roundName && (
+          <div className="text-sm text-zinc-400">{roundName}</div>
+        )}
       </section>
 
       {/* === By the Numbers === */}
