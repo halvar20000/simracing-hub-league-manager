@@ -140,36 +140,8 @@ export default async function RosterPage({
         ) : (
           <>
             <TableFilter tableId="teamRosterTable" placeholder="Filter by driver, team, car…" />
-            {/*
-              Freeze the Driver column so the row stays readable when the
-              table scrolls horizontally. Same pattern as the solo roster.
-              Driver is the 3rd column here; we don't freeze Team because
-              the Team cell rowspans (rendered only on the first row of
-              each team) and a sticky empty cell looks broken.
-            */}
-            <style>{`
-              #teamRosterTable thead th:nth-child(3),
-              #teamRosterTable tbody td:nth-child(3) {
-                position: sticky;
-                left: 0;
-              }
-              #teamRosterTable thead th:nth-child(3) {
-                background-color: rgb(24 24 27);  /* zinc-900 */
-                z-index: 2;
-              }
-              #teamRosterTable tbody td:nth-child(3) {
-                background-color: rgb(9 9 11);    /* zinc-950 */
-                z-index: 1;
-              }
-              #teamRosterTable tbody tr.team-leader-row td:nth-child(3) {
-                background-color: rgb(15 15 18);  /* matches team-leader bg */
-              }
-              #teamRosterTable tbody tr:hover td:nth-child(3) {
-                background-color: rgb(24 24 27);  /* matches row hover */
-              }
-            `}</style>
-            <div className="overflow-x-auto rounded border border-zinc-800">
-              <table id="teamRosterTable" className="min-w-full text-sm">
+            <div className="overflow-x-auto scrollbar-visible rounded border border-zinc-800">
+              <table id="teamRosterTable" className="min-w-full text-sm freeze-driver-col">
               <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
                   <th className="px-3 py-3 whitespace-nowrap w-28">Registered</th>
@@ -448,8 +420,8 @@ export default async function RosterPage({
         }
       `}</style>
 
-      <div className="overflow-x-auto rounded border border-zinc-800">
-        <table id="rosterTable" className="w-full text-sm">
+      <div className="overflow-x-auto scrollbar-visible rounded border border-zinc-800">
+        <table id="rosterTable" className="min-w-full text-sm">
           <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
             <tr>
               <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
