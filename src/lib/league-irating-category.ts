@@ -15,6 +15,7 @@ export type IRatingCategory = "sports_car" | "formula_car" | "oval";
 
 const LEAGUE_IRATING_CATEGORY: Record<string, IRatingCategory> = {
   "cas-sfl-cup": "formula_car",
+  "nascar-cas-cup": "oval",
 };
 
 const DEFAULT_CATEGORY: IRatingCategory = "sports_car";
