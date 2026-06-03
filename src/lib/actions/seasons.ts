@@ -111,6 +111,16 @@ export async function updateSeason(
       ? parseInt(teamScoringBestNRaw, 10)
       : null;
 
+  const teamScoringWeeksCountedRaw = String(
+    formData.get("teamScoringWeeksCounted") ?? ""
+  ).trim();
+  const teamScoringWeeksCounted =
+    teamScoringWeeksCountedRaw && /^\d+$/.test(teamScoringWeeksCountedRaw)
+      ? Math.max(1, Math.min(50, parseInt(teamScoringWeeksCountedRaw, 10)))
+      : null;
+
+  const teamScoringRawOnly = formData.get("teamScoringRawOnly") === "1";
+
   const irlmLeagueName = String(formData.get("irlmLeagueName") ?? "").trim() || null;
   const irlmSeasonIdRaw = String(formData.get("irlmSeasonId") ?? "").trim();
   const irlmSeasonId = irlmSeasonIdRaw ? parseInt(irlmSeasonIdRaw, 10) : null;
@@ -146,6 +156,8 @@ export async function updateSeason(
       gdcEnabled,
       teamScoringMode,
       teamScoringBestN,
+      teamScoringWeeksCounted,
+      teamScoringRawOnly,
       maxDrivers,
       teamMaxDrivers,
       scheduleImageUrl,

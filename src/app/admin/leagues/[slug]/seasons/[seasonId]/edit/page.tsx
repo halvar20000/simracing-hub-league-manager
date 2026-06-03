@@ -156,6 +156,46 @@ export default async function EditSeasonPage({
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
+            Team weeks counted (best N rounds, optional)
+          </span>
+          <input
+            name="teamScoringWeeksCounted"
+            type="number"
+            min={1}
+            max={50}
+            step={1}
+            defaultValue={season.teamScoringWeeksCounted ?? ""}
+            placeholder="e.g. 9 — match iRLM's drop-weeks"
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            Keep only each team&apos;s best N round contributions for the team
+            championship. Blank = count all rounds. iRLM calls this
+            &quot;Weeks counted&quot;.
+          </span>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="teamScoringRawOnly"
+            value="1"
+            defaultChecked={season.teamScoringRawOnly}
+            className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-orange-500 focus:ring-orange-500"
+          />
+          <span className="text-sm text-zinc-300">
+            Team scoring uses raw position points only
+          </span>
+        </label>
+        <p className="-mt-2 text-xs text-zinc-500">
+          When checked, the team championship ignores participation points
+          and manual penalty deductions — driver round contribution =
+          rawPointsAwarded only. Matches iRLM&apos;s &quot;Combined / Raw
+          Results / Bonus: None&quot;.
+        </p>
+
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">
             Maximum drivers per team (optional)
           </span>
           <input

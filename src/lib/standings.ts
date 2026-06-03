@@ -449,6 +449,15 @@ export async function computeTeamStandings(
       ? season.teamScoringBestN ?? 2
       : Number.POSITIVE_INFINITY;
 
+  // iRLM-style "Weeks counted: K" — keep only the team's best K round
+  // contributions for the season total. Null = count all rounds.
+  const weeksCounted = season.teamScoringWeeksCounted ?? null;
+
+  // iRLM "Combined / Source: Raw Results / Bonus: None" — when true, the
+  // per-driver round contribution is rawPointsAwarded only (no
+  // participation, no manual penalty deduction).
+  const rawOnly = !!season.teamScoringRawOnly;
+
   const rounds = await prisma.round.findMany({
     where: { seasonId },
     include: {
@@ -463,6 +472,8 @@ export async function computeTeamStandings(
     string,
     {
       team: { id: string; name: string };
+      // Per-round contributions for this team (before "weeks counted" cap).
+      roundContributions: number[];
       scoringPoints: number;
       fprPoints: number;
       driverIds: Set<string>;
@@ -471,6 +482,7 @@ export async function computeTeamStandings(
   for (const t of season.teams) {
     teamMap.set(t.id, {
       team: { id: t.id, name: t.name },
+      roundContributions: [],
       scoringPoints: 0,
       fprPoints: 0,
       driverIds: new Set(),
@@ -482,10 +494,11 @@ export async function computeTeamStandings(
     for (const r of round.raceResults) {
       const teamId = r.registration.teamId;
       if (!teamId) continue;
-      const points =
-        r.rawPointsAwarded +
-        r.participationPointsAwarded -
-        r.manualPenaltyPoints;
+      const points = rawOnly
+        ? r.rawPointsAwarded
+        : r.rawPointsAwarded +
+          r.participationPointsAwarded -
+          r.manualPenaltyPoints;
       if (!byTeam.has(teamId)) byTeam.set(teamId, []);
       byTeam.get(teamId)!.push(points);
     }
@@ -496,12 +509,22 @@ export async function computeTeamStandings(
         : sorted;
       const sum = taken.reduce((s, p) => s + p, 0);
       const t = teamMap.get(teamId);
-      if (t) t.scoringPoints += sum;
+      if (t) t.roundContributions.push(sum);
     }
     for (const award of round.fprAwards) {
       const t = teamMap.get(award.teamId);
       if (t) t.fprPoints += award.fprPointsAwarded;
     }
+  }
+
+  // Apply weeks-counted cap per team.
+  for (const t of teamMap.values()) {
+    const sorted = [...t.roundContributions].sort((a, b) => b - a);
+    const kept =
+      weeksCounted != null && weeksCounted > 0
+        ? sorted.slice(0, weeksCounted)
+        : sorted;
+    t.scoringPoints = kept.reduce((s, v) => s + v, 0);
   }
 
   const regs = await prisma.registration.findMany({

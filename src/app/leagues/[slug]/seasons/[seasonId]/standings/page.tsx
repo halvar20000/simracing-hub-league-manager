@@ -475,6 +475,10 @@ export default async function StandingsPage({
             {season.teamScoringMode === "SUM_BEST_N"
               ? `Best ${season.teamScoringBestN ?? 2} drivers per round`
               : "Sum of all team drivers' points"}
+            {season.teamScoringWeeksCounted
+              ? ` · keep best ${season.teamScoringWeeksCounted} rounds`
+              : ""}
+            {season.teamScoringRawOnly ? ` · raw points only` : ""}
           </p>
           <TeamsTable rows={teams} />
         </section>

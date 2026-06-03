@@ -186,6 +186,14 @@ model Season {
 
   teamScoringMode  TeamScoringMode @default(NONE)
   teamScoringBestN Int?
+  /// Number of best rounds counted toward the team championship (drop-weeks).
+  /// Null = count all rounds. iRLM calls this "Weeks counted".
+  /// E.g. set to 9 to count the team's best 9 round contributions only.
+  teamScoringWeeksCounted Int?
+  /// When true, team-scoring per-driver round contribution uses raw
+  /// position points only — no participation, no manual penalty deduction.
+  /// Matches iRLM's "Combined → Bonus: None" + "Raw Results" config.
+  teamScoringRawOnly      Boolean @default(false)
   irlmLeagueName   String?
   irlmSeasonId     Int?
   scheduleImageUrl String?
