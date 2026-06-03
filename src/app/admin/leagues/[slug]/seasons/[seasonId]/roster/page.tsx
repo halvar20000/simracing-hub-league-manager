@@ -20,6 +20,7 @@ import GdcToggle from "@/components/GdcToggle";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
+import { DoubleScrollWrapper } from "@/components/DoubleScrollWrapper";
 
 export default async function RosterPage({
   params,
@@ -140,8 +141,8 @@ export default async function RosterPage({
         ) : (
           <>
             <TableFilter tableId="teamRosterTable" placeholder="Filter by driver, team, car…" />
-            <div className="overflow-x-auto scrollbar-visible rounded border border-zinc-800">
-              <table id="teamRosterTable" className="min-w-full text-sm freeze-driver-col">
+            <DoubleScrollWrapper>
+              <table id="teamRosterTable" className="w-max min-w-full text-sm freeze-driver-col">
               <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
                   <th className="px-3 py-3 whitespace-nowrap w-28">Registered</th>
@@ -303,7 +304,7 @@ export default async function RosterPage({
                 )}
               </tbody>
               </table>
-            </div>
+            </DoubleScrollWrapper>
           </>
         )}
       </div>
@@ -420,8 +421,8 @@ export default async function RosterPage({
         }
       `}</style>
 
-      <div className="overflow-x-auto scrollbar-visible rounded border border-zinc-800">
-        <table id="rosterTable" className="min-w-full text-sm">
+      <DoubleScrollWrapper>
+        <table id="rosterTable" className="w-max min-w-full text-sm">
           <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
             <tr>
               <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
@@ -619,7 +620,7 @@ export default async function RosterPage({
             )}
           </tbody>
         </table>
-      </div>
+      </DoubleScrollWrapper>
     </div>
   );
 }
