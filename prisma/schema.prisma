@@ -15,41 +15,42 @@ datasource db {
 // ==========================================
 
 model User {
-  id              String    @id @default(cuid())
-  name            String?
-  email           String?   @unique
-  emailVerified   DateTime?
-  image           String?
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
 
   firstName       String?
   lastName        String?
-  iracingMemberId String?   @unique
-  role            Role      @default(DRIVER)
-  isActive        Boolean   @default(true)
+  iracingMemberId String? @unique
+  role            Role    @default(DRIVER)
+  isActive        Boolean @default(true)
 
-  accounts        Account[]
-  sessions        Session[]
+  accounts Account[]
+  sessions Session[]
 
   // Domain back-relations
-  leaguesCreated         League[]                       @relation("LeagueCreatedBy")
-  registrations          Registration[]
-  approvedRegistrations  Registration[]                 @relation("RegistrationApprovedBy")
-  csvImports             CsvImport[]
-  incidentReports        IncidentReport[]
-  incidentEvidence       IncidentReportEvidence[]
-  incidentComments       IncidentReportComment[]
-  incidentDecisions      IncidentDecision[]
+  leaguesCreated        League[]                 @relation("LeagueCreatedBy")
+  registrations         Registration[]
+  approvedRegistrations Registration[]           @relation("RegistrationApprovedBy")
+  csvImports            CsvImport[]
+  incidentReports       IncidentReport[]
+  incidentEvidence      IncidentReportEvidence[]
+  incidentComments      IncidentReportComment[]
+  incidentDecisions     IncidentDecision[]
+  raceCenterComebacks   RaceCenter[]             @relation("RaceCenterComeback")
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  countryCode     String?
-  casDiscordGuildMember Boolean   @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  countryCode           String?
+  casDiscordGuildMember Boolean  @default(false)
 
   /// Discord user ID (snowflake). For drivers who signed in via Discord this
   /// is also held in Account.providerAccountId; admins can pre-set it here on
   /// a pre-registered driver who has NOT logged in yet, so the RSVP bot can
   /// resolve their button clicks before their first website login.
-  discordId       String?   @unique
+  discordId String? @unique
 
   // Latest iRating / Safety Rating / license class snapshot pulled from
   // members-ng.iracing.com via the admin sync flow (Chrome MCP one-shot
@@ -109,48 +110,48 @@ model VerificationToken {
 // ==========================================
 
 model League {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   name        String
-  slug        String    @unique
+  slug        String  @unique
   description String?
   logoUrl     String?
 
   createdById String
-  createdBy   User      @relation("LeagueCreatedBy", fields: [createdById], references: [id])
+  createdBy   User   @relation("LeagueCreatedBy", fields: [createdById], references: [id])
 
-  seasons     Season[]
+  seasons Season[]
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt                      DateTime @default(now())
+  updatedAt                      DateTime @updatedAt
   discordRegistrationsWebhookUrl String?
-  registrationNotifyEmails      String[]  @default([])
-  paypalUsername          String?
-  registrationFee         Int?
-  registrationFeeCurrency String?  @default("EUR")
+  registrationNotifyEmails       String[] @default([])
+  paypalUsername                 String?
+  registrationFee                Int?
+  registrationFeeCurrency        String?  @default("EUR")
 
   // Per-round RSVP (Accept/Decline/Tentative) Discord integration
-  discordGuildId          String?
-  discordRsvpChannelId    String?
+  discordGuildId       String?
+  discordRsvpChannelId String?
   /// Optional Discord role to @mention on the initial RSVP post.
   /// Reminders (48h / 12h) do NOT use this — they only ping silent drivers.
-  discordRsvpRoleId       String?
+  discordRsvpRoleId    String?
   /// Optional hex color (e.g. "#EB459E") used as the Discord embed's
   /// side-bar color on RSVP posts. Defaults to orange when unset.
-  discordEmbedColor       String?
-  rsvpDaysBefore          Int      @default(7)
-  rsvpMode                RsvpMode @default(FULL)
-  rsvpCloseBeforeHours    Int      @default(1) // Hours before race start when RSVP locks
+  discordEmbedColor    String?
+  rsvpDaysBefore       Int      @default(7)
+  rsvpMode             RsvpMode @default(FULL)
+  rsvpCloseBeforeHours Int      @default(1) // Hours before race start when RSVP locks
 
   /// Per-league channel for Twitch stream announcement bot posts.
-  discordStreamChannelId  String?
+  discordStreamChannelId String?
   /// Default Twitch URL for the league. Each StreamAnnouncement can
   /// override this; if both are unset the embed has no Twitch link.
-  twitchUrl               String?
+  twitchUrl              String?
 
   /// Optional public Garage 61 team URL for the league. Rendered as a
   /// small "Garage 61 team →" link on league / season pages so members
   /// can jump straight to the shared setups + practice laps.
-  garage61TeamUrl         String?
+  garage61TeamUrl String?
 
   /// Discord channel for the automatic after-race results post. Null = the
   /// results-post feature is off for this league. See src/lib/notify-results.ts.
@@ -168,36 +169,36 @@ model League {
 }
 
 model Season {
-  id                  String          @id @default(cuid())
-  leagueId            String
-  league              League          @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  name                String
-  year                Int
-  status              SeasonStatus    @default(DRAFT)
-  startsOn            DateTime?
-  endsOn              DateTime?
-  isMulticlass        Boolean         @default(false)
-  proAmEnabled        Boolean         @default(false)
-  gdcEnabled          Boolean         @default(false)
+  id           String       @id @default(cuid())
+  leagueId     String
+  league       League       @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  name         String
+  year         Int
+  status       SeasonStatus @default(DRAFT)
+  startsOn     DateTime?
+  endsOn       DateTime?
+  isMulticlass Boolean      @default(false)
+  proAmEnabled Boolean      @default(false)
+  gdcEnabled   Boolean      @default(false)
 
-  scoringSystemId     String
-  scoringSystem       ScoringSystem   @relation(fields: [scoringSystemId], references: [id])
+  scoringSystemId String
+  scoringSystem   ScoringSystem @relation(fields: [scoringSystemId], references: [id])
 
-  teamScoringMode     TeamScoringMode @default(NONE)
-  teamScoringBestN    Int?
-  irlmLeagueName      String?
-  irlmSeasonId        Int?
-  scheduleImageUrl    String?
+  teamScoringMode  TeamScoringMode @default(NONE)
+  teamScoringBestN Int?
+  irlmLeagueName   String?
+  irlmSeasonId     Int?
+  scheduleImageUrl String?
 
-  carClasses          CarClass[]
-  cars                Car[]
-  teams               Team[]
-  rounds              Round[]
-  registrations       Registration[]
+  carClasses    CarClass[]
+  cars          Car[]
+  teams         Team[]
+  rounds        Round[]
+  registrations Registration[]
 
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  registrationToken String? @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  registrationToken String?  @unique
   teamRegistration  Boolean  @default(false)
   maxDrivers        Int?
   /// Per-team driver cap (e.g. 3 for IEC: team leader + 2 teammates).
@@ -207,188 +208,190 @@ model Season {
 }
 
 model CarClass {
-  id            String         @id @default(cuid())
-  seasonId      String
-  season        Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  name          String
-  shortCode     String
-  displayOrder  Int            @default(0)
+  id           String @id @default(cuid())
+  seasonId     String
+  season       Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name         String
+  shortCode    String
+  displayOrder Int    @default(0)
 
-  cars          Car[]
-  registrations Registration[]
-  fprAwards     FPRAward[]
-  teamResults   TeamResult[]
+  cars               Car[]
+  registrations      Registration[]
+  fprAwards          FPRAward[]
+  teamResults        TeamResult[]
+  iracingCarClassId  Int?
+  iracingCarClassIds Int[]          @default([])
+  isLocked           Boolean        @default(false)
 
   @@unique([seasonId, shortCode])
-  iracingCarClassId Int?
-  iracingCarClassIds Int[]     @default([])
-  isLocked      Boolean  @default(false)
 }
 
-
 model Team {
-  id            String         @id @default(cuid())
-  seasonId      String
-  season        Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  name          String
-  shortName     String?
-  logoUrl       String?
+  id        String  @id @default(cuid())
+  seasonId  String
+  season    Season  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name      String
+  shortName String?
+  logoUrl   String?
 
   registrations Registration[]
-  teamResults    TeamResult[]
+  teamResults   TeamResult[]
   fprAwards     FPRAward[]
+  iracingTeamId Int?           @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  leaderUserId  String?
 
   @@unique([seasonId, name])
-  iracingTeamId Int?       @unique
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
-  leaderUserId  String?
 }
 
 model Round {
-  id                      String           @id @default(cuid())
-  seasonId                String
-  season                  Season           @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  roundNumber             Int
-  name                    String
-  track                   String
-  trackConfig             String?
-  startsAt                DateTime
-  countsForChampionship   Boolean          @default(true)
-  raceLengthMinutes       Int?
-  status                  RoundStatus      @default(UPCOMING)
-  irlmEventId             Int?
+  id                    String      @id @default(cuid())
+  seasonId              String
+  season                Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  roundNumber           Int
+  name                  String
+  track                 String
+  trackConfig           String?
+  startsAt              DateTime
+  countsForChampionship Boolean     @default(true)
+  raceLengthMinutes     Int?
+  status                RoundStatus @default(UPCOMING)
+  irlmEventId           Int?
 
-  raceResults             RaceResult[]
-  csvImports              CsvImport[]
-  incidentReports         IncidentReport[]
-  fprAwards               FPRAward[]
-  penalties               Penalty[]
-
-  @@unique([seasonId, roundNumber])
-  teamResults     TeamResult[]
-  reportingNotifiedAt     DateTime?
+  raceResults         RaceResult[]
+  csvImports          CsvImport[]
+  incidentReports     IncidentReport[]
+  fprAwards           FPRAward[]
+  penalties           Penalty[]
+  teamResults         TeamResult[]
+  reportingNotifiedAt DateTime?
 
   // RSVP system
-  rsvpNotifiedAt          DateTime?
-  rsvpClosedAt            DateTime?
-  rsvps                   RoundRsvp[]
-  rsvpDiscordMessage      RoundDiscordRsvpMessage?
+  rsvpNotifiedAt     DateTime?
+  rsvpClosedAt       DateTime?
+  rsvps              RoundRsvp[]
+  rsvpDiscordMessage RoundDiscordRsvpMessage?
 
   /// Set when the after-race results were posted to Discord — idempotency
   /// flag for src/lib/notify-results.ts.
-  resultsPostedAt         DateTime?
+  resultsPostedAt DateTime?
 
   // Per-round Twitch stream announcement (1:1).
-  streamAnnouncement      StreamAnnouncement?
+  streamAnnouncement StreamAnnouncement?
+
+  // Per-round Race Center — narrative, curated cards, charts, replay (1:1).
+  raceCenter RaceCenter?
+
+  @@unique([seasonId, roundNumber])
 }
 
 model Registration {
-  id              String              @id @default(cuid())
-  seasonId        String
-  season          Season              @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User                @relation(fields: [userId], references: [id])
+  id       String @id @default(cuid())
+  seasonId String
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
 
-  status          RegistrationStatus  @default(PENDING)
-  startNumber     Int?
+  status      RegistrationStatus @default(PENDING)
+  startNumber Int?
 
-  teamId          String?
-  team            Team?               @relation(fields: [teamId], references: [id])
-  carClassId      String?
-  carClass        CarClass?           @relation(fields: [carClassId], references: [id])
-  carId           String?
-  car             Car?                @relation(fields: [carId], references: [id])
-  proAmClass      ProAmClass?
-  inGdc           Boolean             @default(false)
+  teamId     String?
+  team       Team?       @relation(fields: [teamId], references: [id])
+  carClassId String?
+  carClass   CarClass?   @relation(fields: [carClassId], references: [id])
+  carId      String?
+  car        Car?        @relation(fields: [carId], references: [id])
+  proAmClass ProAmClass?
+  inGdc      Boolean     @default(false)
 
-  notes           String?
-  approvedById    String?
-  approvedBy      User?               @relation("RegistrationApprovedBy", fields: [approvedById], references: [id])
-  approvedAt      DateTime?
+  notes        String?
+  approvedById String?
+  approvedBy   User?     @relation("RegistrationApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
 
-  raceResults             RaceResult[]
-  reportedIncidents       IncidentReport[]                @relation("IncidentReporter")
-  involvedInIncidents     IncidentReportInvolvedDriver[]
-  teamRoundDrivers   TeamRoundDriver[]
-  penalties               Penalty[]
-  rsvps              RoundRsvp[]
+  raceResults         RaceResult[]
+  reportedIncidents   IncidentReport[]               @relation("IncidentReporter")
+  involvedInIncidents IncidentReportInvolvedDriver[]
+  teamRoundDrivers    TeamRoundDriver[]
+  penalties           Penalty[]
+  rsvps               RoundRsvp[]
 
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-
-  @@unique([seasonId, userId])
-  excludedAt      DateTime?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+  excludedAt                DateTime?
   startingFeePaid           AdminCheckStatus @default(NO)
   iracingInvitationSent     AdminCheckStatus @default(NO)
   iracingInvitationAccepted AdminCheckStatus @default(NO)
-  iRating       Int?
+  iRating                   Int?
+
+  @@unique([seasonId, userId])
 }
 
 model RaceResult {
-  id                          String        @id @default(cuid())
-  roundId                     String
-  round                       Round         @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  registrationId              String
-  registration                Registration  @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  roundId        String
+  round          Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
-  finishPosition              Int
-  classPosition               Int?
-  lapsCompleted               Int           @default(0)
-  raceDistancePct             Int           @default(0)
-  totalTimeMs                 Int?
-  bestLapTimeMs               Int?
-  incidents                   Int           @default(0)
-  iRating                     Int?
-  finishStatus                FinishStatus  @default(CLASSIFIED)
+  finishPosition  Int
+  classPosition   Int?
+  lapsCompleted   Int          @default(0)
+  raceDistancePct Int          @default(0)
+  totalTimeMs     Int?
+  bestLapTimeMs   Int?
+  incidents       Int          @default(0)
+  iRating         Int?
+  finishStatus    FinishStatus @default(CLASSIFIED)
 
-  rawPointsAwarded            Int           @default(0)
-  participationPointsAwarded  Int           @default(0)
-  manualPenaltyPoints         Int           @default(0)
-  manualPenaltyReason         String?
-  notes                       String?
+  rawPointsAwarded           Int     @default(0)
+  participationPointsAwarded Int     @default(0)
+  manualPenaltyPoints        Int     @default(0)
+  manualPenaltyReason        String?
+  notes                      String?
 
-  createdAt                   DateTime      @default(now())
-  updatedAt                   DateTime      @updatedAt
-
-  @@unique([roundId, registrationId, raceNumber])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   qualifyingTimeMs Int?
   startPosition    Int?
-  raceNumber       Int       @default(1)
-  correctionPoints Int       @default(0)
+  raceNumber       Int      @default(1)
+  correctionPoints Int      @default(0)
   carId            String?
   car              Car?     @relation(fields: [carId], references: [id])
+
+  @@unique([roundId, registrationId, raceNumber])
 }
 
 model ScoringSystem {
-  id                            String    @id @default(cuid())
-  name                          String    @unique
-  description                   String?
-  pointsTable                   Json
-  classPointsTable              Json?
-  gdcPointsTable                Json?
-  participationPoints           Int       @default(0)
-  participationMinDistancePct   Int       @default(75)
-  racePointsMinDistancePct      Int       @default(50)
-  bonusFastestLap               Int?
-  bonusPole                     Int?
-  bonusMostLapsLed              Int?
-  dropWorstNRounds              Int?
-  fprEnabled                    Boolean   @default(false)
-  fprTiers                      Json?
-  fprMode                       FprMode   @default(ALL_TEAMS_TIERED)
+  id                          String  @id @default(cuid())
+  name                        String  @unique
+  description                 String?
+  pointsTable                 Json
+  classPointsTable            Json?
+  gdcPointsTable              Json?
+  participationPoints         Int     @default(0)
+  participationMinDistancePct Int     @default(75)
+  racePointsMinDistancePct    Int     @default(50)
+  bonusFastestLap             Int?
+  bonusPole                   Int?
+  bonusMostLapsLed            Int?
+  dropWorstNRounds            Int?
+  fprEnabled                  Boolean @default(false)
+  fprTiers                    Json?
+  fprMode                     FprMode @default(ALL_TEAMS_TIERED)
 
-  seasons                       Season[]
-  participationInCombined Boolean   @default(true)
-  racesPerRound                 Int       @default(1)
-  pointsTableRace2              Json?
-  protestWindowHours          Int?
-  protestCooldownHours       Int?
-  deferPenaltyPoints       Boolean @default(false)
-  categoryPointsTable      Json?
-  driverFprEnabled         Boolean @default(false)
-  driverFprTiers           Json?
-  driverFprMinDistancePct  Int     @default(90)
+  seasons                 Season[]
+  participationInCombined Boolean  @default(true)
+  racesPerRound           Int      @default(1)
+  pointsTableRace2        Json?
+  protestWindowHours      Int?
+  protestCooldownHours    Int?
+  deferPenaltyPoints      Boolean  @default(false)
+  categoryPointsTable     Json?
+  driverFprEnabled        Boolean  @default(false)
+  driverFprTiers          Json?
+  driverFprMinDistancePct Int      @default(90)
 
   // Penalty-pool behaviour for the season(s) using this scoring system:
   //   OFF           — no penalty pool, no no-show penalties (default for most leagues)
@@ -397,37 +400,37 @@ model ScoringSystem {
   //   NO_SHOW_ONLY  — SFL Cup mode: NO_RSVP_NO_SHOW penalties only appear in the
   //                   pool view; no auto-forgiveness; report-driven penalties still
   //                   hit standings directly but skip the pool view
-  penaltyPoolMode          PenaltyPoolMode @default(OFF)
+  penaltyPoolMode           PenaltyPoolMode @default(OFF)
   // Points deducted for each no-show (when penaltyPoolMode is FULL or NO_SHOW_ONLY).
   noRsvpNoShowPenaltyPoints Int             @default(1)
 }
 
 model FPRAward {
-  id                  String      @id @default(cuid())
-  roundId             String
-  round               Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  teamId              String
-  team                Team        @relation(fields: [teamId], references: [id])
-  carClassId          String?
-  carClass            CarClass?   @relation(fields: [carClassId], references: [id])
-  teamIncidentTotal   Int
-  fprPointsAwarded    Int
+  id                String    @id @default(cuid())
+  roundId           String
+  round             Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  teamId            String
+  team              Team      @relation(fields: [teamId], references: [id])
+  carClassId        String?
+  carClass          CarClass? @relation(fields: [carClassId], references: [id])
+  teamIncidentTotal Int
+  fprPointsAwarded  Int
 
   @@unique([roundId, teamId, carClassId])
 }
 
 model CsvImport {
-  id                String    @id @default(cuid())
-  roundId           String
-  round             Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  uploadedById      String
-  uploadedBy        User      @relation(fields: [uploadedById], references: [id])
-  originalFilename  String
-  rowsImported      Int       @default(0)
-  rowsSkipped       Int       @default(0)
-  errorLog          Json?
+  id               String @id @default(cuid())
+  roundId          String
+  round            Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  uploadedById     String
+  uploadedBy       User   @relation(fields: [uploadedById], references: [id])
+  originalFilename String
+  rowsImported     Int    @default(0)
+  rowsSkipped      Int    @default(0)
+  errorLog         Json?
 
-  createdAt         DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 // ==========================================
@@ -435,113 +438,113 @@ model CsvImport {
 // ==========================================
 
 model IncidentReport {
-  id                          String          @id @default(cuid())
-  roundId                     String
-  round                       Round           @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  reporterUserId              String
-  reporterUser                User            @relation(fields: [reporterUserId], references: [id])
-  reporterRegistrationId      String
-  reporterRegistration        Registration    @relation("IncidentReporter", fields: [reporterRegistrationId], references: [id])
+  id                     String       @id @default(cuid())
+  roundId                String
+  round                  Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  reporterUserId         String
+  reporterUser           User         @relation(fields: [reporterUserId], references: [id])
+  reporterRegistrationId String
+  reporterRegistration   Registration @relation("IncidentReporter", fields: [reporterRegistrationId], references: [id])
 
-  lapNumber                   Int?
-  turnOrSector                String?
-  description                 String
-  status                      IncidentStatus  @default(SUBMITTED)
-  submittedAt                 DateTime        @default(now())
+  lapNumber    Int?
+  turnOrSector String?
+  description  String
+  status       IncidentStatus @default(SUBMITTED)
+  submittedAt  DateTime       @default(now())
 
-  involvedDrivers             IncidentReportInvolvedDriver[]
-  evidence                    IncidentReportEvidence[]
-  comments                    IncidentReportComment[]
-  decision                    IncidentDecision?
+  involvedDrivers IncidentReportInvolvedDriver[]
+  evidence        IncidentReportEvidence[]
+  comments        IncidentReportComment[]
+  decision        IncidentDecision?
 
-  createdAt                   DateTime        @default(now())
-  updatedAt                   DateTime        @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
   session             RaceSession?
   replayTimestamp     String?
-  outsideRaceIncident Boolean @default(false)
-  irlmReviewId Int?       @unique
-  irlmProtestId Int?      @unique
+  outsideRaceIncident Boolean      @default(false)
+  irlmReviewId        Int?         @unique
+  irlmProtestId       Int?         @unique
 }
 
 model IncidentReportInvolvedDriver {
-  id                  String          @id @default(cuid())
-  incidentReportId    String
-  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
-  registrationId      String
-  registration        Registration    @relation(fields: [registrationId], references: [id])
-  role                ParticipantRole
+  id               String          @id @default(cuid())
+  incidentReportId String
+  incidentReport   IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  registrationId   String
+  registration     Registration    @relation(fields: [registrationId], references: [id])
+  role             ParticipantRole
 
   @@unique([incidentReportId, registrationId])
 }
 
 model IncidentReportEvidence {
-  id                  String          @id @default(cuid())
-  incidentReportId    String
-  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
-  kind                EvidenceKind
-  content             String
-  addedByUserId       String
-  addedByUser         User            @relation(fields: [addedByUserId], references: [id])
+  id               String         @id @default(cuid())
+  incidentReportId String
+  incidentReport   IncidentReport @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  kind             EvidenceKind
+  content          String
+  addedByUserId    String
+  addedByUser      User           @relation(fields: [addedByUserId], references: [id])
 
-  createdAt           DateTime        @default(now())
+  createdAt DateTime @default(now())
 }
 
 model IncidentReportComment {
-  id                  String          @id @default(cuid())
-  incidentReportId    String
-  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
-  authorUserId        String
-  authorUser          User            @relation(fields: [authorUserId], references: [id])
-  body                String
-  isInternal          Boolean         @default(true)
+  id               String         @id @default(cuid())
+  incidentReportId String
+  incidentReport   IncidentReport @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  authorUserId     String
+  authorUser       User           @relation(fields: [authorUserId], references: [id])
+  body             String
+  isInternal       Boolean        @default(true)
 
-  createdAt           DateTime        @default(now())
+  createdAt DateTime @default(now())
 }
 
 model IncidentDecision {
-  id                  String          @id @default(cuid())
-  incidentReportId    String          @unique
-  incidentReport      IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
-  decidedByUserId     String
-  decidedByUser       User            @relation(fields: [decidedByUserId], references: [id])
-  decidedAt           DateTime        @default(now())
-  verdict             Verdict
-  publicSummary       String
-  internalNotes       String?
-  publishedAt         DateTime?
+  id               String         @id @default(cuid())
+  incidentReportId String         @unique
+  incidentReport   IncidentReport @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  decidedByUserId  String
+  decidedByUser    User           @relation(fields: [decidedByUserId], references: [id])
+  decidedAt        DateTime       @default(now())
+  verdict          Verdict
+  publicSummary    String
+  internalNotes    String?
+  publishedAt      DateTime?
 
-  penalties           Penalty[]
+  penalties Penalty[]
 
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Penalty {
-  id                          String              @id @default(cuid())
-  registrationId              String
-  registration                Registration        @relation(fields: [registrationId], references: [id], onDelete: Cascade)
-  roundId                     String
-  round                       Round               @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  roundId        String
+  round          Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
-  source                      PenaltySource
-  sourceIncidentDecisionId    String?
-  sourceIncidentDecision      IncidentDecision?   @relation(fields: [sourceIncidentDecisionId], references: [id])
+  source                   PenaltySource
+  sourceIncidentDecisionId String?
+  sourceIncidentDecision   IncidentDecision? @relation(fields: [sourceIncidentDecisionId], references: [id])
 
-  type                        PenaltyType
-  timePenaltySeconds          Int?
-  pointsValue                 Int?
-  gridPositions               Int?
-  reason                      String
-  appliedAt                   DateTime            @default(now())
+  type               PenaltyType
+  timePenaltySeconds Int?
+  pointsValue        Int?
+  gridPositions      Int?
+  reason             String
+  appliedAt          DateTime    @default(now())
 
-  createdAt                   DateTime            @default(now())
-  category        PenaltyCategory?
-  releasedAt      DateTime?
-  forgivenPoints  Int                @default(0)
-  autoForgivenPoints Int            @default(0)
-  forgivenAt      DateTime?
-  forgivenReason  String?
-  categoryLevel   Int?
+  createdAt          DateTime         @default(now())
+  category           PenaltyCategory?
+  releasedAt         DateTime?
+  forgivenPoints     Int              @default(0)
+  autoForgivenPoints Int              @default(0)
+  forgivenAt         DateTime?
+  forgivenReason     String?
+  categoryLevel      Int?
 }
 
 // ==========================================
@@ -549,17 +552,17 @@ model Penalty {
 // ==========================================
 
 model RoundRsvp {
-  id              String         @id @default(cuid())
-  roundId         String
-  round           Round          @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  registrationId  String
-  registration    Registration   @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  roundId        String
+  round          Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
-  status          RsvpStatus
-  source          RsvpSource     @default(DISCORD)
+  status RsvpStatus
+  source RsvpSource @default(DISCORD)
 
-  respondedAt     DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  respondedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([roundId, registrationId])
   @@index([roundId])
@@ -567,15 +570,15 @@ model RoundRsvp {
 }
 
 model RoundDiscordRsvpMessage {
-  id              String         @id @default(cuid())
-  roundId         String         @unique
-  round           Round          @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  roundId String @unique
+  round   Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
-  channelId       String
-  messageId       String
-  postedAt        DateTime       @default(now())
-  closedAt        DateTime?
-  updatedAt       DateTime       @updatedAt
+  channelId String
+  messageId String
+  postedAt  DateTime  @default(now())
+  closedAt  DateTime?
+  updatedAt DateTime  @updatedAt
 }
 
 // ==========================================
@@ -583,26 +586,26 @@ model RoundDiscordRsvpMessage {
 // ==========================================
 
 model StreamAnnouncement {
-  id                 String   @id @default(cuid())
-  roundId            String   @unique
-  round              Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  roundId String @unique
+  round   Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
   /// Vercel Blob URL of the uploaded poster image.
-  posterBlobUrl      String?
+  posterBlobUrl    String?
   /// Per-round override of League.twitchUrl.
-  twitchUrl          String?
+  twitchUrl        String?
   /// Optional custom body (markdown allowed).
-  messageText        String?
+  messageText      String?
   /// When the bot should post the announcement.
-  scheduledAt        DateTime
+  scheduledAt      DateTime
   /// Set once the bot has posted. Used for idempotency.
-  postedAt           DateTime?
+  postedAt         DateTime?
   /// Snapshot of the channel + message so we can edit/delete later.
-  discordChannelId   String?
-  discordMessageId   String?
+  discordChannelId String?
+  discordMessageId String?
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ==========================================
@@ -734,12 +737,12 @@ enum RsvpStatus {
 enum RsvpSource {
   DISCORD
   WEBSITE
-  ADMIN     // set by an admin on the round RSVP page, not by the driver
+  ADMIN // set by an admin on the round RSVP page, not by the driver
 }
 
 enum RsvpMode {
-  FULL          // Accept / Decline / Tentative buttons + all three driver lists
-  DECLINE_ONLY  // Only a Decline button; silent drivers are assumed racing
+  FULL // Accept / Decline / Tentative buttons + all three driver lists
+  DECLINE_ONLY // Only a Decline button; silent drivers are assumed racing
 }
 
 enum PenaltyType {
@@ -749,14 +752,12 @@ enum PenaltyType {
   WARNING
 }
 
-
 enum RaceSession {
   QUALIFYING
   RACE
   RACE_1
   RACE_2
 }
-
 
 enum PenaltyCategory {
   AVOIDABLE_CONTACT
@@ -770,85 +771,84 @@ enum PenaltyCategory {
   OTHER
 }
 
-
 model TeamResult {
-  id                         String        @id @default(cuid())
-  roundId                    String
-  round                      Round         @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  teamId                     String
-  team                       Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  raceNumber                 Int           @default(1)
+  id         String @id @default(cuid())
+  roundId    String
+  round      Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  teamId     String
+  team       Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  raceNumber Int    @default(1)
 
-  finishPosition             Int
-  classPosition              Int?
-  lapsCompleted              Int           @default(0)
-  raceDistancePct            Int           @default(0)
-  totalTimeMs                Int?
-  bestLapTimeMs              Int?
-  totalIncidents             Int           @default(0)
-  finishStatus               FinishStatus  @default(CLASSIFIED)
-  startPosition              Int?
+  finishPosition  Int
+  classPosition   Int?
+  lapsCompleted   Int          @default(0)
+  raceDistancePct Int          @default(0)
+  totalTimeMs     Int?
+  bestLapTimeMs   Int?
+  totalIncidents  Int          @default(0)
+  finishStatus    FinishStatus @default(CLASSIFIED)
+  startPosition   Int?
 
-  rawPointsAwarded           Int           @default(0)
-  participationPointsAwarded Int           @default(0)
-  manualPenaltyPoints        Int           @default(0)
-  correctionPoints           Int           @default(0)
+  rawPointsAwarded           Int @default(0)
+  participationPointsAwarded Int @default(0)
+  manualPenaltyPoints        Int @default(0)
+  correctionPoints           Int @default(0)
 
-  carId                      String?
-  car                        Car?          @relation(fields: [carId], references: [id])
-  carClassId                 String?
-  carClass                   CarClass?     @relation(fields: [carClassId], references: [id])
+  carId      String?
+  car        Car?      @relation(fields: [carId], references: [id])
+  carClassId String?
+  carClass   CarClass? @relation(fields: [carClassId], references: [id])
 
-  participations             TeamRoundDriver[]
+  participations TeamRoundDriver[]
 
-  createdAt                  DateTime      @default(now())
-  updatedAt                  DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([roundId, teamId, raceNumber])
 }
 
 model TeamRoundDriver {
-  id              String       @id @default(cuid())
-  teamResultId    String
-  teamResult      TeamResult   @relation(fields: [teamResultId], references: [id], onDelete: Cascade)
-  registrationId  String
-  registration    Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  id             String       @id @default(cuid())
+  teamResultId   String
+  teamResult     TeamResult   @relation(fields: [teamResultId], references: [id], onDelete: Cascade)
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
-  lapsCompleted   Int          @default(0)
-  lapsLed         Int          @default(0)
-  bestLapTimeMs   Int?
-  averageLapMs    Int?
-  incidents       Int          @default(0)
-  iRating         Int?
-  finishStatus    FinishStatus @default(CLASSIFIED)
+  lapsCompleted Int          @default(0)
+  lapsLed       Int          @default(0)
+  bestLapTimeMs Int?
+  averageLapMs  Int?
+  incidents     Int          @default(0)
+  iRating       Int?
+  finishStatus  FinishStatus @default(CLASSIFIED)
 
   @@unique([teamResultId, registrationId])
 }
 
 model Car {
-  id            String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  seasonId      String
-  season        Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seasonId String
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
 
   // Optional: a car pinned to a single class (legacy / class-specific).
   // When NULL the car is season-wide and selectable across all driver
   // classes — this is the common case for PRO/AM splits where both tiers
   // race the same cars.
-  carClassId    String?
-  carClass      CarClass? @relation(fields: [carClassId], references: [id], onDelete: SetNull)
+  carClassId String?
+  carClass   CarClass? @relation(fields: [carClassId], references: [id], onDelete: SetNull)
 
-  name          String
-  shortName     String?
-  iracingCarId  Int?
-  displayOrder  Int      @default(0)
+  name         String
+  shortName    String?
+  iracingCarId Int?
+  displayOrder Int     @default(0)
 
   registrations Registration[]
   raceResults   RaceResult[]
   teamResults   TeamResult[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@unique([carClassId, name])
   @@index([carClassId])
@@ -886,9 +886,141 @@ model IracingTrack {
 model IracingCar {
   iracingCarId Int      @id
   name         String
-  category     String?  // GT3 / GT4 / LMP2 / GTP / Touring / Open Wheel / ...
+  category     String? // GT3 / GT4 / LMP2 / GTP / Touring / Open Wheel / ...
   freeContent  Boolean  @default(false)
   cachedAt     DateTime @default(now())
 
   @@index([name])
+}
+
+/// Per-round "Race Center" — the curated post-race content that used to
+/// live as static HTML on simracing-hub.com/race-center.html. Replaces
+/// hand-mirroring CLS data into the website; this is the single source
+/// of truth for narrative, curated cards, charts, and the 2D telemetry
+/// replay video.
+///
+/// The public renderer lives on the existing round page at
+/// /leagues/<slug>/seasons/<id>/rounds/<id>?cls=race-center — only
+/// shown when publishedAt is set.
+///
+/// 1:1 with Round. All Vercel Blob URLs (replay, poster, charts) are
+/// cleaned up via the deleteRaceCenter server action when the row is
+/// removed; cascade deletes via Round cleanup are also covered.
+model RaceCenter {
+  id      String @id @default(cuid())
+  roundId String @unique
+  round   Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  /// Headline for the Race Center hero, e.g. "Zörlaut wins late,
+  /// Wonnenberg's title secured". Distinct from Round.name (the track).
+  headline     String?
+  /// Multi-paragraph markdown rendered with react-markdown on the
+  /// public Race Center tab. The narrative replaces what used to be
+  /// written as <p>…</p> in race-center.html.
+  highlightsMd String? @db.Text
+
+  // === Curated By-the-Numbers cards =====================================
+  // The Race Winner, Fastest Lap and Cleanest Race cards are AUTO-DERIVED
+  // from raceResults on the public page — these *Note fields below are
+  // optional commentary overlays. The Comeback Drive card is fully
+  // curated: hidden when comebackUserId is null.
+
+  /// Admin-selected driver for the "Comeback Drive" card. The card is
+  /// HIDDEN on the public page when this is null.
+  comebackUserId String?
+  comebackUser   User?   @relation("RaceCenterComeback", fields: [comebackUserId], references: [id])
+  comebackNote   String?
+  /// Optional commentary on the auto-derived cleanest-race driver
+  /// (the classified driver with the lowest Inc in raceResults).
+  cleanestNote   String?
+  /// Optional commentary on the auto-derived race winner (Pos = 1).
+  winnerNote     String?
+  /// Optional commentary on the auto-derived fastest-lap holder.
+  fastestLapNote String?
+
+  // === Conditions =======================================================
+  // Most fields auto-pulled from iRacing JSON
+  // (session_results[RACE].weather_result) via the "Pull from iRacing JSON"
+  // admin button, with manual override.
+  //
+  // Track temp is NOT exposed in eventresult JSON, so it's the one field
+  // the admin types by hand (read off the in-game replay).
+
+  /// Average air temperature (°C). Auto-pulled from
+  /// weather_result.avg_temp; admin can override.
+  airTempC      Float?
+  /// Track temperature (°C). Manual — iRacing eventresult JSON does
+  /// not expose this directly.
+  trackTempC    Float?
+  /// iRacing skies code: 0 = clear, 1 = partly cloudy,
+  /// 2 = mostly cloudy, 3 = overcast. Auto-pulled from
+  /// weather_result.avg_skies. Display string is rendered client-side.
+  skiesCode     Int?
+  /// Average cloud cover %. Auto-pulled from
+  /// weather_result.avg_cloud_cover_pct.
+  cloudCoverPct Float?
+  /// Total precipitation in mm during the race session.
+  /// Auto-pulled from weather_result.precip_mm. 0 = bone dry.
+  precipMm      Float?
+  /// % of race time with active precipitation.
+  /// Auto-pulled from weather_result.precip_time_pct.
+  precipTimePct Float?
+
+  // === Yellow flags =====================================================
+  /// Number of FCY periods. Manually entered for v1; could be
+  /// auto-derived from the incident timeline in Phase 2.
+  yellowFlagCount Int     @default(0)
+  yellowFlagNote  String?
+
+  // === 2D telemetry replay ==============================================
+  /// Vercel Blob URL of the MP4 telemetry replay.
+  replayBlobUrl   String?
+  /// Vercel Blob URL of the JPG poster shown above the video.
+  posterBlobUrl   String?
+  replayCaption   String?
+  replayDurationS Int?
+
+  // === Source / publishing ==============================================
+  /// External broadcast (YouTube/Twitch) URL.
+  broadcastUrl String?
+  /// When the admin published the Race Center. Null = draft;
+  /// public tab is hidden until this is set.
+  publishedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  charts RaceCenterChart[]
+
+  @@index([publishedAt])
+}
+
+/// One row per chart image in a Race Center. Today we render up to 10
+/// chart slots (gap, pace, pits, incidents, incidents-map, positions,
+/// overtakes, pit-loss, stint-pace, battle), but chartType is left as
+/// String so new kinds can be added without a schema migration. The
+/// admin form's dropdown is driven by a TS const list in
+/// src/lib/race-center-charts.ts.
+///
+/// Cascade-deletes with the parent RaceCenter; the deleteRaceCenter
+/// server action additionally calls del() on each blobUrl so Vercel
+/// Blob storage stays clean.
+model RaceCenterChart {
+  id           String     @id @default(cuid())
+  raceCenterId String
+  raceCenter   RaceCenter @relation(fields: [raceCenterId], references: [id], onDelete: Cascade)
+
+  chartType String
+  /// Display title for the card, e.g. "Gap to Leader".
+  title     String
+  /// Vercel Blob URL — PNG.
+  blobUrl   String
+  /// Optional descriptive paragraph below the chart.
+  caption   String?
+  /// Display order in the public "Data Views" grid.
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([raceCenterId, chartType])
 }
