@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
+import { DoubleScrollWrapper } from "@/components/DoubleScrollWrapper";
 
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
@@ -45,6 +47,9 @@ export default async function PublicSeasonRoster({
   if (!season || season.league.slug !== slug) notFound();
 
   if (season.teamRegistration) {
+    // Signed-in chefs/managers get a "Manage team" link on their own team.
+    const session = await auth();
+    const viewerId = session?.user?.id ?? null;
     const teams = await prisma.team.findMany({
       where: { seasonId },
       orderBy: { createdAt: "asc" },
@@ -127,8 +132,9 @@ export default async function PublicSeasonRoster({
             No teams registered yet.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded border border-zinc-800">
-            <table className="w-full text-sm freeze-driver-col">
+          <div className="rounded border border-zinc-800">
+            <DoubleScrollWrapper>
+            <table className="w-max min-w-full text-sm freeze-driver-col">
               <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
                   <th className="px-4 py-3">Registered</th>
@@ -168,8 +174,20 @@ export default async function PublicSeasonRoster({
                       </td>
                       <td className="px-4 py-3 align-top">
                         {ri === 0 && (
-                          <div className="font-semibold text-zinc-100">
-                            {team.name}
+                          <div>
+                            <div className="font-semibold text-zinc-100">
+                              {team.name}
+                            </div>
+                            {viewerId &&
+                              (team.leaderUserId === viewerId ||
+                                team.managerUserId === viewerId) && (
+                                <Link
+                                  href={`/teams/${team.id}/manage`}
+                                  className="mt-1 inline-block rounded border border-orange-700 bg-orange-950/30 px-2 py-0.5 text-[11px] font-medium text-orange-300 hover:bg-orange-900/40"
+                                >
+                                  Manage team →
+                                </Link>
+                              )}
                           </div>
                         )}
                       </td>
@@ -229,6 +247,7 @@ export default async function PublicSeasonRoster({
                 )}
               </tbody>
             </table>
+            </DoubleScrollWrapper>
           </div>
         )}
 

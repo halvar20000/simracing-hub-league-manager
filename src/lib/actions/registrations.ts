@@ -1198,6 +1198,92 @@ export async function transferTeamLeadership(formData: FormData) {
 }
 
 // ============================================================================
+// Class & car change on an EXISTING team (Manage Team page). Allowed for the
+// Teamchef or the team manager, but ONLY until the season's first race has
+// started — after that, class/car changes go through an admin. Updates every
+// active driver registration of the team in one go.
+// ============================================================================
+
+export async function updateTeamClassCar(formData: FormData) {
+  const teamId = String(formData.get("teamId") ?? "");
+  const carClassId = String(formData.get("carClassId") ?? "").trim();
+  const carId = String(formData.get("carId") ?? "").trim();
+  if (!teamId) throw new Error("teamId required");
+  const { team } = await requireTeamLeader(teamId);
+
+  const back = `/teams/${teamId}/manage`;
+  const fail = (msg: string): never =>
+    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+
+  // Locked once the first race of the season has started.
+  const startedRound = await prisma.round.findFirst({
+    where: { seasonId: team.seasonId, startsAt: { lte: new Date() } },
+    select: { id: true },
+  });
+  if (startedRound) {
+    fail(
+      "The season has started — class and car can no longer be changed here. Contact an admin."
+    );
+  }
+
+  if (!carClassId) fail("Class is required");
+  if (!carId) fail("Car is required");
+
+  const carClass = await prisma.carClass.findUnique({
+    where: { id: carClassId },
+  });
+  if (!carClass || carClass.seasonId !== team.seasonId) fail("Invalid class");
+  if (carClass!.isLocked) {
+    fail("That class is locked — no changes into it are possible");
+  }
+
+  const car = await prisma.car.findUnique({ where: { id: carId } });
+  // Shared cars (carClassId === null) are valid for every class.
+  if (
+    !car ||
+    car.seasonId !== team.seasonId ||
+    (car.carClassId !== null && car.carClassId !== carClassId)
+  ) {
+    fail("Invalid car for the selected class");
+  }
+
+  await prisma.registration.updateMany({
+    where: {
+      teamId: team.id,
+      status: { notIn: ["WITHDRAWN", "REJECTED"] },
+      isTeamManager: false,
+    },
+    data: { carClassId, carId },
+  });
+
+  await notifyTeamChange({
+    leagueSlug: team.season.league.slug,
+    seasonId: team.seasonId,
+    kind: "UPDATED",
+    teamName: team.name,
+    seasonLabel: `${team.season.name} ${team.season.year}`,
+    fields: [
+      {
+        name: "Class / car changed",
+        value: `${carClass!.name} — ${car!.name}`,
+        inline: false,
+      },
+    ],
+  });
+
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(`/teams/${team.id}/manage`);
+  redirect(
+    `${back}?success=${encodeURIComponent(`Team switched to ${carClass!.name} — ${car!.name}`)}`
+  );
+}
+
+// ============================================================================
 // Team manager assignment on an EXISTING team. Gated to the Teamchef
 // (Team.leaderUserId) or an ADMIN — never self-service, so nobody can claim
 // management of a foreign team. The manager-to-be must already have a CLS

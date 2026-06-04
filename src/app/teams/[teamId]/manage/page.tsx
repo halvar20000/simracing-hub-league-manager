@@ -8,9 +8,12 @@ import {
   transferTeamLeadership,
   assignTeamManager,
   removeTeamManager,
+  updateTeamClassCar,
 } from "@/lib/actions/registrations";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 import UserSearchPicker from "@/components/UserSearchPicker";
+import TeamClassCarSelect from "@/components/TeamClassCarSelect";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 export default async function ManageTeamPage({
   params,
@@ -56,6 +59,34 @@ export default async function ManageTeamPage({
         select: { firstName: true, lastName: true },
       })
     : null;
+
+  // Class & car are changeable until the season's first race has started.
+  const startedRound = await prisma.round.findFirst({
+    where: { seasonId: team.seasonId, startsAt: { lte: new Date() } },
+    select: { id: true },
+  });
+  const classCarLocked = !!startedRound;
+
+  // Season-wide shared cars (carClassId NULL) apply to every class — same
+  // merge as on the registration form.
+  const sharedCars = await prisma.car.findMany({
+    where: { seasonId: team.seasonId, carClassId: null },
+    orderBy: { displayOrder: "asc" },
+    select: { id: true, name: true },
+  });
+  const carClassesForSelect = team.season.carClasses.map((cc) => {
+    const ownCars = cc.cars.map((c) => ({ id: c.id, name: c.name }));
+    const extras = sharedCars.filter(
+      (sc) => !ownCars.some((c) => c.id === sc.id)
+    );
+    return {
+      id: cc.id,
+      name: cc.name,
+      shortCode: cc.shortCode,
+      isLocked: cc.isLocked,
+      cars: [...ownCars, ...extras],
+    };
+  });
   // Driver rows only — the manager's own registration is never edited here.
   const teammates = team.registrations.filter(
     (r) =>
@@ -128,12 +159,12 @@ export default async function ManageTeamPage({
           Edit team
         </h2>
         <p className="mb-3 text-xs text-zinc-500">
-          Class and car cannot be changed here. To change them, withdraw the
-          team and re-register. iRating limits still apply
+          Drivers can be changed at any time. iRating limits still apply
           {leaderReg?.carClass?.shortCode === "LMP2"
             ? " (LMP2: ≥ 1500)"
             : ""}
-          {" "}— max 5000 for any class.
+          {" "}— max 5000 for any class. Class &amp; car have their own
+          section below{classCarLocked ? " (locked — season started)" : ""}.
         </p>
         <form
           action={updateTeamRegistration}
@@ -244,6 +275,44 @@ export default async function ManageTeamPage({
             Save changes
           </button>
         </form>
+      </section>
+
+      {/* === Class & car (until the first race has started) === */}
+      <section>
+        <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+          Class &amp; car
+        </h2>
+        {classCarLocked ? (
+          <p className="rounded border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400">
+            The season has started — class and car are locked. Current:{" "}
+            <strong className="text-zinc-200">
+              {leaderReg?.carClass?.name ?? "—"} · {leaderReg?.car?.name ?? "—"}
+            </strong>
+            . Contact an admin if a change is still needed.
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-zinc-500">
+              Changing class or car applies to the whole team (every driver).
+              Possible until the first race of the season has started.
+            </p>
+            <form
+              action={updateTeamClassCar}
+              className="space-y-4 rounded border border-zinc-800 bg-zinc-900/50 p-4"
+            >
+              <input type="hidden" name="teamId" value={team.id} />
+              <TeamClassCarSelect
+                carClasses={carClassesForSelect}
+                defaultClassId={leaderReg?.carClassId ?? teammates[0]?.carClassId ?? undefined}
+                defaultCarId={leaderReg?.carId ?? teammates[0]?.carId ?? undefined}
+              />
+              <SubmitWithSpinner
+                label="Change class / car"
+                className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
+              />
+            </form>
+          </>
+        )}
       </section>
 
       {/* === Transfer leadership === */}
