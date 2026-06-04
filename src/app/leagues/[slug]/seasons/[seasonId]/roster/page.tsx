@@ -50,13 +50,30 @@ export default async function PublicSeasonRoster({
       orderBy: { createdAt: "asc" },
       include: {
         registrations: {
-          where: { status: { in: ["APPROVED", "PENDING"] } },
+          where: {
+            status: { in: ["APPROVED", "PENDING"] },
+            isTeamManager: false,
+          },
           include: { user: true, carClass: true, car: true },
           orderBy: { createdAt: "asc" },
         },
       },
     });
     const teamsWithRegs = teams.filter((t) => t.registrations.length > 0);
+    // Non-driving team managers — listed separately, never in the driver
+    // table. Source of truth is Team.managerUserId (one manager may run
+    // several teams), so build one row per managed team.
+    const managedTeams = teamsWithRegs.filter((t) => t.managerUserId);
+    const managerUsers = await prisma.user.findMany({
+      where: { id: { in: managedTeams.map((t) => t.managerUserId!) } },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    const managerById = new Map(managerUsers.map((u) => [u.id, u]));
+    const managerRows = managedTeams.map((t) => ({
+      teamId: t.id,
+      teamName: t.name,
+      user: managerById.get(t.managerUserId!) ?? null,
+    }));
     const driverTotal = teamsWithRegs.reduce(
       (s, t) => s + t.registrations.length,
       0
@@ -170,7 +187,7 @@ export default async function PublicSeasonRoster({
                               {reg.user.firstName} {reg.user.lastName}
                             </>
                           )}
-                          {ri === 0 && (
+                          {reg.userId === team.leaderUserId && (
                             <span
                               className="ml-1 text-amber-400"
                               title="Team leader"
@@ -212,6 +229,45 @@ export default async function PublicSeasonRoster({
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {managerRows.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+              Team managers
+            </h2>
+            <div className="overflow-x-auto rounded border border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-900 text-left text-zinc-400">
+                  <tr>
+                    <th className="px-4 py-2">Manager</th>
+                    <th className="px-4 py-2">Team</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managerRows.map((row) => (
+                    <tr
+                      key={row.teamId}
+                      className="border-t border-zinc-800 hover:bg-zinc-900"
+                    >
+                      <td className="px-4 py-2 font-medium">
+                        {row.user
+                          ? `${row.user.firstName ?? ""} ${row.user.lastName ?? ""}`.trim()
+                          : "—"}
+                        <span
+                          className="ml-1 text-cyan-400"
+                          title="Team manager (not driving)"
+                        >
+                          ◆
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-zinc-400">{row.teamName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

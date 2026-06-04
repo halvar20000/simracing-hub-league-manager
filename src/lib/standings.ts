@@ -538,7 +538,13 @@ export async function computeTeamStandings(
   }
 
   const regs = await prisma.registration.findMany({
-    where: { seasonId, status: "APPROVED", teamId: { not: null } },
+    where: {
+      seasonId,
+      status: "APPROVED",
+      teamId: { not: null },
+      // Non-driving team managers don't count as drivers.
+      isTeamManager: false,
+    },
     select: { teamId: true, userId: true },
   });
   for (const r of regs) {

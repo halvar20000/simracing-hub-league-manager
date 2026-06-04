@@ -48,7 +48,7 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 | Slug | Name | Mode |
 |---|---|---|
 | `cas-gt3-wct` | CAS GT3 WCT | Solo + penalty pool auto-forgiveness; teams hard-capped at 3 drivers (`src/lib/team-limit.ts`) — both GT3 WCT only |
-| `cas-iec` | CAS IEC | Team mode (`Season.teamRegistration=true`) |
+| `cas-iec` | CAS IEC | Team mode (`Season.teamRegistration=true`). Optional non-driving Teammanager per team (`Team.managerUserId` + `Registration.isTeamManager`): registers via checkbox on the team form, auto-approved, no fee/invitation, excluded from rosters/caps/RSVP, listed separately, has Manage Team rights and assigns the Teamchef (`leaderUserId`, must be a driver) |
 | `cas-tss-gt4` | CAS TSS GT4 | Solo |
 | `cas-pccd` | CAS PCCD | Solo |
 | `cas-combined-cup` | CAS Combined Cup | Solo |

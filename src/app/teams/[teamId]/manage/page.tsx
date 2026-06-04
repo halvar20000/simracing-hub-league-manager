@@ -40,14 +40,19 @@ export default async function ManageTeamPage({
   if (!team) notFound();
 
   const isLeader = team.leaderUserId === session.user.id;
+  const isManager = team.managerUserId === session.user.id;
   const leaderReg = team.registrations.find(
     (r) => r.userId === team.leaderUserId
   );
+  // Driver rows only — the manager's own registration is never edited here.
   const teammates = team.registrations.filter(
-    (r) => r.userId !== team.leaderUserId && r.status !== "WITHDRAWN"
+    (r) =>
+      r.userId !== team.leaderUserId &&
+      r.status !== "WITHDRAWN" &&
+      !r.isTeamManager
   );
 
-  if (!isLeader) {
+  if (!isLeader && !isManager) {
     return (
       <div className="space-y-4">
         <Link
@@ -58,12 +63,10 @@ export default async function ManageTeamPage({
         </Link>
         <h1 className="text-2xl font-bold">Team management</h1>
         <p className="rounded border border-amber-700/50 bg-amber-950/30 p-3 text-sm text-amber-200">
-          Only the current team leader can manage this team. The leader is{" "}
+          Only the current team leader or team manager can manage this team.
+          The leader is{" "}
           <strong>
-            {team.registrations.find((r) => r.userId === team.leaderUserId)
-              ?.user.firstName}{" "}
-            {team.registrations.find((r) => r.userId === team.leaderUserId)
-              ?.user.lastName}
+            {leaderReg?.user.firstName} {leaderReg?.user.lastName}
           </strong>
           .
         </p>
@@ -86,6 +89,14 @@ export default async function ManageTeamPage({
           {team.season.year} · {leaderReg?.carClass?.name} ·{" "}
           {leaderReg?.car?.name}
         </p>
+        {isManager && (
+          <p className="mt-1 text-xs text-cyan-300">
+            You manage this team as Teammanager (not driving). Teamchef:{" "}
+            {leaderReg
+              ? `${leaderReg.user.firstName ?? ""} ${leaderReg.user.lastName ?? ""}`.trim()
+              : "—"}
+          </p>
+        )}
       </div>
 
       {/* === Update form === */}
@@ -109,7 +120,10 @@ export default async function ManageTeamPage({
 
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">
-              Your current iRating <span className="text-orange-400">*</span>
+              {isManager
+                ? `Teamchef's current iRating (${leaderReg?.user.firstName ?? ""} ${leaderReg?.user.lastName ?? ""})`
+                : "Your current iRating"}{" "}
+              <span className="text-orange-400">*</span>
             </span>
             <input
               name="leaderIRating"
@@ -213,11 +227,12 @@ export default async function ManageTeamPage({
       {teammates.length > 0 && (
         <section>
           <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
-            Transfer leadership
+            {isManager ? "Change Teamchef" : "Transfer leadership"}
           </h2>
           <p className="mb-3 text-xs text-zinc-500">
-            Pick a teammate to take over as team leader. Your registration
-            will be withdrawn. The new leader can manage the team afterwards.
+            {isManager
+              ? "Pick the driver who should be Teamchef. You stay team manager; the previous Teamchef stays a regular driver."
+              : "Pick a teammate to take over as team leader. Your registration will be withdrawn. The new leader can manage the team afterwards."}
           </p>
           <form
             action={transferTeamLeadership}
@@ -251,7 +266,7 @@ export default async function ManageTeamPage({
               type="submit"
               className="rounded border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200 hover:bg-amber-900/50"
             >
-              Transfer + withdraw me
+              {isManager ? "Set as Teamchef" : "Transfer + withdraw me"}
             </button>
           </form>
         </section>

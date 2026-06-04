@@ -472,6 +472,10 @@ export async function createTeamRegistration(
   const MAX_IRATING = 5000;
   const leaderIRatingRaw = String(formData.get("leaderIRating") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  // "Teammanager (not driving)": the registrant manages the team but is not
+  // a driver — no iRating/car, auto-approved, excluded from the driver cap.
+  // The Teamchef (Team.leaderUserId) is then picked among the driver rows.
+  const isTeamManager = String(formData.get("isTeamManager") ?? "") === "1";
 
   const errBack = (msg: string) =>
     redirect(
@@ -489,15 +493,19 @@ export async function createTeamRegistration(
   if (!carClass || carClass.seasonId !== seasonId) errBack("Invalid class");
   if (carClass!.isLocked) errBack("That class is locked — no new registrations");
 
-  if (!leaderIRatingRaw || !/^\d+$/.test(leaderIRatingRaw)) {
-    errBack("Your current iRating is required");
-  }
-  const leaderIRating = parseInt(leaderIRatingRaw, 10);
-  if (leaderIRating > MAX_IRATING) {
-    errBack(`iRating must be ${MAX_IRATING} or lower (you entered ${leaderIRating})`);
-  }
-  if (carClass!.shortCode === "LMP2" && leaderIRating < LMP2_MIN_IRATING) {
-    errBack(`LMP2 requires iRating ${LMP2_MIN_IRATING} or higher (you entered ${leaderIRating})`);
+  // Managers don't drive — their own iRating is irrelevant.
+  let leaderIRating: number | null = null;
+  if (!isTeamManager) {
+    if (!leaderIRatingRaw || !/^\d+$/.test(leaderIRatingRaw)) {
+      errBack("Your current iRating is required");
+    }
+    leaderIRating = parseInt(leaderIRatingRaw, 10);
+    if (leaderIRating > MAX_IRATING) {
+      errBack(`iRating must be ${MAX_IRATING} or lower (you entered ${leaderIRating})`);
+    }
+    if (carClass!.shortCode === "LMP2" && leaderIRating < LMP2_MIN_IRATING) {
+      errBack(`LMP2 requires iRating ${LMP2_MIN_IRATING} or higher (you entered ${leaderIRating})`);
+    }
   }
 
   const car = await prisma.car.findUnique({ where: { id: carId } });
@@ -516,7 +524,9 @@ export async function createTeamRegistration(
   });
 
   if (team) {
-    if (team.leaderUserId !== leader!.id) {
+    const mayResubmit =
+      team.leaderUserId === leader!.id || team.managerUserId === leader!.id;
+    if (!mayResubmit) {
       const teammate = await prisma.registration.findFirst({
         where: { teamId: team.id, userId: leader!.id },
         select: { id: true },
@@ -533,34 +543,71 @@ export async function createTeamRegistration(
     }
   }
   if (!team) {
+    // Manager mode: the registrant becomes the manager; the Teamchef
+    // (leaderUserId) is assigned below from the driver rows.
     team = await prisma.team.create({
-      data: { seasonId, name: teamName, leaderUserId: leader!.id },
+      data: isTeamManager
+        ? { seasonId, name: teamName, managerUserId: leader!.id }
+        : { seasonId, name: teamName, leaderUserId: leader!.id },
+    });
+  } else if (isTeamManager && team.managerUserId !== leader!.id) {
+    // Existing team without a manager being resubmitted by its leader who now
+    // ticks the manager box — claim the manager slot.
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: { managerUserId: leader!.id },
     });
   }
 
-  // ---------- leader registration ----------
+  // ---------- leader / manager registration ----------
+  // A manager registration is auto-approved: no iRacing invitation, no
+  // starting-fee tracking, no admin approval step. No car/class either —
+  // those belong to the drivers.
   await prisma.registration.upsert({
     where: { seasonId_userId: { seasonId, userId: leader!.id } },
-    update: {
-      status: "PENDING",
-      teamId: team.id,
-      carClassId,
-      carId,
-      iRating: leaderIRating,
-      notes,
-      approvedById: null,
-      approvedAt: null,
-    },
-    create: {
-      seasonId,
-      userId: leader!.id,
-      status: "PENDING",
-      teamId: team.id,
-      carClassId,
-      carId,
-      iRating: leaderIRating,
-      notes,
-    },
+    update: isTeamManager
+      ? {
+          status: "APPROVED",
+          isTeamManager: true,
+          teamId: team.id,
+          carClassId: null,
+          carId: null,
+          iRating: null,
+          notes,
+          approvedById: null,
+          approvedAt: new Date(),
+        }
+      : {
+          status: "PENDING",
+          isTeamManager: false,
+          teamId: team.id,
+          carClassId,
+          carId,
+          iRating: leaderIRating,
+          notes,
+          approvedById: null,
+          approvedAt: null,
+        },
+    create: isTeamManager
+      ? {
+          seasonId,
+          userId: leader!.id,
+          status: "APPROVED",
+          isTeamManager: true,
+          teamId: team.id,
+          notes,
+          approvedAt: new Date(),
+        }
+      : {
+          seasonId,
+          userId: leader!.id,
+          status: "PENDING",
+          teamId: team.id,
+          carClassId,
+          carId,
+          iRating: leaderIRating,
+          notes,
+        },
   });
 
   // ---------- teammates ----------
@@ -571,10 +618,23 @@ export async function createTeamRegistration(
     leagueSlug: season.league.slug,
     teamMaxDrivers: season.teamMaxDrivers,
   });
-  const maxTeammates = teamLimit != null ? Math.max(0, teamLimit - 1) : 4;
-  type TM = { name: string; iracingId: string; email: string; iRating: number };
+  // A non-driving manager does not count against the cap, so all `teamLimit`
+  // driver slots are available as teammate rows.
+  const maxTeammates =
+    teamLimit != null
+      ? Math.max(0, isTeamManager ? teamLimit : teamLimit - 1)
+      : isTeamManager
+        ? 5
+        : 4;
+  type TM = {
+    name: string;
+    iracingId: string;
+    email: string;
+    iRating: number;
+    rowIndex: number;
+  };
   const teammates: TM[] = [];
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 5; i++) {
     const name = String(formData.get(`teammate${i}Name`) ?? "").trim();
     const iracingId = String(formData.get(`teammate${i}IracingId`) ?? "").trim();
     const email = String(formData.get(`teammate${i}Email`) ?? "").trim();
@@ -595,18 +655,33 @@ export async function createTeamRegistration(
     if (carClass!.shortCode === "LMP2" && tIrating < LMP2_MIN_IRATING) {
       errBack(`Teammate row ${i}: LMP2 requires iRating ${LMP2_MIN_IRATING} or higher (entered ${tIrating})`);
     }
-    teammates.push({ name, iracingId, email, iRating: tIrating });
+    teammates.push({ name, iracingId, email, iRating: tIrating, rowIndex: i });
   }
 
   // Enforce the per-team driver cap server-side. The form only renders
   // `maxTeammates` rows but a crafted POST could still submit more.
   if (teammates.length > maxTeammates) {
     errBack(
-      `This season caps teams at ${teamLimit} drivers (team leader + ${maxTeammates} teammates). You submitted ${teammates.length} teammates — remove the extra rows.`
+      isTeamManager
+        ? `This season caps teams at ${teamLimit} drivers (your manager slot doesn't count). You submitted ${teammates.length} drivers — remove the extra rows.`
+        : `This season caps teams at ${teamLimit} drivers (team leader + ${maxTeammates} teammates). You submitted ${teammates.length} teammates — remove the extra rows.`
     );
   }
 
+  // Manager mode: at least one driver is required, and the Teamchef must be
+  // one of the driver rows (defaults to the first row).
+  let chefRowIndex: number | null = null;
+  if (isTeamManager) {
+    if (teammates.length === 0) {
+      errBack("Add at least one driver — a team can't race with only a manager.");
+    }
+    const chefRaw = String(formData.get("teamchefIndex") ?? "").trim();
+    chefRowIndex =
+      chefRaw && /^\d+$/.test(chefRaw) ? parseInt(chefRaw, 10) : 1;
+  }
+
   const teammateNames: string[] = [];
+  let chefUser: { id: string; firstName: string | null; lastName: string | null } | null = null;
   for (const tm of teammates) {
     // Find existing user by iRacing ID, then by email, then create.
     let mate = await prisma.user.findFirst({
@@ -660,6 +735,19 @@ export async function createTeamRegistration(
       },
     });
     teammateNames.push(`${mate.firstName ?? ""} ${mate.lastName ?? ""}`.trim());
+    // Exact Teamchef pick wins; the first created driver is the fallback.
+    if (isTeamManager && (chefRowIndex === tm.rowIndex || chefUser === null)) {
+      chefUser = mate;
+    }
+  }
+
+  // Manager mode: assign the Teamchef (Team.leaderUserId) from the driver
+  // rows so the chef keeps the usual Manage Team rights alongside the manager.
+  if (isTeamManager && chefUser) {
+    await prisma.team.update({
+      where: { id: team.id },
+      data: { leaderUserId: chefUser.id },
+    });
   }
 
   // ---------- Discord webhook (fire-and-forget) ----------
@@ -682,14 +770,23 @@ export async function createTeamRegistration(
             color: 0xff6b35,
             fields: [
               {
-                name: "Team leader",
+                name: isTeamManager ? "Team manager (not driving)" : "Team leader",
                 value: `${leader!.firstName} ${leader!.lastName} (iR ${leader!.iracingMemberId})`,
                 inline: false,
               },
+              ...(isTeamManager && chefUser
+                ? [
+                    {
+                      name: "Teamchef",
+                      value: `${chefUser.firstName ?? ""} ${chefUser.lastName ?? ""}`.trim(),
+                      inline: false,
+                    },
+                  ]
+                : []),
               ...(teammateNames.length > 0
                 ? [
                     {
-                      name: `Teammates (${teammateNames.length})`,
+                      name: `${isTeamManager ? "Drivers" : "Teammates"} (${teammateNames.length})`,
                       value: teammateNames.join("\n"),
                       inline: false,
                     },
@@ -728,10 +825,15 @@ async function requireTeamLeader(teamId: string) {
     },
   });
   if (!team) throw new Error("Team not found");
-  if (team.leaderUserId !== sessionUser.id) {
-    throw new Error("Only the team leader can perform this action");
+  // The non-driving team manager has the same management rights as the
+  // leader (Teamchef).
+  const isManager = team.managerUserId === sessionUser.id;
+  if (team.leaderUserId !== sessionUser.id && !isManager) {
+    throw new Error(
+      "Only the team leader or team manager can perform this action"
+    );
   }
-  return { team, sessionUser };
+  return { team, sessionUser, isManager };
 }
 
 export async function updateTeamRegistration(formData: FormData) {
@@ -739,16 +841,21 @@ export async function updateTeamRegistration(formData: FormData) {
   if (!teamId) throw new Error("teamId required");
   const { team } = await requireTeamLeader(teamId);
 
-  const carClass = team.registrations[0]?.carClassId
+  // Reference registration for class/car — never the manager's (it has none).
+  const baseReg = team.registrations.find(
+    (r) => !r.isTeamManager && r.status !== "WITHDRAWN"
+  );
+  const carClass = baseReg?.carClassId
     ? await prisma.carClass.findUnique({
-        where: { id: team.registrations[0].carClassId! },
+        where: { id: baseReg.carClassId },
       })
     : null;
 
-  // Leader iRating
+  // Leader (Teamchef) iRating — the field updates the chef's registration,
+  // also when a manager submits the form on the chef's behalf.
   const leaderRatingRaw = String(formData.get("leaderIRating") ?? "").trim();
   if (!leaderRatingRaw || !/^\d+$/.test(leaderRatingRaw)) {
-    throw new Error("Your current iRating is required");
+    throw new Error("The team leader's current iRating is required");
   }
   const leaderIRating = parseInt(leaderRatingRaw, 10);
   if (leaderIRating > TEAM_MAX_IRATING) {
@@ -763,15 +870,17 @@ export async function updateTeamRegistration(formData: FormData) {
   }
 
   // Update leader registration's iRating
-  await prisma.registration.update({
-    where: {
-      seasonId_userId: {
-        seasonId: team.seasonId,
-        userId: team.leaderUserId!,
+  if (team.leaderUserId) {
+    await prisma.registration.update({
+      where: {
+        seasonId_userId: {
+          seasonId: team.seasonId,
+          userId: team.leaderUserId,
+        },
       },
-    },
-    data: { iRating: leaderIRating },
-  });
+      data: { iRating: leaderIRating },
+    });
+  }
 
   // Parse + validate teammate rows
   type TM = {
@@ -809,9 +918,13 @@ export async function updateTeamRegistration(formData: FormData) {
     tmIn.push({ name, iracingId, email, iRating: iR });
   }
 
-  // Existing teammates (active, not the leader)
+  // Existing teammates (active, not the leader, not the manager — the
+  // manager's registration is never managed through the driver rows)
   const existingTeammates = team.registrations.filter(
-    (r) => r.userId !== team.leaderUserId && r.status !== "WITHDRAWN"
+    (r) =>
+      r.userId !== team.leaderUserId &&
+      r.status !== "WITHDRAWN" &&
+      !r.isTeamManager
   );
 
   const seenUserIds = new Set<string>();
@@ -843,6 +956,7 @@ export async function updateTeamRegistration(formData: FormData) {
       });
     }
     if (mate.id === team.leaderUserId) continue;
+    if (mate.id === team.managerUserId) continue; // manager never drives
 
     const existingReg = team.registrations.find((r) => r.userId === mate!.id);
 
@@ -861,8 +975,8 @@ export async function updateTeamRegistration(formData: FormData) {
         update: {
           status: "PENDING",
           teamId: team.id,
-          carClassId: team.registrations[0]?.carClassId,
-          carId: team.registrations[0]?.carId,
+          carClassId: baseReg?.carClassId,
+          carId: baseReg?.carId,
           startNumber: null,
           iRating: tm.iRating,
           iracingInvitationSent: "NO",
@@ -873,8 +987,8 @@ export async function updateTeamRegistration(formData: FormData) {
           userId: mate.id,
           status: "PENDING",
           teamId: team.id,
-          carClassId: team.registrations[0]?.carClassId,
-          carId: team.registrations[0]?.carId,
+          carClassId: baseReg?.carClassId,
+          carId: baseReg?.carId,
           startNumber: null,
           iRating: tm.iRating,
           iracingInvitationSent: "NO",
@@ -907,6 +1021,7 @@ export async function updateTeamRegistration(formData: FormData) {
       teamId: team.id,
       userId: { not: team.leaderUserId ?? '' },
       status: { not: 'WITHDRAWN' },
+      isTeamManager: false,
     },
     include: { user: true },
     orderBy: { createdAt: 'asc' },
@@ -992,7 +1107,7 @@ export async function transferTeamLeadership(formData: FormData) {
   if (!teamId) throw new Error("teamId required");
   if (!newLeaderUserId) throw new Error("New leader is required");
 
-  const { team, sessionUser } = await requireTeamLeader(teamId);
+  const { team, sessionUser, isManager } = await requireTeamLeader(teamId);
 
   const newLeaderReg = team.registrations.find(
     (r) => r.userId === newLeaderUserId && r.status !== "WITHDRAWN"
@@ -1000,22 +1115,37 @@ export async function transferTeamLeadership(formData: FormData) {
   if (!newLeaderReg) {
     throw new Error("New leader must be a current team member (not withdrawn)");
   }
+  if (newLeaderReg.isTeamManager) {
+    throw new Error("The team manager cannot be Teamchef — pick a driver");
+  }
   if (newLeaderUserId === sessionUser.id) {
     throw new Error("New leader cannot be yourself");
   }
 
-  await prisma.$transaction([
-    prisma.team.update({
+  if (isManager) {
+    // Manager reassigns the Teamchef among the drivers — the manager stays
+    // on the team, and the old chef stays a regular driver.
+    await prisma.team.update({
       where: { id: teamId },
       data: { leaderUserId: newLeaderUserId },
-    }),
-    prisma.registration.updateMany({
-      where: { teamId, userId: sessionUser.id },
-      data: { status: "WITHDRAWN" },
-    }),
-  ]);
+    });
+  } else {
+    // Leader hands over and leaves the team (historical behavior).
+    await prisma.$transaction([
+      prisma.team.update({
+        where: { id: teamId },
+        data: { leaderUserId: newLeaderUserId },
+      }),
+      prisma.registration.updateMany({
+        where: { teamId, userId: sessionUser.id },
+        data: { status: "WITHDRAWN" },
+      }),
+    ]);
+  }
 
-  const oldLeaderReg = team.registrations.find((r) => r.userId === sessionUser.id);
+  const oldLeaderReg = team.registrations.find(
+    (r) => r.userId === (isManager ? team.leaderUserId : sessionUser.id)
+  );
   const newLeaderName = newLeaderReg.user
     ? `${newLeaderReg.user.firstName ?? ''} ${newLeaderReg.user.lastName ?? ''}`.trim()
     : '—';

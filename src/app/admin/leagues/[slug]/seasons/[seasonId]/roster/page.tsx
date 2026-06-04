@@ -84,12 +84,33 @@ export default async function RosterPage({
       orderBy: { createdAt: "asc" },
       include: {
         registrations: {
+          where: { isTeamManager: false },
           include: { user: true, carClass: true, car: true },
           orderBy: { createdAt: "asc" },
         },
       },
     });
     const teamsWithRegs = teams.filter((t) => t.registrations.length > 0);
+    // Non-driving team managers — separate list, no approval/fee/invitation
+    // workflow applies to them. Source of truth is Team.managerUserId (one
+    // manager may run several teams): one row per managed team.
+    const managedTeams = teams.filter((t) => t.managerUserId);
+    const managerUsers = await prisma.user.findMany({
+      where: { id: { in: managedTeams.map((t) => t.managerUserId!) } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        iracingMemberId: true,
+      },
+    });
+    const managerById = new Map(managerUsers.map((u) => [u.id, u]));
+    const managerRows = managedTeams.map((t) => ({
+      teamId: t.id,
+      teamName: t.name,
+      user: managerById.get(t.managerUserId!) ?? null,
+    }));
     const driverTotal = teamsWithRegs.reduce(
       (s, t) => s + t.registrations.length,
       0
@@ -248,7 +269,7 @@ export default async function RosterPage({
                           ) : (
                             <>{reg.user.firstName} {reg.user.lastName}</>
                           )}
-                          {ri === 0 && (
+                          {reg.userId === team.leaderUserId && (
                             <span
                               className="ml-1 text-amber-400"
                               title="Team leader"
@@ -306,6 +327,58 @@ export default async function RosterPage({
               </table>
             </DoubleScrollWrapper>
           </>
+        )}
+
+        {managerRows.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+              Team managers (not driving)
+            </h2>
+            <p className="text-xs text-zinc-500">
+              Auto-approved, no starting fee, no iRacing invitation. They can
+              manage their team&apos;s lineup and Teamchef. One manager can run
+              several teams.
+            </p>
+            <div className="overflow-x-auto rounded border border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-900 text-left text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-2">Manager</th>
+                    <th className="px-3 py-2">Team</th>
+                    <th className="px-3 py-2">iRacing ID</th>
+                    <th className="px-3 py-2">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managerRows.map((row) => (
+                    <tr
+                      key={row.teamId}
+                      className="border-t border-zinc-800 hover:bg-zinc-900"
+                    >
+                      <td className="px-3 py-2 font-medium">
+                        {row.user
+                          ? `${row.user.firstName ?? ""} ${row.user.lastName ?? ""}`.trim()
+                          : "—"}
+                        <span
+                          className="ml-1 text-cyan-400"
+                          title="Team manager (not driving)"
+                        >
+                          ◆
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-zinc-400">{row.teamName}</td>
+                      <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                        {row.user?.iracingMemberId ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-zinc-400">
+                        {row.user?.email ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </div>
     );

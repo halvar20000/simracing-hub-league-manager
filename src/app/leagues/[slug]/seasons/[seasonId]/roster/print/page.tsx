@@ -22,7 +22,7 @@ export default async function PublicPrintRosterPage({
   if (!season || season.league.slug !== slug) notFound();
 
   const registrations = await prisma.registration.findMany({
-    where: { seasonId, status: { in: ["APPROVED", "PENDING"] } },
+    where: { seasonId, status: { in: ["APPROVED", "PENDING"] }, isTeamManager: false },
     include: {
       user: true,
       team: true,

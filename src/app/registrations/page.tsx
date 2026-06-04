@@ -28,6 +28,20 @@ export default async function MyRegistrationsPage({
     orderBy: { createdAt: "desc" },
   });
 
+  // Teams this user manages (Team.managerUserId) — a manager can run several
+  // teams per season, so the Manage links can't come from the single
+  // registration row alone.
+  const managedTeams = await prisma.team.findMany({
+    where: { managerUserId: session.user.id },
+    select: { id: true, name: true, seasonId: true },
+    orderBy: { name: "asc" },
+  });
+  const managedBySeason = new Map<string, { id: string; name: string }[]>();
+  for (const t of managedTeams) {
+    if (!managedBySeason.has(t.seasonId)) managedBySeason.set(t.seasonId, []);
+    managedBySeason.get(t.seasonId)!.push({ id: t.id, name: t.name });
+  }
+
   const me = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { firstName: true, lastName: true },
@@ -121,16 +135,32 @@ export default async function MyRegistrationsPage({
                   )}
                 </div>
               </div>
-              {r.season.teamRegistration && r.team && r.team.leaderUserId === session.user.id && (
-                <div className="mt-3">
-                  <Link
-                    href={`/teams/${r.team.id}/manage`}
-                    className="inline-block rounded border border-orange-700 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-300 hover:bg-orange-900/40"
-                  >
-                    Manage team →
-                  </Link>
-                </div>
-              )}
+              {r.season.teamRegistration &&
+                (() => {
+                  // One link per team: the team the user leads + every team
+                  // they manage (a manager can run several teams).
+                  const links = new Map<string, string>();
+                  if (r.team && r.team.leaderUserId === session.user.id) {
+                    links.set(r.team.id, r.team.name);
+                  }
+                  for (const t of managedBySeason.get(r.season.id) ?? []) {
+                    links.set(t.id, t.name);
+                  }
+                  if (links.size === 0) return null;
+                  return (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {[...links].map(([id, name]) => (
+                        <Link
+                          key={id}
+                          href={`/teams/${id}/manage`}
+                          className="inline-block rounded border border-orange-700 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-300 hover:bg-orange-900/40"
+                        >
+                          Manage {links.size > 1 ? name : "team"} →
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })()}
               {(() => {
                 const pi = getLeaguePayment(r.season.league);
                 if (!pi) return null;

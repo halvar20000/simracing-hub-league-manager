@@ -10,6 +10,7 @@ import SoloIRatingValidator from "@/components/SoloIRatingValidator";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import TeamPicker from "@/components/TeamPicker";
+import TeamManagerToggle from "@/components/TeamManagerToggle";
 import { teamSizeLimit, GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 import {
@@ -253,10 +254,21 @@ export default async function RegisterPage({
       teamMaxDrivers: season.teamMaxDrivers,
     });
     const maxTeammates = teamLimit != null ? Math.max(0, teamLimit - 1) : 4;
+    // A non-driving Teammanager frees one extra driver slot — render the
+    // extra row(s) but keep them hidden unless manager mode is active.
+    const maxManagerRows = teamLimit != null ? teamLimit : 5;
     const teammateRowIndices = Array.from(
-      { length: maxTeammates },
+      { length: maxManagerRows },
       (_, i) => i + 1
     );
+    const isManagerReg = activeRegistration?.isTeamManager ?? false;
+    // Teams this user already manages in this season — a manager can register
+    // several teams (each submit with a NEW team name creates another team).
+    const myManagedTeams = await prisma.team.findMany({
+      where: { seasonId, managerUserId: session.user.id },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
 
     // Pre-fill teammate rows from existing team if user is the leader.
     const leaderTeamId = activeRegistration?.teamId ?? null;
@@ -266,12 +278,20 @@ export default async function RegisterPage({
             teamId: leaderTeamId,
             userId: { not: session.user.id },
             status: { notIn: ["WITHDRAWN", "REJECTED"] },
+            isTeamManager: false,
           },
           include: { user: true },
           orderBy: { createdAt: "asc" },
         })
       : [];
     const tmRow = (i: number) => teammateRegs[i] ?? null;
+    // Teamchef preselect: the row whose user is the current team leader.
+    const chefDefaultIndex =
+      (activeRegistration?.team?.leaderUserId
+        ? teammateRegs.findIndex(
+            (r) => r.userId === activeRegistration.team!.leaderUserId
+          )
+        : -1) + 1; // 0 = none → first row checked below via `|| i === 1`
 
     return (
       <div className="max-w-3xl space-y-6">
@@ -301,7 +321,7 @@ export default async function RegisterPage({
         )}
 
         <div className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm">
-          <p className="text-zinc-400">Team leader (you):</p>
+          <p className="text-zinc-400">Registering (you):</p>
           <p className="mt-1 font-semibold text-zinc-200">
             {user.firstName} {user.lastName}{" "}
             <span className="text-zinc-500">
@@ -313,6 +333,24 @@ export default async function RegisterPage({
         <form action={createTeam} className="space-y-4">
           <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
             <legend className="px-2 text-sm text-zinc-300">Team</legend>
+            <TeamManagerToggle defaultChecked={isManagerReg} />
+            {myManagedTeams.length > 0 && (
+              <p className="rounded border border-zinc-700 bg-zinc-900 p-2 text-xs text-zinc-400">
+                You already manage{" "}
+                <strong className="text-zinc-200">
+                  {myManagedTeams.map((t) => t.name).join(", ")}
+                </strong>
+                . Enter a <strong>new team name</strong> below to register an
+                additional team — existing teams are edited via{" "}
+                <Link
+                  href="/registrations"
+                  className="text-orange-400 underline hover:text-orange-300"
+                >
+                  Manage Team
+                </Link>
+                .
+              </p>
+            )}
             <label className="block">
               <span className="mb-1 block text-sm text-zinc-300">
                 Team name <span className="text-orange-400">*</span>
@@ -325,7 +363,11 @@ export default async function RegisterPage({
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
             </label>
-            <label className="block">
+            <label
+              className="block"
+              data-driver-only
+              style={isManagerReg ? { display: "none" } : undefined}
+            >
               <span className="mb-1 block text-sm text-zinc-300">
                 Your current iRating <span className="text-orange-400">*</span>
               </span>
@@ -334,7 +376,9 @@ export default async function RegisterPage({
                 type="number"
                 min={0}
                 max={20000}
-                required
+                required={!isManagerReg}
+                disabled={isManagerReg}
+                data-was-required="1"
                 defaultValue={activeRegistration?.iRating ?? ""}
                 placeholder="e.g. 2400"
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
@@ -392,7 +436,9 @@ export default async function RegisterPage({
               {teamLimit != null && (
                 <>
                   {" "}This season caps teams at <strong>{teamLimit} drivers</strong> total
-                  (team leader + {maxTeammates} teammates).
+                  (team leader + {maxTeammates} teammates). As Teammanager you
+                  don&apos;t count against the cap — you register up to{" "}
+                  {maxManagerRows} drivers and mark one of them as Teamchef.
                 </>
               )}
             </p>
@@ -404,6 +450,13 @@ export default async function RegisterPage({
                     <th className="pb-2 pr-2 font-normal">iRacing ID</th>
                     <th className="pb-2 pr-2 font-normal">iRating</th>
                     <th className="pb-2 font-normal">Email (optional)</th>
+                    <th
+                      className="pb-2 pl-2 font-normal"
+                      data-chef-cell
+                      style={isManagerReg ? undefined : { display: "none" }}
+                    >
+                      Teamchef
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -414,12 +467,26 @@ export default async function RegisterPage({
                       : "";
                     const preIr = pre?.user.iracingMemberId ?? "";
                     const preEmail = pre?.user.email ?? "";
+                    // Rows beyond the normal teammate allowance only exist in
+                    // manager mode (manager doesn't occupy a driver slot).
+                    const managerOnlyRow = i > maxTeammates;
                     return (
-                      <tr key={i}>
+                      <tr
+                        key={i}
+                        {...(managerOnlyRow
+                          ? { "data-manager-only-row": "" }
+                          : {})}
+                        style={
+                          managerOnlyRow && !isManagerReg
+                            ? { display: "none" }
+                            : undefined
+                        }
+                      >
                         <td className="py-1 pr-2">
                           <input
                             name={`teammate${i}Name`}
                             defaultValue={preName}
+                            disabled={managerOnlyRow && !isManagerReg}
                             placeholder="John Doe"
                             className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
                           />
@@ -429,6 +496,7 @@ export default async function RegisterPage({
                             name={`teammate${i}IracingId`}
                             defaultValue={preIr}
                             inputMode="numeric"
+                            disabled={managerOnlyRow && !isManagerReg}
                             placeholder="123456"
                             className="w-32 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
                           />
@@ -440,6 +508,7 @@ export default async function RegisterPage({
                             min={0}
                             max={20000}
                             inputMode="numeric"
+                            disabled={managerOnlyRow && !isManagerReg}
                             defaultValue={pre?.iRating ?? ""}
                             placeholder="2400"
                             className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
@@ -450,8 +519,27 @@ export default async function RegisterPage({
                             name={`teammate${i}Email`}
                             type="email"
                             defaultValue={preEmail}
+                            disabled={managerOnlyRow && !isManagerReg}
                             placeholder="optional@example.com"
                             className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                          />
+                        </td>
+                        <td
+                          className="py-1 pl-2 text-center"
+                          data-chef-cell
+                          style={isManagerReg ? undefined : { display: "none" }}
+                        >
+                          <input
+                            type="radio"
+                            name="teamchefIndex"
+                            value={i}
+                            disabled={!isManagerReg}
+                            defaultChecked={
+                              chefDefaultIndex === i ||
+                              (chefDefaultIndex === 0 && i === 1)
+                            }
+                            title="This driver is the Teamchef"
+                            className="h-4 w-4 accent-orange-500"
                           />
                         </td>
                       </tr>

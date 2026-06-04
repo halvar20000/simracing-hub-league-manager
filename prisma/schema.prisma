@@ -249,6 +249,10 @@ model Team {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @default(now()) @updatedAt
   leaderUserId  String?
+  // Non-driving team manager (one per team). Has Manage Team rights like the
+  // leader, never counts against the driver cap, never appears in driver
+  // rosters. Set when someone registers the team as "Teammanager".
+  managerUserId String?
 
   @@unique([seasonId, name])
 }
@@ -312,6 +316,9 @@ model Registration {
   car        Car?        @relation(fields: [carId], references: [id])
   proAmClass ProAmClass?
   inGdc      Boolean     @default(false)
+  // True for a non-driving team manager registration (IEC "Teammanager"):
+  // auto-approved, no car/iRating, excluded from rosters and driver caps.
+  isTeamManager Boolean @default(false)
 
   notes        String?
   approvedById String?
