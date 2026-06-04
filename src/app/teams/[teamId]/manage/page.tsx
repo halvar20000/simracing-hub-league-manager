@@ -50,6 +50,11 @@ export default async function ManageTeamPage({
 
   const isLeader = team.leaderUserId === session.user.id;
   const isManager = team.managerUserId === session.user.id;
+  const viewer = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  const isAdmin = viewer?.role === "ADMIN";
   const leaderReg = team.registrations.find(
     (r) => r.userId === team.leaderUserId
   );
@@ -95,7 +100,7 @@ export default async function ManageTeamPage({
       !r.isTeamManager
   );
 
-  if (!isLeader && !isManager) {
+  if (!isLeader && !isManager && !isAdmin) {
     return (
       <div className="space-y-4">
         <Link
@@ -282,7 +287,7 @@ export default async function ManageTeamPage({
         <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
           Class &amp; car
         </h2>
-        {classCarLocked ? (
+        {classCarLocked && !isAdmin ? (
           <p className="rounded border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400">
             The season has started — class and car are locked. Current:{" "}
             <strong className="text-zinc-200">
@@ -295,6 +300,11 @@ export default async function ManageTeamPage({
             <p className="mb-3 text-xs text-zinc-500">
               Changing class or car applies to the whole team (every driver).
               Possible until the first race of the season has started.
+              {classCarLocked && isAdmin && (
+                <span className="text-amber-300">
+                  {" "}Season has started — visible to you as admin only.
+                </span>
+              )}
             </p>
             <form
               action={updateTeamClassCar}
@@ -364,8 +374,8 @@ export default async function ManageTeamPage({
         </section>
       )}
 
-      {/* === Team manager (assign / remove) — Teamchef only === */}
-      {isLeader && (
+      {/* === Team manager (assign / remove) — Teamchef or admin === */}
+      {(isLeader || isAdmin) && (
         <section>
           <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
             Team manager

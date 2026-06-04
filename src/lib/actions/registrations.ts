@@ -849,14 +849,19 @@ async function requireTeamLeader(teamId: string) {
   });
   if (!team) throw new Error("Team not found");
   // The non-driving team manager has the same management rights as the
-  // leader (Teamchef).
+  // leader (Teamchef). Admins can manage every team.
   const isManager = team.managerUserId === sessionUser.id;
-  if (team.leaderUserId !== sessionUser.id && !isManager) {
+  const me = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { role: true },
+  });
+  const isAdmin = me?.role === "ADMIN";
+  if (team.leaderUserId !== sessionUser.id && !isManager && !isAdmin) {
     throw new Error(
-      "Only the team leader or team manager can perform this action"
+      "Only the team leader, team manager or an admin can perform this action"
     );
   }
-  return { team, sessionUser, isManager };
+  return { team, sessionUser, isManager, isAdmin };
 }
 
 export async function updateTeamRegistration(formData: FormData) {
@@ -1209,21 +1214,23 @@ export async function updateTeamClassCar(formData: FormData) {
   const carClassId = String(formData.get("carClassId") ?? "").trim();
   const carId = String(formData.get("carId") ?? "").trim();
   if (!teamId) throw new Error("teamId required");
-  const { team } = await requireTeamLeader(teamId);
+  const { team, isAdmin } = await requireTeamLeader(teamId);
 
   const back = `/teams/${teamId}/manage`;
   const fail = (msg: string): never =>
     redirect(`${back}?error=${encodeURIComponent(msg)}`);
 
-  // Locked once the first race of the season has started.
-  const startedRound = await prisma.round.findFirst({
-    where: { seasonId: team.seasonId, startsAt: { lte: new Date() } },
-    select: { id: true },
-  });
-  if (startedRound) {
-    fail(
-      "The season has started — class and car can no longer be changed here. Contact an admin."
-    );
+  // Locked once the first race of the season has started — admins bypass.
+  if (!isAdmin) {
+    const startedRound = await prisma.round.findFirst({
+      where: { seasonId: team.seasonId, startsAt: { lte: new Date() } },
+      select: { id: true },
+    });
+    if (startedRound) {
+      fail(
+        "The season has started — class and car can no longer be changed here. Contact an admin."
+      );
+    }
   }
 
   if (!carClassId) fail("Class is required");

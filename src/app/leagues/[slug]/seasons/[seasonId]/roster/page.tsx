@@ -47,9 +47,18 @@ export default async function PublicSeasonRoster({
   if (!season || season.league.slug !== slug) notFound();
 
   if (season.teamRegistration) {
-    // Signed-in chefs/managers get a "Manage team" link on their own team.
+    // Signed-in chefs/managers get a "Manage team" link on their own team;
+    // admins see it on every team.
     const session = await auth();
     const viewerId = session?.user?.id ?? null;
+    const viewerIsAdmin = viewerId
+      ? (
+          await prisma.user.findUnique({
+            where: { id: viewerId },
+            select: { role: true },
+          })
+        )?.role === "ADMIN"
+      : false;
     const teams = await prisma.team.findMany({
       where: { seasonId },
       orderBy: { createdAt: "asc" },
@@ -179,7 +188,8 @@ export default async function PublicSeasonRoster({
                               {team.name}
                             </div>
                             {viewerId &&
-                              (team.leaderUserId === viewerId ||
+                              (viewerIsAdmin ||
+                                team.leaderUserId === viewerId ||
                                 team.managerUserId === viewerId) && (
                                 <Link
                                   href={`/teams/${team.id}/manage`}
