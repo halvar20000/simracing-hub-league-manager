@@ -330,11 +330,12 @@ export default async function ManageTeamPage({
           ) : (
             <>
               <p className="mb-3 text-xs text-zinc-500">
-                Assign a non-driving Teammanager. They get the same management
-                rights as you (edit lineup, change Teamchef), don&apos;t count
-                against the driver limit and never appear in the driver
-                roster. The person must have signed in to CLS with Discord at
-                least once.
+                Assign a Teammanager. They get the same management rights as
+                you (edit lineup, change Teamchef), don&apos;t count against
+                the driver limit and don&apos;t appear in this team&apos;s
+                driver roster. They may drive for another team and manage
+                several teams — but not drive for a team they manage. The
+                person must have signed in to CLS with Discord at least once.
               </p>
               <form
                 action={assignTeamManager}

@@ -563,52 +563,75 @@ export async function createTeamRegistration(
   // A manager registration is auto-approved: no iRacing invitation, no
   // starting-fee tracking, no admin approval step. No car/class either —
   // those belong to the drivers.
-  await prisma.registration.upsert({
+  //
+  // A manager may also be a DRIVER of another team. In that case his driver
+  // registration must stay untouched — the manager role lives purely on
+  // Team.managerUserId. Only pure (non-driving) managers get/keep a manager
+  // registration row.
+  const ownReg = await prisma.registration.findUnique({
     where: { seasonId_userId: { seasonId, userId: leader!.id } },
-    update: isTeamManager
-      ? {
-          status: "APPROVED",
-          isTeamManager: true,
-          teamId: team.id,
-          carClassId: null,
-          carId: null,
-          iRating: null,
-          notes,
-          approvedById: null,
-          approvedAt: new Date(),
-        }
-      : {
-          status: "PENDING",
-          isTeamManager: false,
-          teamId: team.id,
-          carClassId,
-          carId,
-          iRating: leaderIRating,
-          notes,
-          approvedById: null,
-          approvedAt: null,
-        },
-    create: isTeamManager
-      ? {
-          seasonId,
-          userId: leader!.id,
-          status: "APPROVED",
-          isTeamManager: true,
-          teamId: team.id,
-          notes,
-          approvedAt: new Date(),
-        }
-      : {
-          seasonId,
-          userId: leader!.id,
-          status: "PENDING",
-          teamId: team.id,
-          carClassId,
-          carId,
-          iRating: leaderIRating,
-          notes,
-        },
+    select: { status: true, isTeamManager: true, teamId: true },
   });
+  const ownActiveDriverReg =
+    !!ownReg &&
+    !ownReg.isTeamManager &&
+    ownReg.status !== "WITHDRAWN" &&
+    ownReg.status !== "REJECTED";
+  if (isTeamManager && ownActiveDriverReg && ownReg!.teamId === team.id) {
+    errBack(
+      "You drive for this team — a manager must not drive for the team he manages."
+    );
+  }
+  const skipOwnRegistration = isTeamManager && ownActiveDriverReg;
+
+  if (!skipOwnRegistration) {
+    await prisma.registration.upsert({
+      where: { seasonId_userId: { seasonId, userId: leader!.id } },
+      update: isTeamManager
+        ? {
+            status: "APPROVED",
+            isTeamManager: true,
+            teamId: team.id,
+            carClassId: null,
+            carId: null,
+            iRating: null,
+            notes,
+            approvedById: null,
+            approvedAt: new Date(),
+          }
+        : {
+            status: "PENDING",
+            isTeamManager: false,
+            teamId: team.id,
+            carClassId,
+            carId,
+            iRating: leaderIRating,
+            notes,
+            approvedById: null,
+            approvedAt: null,
+          },
+      create: isTeamManager
+        ? {
+            seasonId,
+            userId: leader!.id,
+            status: "APPROVED",
+            isTeamManager: true,
+            teamId: team.id,
+            notes,
+            approvedAt: new Date(),
+          }
+        : {
+            seasonId,
+            userId: leader!.id,
+            status: "PENDING",
+            teamId: team.id,
+            carClassId,
+            carId,
+            iRating: leaderIRating,
+            notes,
+          },
+    });
+  }
 
   // ---------- teammates ----------
   // Cap how many teammate rows we accept. The leader counts as one driver, so
@@ -1238,15 +1261,21 @@ export async function assignTeamManager(formData: FormData) {
     where: {
       seasonId_userId: { seasonId: team.seasonId, userId: manager.id },
     },
-    select: { id: true, status: true, isTeamManager: true },
+    select: { id: true, status: true, isTeamManager: true, teamId: true },
   });
   const regActive =
     existingReg &&
     existingReg.status !== "WITHDRAWN" &&
     existingReg.status !== "REJECTED";
-  if (regActive && !existingReg.isTeamManager) {
+  // A manager may drive for ANOTHER team (driver of one team, manager of any
+  // number of teams) — only driving for the team he manages is off-limits.
+  if (
+    regActive &&
+    !existingReg.isTeamManager &&
+    existingReg.teamId === team.id
+  ) {
     fail(
-      `${manager.firstName ?? ""} ${manager.lastName ?? ""} is already registered as a driver this season — a Teammanager must not drive.`
+      `${manager.firstName ?? ""} ${manager.lastName ?? ""} drives for this team — a manager must not drive for the team he manages. Drivers of other teams are fine.`
     );
   }
 
@@ -1255,9 +1284,11 @@ export async function assignTeamManager(formData: FormData) {
     data: { managerUserId: manager.id },
   });
 
-  // Ensure the manager has an (auto-approved) manager registration so they
-  // appear under "My Registrations". Multi-team managers keep their single
-  // row — Team.managerUserId is the source of truth per team.
+  // Ensure a pure (non-driving) manager has an auto-approved manager
+  // registration so they appear under "My Registrations". A driver-manager
+  // keeps his driver registration untouched — his manager role lives purely
+  // on Team.managerUserId. Multi-team managers keep their single row —
+  // Team.managerUserId is the source of truth per team.
   if (!regActive) {
     await prisma.registration.upsert({
       where: {
@@ -1294,7 +1325,7 @@ export async function assignTeamManager(formData: FormData) {
     seasonLabel: `${team.season.name} ${team.season.year}`,
     fields: [
       {
-        name: "Team manager assigned (not driving)",
+        name: "Team manager assigned",
         value: managerName || "—",
         inline: false,
       },
