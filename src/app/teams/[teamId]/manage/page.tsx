@@ -10,6 +10,7 @@ import {
   removeTeamManager,
 } from "@/lib/actions/registrations";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
+import UserSearchPicker from "@/components/UserSearchPicker";
 
 export default async function ManageTeamPage({
   params,
@@ -345,17 +346,12 @@ export default async function ManageTeamPage({
                   name="redirectTo"
                   value={`/teams/${team.id}/manage`}
                 />
-                <label className="block">
+                <div className="block">
                   <span className="mb-1 block text-xs text-zinc-400">
-                    Manager&apos;s email or full name
+                    Search the manager&apos;s CLS account
                   </span>
-                  <input
-                    name="managerQuery"
-                    required
-                    placeholder="manager@example.com or John Doe"
-                    className="w-72 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
-                  />
-                </label>
+                  <UserSearchPicker name="managerUserId" />
+                </div>
                 <button
                   type="submit"
                   className="rounded border border-cyan-700/50 bg-cyan-950/30 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-900/50"

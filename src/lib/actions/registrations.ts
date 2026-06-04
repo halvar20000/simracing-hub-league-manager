@@ -1202,68 +1202,30 @@ async function requireChefOrAdmin(teamId: string) {
 
 export async function assignTeamManager(formData: FormData) {
   const teamId = String(formData.get("teamId") ?? "");
-  const managerQuery = String(formData.get("managerQuery") ?? "").trim();
+  const managerUserId = String(formData.get("managerUserId") ?? "").trim();
   const redirectTo =
     String(formData.get("redirectTo") ?? "") || `/teams/${teamId}/manage`;
   if (!teamId) throw new Error("teamId required");
   const { team } = await requireChefOrAdmin(teamId);
 
-  const fail = (msg: string) =>
+  const fail = (msg: string): never =>
     redirect(`${redirectTo}?error=${encodeURIComponent(msg)}`);
 
-  if (!managerQuery) fail("Enter the manager's email or full name");
-
-  // Resolve the user: exact email first, otherwise an unambiguous name match.
-  let candidates: { id: string; firstName: string | null; lastName: string | null }[];
-  if (managerQuery.includes("@")) {
-    candidates = await prisma.user.findMany({
-      where: { email: { equals: managerQuery, mode: "insensitive" } },
-      select: { id: true, firstName: true, lastName: true },
-      take: 5,
-    });
-  } else {
-    const parts = managerQuery.split(/\s+/);
-    candidates = await prisma.user.findMany({
-      where: {
-        OR: [
-          { name: { equals: managerQuery, mode: "insensitive" } },
-          ...(parts.length >= 2
-            ? [
-                {
-                  AND: [
-                    {
-                      firstName: {
-                        equals: parts[0],
-                        mode: "insensitive" as const,
-                      },
-                    },
-                    {
-                      lastName: {
-                        equals: parts.slice(1).join(" "),
-                        mode: "insensitive" as const,
-                      },
-                    },
-                  ],
-                },
-              ]
-            : []),
-        ],
-      },
-      select: { id: true, firstName: true, lastName: true },
-      take: 5,
-    });
+  // The picker submits a user ID — free text is never accepted. Validate the
+  // ID against the User table regardless (the client check is convenience).
+  if (!managerUserId) {
+    fail("Pick the manager from the search results — free text isn't accepted.");
   }
-  if (candidates.length === 0) {
+  const managerOrNull = await prisma.user.findUnique({
+    where: { id: managerUserId },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  if (!managerOrNull) {
     fail(
-      `No CLS account found for "${managerQuery}". The manager must sign in to CLS with Discord once — then try again (use their exact email or full name).`
+      "That CLS account doesn't exist. The manager must sign in to CLS with Discord once — then search again."
     );
   }
-  if (candidates.length > 1) {
-    fail(
-      `"${managerQuery}" matches several accounts — use the person's email address instead.`
-    );
-  }
-  const manager = candidates[0];
+  const manager = managerOrNull!;
 
   if (manager.id === team.leaderUserId) {
     fail(
