@@ -490,7 +490,12 @@ export async function computeTeamStandings(
   }
 
   for (const round of rounds) {
-    const byTeam = new Map<string, number[]>();
+    // Multi-race rounds (raceNumber 1, 2, …) are scored per race: best N
+    // driver results per team within EACH race, summed across the round's
+    // races. This mirrors iRLM's team scoring (Race 1 + Race 2 sessions
+    // scored independently, then combined). Single-race rounds behave
+    // exactly as before.
+    const byTeamRace = new Map<string, Map<number, number[]>>();
     for (const r of round.raceResults) {
       const teamId = r.registration.teamId;
       if (!teamId) continue;
@@ -499,15 +504,20 @@ export async function computeTeamStandings(
         : r.rawPointsAwarded +
           r.participationPointsAwarded -
           r.manualPenaltyPoints;
-      if (!byTeam.has(teamId)) byTeam.set(teamId, []);
-      byTeam.get(teamId)!.push(points);
+      if (!byTeamRace.has(teamId)) byTeamRace.set(teamId, new Map());
+      const races = byTeamRace.get(teamId)!;
+      if (!races.has(r.raceNumber)) races.set(r.raceNumber, []);
+      races.get(r.raceNumber)!.push(points);
     }
-    for (const [teamId, pointsList] of byTeam) {
-      const sorted = [...pointsList].sort((a, b) => b - a);
-      const taken = Number.isFinite(bestN)
-        ? sorted.slice(0, bestN as number)
-        : sorted;
-      const sum = taken.reduce((s, p) => s + p, 0);
+    for (const [teamId, races] of byTeamRace) {
+      let sum = 0;
+      for (const pointsList of races.values()) {
+        const sorted = [...pointsList].sort((a, b) => b - a);
+        const taken = Number.isFinite(bestN)
+          ? sorted.slice(0, bestN as number)
+          : sorted;
+        sum += taken.reduce((s, p) => s + p, 0);
+      }
       const t = teamMap.get(teamId);
       if (t) t.roundContributions.push(sum);
     }
