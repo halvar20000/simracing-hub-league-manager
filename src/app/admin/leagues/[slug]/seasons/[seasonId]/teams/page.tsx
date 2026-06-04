@@ -21,6 +21,17 @@ export default async function TeamsListPage({
     orderBy: { name: "asc" },
     include: { _count: { select: { registrations: true } } },
   });
+  const managerUsers = await prisma.user.findMany({
+    where: {
+      id: {
+        in: teams
+          .map((t) => t.managerUserId)
+          .filter((x): x is string => !!x),
+      },
+    },
+    select: { id: true, firstName: true, lastName: true },
+  });
+  const managerById = new Map(managerUsers.map((u) => [u.id, u]));
 
   return (
     <div className="space-y-6">
@@ -49,6 +60,7 @@ export default async function TeamsListPage({
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Short name</th>
               <th className="px-4 py-3">Drivers</th>
+              <th className="px-4 py-3">Manager</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -65,6 +77,17 @@ export default async function TeamsListPage({
                 <td className="px-4 py-3 text-zinc-400">
                   {t._count.registrations}
                 </td>
+                <td className="px-4 py-3 text-zinc-400">
+                  {t.managerUserId && managerById.get(t.managerUserId) ? (
+                    <>
+                      <span className="text-cyan-400">◆</span>{" "}
+                      {managerById.get(t.managerUserId)!.firstName}{" "}
+                      {managerById.get(t.managerUserId)!.lastName}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <Link
                     href={`/admin/leagues/${slug}/seasons/${seasonId}/teams/${t.id}/edit`}
@@ -78,7 +101,7 @@ export default async function TeamsListPage({
             {teams.length === 0 && (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={5}
                   className="px-4 py-6 text-center text-zinc-500"
                 >
                   No teams yet. Create the first one.

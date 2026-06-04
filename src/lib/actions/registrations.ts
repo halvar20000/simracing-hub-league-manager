@@ -1175,6 +1175,249 @@ export async function transferTeamLeadership(formData: FormData) {
 }
 
 // ============================================================================
+// Team manager assignment on an EXISTING team. Gated to the Teamchef
+// (Team.leaderUserId) or an ADMIN — never self-service, so nobody can claim
+// management of a foreign team. The manager-to-be must already have a CLS
+// account (one Discord sign-in) and must not be an active driver this season.
+// ============================================================================
+
+async function requireChefOrAdmin(teamId: string) {
+  const sessionUser = await requireAuth();
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { season: { include: { league: true } } },
+  });
+  if (!team) throw new Error("Team not found");
+  const me = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { role: true },
+  });
+  const allowed =
+    team.leaderUserId === sessionUser.id || me?.role === "ADMIN";
+  if (!allowed) {
+    throw new Error("Only the Teamchef or an admin can assign a team manager");
+  }
+  return { team, sessionUser };
+}
+
+export async function assignTeamManager(formData: FormData) {
+  const teamId = String(formData.get("teamId") ?? "");
+  const managerQuery = String(formData.get("managerQuery") ?? "").trim();
+  const redirectTo =
+    String(formData.get("redirectTo") ?? "") || `/teams/${teamId}/manage`;
+  if (!teamId) throw new Error("teamId required");
+  const { team } = await requireChefOrAdmin(teamId);
+
+  const fail = (msg: string) =>
+    redirect(`${redirectTo}?error=${encodeURIComponent(msg)}`);
+
+  if (!managerQuery) fail("Enter the manager's email or full name");
+
+  // Resolve the user: exact email first, otherwise an unambiguous name match.
+  let candidates: { id: string; firstName: string | null; lastName: string | null }[];
+  if (managerQuery.includes("@")) {
+    candidates = await prisma.user.findMany({
+      where: { email: { equals: managerQuery, mode: "insensitive" } },
+      select: { id: true, firstName: true, lastName: true },
+      take: 5,
+    });
+  } else {
+    const parts = managerQuery.split(/\s+/);
+    candidates = await prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { equals: managerQuery, mode: "insensitive" } },
+          ...(parts.length >= 2
+            ? [
+                {
+                  AND: [
+                    {
+                      firstName: {
+                        equals: parts[0],
+                        mode: "insensitive" as const,
+                      },
+                    },
+                    {
+                      lastName: {
+                        equals: parts.slice(1).join(" "),
+                        mode: "insensitive" as const,
+                      },
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
+      select: { id: true, firstName: true, lastName: true },
+      take: 5,
+    });
+  }
+  if (candidates.length === 0) {
+    fail(
+      `No CLS account found for "${managerQuery}". The manager must sign in to CLS with Discord once — then try again (use their exact email or full name).`
+    );
+  }
+  if (candidates.length > 1) {
+    fail(
+      `"${managerQuery}" matches several accounts — use the person's email address instead.`
+    );
+  }
+  const manager = candidates[0];
+
+  if (manager.id === team.leaderUserId) {
+    fail(
+      "The Teamchef can't be his own manager. To become a non-driving manager, re-submit the team registration with the Teammanager checkbox."
+    );
+  }
+
+  // A manager never drives: block users with an active driver registration.
+  const existingReg = await prisma.registration.findUnique({
+    where: {
+      seasonId_userId: { seasonId: team.seasonId, userId: manager.id },
+    },
+    select: { id: true, status: true, isTeamManager: true },
+  });
+  const regActive =
+    existingReg &&
+    existingReg.status !== "WITHDRAWN" &&
+    existingReg.status !== "REJECTED";
+  if (regActive && !existingReg.isTeamManager) {
+    fail(
+      `${manager.firstName ?? ""} ${manager.lastName ?? ""} is already registered as a driver this season — a Teammanager must not drive.`
+    );
+  }
+
+  await prisma.team.update({
+    where: { id: team.id },
+    data: { managerUserId: manager.id },
+  });
+
+  // Ensure the manager has an (auto-approved) manager registration so they
+  // appear under "My Registrations". Multi-team managers keep their single
+  // row — Team.managerUserId is the source of truth per team.
+  if (!regActive) {
+    await prisma.registration.upsert({
+      where: {
+        seasonId_userId: { seasonId: team.seasonId, userId: manager.id },
+      },
+      update: {
+        status: "APPROVED",
+        isTeamManager: true,
+        teamId: team.id,
+        carClassId: null,
+        carId: null,
+        iRating: null,
+        approvedById: null,
+        approvedAt: new Date(),
+      },
+      create: {
+        seasonId: team.seasonId,
+        userId: manager.id,
+        status: "APPROVED",
+        isTeamManager: true,
+        teamId: team.id,
+        approvedAt: new Date(),
+      },
+    });
+  }
+
+  const managerName =
+    `${manager.firstName ?? ""} ${manager.lastName ?? ""}`.trim();
+  await notifyTeamChange({
+    leagueSlug: team.season.league.slug,
+    seasonId: team.seasonId,
+    kind: "UPDATED",
+    teamName: team.name,
+    seasonLabel: `${team.season.name} ${team.season.year}`,
+    fields: [
+      {
+        name: "Team manager assigned (not driving)",
+        value: managerName || "—",
+        inline: false,
+      },
+    ],
+  });
+
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(`/teams/${team.id}/manage`);
+  revalidatePath(`/registrations`);
+  redirect(
+    `${redirectTo}?success=${encodeURIComponent(`${managerName} is now team manager`)}`
+  );
+}
+
+export async function removeTeamManager(formData: FormData) {
+  const teamId = String(formData.get("teamId") ?? "");
+  const redirectTo =
+    String(formData.get("redirectTo") ?? "") || `/teams/${teamId}/manage`;
+  if (!teamId) throw new Error("teamId required");
+  const { team } = await requireChefOrAdmin(teamId);
+
+  const oldManagerId = team.managerUserId;
+  if (!oldManagerId) {
+    redirect(`${redirectTo}?error=${encodeURIComponent("This team has no manager")}`);
+  }
+
+  await prisma.team.update({
+    where: { id: team.id },
+    data: { managerUserId: null },
+  });
+
+  // Withdraw the manager registration only if they manage no other team in
+  // this season.
+  const stillManages = await prisma.team.count({
+    where: { seasonId: team.seasonId, managerUserId: oldManagerId },
+  });
+  if (stillManages === 0) {
+    await prisma.registration.updateMany({
+      where: {
+        seasonId: team.seasonId,
+        userId: oldManagerId!,
+        isTeamManager: true,
+      },
+      data: { status: "WITHDRAWN" },
+    });
+  }
+
+  const oldManager = await prisma.user.findUnique({
+    where: { id: oldManagerId! },
+    select: { firstName: true, lastName: true },
+  });
+  await notifyTeamChange({
+    leagueSlug: team.season.league.slug,
+    seasonId: team.seasonId,
+    kind: "UPDATED",
+    teamName: team.name,
+    seasonLabel: `${team.season.name} ${team.season.year}`,
+    fields: [
+      {
+        name: "Team manager removed",
+        value:
+          `${oldManager?.firstName ?? ""} ${oldManager?.lastName ?? ""}`.trim() ||
+          "—",
+        inline: false,
+      },
+    ],
+  });
+
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(`/teams/${team.id}/manage`);
+  revalidatePath(`/registrations`);
+  redirect(`${redirectTo}?success=${encodeURIComponent("Manager removed")}`);
+}
+
+// ============================================================================
 // Shared notifier for team-leader-driven changes (used by update / withdraw /
 // transfer). Fires Discord webhook AND email to the league's notify list.
 // Fire-and-forget — never blocks the action on a webhook/email failure.

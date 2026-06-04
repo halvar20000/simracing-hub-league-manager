@@ -6,15 +6,20 @@ import {
   updateTeamRegistration,
   withdrawTeam,
   transferTeamLeadership,
+  assignTeamManager,
+  removeTeamManager,
 } from "@/lib/actions/registrations";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 
 export default async function ManageTeamPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ teamId: string }>;
+  searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   const { teamId } = await params;
+  const { error, success } = await searchParams;
   const session = await auth();
   if (!session?.user?.id) {
     redirect(
@@ -44,6 +49,12 @@ export default async function ManageTeamPage({
   const leaderReg = team.registrations.find(
     (r) => r.userId === team.leaderUserId
   );
+  const managerUser = team.managerUserId
+    ? await prisma.user.findUnique({
+        where: { id: team.managerUserId },
+        select: { firstName: true, lastName: true },
+      })
+    : null;
   // Driver rows only — the manager's own registration is never edited here.
   const teammates = team.registrations.filter(
     (r) =>
@@ -98,6 +109,17 @@ export default async function ManageTeamPage({
           </p>
         )}
       </div>
+
+      {error && (
+        <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded border border-emerald-800 bg-emerald-950 p-3 text-sm text-emerald-200">
+          {success}
+        </div>
+      )}
 
       {/* === Update form === */}
       <section>
@@ -269,6 +291,80 @@ export default async function ManageTeamPage({
               {isManager ? "Set as Teamchef" : "Transfer + withdraw me"}
             </button>
           </form>
+        </section>
+      )}
+
+      {/* === Team manager (assign / remove) — Teamchef only === */}
+      {isLeader && (
+        <section>
+          <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+            Team manager
+          </h2>
+          {managerUser ? (
+            <div className="flex flex-wrap items-center gap-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
+              <p className="text-sm">
+                <span className="text-cyan-300">◆</span>{" "}
+                <strong>
+                  {managerUser.firstName} {managerUser.lastName}
+                </strong>{" "}
+                <span className="text-zinc-500">
+                  manages this team (not driving).
+                </span>
+              </p>
+              <form action={removeTeamManager}>
+                <input type="hidden" name="teamId" value={team.id} />
+                <input
+                  type="hidden"
+                  name="redirectTo"
+                  value={`/teams/${team.id}/manage`}
+                />
+                <button
+                  type="submit"
+                  className="rounded border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200 hover:bg-amber-900/50"
+                >
+                  Remove manager
+                </button>
+              </form>
+            </div>
+          ) : (
+            <>
+              <p className="mb-3 text-xs text-zinc-500">
+                Assign a non-driving Teammanager. They get the same management
+                rights as you (edit lineup, change Teamchef), don&apos;t count
+                against the driver limit and never appear in the driver
+                roster. The person must have signed in to CLS with Discord at
+                least once.
+              </p>
+              <form
+                action={assignTeamManager}
+                className="flex flex-wrap items-end gap-3 rounded border border-zinc-800 bg-zinc-900/50 p-4"
+              >
+                <input type="hidden" name="teamId" value={team.id} />
+                <input
+                  type="hidden"
+                  name="redirectTo"
+                  value={`/teams/${team.id}/manage`}
+                />
+                <label className="block">
+                  <span className="mb-1 block text-xs text-zinc-400">
+                    Manager&apos;s email or full name
+                  </span>
+                  <input
+                    name="managerQuery"
+                    required
+                    placeholder="manager@example.com or John Doe"
+                    className="w-72 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="rounded border border-cyan-700/50 bg-cyan-950/30 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-900/50"
+                >
+                  Assign manager
+                </button>
+              </form>
+            </>
+          )}
         </section>
       )}
 
