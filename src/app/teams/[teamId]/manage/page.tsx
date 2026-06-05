@@ -9,6 +9,7 @@ import {
   assignTeamManager,
   removeTeamManager,
   updateTeamClassCar,
+  renameTeam,
 } from "@/lib/actions/registrations";
 import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 import UserSearchPicker from "@/components/UserSearchPicker";
@@ -157,6 +158,55 @@ export default async function ManageTeamPage({
           {success}
         </div>
       )}
+
+      {/* === Team name (until the first race has started) === */}
+      <section>
+        <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+          Team name
+        </h2>
+        {classCarLocked && !isAdmin ? (
+          <p className="rounded border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400">
+            The season has started — the team name is locked. Current:{" "}
+            <strong className="text-zinc-200">{team.name}</strong>. Contact an
+            admin if a change is still needed.
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-zinc-500">
+              Fix a typo or adjust the team name. Possible until the first
+              race of the season has started. The name must be unique within
+              the season.
+              {classCarLocked && isAdmin && (
+                <span className="text-amber-300">
+                  {" "}Season has started — visible to you as admin only.
+                </span>
+              )}
+            </p>
+            <form
+              action={renameTeam}
+              className="flex flex-wrap items-end gap-3 rounded border border-zinc-800 bg-zinc-900/50 p-4"
+            >
+              <input type="hidden" name="teamId" value={team.id} />
+              <label className="block grow">
+                <span className="mb-1 block text-xs text-zinc-400">
+                  Team name
+                </span>
+                <input
+                  name="newName"
+                  required
+                  maxLength={60}
+                  defaultValue={team.name}
+                  className="w-full max-w-md rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                />
+              </label>
+              <SubmitWithSpinner
+                label="Rename team"
+                className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
+              />
+            </form>
+          </>
+        )}
+      </section>
 
       {/* === Update form === */}
       <section>

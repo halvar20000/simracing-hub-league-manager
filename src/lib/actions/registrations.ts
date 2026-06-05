@@ -1291,6 +1291,93 @@ export async function updateTeamClassCar(formData: FormData) {
 }
 
 // ============================================================================
+// Rename a team — Teamchef, Teammanager or admin. Meant for typo fixes, so
+// it is locked once the season's first race has started (admins bypass).
+// ============================================================================
+
+export async function renameTeam(formData: FormData) {
+  const teamId = String(formData.get("teamId") ?? "");
+  const newName = String(formData.get("newName") ?? "").trim();
+  if (!teamId) throw new Error("teamId required");
+  const { team, isAdmin } = await requireTeamLeader(teamId);
+
+  const back = `/teams/${teamId}/manage`;
+  const fail = (msg: string): never =>
+    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+
+  // Locked once the first race of the season has started — admins bypass.
+  if (!isAdmin) {
+    const startedRound = await prisma.round.findFirst({
+      where: { seasonId: team.seasonId, startsAt: { lte: new Date() } },
+      select: { id: true },
+    });
+    if (startedRound) {
+      fail(
+        "The season has started — the team name can no longer be changed here. Contact an admin."
+      );
+    }
+  }
+
+  if (!newName) fail("Team name is required");
+  if (newName.length > 60) fail("Team name is too long (max 60 characters)");
+  if (newName === team.name) {
+    redirect(`${back}?success=${encodeURIComponent("Team name unchanged")}`);
+  }
+
+  // Unique per season (case-insensitive check to avoid near-duplicates).
+  const clash = await prisma.team.findFirst({
+    where: {
+      seasonId: team.seasonId,
+      id: { not: team.id },
+      name: { equals: newName, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+  if (clash) {
+    fail("Another team in this season already uses that name");
+  }
+
+  const oldName = team.name;
+  await prisma.team.update({
+    where: { id: team.id },
+    data: { name: newName },
+  });
+
+  await notifyTeamChange({
+    leagueSlug: team.season.league.slug,
+    seasonId: team.seasonId,
+    kind: "UPDATED",
+    teamName: newName,
+    seasonLabel: `${team.season.name} ${team.season.year}`,
+    fields: [
+      {
+        name: "Team renamed",
+        value: `${oldName} → ${newName}`,
+        inline: false,
+      },
+    ],
+  });
+
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
+  );
+  revalidatePath(
+    `/leagues/${team.season.league.slug}/seasons/${team.seasonId}/standings`
+  );
+  revalidatePath(
+    `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/teams`
+  );
+  revalidatePath(`/teams/${team.id}/manage`);
+  revalidatePath("/registrations");
+  redirect(
+    `${back}?success=${encodeURIComponent(`Team renamed to ${newName}`)}`
+  );
+}
+
+// ============================================================================
 // Team manager assignment on an EXISTING team. Gated to the Teamchef
 // (Team.leaderUserId) or an ADMIN — never self-service, so nobody can claim
 // management of a foreign team. The manager-to-be must already have a CLS
