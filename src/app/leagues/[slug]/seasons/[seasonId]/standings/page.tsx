@@ -17,6 +17,7 @@ import {
   type CarStanding,
   type TeamClassGroup,
 } from "@/lib/standings";
+import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 
 type StandingsKind = "combined" | "class";
 type ViewMode = "list" | "races";
@@ -58,11 +59,14 @@ export default async function StandingsPage({
   type Cls = "combined" | "pro" | "am" | "gdc" | "team" | "car";
   // IEC: collapse all tabs to team view (no driver/per-car views).
   const clsForTeamEvent = (raw: string | undefined): Cls => "team";
+  // Leagues without any team competition (e.g. PCCD) hide the Team tab and
+  // team standings tables; a direct ?cls=team link falls back to combined.
+  const showTeams = leagueHasTeamCompetition(slug);
   const cls: Cls =
     clsRaw === "pro" ? "pro" :
     clsRaw === "am" ? "am" :
     clsRaw === "gdc" ? "gdc" :
-    clsRaw === "team" ? "team" :
+    clsRaw === "team" && showTeams ? "team" :
     clsRaw === "car" ? "car" : "combined";
   const viewSuffix = view === "races" ? "&view=races" : "";
   const viewQuery  = view === "races" ? "?view=races" : "";
@@ -190,7 +194,9 @@ export default async function StandingsPage({
           {season.gdcEnabled && (
             <Link href={`${baseHref}?cls=gdc${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "gdc" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>GDC</Link>
           )}
-          <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Team</Link>
+          {showTeams && (
+            <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Team</Link>
+          )}
           <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>By Car</Link>
         </div>
       </div>

@@ -14,6 +14,7 @@ import { RsvpWidget } from "@/components/RsvpWidget";
 import { isRsvpClosed } from "@/lib/rsvp-window";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { RaceCenterView } from "@/components/RaceCenterView";
+import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams" | "race-center";
 const TEAM_BEST_N = 2;
@@ -285,10 +286,14 @@ export default async function PublicRoundResults({
       defaultTeamClass
     : null;
 
+  // Leagues without any team competition (e.g. PCCD) hide every team tab,
+  // table and column on this page.
+  const showTeams = leagueHasTeamCompetition(slug);
+
   // Team-event rounds (e.g. IEC) collapse to the class/team grouping only —
   // mirrors the standings page behaviour. All driver-centric tabs are hidden.
   const defaultCls: Cls = hasTeamData ? "teams" : "combined";
-  const cls: Cls =
+  const clsResolved: Cls =
     // In team mode, the clsRaw is a carClass shortCode (e.g. "GTP"), not one
     // of the legacy tab keys. Treat it as the team-mode marker.
     hasTeamData && selectedTeamClass
@@ -312,6 +317,8 @@ export default async function PublicRoundResults({
                       : clsRaw === "race-center"
                         ? "race-center"
                         : defaultCls;
+  // No team competition → a direct ?cls=team link falls back to combined.
+  const cls: Cls = !showTeams && clsResolved === "team" ? "combined" : clsResolved;
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
@@ -629,12 +636,14 @@ export default async function PublicRoundResults({
                 </Link>
               </>
             )}
-            <Link
-              href={`${baseHref}?cls=team`}
-              className={`${pillBase} ${cls === "team" ? pillOn : pillOff}`}
-            >
-              Team
-            </Link>
+            {showTeams && (
+              <Link
+                href={`${baseHref}?cls=team`}
+                className={`${pillBase} ${cls === "team" ? pillOn : pillOff}`}
+              >
+                Team
+              </Link>
+            )}
             <Link
               href={`${baseHref}?cls=car`}
               className={`${pillBase} ${cls === "car" ? pillOn : pillOff}`}
