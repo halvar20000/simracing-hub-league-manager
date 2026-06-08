@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { PrintTrigger } from "@/components/PrintTrigger";
+import { compareStartNumber } from "@/lib/start-number";
 
 /**
  * Public printable roster. No auth gate — same visibility as the
@@ -32,9 +33,20 @@ export default async function PublicPrintRosterPage({
     orderBy: [
       { team: { name: "asc" } },
       { carClass: { displayOrder: "asc" } },
-      { startNumber: "asc" },
       { user: { lastName: "asc" } },
     ],
+  });
+  // Numeric-aware ordering by start number (text field, leading zeros allowed).
+  registrations.sort((a, b) => {
+    const at = a.team?.name ?? "";
+    const bt = b.team?.name ?? "";
+    if (at !== bt) return at.localeCompare(bt);
+    const ao = a.carClass?.displayOrder ?? 9999;
+    const bo = b.carClass?.displayOrder ?? 9999;
+    if (ao !== bo) return ao - bo;
+    const sn = compareStartNumber(a.startNumber, b.startNumber);
+    if (sn !== 0) return sn;
+    return (a.user.lastName ?? "").localeCompare(b.user.lastName ?? "");
   });
 
   const heading = `${season.league.name} — ${season.name} ${season.year}`;

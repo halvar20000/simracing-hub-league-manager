@@ -7,6 +7,7 @@ import { EmptyState, CalendarIcon, UsersIcon } from "@/components/EmptyState";
 import { SeasonHero } from "@/components/SeasonHero";
 import { CountryFlag } from "@/components/CountryFlag";
 import Garage61Link from "@/components/Garage61Link";
+import { compareStartNumber } from "@/lib/start-number";
 import type { Metadata } from "next";
 
 export async function generateMetadata({
@@ -58,11 +59,16 @@ export default async function PublicSeasonDetail({
       registrations: {
         where: { status: "APPROVED" },
         include: { user: true, team: true, carClass: true },
-        orderBy: [{ startNumber: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ createdAt: "asc" }],
       },
     },
   });
   if (!season || season.league.slug !== slug) notFound();
+
+  // Numeric-aware ordering by start number (text field, leading zeros allowed)
+  season.registrations.sort((a, b) =>
+    compareStartNumber(a.startNumber, b.startNumber)
+  );
 
   const teamClasses = await computeTeamClassStandings(prisma, seasonId);
   const isTeamEventSeason = teamClasses.length > 0;
@@ -100,7 +106,7 @@ export default async function PublicSeasonDetail({
   let currentLeader: {
     firstName: string | null;
     lastName: string | null;
-    startNumber: number | null;
+    startNumber: string | null;
     teamName: string | null;
     points: number;
   } | null = null;

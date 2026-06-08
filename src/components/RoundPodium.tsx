@@ -5,7 +5,7 @@ type PodiumDriver = {
   rank: number; // 1, 2, 3
   firstName: string | null;
   lastName: string | null;
-  startNumber: number | null;
+  startNumber: string | null;
   countryCode: string | null;
   teamName: string | null;
   carClassName: string | null;

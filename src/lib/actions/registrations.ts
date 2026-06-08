@@ -9,6 +9,7 @@ import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
+import { parseStartNumberInput } from "@/lib/start-number";
 
 export async function createRegistration(
   leagueSlug: string,
@@ -55,8 +56,14 @@ export async function createRegistration(
     redirect("/profile?error=Please+complete+your+profile+before+registering");
   }
 
-  const startNumberRaw = String(formData.get("startNumber") ?? "").trim();
-  const startNumber = startNumberRaw ? parseInt(startNumberRaw, 10) : null;
+  let startNumber: string | null;
+  try {
+    startNumber = parseStartNumberInput(formData.get("startNumber"));
+  } catch {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Start+number+must+be+1-4+digits`
+    );
+  }
   const teamIdFromDropdown =
     String(formData.get("teamId") ?? "").trim() || null;
   const newTeamName = String(formData.get("newTeamName") ?? "").trim();

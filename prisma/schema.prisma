@@ -306,7 +306,7 @@ model Registration {
   user     User   @relation(fields: [userId], references: [id])
 
   status      RegistrationStatus @default(PENDING)
-  startNumber Int?
+  startNumber String?
 
   teamId     String?
   team       Team?       @relation(fields: [teamId], references: [id])

@@ -20,7 +20,7 @@ export type SeasonHeroProps = {
   currentLeader: {
     firstName: string | null;
     lastName: string | null;
-    startNumber: number | null;
+    startNumber: string | null;
     teamName: string | null;
     points: number;
   } | null;

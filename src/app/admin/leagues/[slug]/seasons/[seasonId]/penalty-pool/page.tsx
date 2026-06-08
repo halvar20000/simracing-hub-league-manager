@@ -84,7 +84,7 @@ export default async function PenaltyPoolAdminPage({
   type DriverRow = {
     registrationId: string;
     name: string;
-    startNumber: number | null;
+    startNumber: string | null;
     cellsByRound: Map<string, number>;
     autoForgiven: number;
     activePool: number;
@@ -126,8 +126,8 @@ export default async function PenaltyPoolAdminPage({
   }
 
   const drivers = Array.from(rowMap.values()).sort((a, b) => {
-    const aN = a.startNumber ?? 9999;
-    const bN = b.startNumber ?? 9999;
+    const aN = a.startNumber ? parseInt(a.startNumber, 10) : 9999;
+    const bN = b.startNumber ? parseInt(b.startNumber, 10) : 9999;
     if (aN !== bN) return aN - bN;
     return a.name.localeCompare(b.name);
   });

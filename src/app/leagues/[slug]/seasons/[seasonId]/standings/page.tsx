@@ -283,7 +283,7 @@ export default async function StandingsPage({
           // Aggregate drivers across cars within the class.
           const byDriver = new Map<string, {
             registrationId: string;
-            startNumber: number | null;
+            startNumber: string | null;
             driverFirstName: string | null;
             driverLastName: string | null;
             countryCode: string | null;

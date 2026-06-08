@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 export interface Driver {
   registrationId: string;
-  startNumber: number | null;
+  startNumber: string | null;
   firstName: string | null;
   lastName: string | null;
   countryCode: string | null;
@@ -47,8 +47,8 @@ export function InvolvedDriversPicker({
         return dn.includes(q) || num.includes(q);
       })
       .sort((a, b) => {
-        const an = a.startNumber ?? 9999;
-        const bn = b.startNumber ?? 9999;
+        const an = a.startNumber ? parseInt(a.startNumber, 10) : 9999;
+        const bn = b.startNumber ? parseInt(b.startNumber, 10) : 9999;
         if (an !== bn) return an - bn;
         return (a.lastName ?? "").localeCompare(b.lastName ?? "");
       });

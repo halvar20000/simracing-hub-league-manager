@@ -9,6 +9,7 @@ import { DoubleScrollWrapper } from "@/components/DoubleScrollWrapper";
 
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
+import { compareStartNumber } from "@/lib/start-number";
 
 export async function generateMetadata({
   params,
@@ -314,9 +315,18 @@ export default async function PublicSeasonRoster({
     },
     orderBy: [
       { carClass: { displayOrder: "asc" } },
-      { startNumber: "asc" },
       { user: { lastName: "asc" } },
     ],
+  });
+  // Numeric-aware ordering by start number (text field, leading zeros allowed),
+  // keeping car-class order primary and last name as final tiebreak.
+  registrations.sort((a, b) => {
+    const ao = a.carClass?.displayOrder ?? 9999;
+    const bo = b.carClass?.displayOrder ?? 9999;
+    if (ao !== bo) return ao - bo;
+    const sn = compareStartNumber(a.startNumber, b.startNumber);
+    if (sn !== 0) return sn;
+    return (a.user.lastName ?? "").localeCompare(b.user.lastName ?? "");
   });
 
   const seasonCarClasses = await prisma.carClass.findMany({

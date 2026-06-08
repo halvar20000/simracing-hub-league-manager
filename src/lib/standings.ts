@@ -20,7 +20,7 @@ export interface RoundPoints {
 
 export interface DriverStanding {
   registrationId: string;
-  startNumber: number | null;
+  startNumber: string | null;
   driverFirstName: string | null;
   driverLastName: string | null;
   countryCode: string | null;
@@ -586,7 +586,7 @@ export interface CarStandingDriver {
   driverFirstName: string | null;
   driverLastName: string | null;
   countryCode: string | null;
-  startNumber: number | null;
+  startNumber: string | null;
   teamName: string | null;
   rawPoints: number;
   participationPoints: number;
@@ -625,7 +625,7 @@ export async function computeCarStandings(
     raw: number; participation: number; manual: number; correction: number;
     rounds: Set<string>;
     firstName: string | null; lastName: string | null;
-    countryCode: string | null; startNumber: number | null;
+    countryCode: string | null; startNumber: string | null;
     teamName: string | null;
   };
 

@@ -8,6 +8,7 @@ import { CountryFlag } from "@/components/CountryFlag";
 import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
 import { PullFromIRLMButton } from "@/components/PullFromIRLMButton";
 import { formatDateTime } from "@/lib/date";
+import { compareStartNumber } from "@/lib/start-number";
 
 export default async function AdminRoundResults({
   params,
@@ -46,8 +47,11 @@ export default async function AdminRoundResults({
       carClass: true,
       raceResults: { where: { roundId } },
     },
-    orderBy: [{ startNumber: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ createdAt: "asc" }],
   });
+  registrations.sort((a, b) =>
+    compareStartNumber(a.startNumber, b.startNumber)
+  );
 
   return (
     <div className="space-y-6">
@@ -222,7 +226,7 @@ function ResultRow({
   includeParticipation?: boolean;
   reg: {
     id: string;
-    startNumber: number | null;
+    startNumber: string | null;
     user: { firstName: string | null; lastName: string | null; countryCode: string | null };
     team: { name: string } | null;
     carClass: { name: string; shortCode: string } | null;

@@ -843,7 +843,7 @@ type Row = {
   participationPointsAwarded: number;
   manualPenaltyPoints: number;
   registration: {
-    startNumber: number | null;
+    startNumber: string | null;
     user: { firstName: string | null; lastName: string | null; countryCode: string | null };
     team: { name: string } | null;
     carClass: { name: string } | null;
@@ -1421,7 +1421,7 @@ interface ByCarRow {
   driverFirstName: string | null;
   driverLastName: string | null;
   countryCode: string | null;
-  startNumber: number | null;
+  startNumber: string | null;
 }
 
 function ByCarSection({

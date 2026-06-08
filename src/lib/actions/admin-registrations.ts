@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
+import { parseStartNumberInput } from "@/lib/start-number";
 import type { RegistrationStatus, ProAmClass } from "@prisma/client";
 
 export async function approveRegistration(registrationId: string) {
@@ -55,8 +56,14 @@ export async function updateRegistration(
   const admin = await requireAdmin();
 
   const status = String(formData.get("status") ?? "PENDING") as RegistrationStatus;
-  const startNumberRaw = String(formData.get("startNumber") ?? "").trim();
-  const startNumber = startNumberRaw ? parseInt(startNumberRaw, 10) : null;
+  let startNumber: string | null;
+  try {
+    startNumber = parseStartNumberInput(formData.get("startNumber"));
+  } catch {
+    redirect(
+      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster/${registrationId}/edit?error=Start+number+must+be+1-4+digits`
+    );
+  }
   const teamId = String(formData.get("teamId") ?? "").trim() || null;
   const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
   const proAmClassRaw = String(formData.get("proAmClass") ?? "").trim();

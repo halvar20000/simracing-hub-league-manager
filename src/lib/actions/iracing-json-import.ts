@@ -132,7 +132,7 @@ export async function importIracingJson(
     where: { seasonId, status: "APPROVED" },
     include: { user: true },
   });
-  const memberMap = new Map<number, { regId: string; userId: string; currentCountry: string | null; currentCarId: string | null; currentStartNumber: number | null }>();
+  const memberMap = new Map<number, { regId: string; userId: string; currentCountry: string | null; currentCarId: string | null; currentStartNumber: string | null }>();
   for (const reg of registrations) {
     const raw = reg.user.iracingMemberId;
     if (!raw) continue;
@@ -187,15 +187,16 @@ export async function importIracingJson(
       }
 
       // Update startNumber from livery.car_number when present + numeric.
+      // Stored as text (leading zeros preserved, e.g. "05").
       const carNumStr = (d as { carNumber?: string | null }).carNumber;
       if (carNumStr) {
-        const n = parseInt(carNumStr, 10);
-        if (Number.isFinite(n) && n !== reg.currentStartNumber) {
+        const num = carNumStr.trim();
+        if (/^\d{1,4}$/.test(num) && num !== reg.currentStartNumber) {
           await prisma.registration.update({
             where: { id: reg.regId },
-            data: { startNumber: n },
+            data: { startNumber: num },
           });
-          reg.currentStartNumber = n;
+          reg.currentStartNumber = num;
         }
       }
 

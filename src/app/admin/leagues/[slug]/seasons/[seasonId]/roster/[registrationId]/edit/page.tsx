@@ -127,10 +127,12 @@ export default async function EditRegistrationPage({
           <span className="mb-1 block text-sm text-zinc-300">Start number</span>
           <input
             name="startNumber"
-            type="number"
-            min={1}
-            max={999}
+            type="text"
+            inputMode="numeric"
+            pattern="\d{1,4}"
+            maxLength={4}
             defaultValue={registration.startNumber ?? ""}
+            placeholder="e.g. 42 or 05"
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
         </label>

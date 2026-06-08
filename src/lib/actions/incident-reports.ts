@@ -131,16 +131,22 @@ export async function createIncidentReport(
       });
   }
 
-  // Parse involved start numbers → match to season's roster → tag as ACCUSED
+  // Parse involved start numbers → match to season's roster → tag as ACCUSED.
+  // Start numbers are text (leading zeros allowed); match numerically so "5"
+  // also matches a stored "05".
   if (involvedNumbersRaw) {
     const numbers = involvedNumbersRaw
       .split(/[,;\s]+/)
       .map((n) => parseInt(n.trim(), 10))
       .filter((n) => !Number.isNaN(n));
+    const approvedRegs = await prisma.registration.findMany({
+      where: { seasonId, status: "APPROVED", startNumber: { not: null } },
+      select: { id: true, startNumber: true },
+    });
     for (const num of numbers) {
-      const reg = await prisma.registration.findFirst({
-        where: { seasonId, startNumber: num, status: "APPROVED" },
-      });
+      const reg = approvedRegs.find(
+        (r) => parseInt(r.startNumber ?? "", 10) === num
+      );
       if (!reg || reg.id === reporterReg.id) continue;
       await prisma.incidentReportInvolvedDriver
         .create({
