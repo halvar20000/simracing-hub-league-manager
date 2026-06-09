@@ -330,33 +330,47 @@ export async function computeDriverStandings(
     const gdcParticipation = participation;
 
     // --- Drop worst N rounds (per ScoringSystem.dropWorstNRounds) ---
-    // Priority: missed rounds (no result) first, then lowest combinedPoints.
-    // Penalties are NEVER dropped — they always count. GDC is NOT dropped.
+    // The COMBINED total drops the worst rounds ranked by combinedPoints; the
+    // CLASS total drops the worst rounds ranked by classPoints. These two sets
+    // DIFFER whenever a driver's overall finishing order differs from their
+    // in-class order (Pro/Am) — so picking one set by combinedPoints and
+    // applying it to the class total discards the wrong rounds and undercounts
+    // class standings. Missed rounds (no result) are always dropped first.
+    // Penalties / GDC are never dropped.
+    let combRaw = raw;
+    let combParticipation = participation;
+    let classParticipation = participation;
     const dropN = season?.scoringSystem.dropWorstNRounds ?? 0;
     if (dropN > 0 && roundPoints.length > 0) {
-      const sorted = [...roundPoints].sort((a, b) => {
-        if (a.hasResult !== b.hasResult) {
-          // false (no result) < true (has result), so missed rounds sort first
-          return Number(a.hasResult) - Number(b.hasResult);
-        }
-        return a.combinedPoints - b.combinedPoints;
-      });
-      const droppedIds = new Set(
-        sorted.slice(0, dropN).map((rp) => rp.roundId)
-      );
-      for (const rp of roundPoints) {
-        if (droppedIds.has(rp.roundId)) {
-          rp.dropped = true;
-          if (rp.hasResult) {
-            raw -= rp.rawPoints;
-            classRaw -= rp.classRawPoints;
-            participation -= rp.participationPoints;
-            // penalty stays — penalties always count, even when the round is dropped
-            // gdcRaw stays too — the GDC class ignores drop-weeks entirely.
+      const pickDropped = (metric: (rp: RoundPoints) => number) => {
+        const sorted = [...roundPoints].sort((a, b) => {
+          if (a.hasResult !== b.hasResult) {
+            // false (no result) < true (has result), so missed rounds sort first
+            return Number(a.hasResult) - Number(b.hasResult);
           }
-          // Missed rounds contribute 0, so nothing to subtract.
+          return metric(a) - metric(b);
+        });
+        return new Set(sorted.slice(0, dropN).map((rp) => rp.roundId));
+      };
+      const droppedCombined = pickDropped((rp) => rp.combinedPoints);
+      const droppedClass = pickDropped((rp) => rp.classPoints);
+      for (const rp of roundPoints) {
+        if (!rp.hasResult) continue; // missed rounds contribute 0
+        if (droppedCombined.has(rp.roundId)) {
+          combRaw -= rp.rawPoints;
+          combParticipation -= rp.participationPoints;
+        }
+        if (droppedClass.has(rp.roundId)) {
+          classRaw -= rp.classRawPoints;
+          classParticipation -= rp.participationPoints;
         }
       }
+      // Per-round `dropped` flag for the UI: reflect the audience the page
+      // renders — class drops on Pro/Am seasons, combined drops otherwise.
+      // (For single-class seasons classPoints === combinedPoints, so the two
+      // sets coincide and behaviour is unchanged.)
+      const flagSet = proAmEnabled ? droppedClass : droppedCombined;
+      for (const rp of roundPoints) rp.dropped = flagSet.has(rp.roundId);
     }
 
     return {
@@ -371,13 +385,13 @@ export async function computeDriverStandings(
       carClassName: reg.carClass?.name ?? null,
       proAmClass: reg.proAmClass as "PRO" | "AM" | null,
       inGdc: reg.inGdc,
-      rawPoints: raw,
+      rawPoints: combRaw,
       classRawPoints: classRaw,
-      participationPoints: participation,
+      participationPoints: proAmEnabled ? classParticipation : combParticipation,
       manualPenalties: penalty,
       fprPoints: fprTotal,
-      combinedTotal: raw + (includeParticipationInCombined ? participation : 0) - penalty + correction + fprTotal,
-      classTotal: classRaw + participation - penalty + correction + fprTotal,
+      combinedTotal: combRaw + (includeParticipationInCombined ? combParticipation : 0) - penalty + correction + fprTotal,
+      classTotal: classRaw + classParticipation - penalty + correction + fprTotal,
       gdcRawPoints: gdcEnabled && reg.inGdc ? gdcRaw : 0,
       gdcTotal:
         gdcEnabled && reg.inGdc
