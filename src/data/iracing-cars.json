@@ -165,7 +165,7 @@
   {"iracingCarId":192,"name":"Supercars Chevrolet Camaro Gen 3","category":null},
   {"iracingCarId":193,"name":"Dirt Mini Stock","category":"Oval"},
   {"iracingCarId":194,"name":"Acura NSX GT3 EVO 22","category":"GT3"},
-  {"iracingCarId":195,"name":"BMW M2 CS Racing","category":null},
+  {"iracingCarId":195,"name":"BMW M2 CS Racing (F87) - 2020","category":"Touring"},
   {"iracingCarId":196,"name":"Ferrari 499P","category":"Prototype"},
   {"iracingCarId":198,"name":"ARCA Chevrolet SS","category":"Oval"},
   {"iracingCarId":199,"name":"ARCA Ford Mustang","category":"Oval"},
@@ -179,5 +179,9 @@
   {"iracingCarId":207,"name":"FIA Cross Car","category":"Dirt"},
   {"iracingCarId":208,"name":"Porsche 911 Cup (992.2)","category":null},
   {"iracingCarId":210,"name":"Audi RS3 LMS Gen2 TCR","category":null},
-  {"iracingCarId":211,"name":"NASCAR Truck RAM","category":"Oval"}
+  {"iracingCarId":211,"name":"NASCAR Truck RAM","category":"Oval"},
+  {"iracingCarId":213,"name":"EURO NASCAR V8GP","category":"Oval"},
+  {"iracingCarId":214,"name":"Formula Vee - Cutlass","category":"Open Wheel"},
+  {"iracingCarId":215,"name":"Formula Vee - Conqueror","category":"Open Wheel"},
+  {"iracingCarId":216,"name":"BMW M2 Racing (G87)","category":"Touring"}
 ]

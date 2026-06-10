@@ -422,5 +422,8 @@
   {"iracingTrackId":582,"trackName":"Winton Motor Raceway","configName":"Rallycross","category":"dirt_road"},
   {"iracingTrackId":583,"trackName":"Rockingham Speedway","configName":"Oval","category":"oval"},
   {"iracingTrackId":584,"trackName":"St. Petersburg Grand Prix","configName":"Grand Prix","category":"road"},
-  {"iracingTrackId":585,"trackName":"Barber Motorsports Park","configName":null,"category":"road"}
+  {"iracingTrackId":585,"trackName":"Barber Motorsports Park","configName":null,"category":"road"},
+  {"iracingTrackId":586,"trackName":"WeatherTech Raceway at Laguna Seca","configName":"2026","category":"road"},
+  {"iracingTrackId":587,"trackName":"Charlotte Motor Speedway","configName":"Dirt Road","category":"dirt_road"},
+  {"iracingTrackId":589,"trackName":"Qualcomm Circuit (Naval Base Coronado)","configName":null,"category":"road"}
 ]
