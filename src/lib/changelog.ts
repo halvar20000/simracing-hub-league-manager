@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.1.1",
+    date: "2026-06-12",
+    changes: [
+      "Start numbers are now fixed after registration — drivers can still edit car and notes, but start number changes go through an admin.",
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-06-12",
     changes: [

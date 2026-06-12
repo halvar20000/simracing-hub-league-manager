@@ -124,6 +124,12 @@ export async function createRegistration(
     where: { seasonId_userId: { seasonId, userId: user.id } },
   });
 
+  // The start number is picked once at initial registration — after that,
+  // only an admin can change it. Any driver edit keeps the existing number.
+  if (existing) {
+    startNumber = existing.startNumber;
+  }
+
   // A registration locks once the driver's FIRST result of the season has
   // been uploaded (they actually raced). Until then everything stays
   // editable — a driver who skipped the opening rounds may still change car.

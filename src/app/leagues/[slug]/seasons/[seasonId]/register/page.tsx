@@ -594,9 +594,9 @@ export default async function RegisterPage({
         </Link>
         <h1 className="text-2xl font-bold">Registration locked</h1>
         <p className="text-zinc-400">
-          You have already raced this season — your registration (car, start
-          number) can no longer be changed here. Please contact an admin if
-          something needs to be updated.
+          You have already raced this season — your registration can no
+          longer be changed here. Please contact an admin if something needs
+          to be updated.
         </p>
         <Link
           href="/registrations"
@@ -661,8 +661,8 @@ export default async function RegisterPage({
           {isApprovedEdit ? (
             <>
               You are editing your approved registration — your approval is
-              kept. You can change car, start number and notes until your
-              first race result is in. Team changes go through an admin.
+              kept. You can change car and notes until your first race result
+              is in. Start number and team changes go through an admin.
             </>
           ) : (
             <>
@@ -697,25 +697,40 @@ export default async function RegisterPage({
       </div>
 
       <form action={create} className="space-y-4">
-        <label className="block">
-          <span className="mb-1 block text-sm text-zinc-300">
-            Preferred start number
-          </span>
-          <input
-            name="startNumber"
-            type="text"
-            inputMode="numeric"
-            pattern="\d{1,4}"
-            maxLength={4}
-            defaultValue={existing?.startNumber ?? ""}
-            placeholder="e.g. 42 or 05"
-            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-          />
-          <span className="mt-1 block text-xs text-zinc-500">
-            Digits only; leading zeros allowed (e.g. 05). Subject to
-            availability — admin may assign a different number.
-          </span>
-        </label>
+        {isUpdate ? (
+          <div className="block">
+            <span className="mb-1 block text-sm text-zinc-300">
+              Start number
+            </span>
+            <div className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">
+              {existing?.startNumber ? `#${existing.startNumber}` : "—"}
+            </div>
+            <span className="mt-1 block text-xs text-zinc-500">
+              The start number is fixed after registration — contact an admin
+              to change it.
+            </span>
+          </div>
+        ) : (
+          <label className="block">
+            <span className="mb-1 block text-sm text-zinc-300">
+              Preferred start number
+            </span>
+            <input
+              name="startNumber"
+              type="text"
+              inputMode="numeric"
+              pattern="\d{1,4}"
+              maxLength={4}
+              placeholder="e.g. 42 or 05"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+            <span className="mt-1 block text-xs text-zinc-500">
+              Digits only; leading zeros allowed (e.g. 05). Subject to
+              availability — admin may assign a different number. Fixed after
+              registration.
+            </span>
+          </label>
+        )}
 
         {sflGate.applies && (() => {
           // SFL Cup is a formula league — drivers must enter their
