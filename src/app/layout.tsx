@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Rajdhani } from "next/font/google";
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
+import ContactFab from "@/components/ContactFab";
 import "./globals.css";
 
 const inter = Inter({
@@ -63,6 +64,7 @@ export default function RootLayout({
           {children}
         </main>
         <Footer />
+        <ContactFab />
       </body>
     </html>
   );
