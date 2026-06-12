@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
 import { computeDriverStandings, computeTeamClassStandings } from "@/lib/standings";
@@ -90,6 +91,22 @@ export default async function PublicSeasonDetail({
 
   const registrationOpen =
     season.status === "OPEN_REGISTRATION" || season.status === "ACTIVE";
+
+  // Signed-in viewer with an active (pending/approved) registration sees
+  // "Edit registration →" instead of "Register →". The registration token is
+  // forwarded only for these users so their Edit link passes the link guard.
+  const session = await auth();
+  const ownRegistration = session?.user?.id
+    ? await prisma.registration.findUnique({
+        where: {
+          seasonId_userId: { seasonId, userId: session.user.id },
+        },
+        select: { status: true },
+      })
+    : null;
+  const ownActiveRegistration =
+    ownRegistration?.status === "PENDING" ||
+    ownRegistration?.status === "APPROVED";
   const hasResults = season.rounds.some((r) => r._count.raceResults > 0);
   const completedRounds = season.rounds.filter((r) => r.status === "COMPLETED").length;
   const totalRounds = season.rounds.length;
@@ -164,6 +181,10 @@ export default async function PublicSeasonDetail({
             : null
         }
         registrationOpen={registrationOpen}
+        ownActiveRegistration={ownActiveRegistration}
+        registerToken={
+          ownActiveRegistration ? season.registrationToken : null
+        }
         hasResults={hasResults}
         penaltyPoolMode={season.scoringSystem.penaltyPoolMode}
       />

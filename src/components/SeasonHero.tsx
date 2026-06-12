@@ -31,6 +31,12 @@ export type SeasonHeroProps = {
     startsAtIso: string;
   } | null;
   registrationOpen: boolean;
+  /** Signed-in viewer already has an active (pending/approved) registration —
+   * the CTA flips to "Edit registration →". */
+  ownActiveRegistration?: boolean;
+  /** Registration token, passed ONLY when the viewer already has an active
+   * registration on a link-protected season (so their Edit link works). */
+  registerToken?: string | null;
   hasResults: boolean;
   /** Scoring system penalty pool mode — drives whether the "Penalty Pool"
    * CTA renders. Independent from hasResults so the button is visible from
@@ -224,10 +230,12 @@ export function SeasonHero(p: SeasonHeroProps) {
           )}
           {p.registrationOpen && (
             <Link
-              href={`/leagues/${p.slug}/seasons/${p.seasonId}/register`}
+              href={`/leagues/${p.slug}/seasons/${p.seasonId}/register${
+                p.registerToken ? `?t=${encodeURIComponent(p.registerToken)}` : ""
+              }`}
               className="rounded border border-[#ff6b35] px-3 py-1.5 text-xs font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"
             >
-              Register →
+              {p.ownActiveRegistration ? "Edit registration →" : "Register →"}
             </Link>
           )}
           <Link

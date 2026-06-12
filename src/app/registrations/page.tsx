@@ -28,6 +28,17 @@ export default async function MyRegistrationsPage({
     orderBy: { createdAt: "desc" },
   });
 
+  // Registrations with at least one uploaded race result — once the driver
+  // has raced, the registration locks (edits then go through an admin).
+  const racedResults = await prisma.raceResult.findMany({
+    where: { registrationId: { in: registrations.map((r) => r.id) } },
+    select: { registrationId: true },
+    distinct: ["registrationId"],
+  });
+  const racedRegistrationIds = new Set(
+    racedResults.map((r) => r.registrationId)
+  );
+
   // Teams this user manages (Team.managerUserId) — a manager can run several
   // teams per season, so the Manage links can't come from the single
   // registration row alone.
@@ -54,7 +65,9 @@ export default async function MyRegistrationsPage({
 
       {success && (
         <div className="rounded border border-emerald-800 bg-emerald-950 p-3 text-sm text-emerald-200">
-          Registration submitted. Awaiting admin approval.
+          {success === "updated"
+            ? "Registration updated — your approval is unchanged."
+            : "Registration submitted. Awaiting admin approval."}
         </div>
       )}
       {error && (
@@ -113,6 +126,34 @@ export default async function MyRegistrationsPage({
                   >
                     View season
                   </Link>
+                  {(() => {
+                    // Edit is available on solo seasons while registration is
+                    // possible: PENDING any time, APPROVED only until the
+                    // driver's own first race result has been uploaded. Team
+                    // seasons use the Manage Team flow instead.
+                    const seasonRunning =
+                      r.season.status === "OPEN_REGISTRATION" ||
+                      r.season.status === "ACTIVE";
+                    const raced = racedRegistrationIds.has(r.id);
+                    const canEdit =
+                      !r.season.teamRegistration &&
+                      !r.isTeamManager &&
+                      seasonRunning &&
+                      (r.status === "PENDING" ||
+                        (r.status === "APPROVED" && !raced));
+                    if (!canEdit) return null;
+                    const tokenQs = r.season.registrationToken
+                      ? `?t=${encodeURIComponent(r.season.registrationToken)}`
+                      : "";
+                    return (
+                      <Link
+                        href={`/leagues/${r.season.league.slug}/seasons/${r.season.id}/register${tokenQs}`}
+                        className="text-orange-400 hover:underline"
+                      >
+                        Edit
+                      </Link>
+                    );
+                  })()}
                   {(r.status === "PENDING" || r.status === "APPROVED") && (
                     <form
                       action={withdrawRegistration.bind(null, r.id)}

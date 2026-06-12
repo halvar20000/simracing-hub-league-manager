@@ -92,20 +92,11 @@ export default async function RegisterPage({
     sharedCars,
     existing,
     teamCountGroups,
+    firstResult,
   ] = await Promise.all([
       prisma.season.findUnique({
         where: { id: seasonId },
-        include: {
-          league: true,
-          rounds: {
-            where: {
-              countsForChampionship: true,
-              startsAt: { lte: new Date() },
-            },
-            take: 1,
-            select: { id: true },
-          },
-        },
+        include: { league: true },
       }),
       prisma.user.findUnique({ where: { id: session.user.id } }),
       prisma.team.findMany({
@@ -147,6 +138,14 @@ export default async function RegisterPage({
           excludedAt: null,
         },
         _count: true,
+      }),
+      // The viewer's first uploaded result this season — once it exists, the
+      // registration (car, start number, …) is locked for self-service edits.
+      prisma.raceResult.findFirst({
+        where: {
+          registration: { seasonId, userId: session.user.id },
+        },
+        select: { id: true },
       }),
     ]);
 
@@ -221,10 +220,11 @@ export default async function RegisterPage({
 
   const hasCars = carClasses.some((cc) => cc.cars.length > 0);
   const paymentInfo = getLeaguePayment(season.league);
-  const seasonHasStarted = season.rounds.length > 0;
-  const carLocked =
-    !!existing?.carId &&
-    (season.status === "ACTIVE" || seasonHasStarted);
+  const driverHasRaced = !!firstResult;
+  const isApprovedEdit = existing?.status === "APPROVED";
+  // The car locks only once the driver's own first result of the season has
+  // been uploaded — a driver who hasn't raced yet may still change it freely.
+  const carLocked = !!existing?.carId && driverHasRaced;
   const lockedCarId = carLocked ? existing?.carId ?? null : null;
   const lockedCar = lockedCarId
     ? carClasses.flatMap((cc) => cc.cars).find((c) => c.id === lockedCarId) ?? null
@@ -581,6 +581,33 @@ export default async function RegisterPage({
     );
   }
 
+  // Approved drivers may edit until their own first race result has been
+  // uploaded; after that, changes go through an admin.
+  if (isApprovedEdit && driverHasRaced) {
+    return (
+      <div className="max-w-xl space-y-4">
+        <Link
+          href={`/leagues/${slug}/seasons/${seasonId}`}
+          className="text-sm text-zinc-400 hover:text-zinc-200"
+        >
+          ← Back to season
+        </Link>
+        <h1 className="text-2xl font-bold">Registration locked</h1>
+        <p className="text-zinc-400">
+          You have already raced this season — your registration (car, start
+          number) can no longer be changed here. Please contact an admin if
+          something needs to be updated.
+        </p>
+        <Link
+          href="/registrations"
+          className="inline-block text-orange-400 hover:underline"
+        >
+          My registrations →
+        </Link>
+      </div>
+    );
+  }
+
   // GT3 WCT: the driver does not choose a class — an admin allocates the
   // Pro/Am tier after registration. Hide the class dropdown and present the
   // car picker as a single flat list (deduped: shared cars are merged into
@@ -631,8 +658,19 @@ export default async function RegisterPage({
 
       {isUpdate && (
         <div className="rounded border border-amber-800 bg-amber-950 p-3 text-sm text-amber-200">
-          You already have a {existing.status.toLowerCase()} registration.
-          Submitting will reset it to PENDING for re-approval.
+          {isApprovedEdit ? (
+            <>
+              You are editing your approved registration — your approval is
+              kept. You can change car, start number and notes until your
+              first race result is in. Team changes go through an admin.
+            </>
+          ) : (
+            <>
+              You already have a {existing.status.toLowerCase()} registration.
+              Submitting will update it (status stays pending until an admin
+              approves).
+            </>
+          )}
         </div>
       )}
 
@@ -730,7 +768,17 @@ export default async function RegisterPage({
           );
         })()}
 
-        {isGt3Wct ? (
+        {isApprovedEdit ? (
+          <div className="rounded border border-zinc-800 bg-zinc-900/50 p-4">
+            <span className="mb-1 block text-sm text-zinc-300">Team</span>
+            <div className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">
+              {existing?.team?.name ?? "No team / Independent"}
+            </div>
+            <span className="mt-1 block text-xs text-zinc-500">
+              Team changes after approval go through an admin.
+            </span>
+          </div>
+        ) : isGt3Wct ? (
           <TeamPicker
             teams={teamsWithCounts}
             limit={
@@ -826,8 +874,8 @@ export default async function RegisterPage({
                   {lockedCar?.name ?? "—"}
                 </div>
                 <span className="block text-xs text-amber-300">
-                  Locked — your car cannot be changed once the season is
-                  active.
+                  Locked — your car cannot be changed after your first race
+                  of the season.
                 </span>
               </div>
             ) : (

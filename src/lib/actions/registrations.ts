@@ -120,11 +120,40 @@ export async function createRegistration(
     }
   }
 
+  const existing = await prisma.registration.findUnique({
+    where: { seasonId_userId: { seasonId, userId: user.id } },
+  });
+
+  // A registration locks once the driver's FIRST result of the season has
+  // been uploaded (they actually raced). Until then everything stays
+  // editable — a driver who skipped the opening rounds may still change car.
+  const driverHasResult = existing
+    ? await prisma.raceResult.findFirst({
+        where: { registrationId: existing.id },
+        select: { id: true },
+      })
+    : null;
+
+  // APPROVED drivers may edit their registration (car, start number, notes)
+  // until they have raced for the first time. The edit keeps the approval —
+  // no reset to PENDING. Team changes after approval go through an admin.
+  const approvedEdit = !!existing && existing.status === "APPROVED";
+  if (approvedEdit && driverHasResult) {
+    redirect(
+      `/registrations?error=${encodeURIComponent(
+        "You have already raced this season — registration changes now go through an admin."
+      )}`
+    );
+  }
+
   // Resolve team:
+  //   - Approved edit: the team is locked — keep the existing one
   //   - If newTeamName is provided, find or create that team (it wins)
   //   - Otherwise use the team from the dropdown
   let teamId: string | null = teamIdFromDropdown;
-  if (newTeamName) {
+  if (approvedEdit) {
+    teamId = existing!.teamId;
+  } else if (newTeamName) {
     // Case-insensitive match so "cas racing" never creates a near-duplicate
     // of an existing "CAS Racing" — team names exist only once per season.
     const existingTeam = await prisma.team.findFirst({
@@ -147,7 +176,7 @@ export async function createRegistration(
     leagueSlug: season.league.slug,
     teamMaxDrivers: season.teamMaxDrivers,
   });
-  if (teamLimit != null && teamId) {
+  if (teamLimit != null && teamId && !approvedEdit) {
     const occupied = await countTeamMembers(teamId, user.id);
     if (occupied >= teamLimit) {
       redirect(
@@ -209,10 +238,6 @@ export async function createRegistration(
   }
 
 
-  const existing = await prisma.registration.findUnique({
-    where: { seasonId_userId: { seasonId, userId: user.id } },
-  });
-
   // GT3 WCT: never derive the class from the chosen car and never wipe an
   // allocation the admin already made — keep whatever is on the existing
   // registration (null for a brand-new one) so only an admin can set it.
@@ -220,29 +245,16 @@ export async function createRegistration(
     resolvedCarClassId = existing?.carClassId ?? null;
   }
 
-  if (existing && existing.status === "APPROVED") {
-    redirect(
-      `/registrations?error=You+are+already+approved+for+this+season`
-    );
-  }
-  const seasonHasStartedRound = await prisma.round.findFirst({
-    where: {
-      seasonId,
-      countsForChampionship: true,
-      startsAt: { lte: new Date() },
-    },
-    select: { id: true },
-  });
-
-
+  // The car is locked once the driver's first result has been uploaded —
+  // until then, drivers may freely change it (regardless of season status).
   if (
     existing &&
     existing.carId &&
-    (season.status === "ACTIVE" || !!seasonHasStartedRound) &&
+    !!driverHasResult &&
     existing.carId !== carId
   ) {
     redirect(
-      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+is+locked+after+season+start`
+      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+is+locked+after+your+first+race`
     );
   }
 
@@ -250,19 +262,29 @@ export async function createRegistration(
   if (existing) {
     await prisma.registration.update({
       where: { id: existing.id },
-      data: {
-        status: "PENDING",
-        startNumber,
-        teamId,
-        carClassId: resolvedCarClassId,
-        carId,
-        notes,
-        // Only overwrite iRating when the form actually submitted one, so a
-        // league without the iRating field never wipes an existing value.
-        ...(iRatingValue != null ? { iRating: iRatingValue } : {}),
-        approvedById: null,
-        approvedAt: null,
-      },
+      data: approvedEdit
+        ? {
+            // Approved edit: car/start number/notes only — the approval and
+            // the team stay untouched.
+            startNumber,
+            carClassId: resolvedCarClassId,
+            carId,
+            notes,
+            ...(iRatingValue != null ? { iRating: iRatingValue } : {}),
+          }
+        : {
+            status: "PENDING",
+            startNumber,
+            teamId,
+            carClassId: resolvedCarClassId,
+            carId,
+            notes,
+            // Only overwrite iRating when the form actually submitted one, so a
+            // league without the iRating field never wipes an existing value.
+            ...(iRatingValue != null ? { iRating: iRatingValue } : {}),
+            approvedById: null,
+            approvedAt: null,
+          },
     });
   } else {
     await prisma.registration.create({
@@ -309,9 +331,12 @@ export async function createRegistration(
         username: "CLS Registrations",
         embeds: [
           {
-            title: `📝 New registration — ${season.league.name} ${season.name}`,
-            description:
-              existing && existing.status !== "PENDING"
+            title: existing
+              ? `✏️ Updated registration — ${season.league.name} ${season.name}`
+              : `📝 New registration — ${season.league.name} ${season.name}`,
+            description: approvedEdit
+              ? "Approved registration updated by the driver (stays approved)"
+              : existing && existing.status !== "PENDING"
                 ? `Updated registration (was ${existing.status.toLowerCase()})`
                 : "New pending registration awaiting approval",
             url: `${baseUrl}/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`,
@@ -346,10 +371,9 @@ export async function createRegistration(
         ? (await prisma.carClass.findUnique({ where: { id: carClassId }, select: { name: true } }))?.name ?? "—"
         : null;
 
-      const subject =
-        existing && existing.status !== "PENDING"
-          ? `Updated registration — ${season.league.name} ${season.name}`
-          : `New registration — ${season.league.name} ${season.name}`;
+      const subject = existing
+        ? `Updated registration — ${season.league.name} ${season.name}`
+        : `New registration — ${season.league.name} ${season.name}`;
 
       const escape = (v: string | number | null | undefined) =>
         String(v ?? "")
@@ -361,7 +385,7 @@ export async function createRegistration(
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; color: #18181b;">
           <h2 style="margin: 0 0 8px 0; color: #ff6b35;">📝 ${escape(subject)}</h2>
           <p style="margin: 0 0 16px 0; color: #52525b; font-size: 13px;">
-            ${existing && existing.status !== "PENDING" ? "Updated registration (was " + escape(existing.status.toLowerCase()) + ")" : "New pending registration awaiting approval"}
+            ${approvedEdit ? "Approved registration updated by the driver (stays approved)" : existing && existing.status !== "PENDING" ? "Updated registration (was " + escape(existing.status.toLowerCase()) + ")" : "New pending registration awaiting approval"}
           </p>
           <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
             <tr><td style="padding: 6px 0; color: #71717a; width: 110px;">Driver</td><td>${escape(user.firstName)} ${escape(user.lastName)}</td></tr>
@@ -407,7 +431,7 @@ export async function createRegistration(
   revalidatePath(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/teams`
   );
-  redirect("/registrations?success=1");
+  redirect(approvedEdit ? "/registrations?success=updated" : "/registrations?success=1");
 }
 
 export async function withdrawRegistration(registrationId: string) {
