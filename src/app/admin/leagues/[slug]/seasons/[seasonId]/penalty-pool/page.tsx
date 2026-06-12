@@ -8,6 +8,7 @@ import {
 } from "@/lib/actions/penalty-pool";
 import { recomputePenaltyPoolAction } from "@/lib/actions/penalty-pool-recompute";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 
 export default async function PenaltyPoolAdminPage({
   params,
@@ -27,6 +28,11 @@ export default async function PenaltyPoolAdminPage({
   const poolMode = season.scoringSystem.penaltyPoolMode;
   const isNoShowOnly = poolMode === "NO_SHOW_ONLY";
   const isFull = poolMode === "FULL";
+  // Per-race penalty mode (GT3 WCT 13th Season onward): penalties already hit
+  // the race they were incurred in; the pool only tracks forgiveness. There is
+  // NO release step — releasing would double-count, so all release controls
+  // and the Released column are hidden.
+  const perRace = isPerRacePenaltySeason(slug, seasonId);
 
   const registrations = await prisma.registration.findMany({
     where: { seasonId },
@@ -154,9 +160,11 @@ export default async function PenaltyPoolAdminPage({
         <p className="mt-1 text-sm text-zinc-400">
           {isNoShowOnly
             ? "No-show points apply IMMEDIATELY to standings. Reporting / steward penalties are recorded against the driver too but are not shown in this view."
-            : season.scoringSystem.deferPenaltyPoints
-              ? "Pending penalty points stay in the pool until you release them. Releasing applies them to the championship standings."
-              : "Penalty points apply IMMEDIATELY to standings on this scoring system. This view is informational."}
+            : perRace
+              ? "Per-race mode: penalty points are deducted directly in the race they were incurred (driver and team standings). The pool only tracks forgiveness — when the season is set to COMPLETED, forgiven points (auto + manual) are credited back to the season total and no-show points are deducted from it. No release step needed."
+              : season.scoringSystem.deferPenaltyPoints
+                ? "Pending penalty points stay in the pool until you release them. Releasing applies them to the championship standings."
+                : "Penalty points apply IMMEDIATELY to standings on this scoring system. This view is informational."}
         </p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <span className="rounded bg-amber-900/40 px-2 py-1 text-amber-200">
@@ -189,7 +197,7 @@ export default async function PenaltyPoolAdminPage({
             </span>
           </form>
         )}
-        {season.scoringSystem.deferPenaltyPoints && totals.pending > 0 && (
+        {season.scoringSystem.deferPenaltyPoints && !perRace && totals.pending > 0 && (
           <form action={releaseAll}>
             <SubmitWithSpinner
               label={`Release ALL ${totals.pending} pending points (end of season)`}
@@ -218,8 +226,8 @@ export default async function PenaltyPoolAdminPage({
               <th className="px-2 py-2 text-right">
                 {isNoShowOnly ? "Total" : "Pool"}
               </th>
-              {isFull && <th className="px-2 py-2 text-right">Released</th>}
-              {isFull && <th className="px-2 py-2 text-right">Action</th>}
+              {isFull && !perRace && <th className="px-2 py-2 text-right">Released</th>}
+              {isFull && !perRace && <th className="px-2 py-2 text-right">Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -276,12 +284,12 @@ export default async function PenaltyPoolAdminPage({
                       <span className="text-zinc-600">0</span>
                     )}
                   </td>
-                  {isFull && (
+                  {isFull && !perRace && (
                     <td className="px-2 py-2 text-right tabular-nums text-red-300">
                       {d.released > 0 ? d.released : ""}
                     </td>
                   )}
-                  {isFull && (
+                  {isFull && !perRace && (
                     <td className="px-2 py-2 text-right">
                       {d.hasPending && season.scoringSystem.deferPenaltyPoints ? (
                         <form action={releaseDriver}>

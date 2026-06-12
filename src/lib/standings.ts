@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
+import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 
 export interface RoundPoints {
   roundId: string;
@@ -34,6 +35,13 @@ export interface DriverStanding {
   classRawPoints: number;
   participationPoints: number;
   manualPenalties: number;
+  /** Per-race penalty mode only: forgiveness (auto + manual) credited back to
+   * the season total once the season is COMPLETED. 0 otherwise. */
+  forgivenessCredit: number;
+  /** Per-race penalty mode only: no-show points deducted from the season
+   * total once the season is COMPLETED (already included in manualPenalties).
+   * 0 otherwise. */
+  noShowPenaltyPoints: number;
   combinedTotal: number;
   classTotal: number;
   gdcRawPoints: number;       // season GDC race points (0 for non-GDC drivers)
@@ -62,12 +70,19 @@ export async function computeDriverStandings(
 ): Promise<DriverStanding[]> {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
-    include: { scoringSystem: true },
+    include: { scoringSystem: true, league: { select: { slug: true } } },
   });
   const pointsTable = (season?.scoringSystem?.pointsTable ?? {}) as Record<
     string,
     number
   >;
+  // Per-race penalty mode (GT3 WCT 13th Season onward): incident penalties
+  // hit the round they were incurred in; forgiveness + no-shows settle on the
+  // season total when the season completes. See src/lib/penalty-application.ts.
+  const perRacePenalties = season
+    ? isPerRacePenaltySeason(season.league.slug, season.id)
+    : false;
+  const seasonCompleted = season?.status === "COMPLETED";
   const proAmEnabled = !!season?.proAmEnabled;
   const gdcEnabled = !!season?.gdcEnabled;
   const gdcPointsTable = (season?.scoringSystem?.gdcPointsTable ?? {}) as Record<
@@ -99,6 +114,8 @@ export async function computeDriverStandings(
           select: {
             pointsValue: true,
             forgivenPoints: true,
+            autoForgivenPoints: true,
+            source: true,
             releasedAt: true,
             roundId: true,
           },
@@ -216,12 +233,50 @@ export async function computeDriverStandings(
       }
     }
 
-    for (const p of reg.penalties) {
-      if (p.pointsValue == null) continue;
-      // Deferred systems: only released penalties hit the standings.
-      if (defersPenalties && p.releasedAt == null) continue;
-      const effective = Math.max(0, p.pointsValue - (p.forgivenPoints ?? 0));
-      penalty += effective;
+    // Per-race penalty mode: incident penalties are deducted in full in the
+    // round where they were incurred (releasedAt is ignored). Forgiveness
+    // (auto + manual) and no-show points settle on the SEASON TOTAL only —
+    // and only once the season is COMPLETED. Individual race results stay
+    // untouched by forgiveness.
+    const incidentPenaltyByRound = new Map<string, number>();
+    let forgivenessCredit = 0;
+    let noShowPenaltyPoints = 0;
+    if (perRacePenalties) {
+      for (const p of reg.penalties) {
+        const pv = p.pointsValue ?? 0;
+        if (pv <= 0) continue;
+        if (p.source === "NO_RSVP_NO_SHOW") {
+          // No-shows never touch individual races: deducted from the season
+          // total at season end (manual forgiveness still respected).
+          if (seasonCompleted) {
+            noShowPenaltyPoints += Math.max(
+              0,
+              pv - (p.forgivenPoints ?? 0) - (p.autoForgivenPoints ?? 0)
+            );
+          }
+          continue;
+        }
+        penalty += pv;
+        incidentPenaltyByRound.set(
+          p.roundId,
+          (incidentPenaltyByRound.get(p.roundId) ?? 0) + pv
+        );
+        if (seasonCompleted) {
+          forgivenessCredit += Math.min(
+            pv,
+            (p.forgivenPoints ?? 0) + (p.autoForgivenPoints ?? 0)
+          );
+        }
+      }
+      penalty += noShowPenaltyPoints;
+    } else {
+      for (const p of reg.penalties) {
+        if (p.pointsValue == null) continue;
+        // Deferred systems: only released penalties hit the standings.
+        if (defersPenalties && p.releasedAt == null) continue;
+        const effective = Math.max(0, p.pointsValue - (p.forgivenPoints ?? 0));
+        penalty += effective;
+      }
     }
 
     const sortedNewestFirst = [...reg.raceResults].sort(
@@ -277,7 +332,11 @@ export async function computeDriverStandings(
         (sum, r) => sum + r.participationPointsAwarded,
         0
       );
-      const rPen = results.reduce((sum, r) => sum + r.manualPenaltyPoints, 0);
+      // Per-race mode: incident penalties show up in the round they were
+      // incurred, on top of any manual per-result penalty points.
+      const rPen =
+        results.reduce((sum, r) => sum + r.manualPenaltyPoints, 0) +
+        (incidentPenaltyByRound.get(round.id) ?? 0);
       const rCorrection = results.reduce(
         (sum, r) => sum + r.correctionPoints,
         0
@@ -389,13 +448,15 @@ export async function computeDriverStandings(
       classRawPoints: classRaw,
       participationPoints: proAmEnabled ? classParticipation : combParticipation,
       manualPenalties: penalty,
+      forgivenessCredit,
+      noShowPenaltyPoints,
       fprPoints: fprTotal,
-      combinedTotal: combRaw + (includeParticipationInCombined ? combParticipation : 0) - penalty + correction + fprTotal,
-      classTotal: classRaw + classParticipation - penalty + correction + fprTotal,
+      combinedTotal: combRaw + (includeParticipationInCombined ? combParticipation : 0) - penalty + correction + fprTotal + forgivenessCredit,
+      classTotal: classRaw + classParticipation - penalty + correction + fprTotal + forgivenessCredit,
       gdcRawPoints: gdcEnabled && reg.inGdc ? gdcRaw : 0,
       gdcTotal:
         gdcEnabled && reg.inGdc
-          ? gdcRaw + gdcParticipation - penalty + correction + fprTotal
+          ? gdcRaw + gdcParticipation - penalty + correction + fprTotal + forgivenessCredit
           : 0,
       totalIncidents,
       iRating,
@@ -454,9 +515,34 @@ export async function computeTeamStandings(
 ): Promise<TeamStanding[]> {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
-    include: { teams: true, scoringSystem: true },
+    include: { teams: true, scoringSystem: true, league: { select: { slug: true } } },
   });
   if (!season || season.teamScoringMode === "NONE") return [];
+
+  // Per-race penalty mode: incident penalties reduce the driver's round
+  // contribution BEFORE best-N selection, so a penalty can change which
+  // drivers count for the team. No-show penalties never touch team scoring
+  // (the driver has no result to contribute anyway).
+  const perRacePenalties = isPerRacePenaltySeason(season.league.slug, season.id);
+  const incidentPenaltyByRegRound = new Map<string, number>();
+  if (perRacePenalties) {
+    const pens = await prisma.penalty.findMany({
+      where: {
+        registration: { seasonId },
+        type: "POINTS_DEDUCTION",
+        pointsValue: { gt: 0 },
+        source: { not: "NO_RSVP_NO_SHOW" },
+      },
+      select: { registrationId: true, roundId: true, pointsValue: true },
+    });
+    for (const p of pens) {
+      const key = `${p.registrationId}::${p.roundId}`;
+      incidentPenaltyByRegRound.set(
+        key,
+        (incidentPenaltyByRegRound.get(key) ?? 0) + (p.pointsValue ?? 0)
+      );
+    }
+  }
 
   const bestN =
     season.teamScoringMode === "SUM_BEST_N"
@@ -509,7 +595,13 @@ export async function computeTeamStandings(
     // races. This mirrors iRLM's team scoring (Race 1 + Race 2 sessions
     // scored independently, then combined). Single-race rounds behave
     // exactly as before.
-    const byTeamRace = new Map<string, Map<number, number[]>>();
+    type Entry = {
+      teamId: string;
+      registrationId: string;
+      raceNumber: number;
+      points: number;
+    };
+    const entries: Entry[] = [];
     for (const r of round.raceResults) {
       const teamId = r.registration.teamId;
       if (!teamId) continue;
@@ -518,10 +610,37 @@ export async function computeTeamStandings(
         : r.rawPointsAwarded +
           r.participationPointsAwarded -
           r.manualPenaltyPoints;
-      if (!byTeamRace.has(teamId)) byTeamRace.set(teamId, new Map());
-      const races = byTeamRace.get(teamId)!;
-      if (!races.has(r.raceNumber)) races.set(r.raceNumber, []);
-      races.get(r.raceNumber)!.push(points);
+      entries.push({
+        teamId,
+        registrationId: r.registrationId,
+        raceNumber: r.raceNumber,
+        points,
+      });
+    }
+    // Per-race penalty mode: subtract the driver's incident penalties for
+    // this round from their contribution (once, from their highest-scoring
+    // race of the round) BEFORE the best-N pick below.
+    if (perRacePenalties) {
+      const byReg = new Map<string, Entry[]>();
+      for (const e of entries) {
+        const list = byReg.get(e.registrationId) ?? [];
+        list.push(e);
+        byReg.set(e.registrationId, list);
+      }
+      for (const [regId, list] of byReg) {
+        const pen =
+          incidentPenaltyByRegRound.get(`${regId}::${round.id}`) ?? 0;
+        if (pen <= 0) continue;
+        const target = list.reduce((a, b) => (b.points > a.points ? b : a));
+        target.points -= pen;
+      }
+    }
+    const byTeamRace = new Map<string, Map<number, number[]>>();
+    for (const e of entries) {
+      if (!byTeamRace.has(e.teamId)) byTeamRace.set(e.teamId, new Map());
+      const races = byTeamRace.get(e.teamId)!;
+      if (!races.has(e.raceNumber)) races.set(e.raceNumber, []);
+      races.get(e.raceNumber)!.push(e.points);
     }
     for (const [teamId, races] of byTeamRace) {
       let sum = 0;

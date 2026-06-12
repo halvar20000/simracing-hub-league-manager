@@ -18,6 +18,7 @@ import {
   type TeamClassGroup,
 } from "@/lib/standings";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
+import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 
 type StandingsKind = "combined" | "class";
 type ViewMode = "list" | "races";
@@ -208,6 +209,8 @@ export default async function StandingsPage({
           {season.scoringSystem.participationInCombined
             ? "Race points + participation − penalties."
             : "Race points − penalties. Participation points are not included in this view."}
+          {isPerRacePenaltySeason(slug, seasonId) &&
+            " Penalty points are deducted in the race they were incurred. Forgiveness earned in the penalty pool is credited back to the season total when the season completes; no-show points are deducted from the season total at the end of the season."}
         </p>
         {view === "races" ? (
           <RaceByRaceTable
@@ -588,7 +591,13 @@ function DriversTable({
             const prevPos = previousPositions.get(r.registrationId) ?? null;
             const positionDelta = prevPos != null ? prevPos - (idx + 1) : null;
             const incDelta = prev ? r.totalIncidents - prev.totalIncidents : null;
-            const penDelta = prev ? r.manualPenalties - prev.manualPenalties : null;
+            // Net penalty = gross penalties − season-end forgiveness credit
+            // (credit is 0 except on completed per-race-penalty seasons).
+            const netPen = r.manualPenalties - r.forgivenessCredit;
+            const prevNetPen = prev
+              ? prev.manualPenalties - prev.forgivenessCredit
+              : null;
+            const penDelta = prevNetPen != null ? netPen - prevNetPen : null;
             const rawForView = kind === "combined" ? r.rawPoints : r.classRawPoints;
             const prevRawForView = prev
               ? kind === "combined"
@@ -630,7 +639,7 @@ function DriversTable({
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
                   {r.participationPoints}
                 </td>
-                <td className="px-3 py-2 text-right text-red-400 tabular-nums"><ValueCell value={r.manualPenalties > 0 ? `−${r.manualPenalties}` : 0} delta={penDelta} lowerIsBetter /></td>
+                <td className="px-3 py-2 text-right text-red-400 tabular-nums"><ValueCell value={netPen > 0 ? `−${netPen}` : 0} delta={penDelta} lowerIsBetter /></td>
                 <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums"><ValueCell value={total} delta={totalDelta} width="w-12" /></td>
               </tr>
             );

@@ -15,6 +15,7 @@ import { isRsvpClosed } from "@/lib/rsvp-window";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { RaceCenterView } from "@/components/RaceCenterView";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
+import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 
 type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams" | "race-center";
 const TEAM_BEST_N = 2;
@@ -428,6 +429,25 @@ export default async function PublicRoundResults({
     a.participationPoints += r.participationPointsAwarded;
     a.penaltyPoints += r.manualPenaltyPoints;
     a.incidents += r.incidents;
+  }
+  // Per-race penalty mode (GT3 WCT 13th Season onward): steward incident
+  // penalties are deducted directly in the round they were incurred, so this
+  // round's points tables must show them. No-show penalties stay out — they
+  // settle on the season total at season end.
+  if (isPerRacePenaltySeason(slug, seasonId)) {
+    const roundIncidentPenalties = await prisma.penalty.findMany({
+      where: {
+        roundId,
+        type: "POINTS_DEDUCTION",
+        pointsValue: { gt: 0 },
+        source: { not: "NO_RSVP_NO_SHOW" },
+      },
+      select: { registrationId: true, pointsValue: true },
+    });
+    for (const p of roundIncidentPenalties) {
+      const a = aggMap.get(p.registrationId);
+      if (a) a.penaltyPoints += p.pointsValue ?? 0;
+    }
   }
   for (const a of aggMap.values()) {
     a.totalPoints =

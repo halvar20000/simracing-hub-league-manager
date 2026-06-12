@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
+import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 
 export async function generateMetadata({
   params,
@@ -42,6 +43,10 @@ export default async function PenaltyPoolPublicPage({
   // SFL mode: pool shows only no-show penalties; no auto-forgiveness columns.
   const isNoShowOnly = poolMode === "NO_SHOW_ONLY";
   const isFull = poolMode === "FULL";
+  // Per-race penalty mode (GT3 WCT 13th Season onward): penalties are already
+  // deducted in the race they were incurred; the pool only tracks forgiveness.
+  // There is no release step, so the Released column is hidden.
+  const perRace = isPerRacePenaltySeason(slug, seasonId);
 
   const registrations = await prisma.registration.findMany({
     where: { seasonId },
@@ -152,9 +157,11 @@ export default async function PenaltyPoolPublicPage({
         <p className="mt-1 text-sm text-zinc-400">
           {isNoShowOnly
             ? "Points deducted when a driver neither RSVPs nor races. Reporting / steward penalties are applied directly to standings and not shown here."
-            : isFull
-              ? "Penalty points incurred per round. Two clean races forgive 1 point automatically."
-              : "Penalty points incurred per round."}
+            : isFull && perRace
+              ? "Penalty points are deducted directly in the race they were incurred. This pool tracks them to calculate forgiveness: two clean races forgive 1 point automatically. Forgiven points are credited back to the season total at the end of the season; no-show points are deducted from the season total at the end of the season."
+              : isFull
+                ? "Penalty points incurred per round. Two clean races forgive 1 point automatically."
+                : "Penalty points incurred per round."}
         </p>
       </div>
 
@@ -176,7 +183,7 @@ export default async function PenaltyPoolPublicPage({
               <th className="px-2 py-2 text-right">
                 {isNoShowOnly ? "Total" : "Pool"}
               </th>
-              {isFull && <th className="px-2 py-2 text-right">Released</th>}
+              {isFull && !perRace && <th className="px-2 py-2 text-right">Released</th>}
             </tr>
           </thead>
           <tbody>
@@ -228,7 +235,7 @@ export default async function PenaltyPoolPublicPage({
                     <span className="text-zinc-600">0</span>
                   )}
                 </td>
-                {isFull && (
+                {isFull && !perRace && (
                   <td className="px-2 py-2 text-right tabular-nums text-red-300">
                     {d.released > 0 ? d.released : ""}
                   </td>
