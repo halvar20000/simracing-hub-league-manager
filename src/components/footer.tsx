@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CURRENT_VERSION } from "@/lib/changelog";
 
 export default function Footer() {
   return (
@@ -22,6 +23,13 @@ export default function Footer() {
           >
             CAS Regulations ↗
           </a>
+          <Link
+            href="/changelog"
+            title="What changed on the site"
+            className="font-mono text-zinc-500 hover:text-[#ff6b35]"
+          >
+            v{CURRENT_VERSION}
+          </Link>
         </nav>
       </div>
     </footer>

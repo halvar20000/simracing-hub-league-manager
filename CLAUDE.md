@@ -212,6 +212,10 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - **Public, CORS-open** (`Access-Control-Allow-Origin: *`), edge-cached briefly. No auth — these are read-only and expose only already-public standings data, never iRating/team/email/penalties beyond what the public site shows.
 - Consumed by `iracing_championship.py` in the iRacing-overlays project (`~/Nextcloud/iRacing/python/files/`).
 
+## Changelog & versioning
+
+`src/lib/changelog.ts` is the single source of truth for the site version (semver, started 1.0.0 on 2026-06-12) and feeds the public `/changelog` page and the footer version link. **Every user-visible change MUST add an entry at the top of `CHANGELOG` and bump the version**: feature → minor, fix/tweak → patch, big rework → major. Include `src/lib/changelog.ts` in the deploy script's `git add`. Internal-only changes (cron, refactors) don't need an entry.
+
 ## Editing this file
 
 Treat this as living documentation. When a new convention emerges, a new league launches, or a major flow changes, update the relevant section. Don't let it grow into a wiki — entries should be terse pointers; the code is authoritative.
