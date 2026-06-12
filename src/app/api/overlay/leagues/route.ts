@@ -24,6 +24,7 @@ export async function OPTIONS() {
 
 export async function GET() {
   const leagues = await prisma.league.findMany({
+    where: { isArchived: false },
     orderBy: { name: "asc" },
     select: {
       id: true,

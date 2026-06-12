@@ -18,6 +18,7 @@ export default async function Home() {
   // Pull every league with its most-recent (or active) season + that season's
   // rounds. We pick "most recent year" if no ACTIVE/OPEN_REGISTRATION season.
   const leagues = await prisma.league.findMany({
+    where: { isArchived: false },
     orderBy: { name: "asc" },
     include: {
       seasons: {

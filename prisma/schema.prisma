@@ -119,6 +119,11 @@ model League {
   createdById String
   createdBy   User   @relation("LeagueCreatedBy", fields: [createdById], references: [id])
 
+  /// Archived leagues are hidden from all public pages (home, /leagues,
+  /// /rosters, overlay API). Admin pages still show them; direct URLs keep
+  /// working for history. Toggle on the admin league-edit page.
+  isArchived Boolean @default(false)
+
   seasons Season[]
 
   createdAt                      DateTime @default(now())

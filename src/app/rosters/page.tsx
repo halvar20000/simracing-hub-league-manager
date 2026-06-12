@@ -13,6 +13,7 @@ export const metadata: Metadata = pageMetadata({
 
 export default async function PublicRostersIndex() {
   const leagues = await prisma.league.findMany({
+    where: { isArchived: false },
     orderBy: { name: "asc" },
     include: {
       seasons: {

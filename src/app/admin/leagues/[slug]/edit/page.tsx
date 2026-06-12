@@ -80,6 +80,26 @@ export default async function EditLeaguePage({
             it without uploading a new one.
           </span>
         </div>
+        <label className="flex items-start gap-2 rounded border border-zinc-800 bg-zinc-900/50 p-3">
+          <input
+            type="checkbox"
+            name="isArchived"
+            value="1"
+            defaultChecked={league.isArchived}
+            className="mt-0.5 h-4 w-4 accent-orange-500"
+          />
+          <span className="text-sm">
+            <span className="font-medium text-zinc-200">
+              Archive this league
+            </span>
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Hidden from the home page, league list, rosters and the overlay
+              API. Admin pages and direct links keep working. Untick to bring
+              it back.
+            </span>
+          </span>
+        </label>
+
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
             Email recipients for new registrations (one per line)

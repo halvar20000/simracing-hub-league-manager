@@ -35,6 +35,7 @@ export default async function PublicLeaguesList() {
     });
 
   const leagues = await prisma.league.findMany({
+    where: { isArchived: false },
     orderBy: { name: "asc" },
     include: {
       _count: { select: { seasons: true } },

@@ -189,6 +189,9 @@ export async function updateLeague(id: string, formData: FormData) {
       ? Math.max(0, Math.min(72, parseInt(closeHoursRaw, 10)))
       : 1;
 
+  // Archived leagues are hidden from all public pages; admin keeps access.
+  const isArchived = String(formData.get("isArchived") ?? "") === "1";
+
   if (!name) {
     redirect(`/admin/leagues/${id}/edit?error=Name+is+required`);
   }
@@ -250,6 +253,7 @@ export async function updateLeague(id: string, formData: FormData) {
       rsvpDaysBefore,
       rsvpMode,
       rsvpCloseBeforeHours,
+      isArchived,
     },
   });
 
