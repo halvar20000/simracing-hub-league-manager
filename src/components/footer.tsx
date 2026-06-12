@@ -10,9 +10,9 @@ export default function Footer() {
         <nav className="flex flex-wrap items-center justify-center gap-3 text-xs">
           <Link
             href="/contact"
-            className="text-zinc-400 hover:text-[#ff6b35]"
+            className="inline-flex items-center gap-1.5 rounded border border-[#ff6b35] px-3 py-1.5 font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"
           >
-            Report an issue
+            <span aria-hidden>🛠️</span> Report an issue / Contact developer
           </Link>
           <a
             href="https://docs.google.com/document/d/1-PSzsVuO72ibGj0ioXDoHIMyehA5lOsn9LVuo5vI2M8/edit?tab=t.os392vq0z8ib"
