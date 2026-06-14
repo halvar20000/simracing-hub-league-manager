@@ -71,6 +71,22 @@ export default async function PublicSeasonDetail({
     compareStartNumber(a.startNumber, b.startNumber)
   );
 
+  // Split confirmed grid drivers from the waiting list (capped seasons only).
+  // Waitlisted = APPROVED but over the season's maxDrivers cap; show them in a
+  // separate list, in registration order (first registered is next in line).
+  const confirmedRegs = season.registrations.filter(
+    (r) => r.waitlistedAt == null
+  );
+  const waitlistRegs = season.registrations
+    .filter((r) => r.waitlistedAt != null)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const fmtWaitDate = (d: Date) =>
+    d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
   const teamClasses = await computeTeamClassStandings(prisma, seasonId);
   const isTeamEventSeason = teamClasses.length > 0;
   const classLeaders = isTeamEventSeason
@@ -372,9 +388,10 @@ export default async function PublicSeasonDetail({
       {!isTeamEventSeason && (
       <section>
         <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-          Roster ({season.registrations.length} approved)
+          Roster ({confirmedRegs.length} approved
+          {season.maxDrivers != null ? ` / ${season.maxDrivers}` : ""})
         </h2>
-        {season.registrations.length === 0 ? (
+        {confirmedRegs.length === 0 ? (
           <EmptyState
             icon={<UsersIcon />}
             title="No approved drivers yet"
@@ -397,7 +414,7 @@ export default async function PublicSeasonDetail({
                 </tr>
               </thead>
               <tbody>
-                {season.registrations.map((r) => (
+                {confirmedRegs.map((r) => (
                   <tr key={r.id} className="border-t border-zinc-800">
                     <td className="px-3 py-2 font-display text-zinc-500">
                       {r.startNumber ?? "—"}
@@ -423,6 +440,47 @@ export default async function PublicSeasonDetail({
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {waitlistRegs.length > 0 && (
+          <div className="mt-4">
+            <h3 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-cyan-400">
+              Waiting list ({waitlistRegs.length})
+            </h3>
+            <p className="mb-2 text-xs text-zinc-500">
+              The grid is full
+              {season.maxDrivers != null ? ` (${season.maxDrivers} drivers)` : ""}.
+              These drivers are next in line, in registration order — if a
+              confirmed driver drops out of a race, the next gets the spot.
+            </p>
+            <div className="overflow-hidden rounded border border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-900 text-left text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-2 font-display tracking-wider w-10">#</th>
+                    <th className="px-3 py-2 font-display tracking-wider">Driver</th>
+                    <th className="px-3 py-2 font-display tracking-wider">Registered</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waitlistRegs.map((r, i) => (
+                    <tr key={r.id} className="border-t border-zinc-800">
+                      <td className="px-3 py-2 font-display text-cyan-300 tabular-nums">
+                        {i + 1}
+                      </td>
+                      <td className="px-3 py-2 font-medium">
+                        <CountryFlag code={r.user.countryCode} />
+                        {r.user.firstName} {r.user.lastName}
+                      </td>
+                      <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                        {fmtWaitDate(r.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>

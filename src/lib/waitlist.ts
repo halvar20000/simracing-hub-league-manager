@@ -290,8 +290,10 @@ export async function promoteFromWaitlist(seasonId: string): Promise<number> {
 /**
  * Reconcile one-race fill-ins for a round so the number of fill-ins matches the
  * number of confirmed drivers who have DECLINED that round. Idempotent:
+ *   - the offered fill-in driver ALSO declines → drop their fill-in and offer
+ *     the slot to the next waiting-list driver (the queue chains down the list).
  *   - too few fill-ins → offer the next waiting-list driver(s) the slot + DM.
- *   - too many (a driver un-declined) → revoke the newest surplus fill-in + DM.
+ *   - too many (a confirmed driver un-declined) → revoke the newest surplus + DM.
  *   - existing fill-ins missing a DM (notify failed earlier) → retry the DM.
  *
  * Only runs for capped seasons. Safe to call on every RSVP decline toggle.
@@ -316,18 +318,31 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
   });
   if (!round || round.season.maxDrivers == null) return;
 
-  // Confirmed drivers who declined this round = the open slots.
-  const declines = await prisma.roundRsvp.findMany({
+  // Every APPROVED driver (confirmed OR waitlisted) who DECLINED this round.
+  // A confirmed decliner opens a slot; a waitlisted decliner is the fill-in
+  // driver passing on the offer — either way we must not (re-)offer them.
+  const declinedRsvps = await prisma.roundRsvp.findMany({
     where: {
       roundId,
       status: "DECLINED",
-      registration: { ...CONFIRMED_WHERE, seasonId: round.seasonId },
+      registration: {
+        seasonId: round.seasonId,
+        status: "APPROVED",
+        excludedAt: null,
+        isTeamManager: false,
+      },
     },
-    select: { registrationId: true },
+    select: {
+      registrationId: true,
+      registration: { select: { waitlistedAt: true } },
+    },
   });
-  const openSlots = declines.length;
+  const openSlots = declinedRsvps.filter(
+    (d) => d.registration.waitlistedAt == null
+  ).length;
+  const declinedRegIds = new Set(declinedRsvps.map((d) => d.registrationId));
 
-  const existing = await prisma.roundFillIn.findMany({
+  let existing = await prisma.roundFillIn.findMany({
     where: { roundId },
     orderBy: { createdAt: "asc" },
     select: { id: true, registrationId: true, notifiedAt: true },
@@ -339,8 +354,26 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
     timeZone: "Europe/Berlin",
   });
   const roundLink = `${SITE_URL}/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}`;
+  const offerMessage = (verb: string) =>
+    `🏁 A spot ${verb} for **${round.season.league.name} — ${round.name}** ` +
+    `(${round.track}, ${raceWhen}). As the next driver on the waiting list, ` +
+    `you're invited to take this race. Reply to your league admin to confirm ` +
+    `your iRacing entry. Can't make it? Just click Decline on the round and ` +
+    `we'll offer it to the next driver. Details: ${roundLink}`;
 
-  // 1) Revoke surplus fill-ins (newest first) when drivers un-declined.
+  // 1) A fill-in driver who DECLINED the offer → drop their fill-in (silently;
+  //    they chose to pass) so the slot reopens for the next driver. They keep
+  //    their place on the waiting list for other rounds.
+  const passedOn = existing.filter((f) => declinedRegIds.has(f.registrationId));
+  if (passedOn.length > 0) {
+    await prisma.roundFillIn.deleteMany({
+      where: { id: { in: passedOn.map((f) => f.id) } },
+    });
+    existing = existing.filter((f) => !declinedRegIds.has(f.registrationId));
+  }
+
+  // 2) Revoke surplus fill-ins (newest first) when a confirmed driver
+  //    un-declined and there are now more fill-ins than open slots.
   if (existing.length > openSlots) {
     const surplus = existing.slice(openSlots); // newest are last (asc order)
     for (const f of surplus) {
@@ -358,15 +391,14 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
         );
       }
     }
+    existing = existing.slice(0, openSlots);
   }
 
-  // 2) Add fill-ins for any still-open slots from the waiting list (FIFO).
-  let needed = openSlots - Math.min(existing.length, openSlots);
+  // 3) Offer any still-open slots to the next waiting-list drivers (FIFO),
+  //    skipping anyone already filling in or who declined this round.
+  let needed = openSlots - existing.length;
   if (needed > 0) {
-    const declinedRegIds = new Set(declines.map((d) => d.registrationId));
-    const alreadyFilling = new Set(
-      existing.slice(0, openSlots).map((e) => e.registrationId)
-    );
+    const alreadyFilling = new Set(existing.map((e) => e.registrationId));
     const candidates = await prisma.registration.findMany({
       where: { seasonId: round.seasonId, ...WAITLIST_WHERE },
       orderBy: { createdAt: "asc" },
@@ -379,13 +411,7 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
         data: { roundId, registrationId: c.id },
         select: { id: true },
       });
-      const ok = await dmUser(
-        c.userId,
-        `🏁 A spot just opened for **${round.season.league.name} — ${round.name}** ` +
-          `(${round.track}, ${raceWhen}). As the next driver on the waiting list, ` +
-          `you're invited to take this race. Reply to your league admin to confirm ` +
-          `your iRacing entry. Details: ${roundLink}`
-      );
+      const ok = await dmUser(c.userId, offerMessage("just opened"));
       if (ok) {
         await prisma.roundFillIn.update({
           where: { id: created.id },
@@ -396,7 +422,7 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
     }
   }
 
-  // 3) Retry DM for kept fill-ins that were never successfully notified.
+  // 4) Retry DM for kept fill-ins that were never successfully notified.
   const kept = await prisma.roundFillIn.findMany({
     where: { roundId, notifiedAt: null },
     select: { id: true, registrationId: true },
@@ -407,12 +433,7 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
       select: { userId: true },
     });
     if (!reg) continue;
-    const ok = await dmUser(
-      reg.userId,
-      `🏁 A spot is open for **${round.season.league.name} — ${round.name}** ` +
-        `(${round.track}, ${raceWhen}). As the next driver on the waiting list, ` +
-        `you're invited to take this race. Details: ${roundLink}`
-    );
+    const ok = await dmUser(reg.userId, offerMessage("is open"));
     if (ok) {
       await prisma.roundFillIn.update({
         where: { id: f.id },
