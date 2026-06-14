@@ -289,6 +289,7 @@ model Round {
   rsvpClosedAt       DateTime?
   rsvps              RoundRsvp[]
   rsvpDiscordMessage RoundDiscordRsvpMessage?
+  fillIns            RoundFillIn[]
 
   /// Set when the after-race results were posted to Discord — idempotency
   /// flag for src/lib/notify-results.ts.
@@ -336,10 +337,16 @@ model Registration {
   teamRoundDrivers    TeamRoundDriver[]
   penalties           Penalty[]
   rsvps               RoundRsvp[]
+  fillIns             RoundFillIn[]
 
   createdAt                 DateTime         @default(now())
   updatedAt                 DateTime         @updatedAt
   excludedAt                DateTime?
+  /// Set when this APPROVED registration is over the season's maxDrivers cap
+  /// and therefore on the waiting list (not a confirmed grid driver). Waiting
+  /// list order is by `createdAt` (registration date) ascending — first to
+  /// register is first in line. Null = confirmed grid driver. See src/lib/waitlist.ts.
+  waitlistedAt              DateTime?
   startingFeePaid           AdminCheckStatus @default(NO)
   iracingInvitationSent     AdminCheckStatus @default(NO)
   iracingInvitationAccepted AdminCheckStatus @default(NO)
@@ -583,6 +590,30 @@ model RoundRsvp {
 
   respondedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@unique([roundId, registrationId])
+  @@index([roundId])
+  @@index([registrationId])
+}
+
+/// A one-race fill-in: when a confirmed driver declines a round (RSVP) on a
+/// capped season, the earliest-registered waiting-list driver is offered that
+/// round's slot and DM'd. Created/revoked idempotently by
+/// src/lib/waitlist.ts:reconcileFillInsForRound. Does NOT change the driver's
+/// season waitlist status — it only covers this single round.
+model RoundFillIn {
+  id             String       @id @default(cuid())
+  roundId        String
+  round          Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  /// Optional: the confirmed driver whose decline freed this slot.
+  replacesRegistrationId String?
+  /// Set once the fill-in driver has been DM'd. Null = not yet notified (retry).
+  notifiedAt             DateTime?
+
+  createdAt DateTime @default(now())
 
   @@unique([roundId, registrationId])
   @@index([roundId])

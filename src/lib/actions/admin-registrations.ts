@@ -1,11 +1,17 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 import { parseStartNumberInput } from "@/lib/start-number";
+import {
+  applyWaitlistOnApprove,
+  promoteFromWaitlist,
+  setRegistrationWaitlisted,
+} from "@/lib/waitlist";
 import type { RegistrationStatus, ProAmClass } from "@prisma/client";
 
 export async function approveRegistration(registrationId: string) {
@@ -20,6 +26,9 @@ export async function approveRegistration(registrationId: string) {
     },
     include: { season: { include: { league: true } } },
   });
+
+  // Park this approval on the waiting list if it is over the season cap.
+  await applyWaitlistOnApprove(reg.id);
 
   revalidatePath(
     `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
@@ -38,13 +47,56 @@ export async function rejectRegistration(registrationId: string) {
       status: "REJECTED",
       approvedById: null,
       approvedAt: null,
+      waitlistedAt: null,
     },
     include: { season: { include: { league: true } } },
+  });
+
+  // A confirmed driver leaving may free a seat for the next on the waiting list.
+  after(async () => {
+    try {
+      await promoteFromWaitlist(reg.seasonId);
+    } catch {
+      /* swallow — promotion is best-effort */
+    }
   });
 
   revalidatePath(
     `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
   );
+  revalidatePath(
+    `/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}`
+  );
+}
+
+/** Admin: move a waiting-list driver up into a confirmed seat (DMs them). */
+export async function promoteWaitlistRegistration(registrationId: string) {
+  await requireAdmin();
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: { seasonId: true, season: { select: { league: { select: { slug: true } } } } },
+  });
+  if (!reg) return;
+  await setRegistrationWaitlisted(registrationId, false);
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+  revalidatePath(`/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}`);
+}
+
+/** Admin: move a confirmed driver onto the waiting list. */
+export async function demoteToWaitlist(registrationId: string) {
+  await requireAdmin();
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: { seasonId: true, season: { select: { league: { select: { slug: true } } } } },
+  });
+  if (!reg) return;
+  await setRegistrationWaitlisted(registrationId, true);
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+  revalidatePath(`/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}`);
 }
 
 export async function updateRegistration(
@@ -117,8 +169,23 @@ export async function updateRegistration(
 
   await prisma.registration.update({
     where: { id: registrationId },
-    data,
+    data: status === "APPROVED" ? data : { ...data, waitlistedAt: null },
   });
+
+  // Keep the waiting list consistent with the new status.
+  if (status === "APPROVED") {
+    // May park this driver on the waiting list if the season is now over cap.
+    await applyWaitlistOnApprove(registrationId);
+  } else {
+    // A confirmed driver leaving the grid may free a seat for the next in line.
+    after(async () => {
+      try {
+        await promoteFromWaitlist(seasonId);
+      } catch {
+        /* swallow */
+      }
+    });
+  }
 
   revalidatePath(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`

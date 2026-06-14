@@ -122,3 +122,31 @@ export async function getChannelAsBot(
 ): Promise<Result<{ id: string; name?: string; guild_id?: string; type?: number }>> {
   return discordFetch(`/channels/${channelId}`, { method: "GET" });
 }
+
+/**
+ * Open (or fetch the existing) DM channel between the bot and a user.
+ * Discord returns the same channel on repeated calls, so this is idempotent.
+ */
+export async function openDmChannel(
+  discordUserId: string
+): Promise<Result<{ id: string }>> {
+  return discordFetch(`/users/@me/channels`, {
+    method: "POST",
+    body: JSON.stringify({ recipient_id: discordUserId }),
+  });
+}
+
+/**
+ * Send a direct message to a Discord user by their Discord ID. Opens the DM
+ * channel first, then posts. Returns the same Result shape as postBotMessage.
+ * Never throws. Common failure: the user shares no guild with the bot or has
+ * DMs disabled (Discord 403) — the caller decides how to surface that.
+ */
+export async function sendDirectMessage(
+  discordUserId: string,
+  payload: MessagePayload
+): Promise<Result<{ id: string; channel_id: string }>> {
+  const dm = await openDmChannel(discordUserId);
+  if (!dm.ok) return dm;
+  return postBotMessage(dm.data.id, payload);
+}

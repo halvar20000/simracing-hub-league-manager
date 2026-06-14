@@ -7,7 +7,10 @@ import {
   rejectRegistration,
   approveTeamRegistrations,
   rejectTeamRegistrations,
+  promoteWaitlistRegistration,
+  demoteToWaitlist,
 } from "@/lib/actions/admin-registrations";
+import { getSeasonCapInfo, getWaitlist } from "@/lib/waitlist";
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
 import RegistrationCarSelect from "@/components/RegistrationCarSelect";
 import {
@@ -402,6 +405,18 @@ export default async function RosterPage({
   const showFee =
     !!season.league.registrationFee && season.league.registrationFee > 0;
 
+  // Waiting list (only active when the season has a maxDrivers cap).
+  const capInfo = await getSeasonCapInfo(seasonId);
+  const waitlist = capInfo.enabled ? await getWaitlist(seasonId) : [];
+  const fmtDateTime = (d: Date) =>
+    d.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
   return (
     <div className="space-y-6">
       <div>
@@ -420,6 +435,23 @@ export default async function RosterPage({
               {pendingCount > 0 && (
                 <span className="ml-2 rounded bg-amber-900 px-2 py-0.5 text-xs text-amber-200">
                   {pendingCount} pending
+                </span>
+              )}
+              {capInfo.enabled && (
+                <span
+                  className={`ml-2 rounded px-2 py-0.5 text-xs ${
+                    capInfo.openSeats <= 0
+                      ? "bg-red-900/50 text-red-200"
+                      : "bg-zinc-800 text-zinc-300"
+                  }`}
+                  title="Confirmed grid drivers vs. the season's maxDrivers cap"
+                >
+                  {capInfo.confirmed}/{capInfo.cap} grid
+                </span>
+              )}
+              {capInfo.enabled && capInfo.waitlistCount > 0 && (
+                <span className="ml-2 rounded bg-cyan-900/40 px-2 py-0.5 text-xs text-cyan-200">
+                  {capInfo.waitlistCount} on waiting list
                 </span>
               )}
             </p>
@@ -623,6 +655,14 @@ export default async function RosterPage({
                 )}
                 <td className="px-4 py-3">
                   <StatusBadge status={r.status} />
+                  {r.waitlistedAt != null && (
+                    <span
+                      className="mt-1 block rounded bg-cyan-900/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200"
+                      title="On the waiting list — not a confirmed grid driver"
+                    >
+                      Waiting list
+                    </span>
+                  )}
                 </td>
                 {showFee && (
                 <td className="px-4 py-3">
@@ -671,6 +711,29 @@ export default async function RosterPage({
                         </form>
                       </>
                     )}
+                    {capInfo.enabled && r.status === "APPROVED" && (
+                      r.waitlistedAt != null ? (
+                        <form action={promoteWaitlistRegistration.bind(null, r.id)}>
+                          <button
+                            type="submit"
+                            className="rounded border border-cyan-800 bg-cyan-950/40 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-900/60"
+                            title="Move into a confirmed grid seat and DM the driver"
+                          >
+                            ↑ Grid
+                          </button>
+                        </form>
+                      ) : (
+                        <form action={demoteToWaitlist.bind(null, r.id)}>
+                          <button
+                            type="submit"
+                            className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                            title="Move this driver onto the waiting list"
+                          >
+                            ↓ Waitlist
+                          </button>
+                        </form>
+                      )
+                    )}
                     <Link
                       href={`/admin/leagues/${slug}/seasons/${seasonId}/roster/${r.id}/edit`}
                       className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
@@ -694,6 +757,75 @@ export default async function RosterPage({
           </tbody>
         </table>
       </DoubleScrollWrapper>
+
+      {capInfo.enabled && (
+        <div className="space-y-2">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+            Waiting list
+          </h2>
+          <p className="text-xs text-zinc-500">
+            Approved drivers over the {capInfo.cap}-seat cap, in registration
+            order (first registered is next in line). When a confirmed driver
+            declines a race, the top waiting-list driver is automatically offered
+            that round and DM&apos;d on Discord. Permanent withdrawals promote the
+            next driver into a season seat.
+          </p>
+          {waitlist.length === 0 ? (
+            <p className="rounded border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-400">
+              No drivers on the waiting list — {capInfo.openSeats} seat
+              {capInfo.openSeats === 1 ? "" : "s"} still open.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded border border-zinc-800">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-900 text-left text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-2 w-12">#</th>
+                    <th className="px-3 py-2">Driver</th>
+                    <th className="px-3 py-2">Registered</th>
+                    <th className="px-3 py-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {waitlist.map((w) => (
+                    <tr
+                      key={w.registrationId}
+                      className="border-t border-zinc-800 hover:bg-zinc-900/60"
+                    >
+                      <td className="px-3 py-2 tabular-nums text-cyan-300">
+                        {w.position}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-zinc-100">
+                        {w.name ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                        {fmtDateTime(w.registeredAt)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <form
+                          action={promoteWaitlistRegistration.bind(
+                            null,
+                            w.registrationId
+                          )}
+                          className="inline"
+                        >
+                          <button
+                            type="submit"
+                            className="rounded border border-cyan-800 bg-cyan-950/40 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-900/60"
+                            title="Promote into a confirmed grid seat and DM the driver"
+                          >
+                            ↑ Promote to grid
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

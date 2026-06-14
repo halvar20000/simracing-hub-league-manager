@@ -62,6 +62,25 @@ export default async function AdminRoundRsvp({
   const tentative = rows.filter((r) => r.status === "TENTATIVE");
   const silent = rows.filter((r) => r.status === null);
 
+  // Waiting-list fill-ins offered for this round (a confirmed driver declined,
+  // so the next on the waiting list was auto-invited + DM'd).
+  const fillIns = await prisma.roundFillIn.findMany({
+    where: { roundId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      notifiedAt: true,
+      registration: {
+        select: {
+          startNumber: true,
+          user: {
+            select: { name: true, firstName: true, lastName: true, iracingMemberId: true },
+          },
+        },
+      },
+    },
+  });
+
   // Read banners from search params (set by the server action redirects).
   const postStatus = pickStr("status");
   const postReason = pickStr("reason");
@@ -238,6 +257,48 @@ export default async function AdminRoundRsvp({
           subtitle="No response — will incur a penalty point on no-show (GT3 WCT)."
         />
       </div>
+
+      {/* Waiting-list fill-ins for this round */}
+      {fillIns.length > 0 && (
+        <div className="space-y-2 rounded border border-cyan-900/50 bg-cyan-950/20 p-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-cyan-300">
+            Waiting-list fill-ins ({fillIns.length})
+          </h2>
+          <p className="text-xs text-zinc-400">
+            A confirmed driver declined, so these waiting-list drivers were
+            auto-invited for this round and DM&apos;d on Discord. Send them the
+            iRacing race invite to lock in their entry.
+          </p>
+          <ul className="space-y-1 text-sm">
+            {fillIns.map((f) => {
+              const u = f.registration.user;
+              const name =
+                `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() ||
+                u.name ||
+                "—";
+              return (
+                <li key={f.id} className="flex items-center gap-2">
+                  <span className="font-medium text-zinc-100">{name}</span>
+                  {u.iracingMemberId && (
+                    <span className="text-xs text-zinc-500 tabular-nums">
+                      iR {u.iracingMemberId}
+                    </span>
+                  )}
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
+                      f.notifiedAt
+                        ? "bg-emerald-900/40 text-emerald-200"
+                        : "bg-amber-900/40 text-amber-200"
+                    }`}
+                  >
+                    {f.notifiedAt ? "DM sent" : "DM pending"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* Full table with per-driver admin override */}
       <div className="space-y-2">

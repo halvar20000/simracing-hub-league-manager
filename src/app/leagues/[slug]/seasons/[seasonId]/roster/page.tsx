@@ -10,6 +10,7 @@ import { DoubleScrollWrapper } from "@/components/DoubleScrollWrapper";
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
 import { compareStartNumber } from "@/lib/start-number";
+import { getSeasonCapInfo, getWaitlist } from "@/lib/waitlist";
 
 export async function generateMetadata({
   params,
@@ -347,6 +348,19 @@ export default async function PublicSeasonRoster({
   const showFee =
     !!season.league.registrationFee && season.league.registrationFee > 0;
 
+  // Waiting list (active only when the season has a maxDrivers cap). Waitlisted
+  // drivers are APPROVED-but-over-cap; show them in a separate panel, not the
+  // confirmed grid table.
+  const capInfo = await getSeasonCapInfo(seasonId);
+  const waitlist = capInfo.enabled ? await getWaitlist(seasonId) : [];
+  const gridRegistrations = registrations.filter((r) => r.waitlistedAt == null);
+  const fmtWaitDate = (d: Date) =>
+    d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
   return (
     <div className="space-y-6">
       <div>
@@ -360,11 +374,16 @@ export default async function PublicSeasonRoster({
           <div>
             <h1 className="text-2xl font-bold">Roster</h1>
             <p className="mt-1 text-sm text-zinc-400">
-              {registrations.length}{" "}
-              {registrations.length === 1 ? "driver" : "drivers"}
+              {gridRegistrations.length}{" "}
+              {gridRegistrations.length === 1 ? "driver" : "drivers"}
               {pendingCount > 0 && (
                 <span className="ml-1 text-zinc-500">
                   ({pendingCount} pending)
+                </span>
+              )}
+              {capInfo.enabled && capInfo.waitlistCount > 0 && (
+                <span className="ml-2 rounded bg-cyan-900/40 px-2 py-0.5 text-xs text-cyan-200">
+                  {capInfo.waitlistCount} on waiting list
                 </span>
               )}
             </p>
@@ -376,7 +395,7 @@ export default async function PublicSeasonRoster({
         </div>
       </div>
 
-      {registrations.length === 0 ? (
+      {gridRegistrations.length === 0 ? (
         <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
           No drivers registered yet.
         </p>
@@ -464,7 +483,7 @@ export default async function PublicSeasonRoster({
                 </tr>
               </thead>
               <tbody>
-                {registrations.map((r) => (
+                {gridRegistrations.map((r) => (
                   <tr
                     key={r.id}
                     data-filter={[
@@ -565,6 +584,48 @@ export default async function PublicSeasonRoster({
             </table>
           </div>
         </>
+      )}
+
+      {capInfo.enabled && waitlist.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+            Waiting list
+          </h2>
+          <p className="text-xs text-zinc-500">
+            The grid is full ({capInfo.cap} drivers). These drivers are on the
+            waiting list in registration order — if a confirmed driver drops out
+            of a race, the next in line is offered the spot.
+          </p>
+          <div className="overflow-x-auto rounded border border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-900 text-left text-zinc-400">
+                <tr>
+                  <th className="px-4 py-2 w-12">#</th>
+                  <th className="px-4 py-2">Driver</th>
+                  <th className="px-4 py-2">Registered</th>
+                </tr>
+              </thead>
+              <tbody>
+                {waitlist.map((w) => (
+                  <tr
+                    key={w.registrationId}
+                    className="border-t border-zinc-800 hover:bg-zinc-900"
+                  >
+                    <td className="px-4 py-2 tabular-nums text-cyan-300">
+                      {w.position}
+                    </td>
+                    <td className="px-4 py-2 font-medium text-zinc-100">
+                      {w.name ?? "—"}
+                    </td>
+                    <td className="px-4 py-2 text-zinc-400 tabular-nums">
+                      {fmtWaitDate(w.registeredAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

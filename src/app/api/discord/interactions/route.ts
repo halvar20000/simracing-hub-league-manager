@@ -24,6 +24,7 @@ import {
 } from "@/lib/rsvp";
 import { parseRsvpCustomId } from "@/lib/discord-rsvp-embed";
 import { isRsvpClosed } from "@/lib/rsvp-window";
+import { reconcileFillInsForRound } from "@/lib/waitlist";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -216,6 +217,12 @@ export async function POST(req: NextRequest) {
       } catch {
         /* swallow */
       }
+      // Offer the freed slot to the next waiting-list driver (no-op uncapped).
+      try {
+        await reconcileFillInsForRound(parsed.roundId);
+      } catch {
+        /* swallow */
+      }
     });
     const verb =
       t.action === "added"
@@ -254,6 +261,11 @@ export async function POST(req: NextRequest) {
   after(async () => {
     try {
       await refreshDiscordRsvpMessage(parsed.roundId);
+    } catch {
+      /* swallow */
+    }
+    try {
+      await reconcileFillInsForRound(parsed.roundId);
     } catch {
       /* swallow */
     }

@@ -8,6 +8,7 @@ import { requireAuth, requireAdmin } from "@/lib/auth-helpers";
 import { upsertRsvp, toggleDecline, refreshDiscordRsvpMessage } from "@/lib/rsvp";
 import { postRsvpForRound } from "@/lib/notify-rsvp";
 import { getChannelAsBot } from "@/lib/discord-bot";
+import { reconcileFillInsForRound } from "@/lib/waitlist";
 import type { RsvpStatus } from "@prisma/client";
 
 /**
@@ -55,6 +56,12 @@ export async function submitRsvpAction(formData: FormData): Promise<void> {
     } catch {
       /* swallow */
     }
+    // Offer freed slots to the waiting list (no-op on uncapped seasons).
+    try {
+      await reconcileFillInsForRound(roundId);
+    } catch {
+      /* swallow */
+    }
   });
 }
 
@@ -90,6 +97,12 @@ export async function toggleDeclineAction(formData: FormData): Promise<void> {
   after(async () => {
     try {
       await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
+    // Offer freed slots to the waiting list (no-op on uncapped seasons).
+    try {
+      await reconcileFillInsForRound(roundId);
     } catch {
       /* swallow */
     }
@@ -251,6 +264,12 @@ export async function adminSetRsvpAction(
   after(async () => {
     try {
       await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
+    // Offer freed slots to the waiting list (no-op on uncapped seasons).
+    try {
+      await reconcileFillInsForRound(roundId);
     } catch {
       /* swallow */
     }
