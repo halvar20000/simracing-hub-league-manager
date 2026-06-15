@@ -1,14 +1,14 @@
 #!/bin/sh
 set -e
 
-# Apply schema to the database, then start the server.
-# Use db push (matches your project convention: Neon schema is managed with
-# `prisma db push`, NOT migrate). Safe + additive. See CLAUDE.md.
-# After a full dump/restore the schema already matches, so this is normally a
-# no-op. It's here so future schema changes apply on deploy. It will NOT drop
-# data unless you pass --accept-data-loss, which we deliberately omit.
-echo "Applying schema with prisma db push..."
-npx prisma db push --skip-generate
-
+# The Next.js standalone runtime image intentionally ships only the Prisma
+# CLIENT + query engine (what the app uses at request time) — NOT the Prisma
+# CLI, whose dependencies (effect, etc.) aren't traced into the standalone
+# bundle. So schema work is done OUT OF BAND, never in this container:
+#   - Initial schema comes from the database dump/restore during migration.
+#   - Future schema changes: run `npx prisma db push` from a full dev/build
+#     environment (your Mac, or the build-stage image) against DATABASE_URL.
+#
+# This container's only job is to serve the app.
 echo "Starting Next.js..."
 exec node server.js
