@@ -62,7 +62,9 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 
 ## Results publish gate (COMPLETED = published)
 
-A round's results and their standings impact go public **only** when `Round.status === "COMPLETED"`. Workflow: race runs → admin imports results → admin previews → admin sets the round to `COMPLETED` (season-edit/round-edit) → published.
+A round's results and their standings impact go public **only** when `Round.status === "COMPLETED"`. Workflow: race runs → admin imports results → admin previews → admin clicks **✓ Publish results** (or sets `COMPLETED` on the round-edit form) → published.
+
+- **Publish button**: `setRoundPublished(formData)` in `src/lib/actions/rounds.ts` flips status to `COMPLETED` (publish) or `IN_PROGRESS` (unpublish) and runs the *same* downstream pipeline as `updateRound` (no-show penalties → penalty-pool recompute → Discord results post via `after()`). Rendered as a green "✓ Publish results" / "Unpublish" `<form action>` on the admin round page (disabled until results exist).
 
 - **Engine** (`src/lib/standings.ts`): all four compute functions (`computeDriverStandings`, `computeTeamStandings`, `computeCarStandings`, `computeTeamClassStandings`) take an optional `opts: StandingsOptions = {}` 4th/3rd arg. Default (no opts) counts **only COMPLETED rounds** — every round/raceResult/teamResult/penalty query is gated by `round.status = COMPLETED`. Pass `{ includeUnpublishedRounds: true }` for admin preview. Every public caller (standings page, season/league/home pages, `/api/overlay/standings`) uses the default and is automatically gated.
 - **Admin preview**: gated by the soft, non-redirecting `isAdminOrSteward()` (`src/lib/auth-helpers.ts`). The public round page and standings page render the pending round's tables to admins/stewards with an orange "Preview — admin only" banner; the public sees a "results are being reviewed" note (round page) and standings frozen at the last COMPLETED round. The admin round page has a "👁 Preview public" link. Round OG metadata hides the podium until COMPLETED. Season schedule shows "Pending" (not a results link) until COMPLETED.

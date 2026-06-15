@@ -125,6 +125,58 @@ export async function updateRound(
   redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
 }
 
+/**
+ * Publish / unpublish a round's results without going through the full
+ * Edit-round form. Publishing flips status to COMPLETED (which makes results
+ * and standings public) and runs the exact same downstream pipeline as
+ * updateRound: no-show penalties, penalty-pool recompute, Discord results
+ * post. Unpublishing moves it back to IN_PROGRESS (results stay imported, but
+ * become admin-preview-only again) and clears the COMPLETED-only side effects.
+ *
+ * Used as a `<form action>` on the admin round page — reads hidden inputs and
+ * returns void (redirects on success).
+ */
+export async function setRoundPublished(formData: FormData) {
+  await requireAdmin();
+
+  const leagueSlug = String(formData.get("leagueSlug") ?? "");
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const roundId = String(formData.get("roundId") ?? "");
+  const publish = String(formData.get("publish") ?? "") === "1";
+
+  const status: RoundStatus = publish ? "COMPLETED" : "IN_PROGRESS";
+
+  await prisma.round.update({
+    where: { id: roundId },
+    data: { status },
+  });
+
+  // Same downstream pipeline as updateRound. applyNoRsvpNoShowPenalties is safe
+  // on any transition — it clears stale auto penalties when leaving COMPLETED.
+  await applyNoRsvpNoShowPenalties(roundId);
+
+  if (status === "COMPLETED") {
+    await recomputePenaltyPoolForSeason(seasonId);
+    after(async () => {
+      try {
+        await postRoundResults(roundId);
+      } catch {
+        /* never block a round save on a Discord hiccup */
+      }
+    });
+  }
+
+  revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
+  revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}`);
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}`);
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}`);
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/standings`);
+  revalidatePath(`/leagues/${leagueSlug}`);
+  redirect(
+    `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?${publish ? "published=1" : "unpublished=1"}`
+  );
+}
+
 export async function deleteRound(
   leagueSlug: string,
   seasonId: string,
