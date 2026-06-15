@@ -7,6 +7,8 @@ import { formatMsToTime } from "@/lib/time";
 import { CountryFlag } from "@/components/CountryFlag";
 import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
 import { PullFromIRLMButton } from "@/components/PullFromIRLMButton";
+import { setRoundPublished } from "@/lib/actions/rounds";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { formatDateTime } from "@/lib/date";
 import { compareStartNumber } from "@/lib/start-number";
 
@@ -15,11 +17,18 @@ export default async function AdminRoundResults({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string; roundId: string }>;
-  searchParams: Promise<{ imported?: string; skipped?: string; cls?: string }>;
+  searchParams: Promise<{
+    imported?: string;
+    skipped?: string;
+    cls?: string;
+    published?: string;
+    unpublished?: string;
+  }>;
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
-  const { imported, skipped, cls: clsRaw } = await searchParams;
+  const { imported, skipped, cls: clsRaw, published, unpublished } =
+    await searchParams;
   type Cls = "combined" | "pro" | "am" | "team";
   const cls: Cls =
     clsRaw === "pro" ? "pro" :
@@ -53,6 +62,12 @@ export default async function AdminRoundResults({
     compareStartNumber(a.startNumber, b.startNumber)
   );
 
+  // Publish state: results go public only when the round is COMPLETED.
+  const isPublished = round.status === "COMPLETED";
+  const teamResultCount = await prisma.teamResult.count({ where: { roundId } });
+  const hasResults =
+    registrations.some((r) => r.raceResults.length > 0) || teamResultCount > 0;
+
   return (
     <div className="space-y-6">
       <div>
@@ -72,9 +87,44 @@ export default async function AdminRoundResults({
               {round.trackConfig ? ` (${round.trackConfig})` : ""} •{" "}
               {formatDateTime(round.startsAt)} •{" "}
               {round.status.replace("_", " ")}
+              {isPublished ? (
+                <span className="ml-2 rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+                  Public
+                </span>
+              ) : (
+                <span className="ml-2 rounded bg-orange-950 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-300">
+                  Not published
+                </span>
+              )}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {isPublished ? (
+              <form action={setRoundPublished}>
+                <input type="hidden" name="leagueSlug" value={slug} />
+                <input type="hidden" name="seasonId" value={seasonId} />
+                <input type="hidden" name="roundId" value={roundId} />
+                <input type="hidden" name="publish" value="0" />
+                <SubmitWithSpinner
+                  label="Unpublish"
+                  pendingLabel="Unpublishing…"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                />
+              </form>
+            ) : (
+              <form action={setRoundPublished}>
+                <input type="hidden" name="leagueSlug" value={slug} />
+                <input type="hidden" name="seasonId" value={seasonId} />
+                <input type="hidden" name="roundId" value={roundId} />
+                <input type="hidden" name="publish" value="1" />
+                <SubmitWithSpinner
+                  label="✓ Publish results"
+                  pendingLabel="Publishing…"
+                  disabled={!hasResults}
+                  className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"
+                />
+              </form>
+            )}
             {round.irlmEventId && round.season.irlmLeagueName && (
               <form action={pullResultsFromIRLM}>
                 <input type="hidden" name="leagueSlug" value={slug} />
@@ -114,6 +164,12 @@ export default async function AdminRoundResults({
               📝 Race Center
             </Link>
             <Link
+              href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`}
+              className="rounded border border-orange-500/60 bg-orange-500/10 px-3 py-1.5 text-sm font-medium text-orange-300 hover:bg-orange-500/20"
+            >
+              👁 Preview public
+            </Link>
+            <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/edit`}
               className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
             >
@@ -130,6 +186,27 @@ export default async function AdminRoundResults({
             ? `, skipped ${skipped} (likely no matching iRacing ID in roster)`
             : ""}
           .
+        </div>
+      )}
+
+      {published && (
+        <div className="rounded border border-emerald-800 bg-emerald-950 p-3 text-sm text-emerald-200">
+          ✓ Results published — they are now live on the public round page and
+          counted in the standings.
+        </div>
+      )}
+      {unpublished && (
+        <div className="rounded border border-orange-800 bg-orange-950 p-3 text-sm text-orange-200">
+          Results unpublished — they are hidden from the public again (admin
+          preview only) and removed from the public standings.
+        </div>
+      )}
+
+      {!isPublished && (
+        <div className="rounded border border-orange-500/40 bg-orange-500/5 p-3 text-sm text-orange-200/90">
+          {hasResults
+            ? "Results are imported but not yet public. Preview them, then click “✓ Publish results” to make them live and update the standings."
+            : "Import the race results first, then a “✓ Publish results” button will appear here to make them public."}
         </div>
       )}
 

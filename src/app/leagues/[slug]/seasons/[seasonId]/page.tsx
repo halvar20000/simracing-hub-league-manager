@@ -304,13 +304,15 @@ export default async function PublicSeasonDetail({
                     {r.status.replace("_", " ")}
                   </td>
                   <td className="px-3 py-2 text-right text-zinc-500">
-                    {r._count.raceResults > 0 ? (
+                    {r.status === "COMPLETED" && r._count.raceResults > 0 ? (
                       <Link
                         href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
                         className="text-[#ff6b35] hover:underline"
                       >
                         Results →
                       </Link>
+                    ) : r._count.raceResults > 0 ? (
+                      <span className="text-xs text-zinc-500">Pending</span>
                     ) : (
                       <span className="text-xs">No results</span>
                     )}

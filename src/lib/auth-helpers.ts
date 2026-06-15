@@ -10,6 +10,22 @@ export async function requireAuth() {
   return session.user;
 }
 
+/**
+ * Soft, non-redirecting check: is the current viewer an ADMIN or STEWARD?
+ * Used to gate admin-only previews on otherwise-public pages (e.g. seeing a
+ * round's results/standings before it is marked COMPLETED). Returns false for
+ * signed-out users and ordinary drivers — never redirects.
+ */
+export async function isAdminOrSteward(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user?.id) return false;
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  return user?.role === "ADMIN" || user?.role === "STEWARD";
+}
+
 export async function requireAdmin() {
   const session = await auth();
   if (!session?.user?.id) redirect("/api/auth/signin");

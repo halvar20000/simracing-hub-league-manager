@@ -60,6 +60,14 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 
 `PAUSED` = put a season on hold without deleting it. The reporting-window and RSVP crons (`/api/cron/notify-reporting-open`, `/api/cron/post-rsvp`) only fire for `OPEN_REGISTRATION`/`ACTIVE`, so a `PAUSED` season stops all Discord announcements; registration also closes (the open-registration guards check for `OPEN_REGISTRATION`/`ACTIVE`). Switch back to `ACTIVE` to resume. Set via the admin season-edit page. The `{ in: ["OPEN_REGISTRATION","ACTIVE"] }` "currently running" filters deliberately exclude `PAUSED`.
 
+## Results publish gate (COMPLETED = published)
+
+A round's results and their standings impact go public **only** when `Round.status === "COMPLETED"`. Workflow: race runs → admin imports results → admin previews → admin sets the round to `COMPLETED` (season-edit/round-edit) → published.
+
+- **Engine** (`src/lib/standings.ts`): all four compute functions (`computeDriverStandings`, `computeTeamStandings`, `computeCarStandings`, `computeTeamClassStandings`) take an optional `opts: StandingsOptions = {}` 4th/3rd arg. Default (no opts) counts **only COMPLETED rounds** — every round/raceResult/teamResult/penalty query is gated by `round.status = COMPLETED`. Pass `{ includeUnpublishedRounds: true }` for admin preview. Every public caller (standings page, season/league/home pages, `/api/overlay/standings`) uses the default and is automatically gated.
+- **Admin preview**: gated by the soft, non-redirecting `isAdminOrSteward()` (`src/lib/auth-helpers.ts`). The public round page and standings page render the pending round's tables to admins/stewards with an orange "Preview — admin only" banner; the public sees a "results are being reviewed" note (round page) and standings frozen at the last COMPLETED round. The admin round page has a "👁 Preview public" link. Round OG metadata hides the podium until COMPLETED. Season schedule shows "Pending" (not a results link) until COMPLETED.
+- Consistent with existing COMPLETED-triggered side effects (Discord results post, penalty-pool/no-show settlement) — nothing publishes before COMPLETED.
+
 ## Car Class vs Driver Class
 
 Two **independent** concepts — never conflate them:

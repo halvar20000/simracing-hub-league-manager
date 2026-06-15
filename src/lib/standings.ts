@@ -63,11 +63,29 @@ export interface TeamStanding {
   driversCount: number;
 }
 
+/**
+ * Options shared by every standings computation.
+ *
+ * Public consumers (standings page, season/league/home pages, the overlay
+ * API, Discord posts) leave this at its default so results stay hidden until
+ * a round is marked COMPLETED. Admin/steward preview views pass
+ * `includeUnpublishedRounds: true` to see the round before it is published.
+ */
+export type StandingsOptions = {
+  includeUnpublishedRounds?: boolean;
+};
+
 export async function computeDriverStandings(
   prisma: PrismaClient,
   seasonId: string,
-  excludeRoundIds: string[] = []
+  excludeRoundIds: string[] = [],
+  opts: StandingsOptions = {}
 ): Promise<DriverStanding[]> {
+  // Publish gate: by default only COMPLETED rounds contribute to standings.
+  const onlyPublished = !opts.includeUnpublishedRounds;
+  const completedRoundWhere = onlyPublished
+    ? ({ status: "COMPLETED" } as const)
+    : {};
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: { scoringSystem: true, league: { select: { slug: true } } },
@@ -98,10 +116,12 @@ export async function computeDriverStandings(
         team: true,
         carClass: true,
         raceResults: {
-          where:
-            excludeRoundIds.length > 0
+          where: {
+            ...(excludeRoundIds.length > 0
               ? { roundId: { notIn: excludeRoundIds } }
-              : undefined,
+              : {}),
+            ...(onlyPublished ? { round: completedRoundWhere } : {}),
+          },
           include: { round: true },
         },
         penalties: {
@@ -110,6 +130,7 @@ export async function computeDriverStandings(
             ...(excludeRoundIds.length > 0
               ? { roundId: { notIn: excludeRoundIds } }
               : {}),
+            ...(onlyPublished ? { round: completedRoundWhere } : {}),
           },
           select: {
             pointsValue: true,
@@ -123,7 +144,7 @@ export async function computeDriverStandings(
       },
     }),
     prisma.round.findMany({
-      where: { seasonId },
+      where: { seasonId, ...completedRoundWhere },
       orderBy: { roundNumber: "asc" },
       select: { id: true, roundNumber: true, name: true, startsAt: true },
     }),
@@ -138,6 +159,7 @@ export async function computeDriverStandings(
     const roundsWithResults = await prisma.round.findMany({
       where: {
         seasonId,
+        ...completedRoundWhere,
         ...(excludeRoundIds.length > 0
           ? { id: { notIn: excludeRoundIds } }
           : {}),
@@ -511,8 +533,13 @@ export async function computeGdcStandings(
 
 export async function computeTeamStandings(
   prisma: PrismaClient,
-  seasonId: string
+  seasonId: string,
+  opts: StandingsOptions = {}
 ): Promise<TeamStanding[]> {
+  const onlyPublished = !opts.includeUnpublishedRounds;
+  const completedRoundWhere = onlyPublished
+    ? ({ status: "COMPLETED" } as const)
+    : {};
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: { teams: true, scoringSystem: true, league: { select: { slug: true } } },
@@ -532,6 +559,7 @@ export async function computeTeamStandings(
         type: "POINTS_DEDUCTION",
         pointsValue: { gt: 0 },
         source: { not: "NO_RSVP_NO_SHOW" },
+        ...(onlyPublished ? { round: completedRoundWhere } : {}),
       },
       select: { registrationId: true, roundId: true, pointsValue: true },
     });
@@ -559,7 +587,7 @@ export async function computeTeamStandings(
   const rawOnly = !!season.teamScoringRawOnly;
 
   const rounds = await prisma.round.findMany({
-    where: { seasonId },
+    where: { seasonId, ...completedRoundWhere },
     include: {
       raceResults: {
         include: { registration: { select: { teamId: true } } },
@@ -739,10 +767,15 @@ export interface CarStanding {
 
 export async function computeCarStandings(
   prisma: PrismaClient,
-  seasonId: string
+  seasonId: string,
+  opts: StandingsOptions = {}
 ): Promise<CarStanding[]> {
+  const onlyPublished = !opts.includeUnpublishedRounds;
   const results = await prisma.raceResult.findMany({
-    where: { round: { seasonId }, carId: { not: null } },
+    where: {
+      round: { seasonId, ...(onlyPublished ? { status: "COMPLETED" } : {}) },
+      carId: { not: null },
+    },
     include: {
       car: { include: { carClass: { select: { shortCode: true } } } },
       registration: {
@@ -871,8 +904,10 @@ export interface TeamClassGroup {
 
 export async function computeTeamClassStandings(
   prisma: PrismaClient,
-  seasonId: string
+  seasonId: string,
+  opts: StandingsOptions = {}
 ): Promise<TeamClassGroup[]> {
+  const onlyPublished = !opts.includeUnpublishedRounds;
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: { scoringSystem: true },
@@ -889,7 +924,7 @@ export async function computeTeamClassStandings(
   const teamFprMinDistance = season.scoringSystem.driverFprMinDistancePct ?? 90;
 
   const results = await prisma.teamResult.findMany({
-    where: { round: { seasonId } },
+    where: { round: { seasonId, ...(onlyPublished ? { status: "COMPLETED" } : {}) } },
     include: {
       team: { select: { id: true, name: true } },
       carClass: { select: { id: true, name: true, shortCode: true, displayOrder: true } },

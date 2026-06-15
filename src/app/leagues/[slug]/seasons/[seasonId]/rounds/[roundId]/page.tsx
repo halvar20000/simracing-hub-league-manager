@@ -7,6 +7,7 @@ import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { protestWindowState, formatCountdown } from "@/lib/protest-window";
 import type { Metadata } from "next";
 import { auth } from "@/auth";
+import { isAdminOrSteward } from "@/lib/auth-helpers";
 import { formatDateTime } from "@/lib/date";
 import { EmptyState, FlagIcon } from "@/components/EmptyState";
 import { RoundPodium } from "@/components/RoundPodium";
@@ -89,8 +90,11 @@ export async function generateMetadata({
     .slice(0, 3);
 
   const title = `${round.season.league.name} R${round.roundNumber} — ${round.track}`;
+  // Don't leak the podium via link previews until the round is published
+  // (marked COMPLETED). Until then, fall back to a neutral description.
+  const isPublished = round.status === "COMPLETED";
   const description =
-    top3.length === 3
+    isPublished && top3.length === 3
       ? `🥇 ${top3[0].name} · 🥈 ${top3[1].name} · 🥉 ${top3[2].name}`
       : `${round.name} · ${round.season.name} ${round.season.year}`;
   const image = round.season.league.logoUrl ?? "/logos/cas-community.webp";
@@ -125,6 +129,8 @@ export default async function PublicRoundResults({
 
   const session = await auth();
   const sessionUserId = session?.user?.id ?? null;
+  // Admins/stewards may preview a round's results before it is published.
+  const isAdminViewer = await isAdminOrSteward();
 
   const round = await prisma.round.findUnique({
     where: { id: roundId },
@@ -205,6 +211,12 @@ export default async function PublicRoundResults({
     orderBy: [{ classPosition: "asc" }, { finishPosition: "asc" }],
   });
   const hasTeamData = teamResultsForRound.length > 0;
+  // Publish gate: results + standings impact only go public once the round is
+  // marked COMPLETED. Admins/stewards see a preview before that; the public
+  // sees a "being reviewed" note instead of the tables.
+  const resultsPublished = round.status === "COMPLETED";
+  const showResults = resultsPublished || isAdminViewer;
+  const hasAnyResults = round.raceResults.length > 0 || hasTeamData;
   const racesPerRound = round.season.scoringSystem.racesPerRound ?? 1;
   const isMultiRace = racesPerRound > 1;
 
@@ -578,6 +590,22 @@ export default async function PublicRoundResults({
         </div>
       </div>
 
+      {isAdminViewer && !resultsPublished && hasAnyResults && (
+        <div className="rounded border border-orange-500/60 bg-orange-500/10 px-4 py-3 text-sm text-orange-200">
+          <span className="font-semibold">Preview — admin only.</span>{" "}
+          These results and their standings impact are not yet public. They go
+          live when you set this round to <span className="font-semibold">Completed</span>{" "}
+          on the{" "}
+          <Link
+            href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/edit`}
+            className="underline hover:text-orange-100"
+          >
+            edit round
+          </Link>{" "}
+          page.
+        </div>
+      )}
+
       {sessionUserId && round.status === "UPCOMING" && (
         <RsvpWidget
           roundId={round.id}
@@ -593,6 +621,34 @@ export default async function PublicRoundResults({
         />
       )}
 
+      {!showResults && (
+        <div className="rounded border border-zinc-800 bg-zinc-900 px-4 py-6 text-center">
+          {hasAnyResults ? (
+            <>
+              <p className="text-sm font-medium text-zinc-200">
+                Results are being reviewed
+              </p>
+              <p className="mt-1 text-sm text-zinc-400">
+                The race results and updated standings will be published once
+                the stewards have checked them.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-zinc-200">
+                No results yet
+              </p>
+              <p className="mt-1 text-sm text-zinc-400">
+                Results will appear here once the race has run and the round is
+                completed.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
+      {showResults && (
+      <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-zinc-500">View:</span>
         {hasTeamData ? (
@@ -841,6 +897,8 @@ export default async function PublicRoundResults({
             </table>
           </div>
         </section>
+      )}
+      </>
       )}
       </>
       )}

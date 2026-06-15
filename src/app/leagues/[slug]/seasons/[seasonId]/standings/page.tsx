@@ -19,6 +19,7 @@ import {
 } from "@/lib/standings";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
+import { isAdminOrSteward } from "@/lib/auth-helpers";
 
 type StandingsKind = "combined" | "class";
 type ViewMode = "list" | "races";
@@ -82,21 +83,47 @@ export default async function StandingsPage({
   });
   if (!season || season.league.slug !== slug) notFound();
 
-  // Latest round with results — used to compute "before this round" snapshot
+  // Publish gate: standings only reflect COMPLETED rounds for the public.
+  // Admins/stewards preview the pending round (and its standings impact)
+  // before it is published.
+  const isAdminViewer = await isAdminOrSteward();
+  const previewOpts = { includeUnpublishedRounds: isAdminViewer };
+
+  // A not-yet-published round that already has results — drives the admin
+  // preview banner.
+  const pendingRound = isAdminViewer
+    ? await prisma.round.findFirst({
+        where: {
+          seasonId,
+          status: { not: "COMPLETED" },
+          raceResults: { some: {} },
+        },
+        orderBy: { roundNumber: "desc" },
+        select: { roundNumber: true, name: true },
+      })
+    : null;
+
+  // Latest round with results — used to compute "before this round" snapshot.
+  // For the public this is the latest COMPLETED round; admins compare against
+  // the latest round with results so the delta reflects the pending round.
   const latestRound = await prisma.round.findFirst({
-    where: { seasonId, raceResults: { some: {} } },
+    where: {
+      seasonId,
+      raceResults: { some: {} },
+      ...(isAdminViewer ? {} : { status: "COMPLETED" }),
+    },
     orderBy: { roundNumber: "desc" },
     select: { id: true, roundNumber: true, name: true },
   });
 
   const [drivers, previousDrivers, teams, cars, teamClasses] = await Promise.all([
-    computeDriverStandings(prisma, seasonId),
+    computeDriverStandings(prisma, seasonId, [], previewOpts),
     latestRound
-      ? computeDriverStandings(prisma, seasonId, [latestRound.id])
+      ? computeDriverStandings(prisma, seasonId, [latestRound.id], previewOpts)
       : Promise.resolve(null as DriverStanding[] | null),
-    computeTeamStandings(prisma, seasonId),
-  computeCarStandings(prisma, seasonId),
-  computeTeamClassStandings(prisma, seasonId),
+    computeTeamStandings(prisma, seasonId, previewOpts),
+  computeCarStandings(prisma, seasonId, previewOpts),
+  computeTeamClassStandings(prisma, seasonId, previewOpts),
   ]);
 
   const isTeamEventSeason = teamClasses.length > 0;
@@ -147,6 +174,14 @@ export default async function StandingsPage({
         <h1 className="mt-2 font-display text-3xl font-bold">
           Standings — {season.name} {season.year}
         </h1>
+      {pendingRound && (
+        <div className="mt-3 rounded border border-orange-500/60 bg-orange-500/10 px-4 py-3 text-sm text-orange-200">
+          <span className="font-semibold">Preview — admin only.</span>{" "}
+          These standings include R{pendingRound.roundNumber} {pendingRound.name},
+          which is not yet public. The public sees standings through the last
+          completed round until you mark it Completed.
+        </div>
+      )}
       {season.scoringSystem.penaltyPoolMode !== "OFF" && (
         <div className="mb-4">
           <Link
