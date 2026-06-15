@@ -44,7 +44,7 @@ export default async function PrintRosterPage({
   const showProAmColumn = season.proAmEnabled && !proAmIsClass;
 
   const registrations = await prisma.registration.findMany({
-    where: { seasonId, isTeamManager: false },
+    where: { seasonId, isTeamManager: false, status: { not: "WITHDRAWN" } },
     include: {
       user: true,
       team: true,

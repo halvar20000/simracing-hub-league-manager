@@ -87,7 +87,9 @@ export default async function RosterPage({
       orderBy: { createdAt: "asc" },
       include: {
         registrations: {
-          where: { isTeamManager: false },
+          // Withdrawn drivers leave the team entirely — never list them under
+          // it (mirrors the public roster, which shows APPROVED/PENDING only).
+          where: { isTeamManager: false, status: { not: "WITHDRAWN" } },
           include: { user: true, carClass: true, car: true },
           orderBy: { createdAt: "asc" },
         },
