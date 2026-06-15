@@ -1,0 +1,6 @@
+# Automatic HTTPS via Let's Encrypt. Used by the docker-compose fallback.
+# (Coolify handles this for you — you don't need this file with Coolify.)
+league.simracing-hub.com {
+	encode zstd gzip
+	reverse_proxy app:3000
+}
