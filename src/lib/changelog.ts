@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.2",
+    date: "2026-06-15",
+    changes: [
+      "Added a \"Manage team →\" button to each team on the admin roster (team seasons), matching the public roster.",
+    ],
+  },
+  {
     version: "1.3.1",
     date: "2026-06-15",
     changes: [

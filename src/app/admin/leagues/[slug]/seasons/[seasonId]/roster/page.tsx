@@ -227,6 +227,12 @@ export default async function RosterPage({
                             <div className="font-semibold text-zinc-100">
                               {team.name}
                             </div>
+                            <Link
+                              href={`/teams/${team.id}/manage`}
+                              className="inline-block rounded border border-orange-700 bg-orange-950/30 px-2 py-0.5 text-[11px] font-medium text-orange-300 hover:bg-orange-900/40"
+                            >
+                              Manage team →
+                            </Link>
                             {team.registrations.some(
                               (rr) => rr.status === "PENDING"
                             ) && (
