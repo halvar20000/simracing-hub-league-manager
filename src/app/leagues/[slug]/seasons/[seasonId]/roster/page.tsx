@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
+import { SortableGroupedTableEnhancer } from "@/components/SortableGroupedTableEnhancer";
 import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
 import { DoubleScrollWrapper } from "@/components/DoubleScrollWrapper";
 
@@ -144,24 +145,25 @@ export default async function PublicSeasonRoster({
           </p>
         ) : (
           <div className="rounded border border-zinc-800">
+            <SortableGroupedTableEnhancer tableId="publicTeamRosterTable" />
             <DoubleScrollWrapper>
-            <table className="w-max min-w-full text-sm freeze-driver-col">
+            <table id="publicTeamRosterTable" className="w-max min-w-full text-sm freeze-driver-col">
               <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
-                  <th className="px-4 py-3">Registered</th>
-                  <th className="px-4 py-3">Team</th>
-                  <th className="px-4 py-3 driver-col">Driver</th>
-                  <th className="px-4 py-3">Class</th>
-                  <th className="px-4 py-3">Car</th>
-                  <th className="px-4 py-3">iRacing ID</th>
-                  <th className="px-4 py-3">iRating</th>
-                  <th className="px-4 py-3">
+                  <th data-col="registered" className="px-4 py-3">Registered</th>
+                  <th data-col="team" className="px-4 py-3">Team</th>
+                  <th data-col="name" className="px-4 py-3 driver-col">Driver</th>
+                  <th data-col="class" className="px-4 py-3">Class</th>
+                  <th data-col="car" className="px-4 py-3">Car</th>
+                  <th data-col="irid" className="px-4 py-3">iRacing ID</th>
+                  <th data-col="irating" className="px-4 py-3">iRating</th>
+                  <th data-col="invsent" className="px-4 py-3">
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                       iRacing
                     </div>
                     Invite
                   </th>
-                  <th className="px-4 py-3">
+                  <th data-col="invaccepted" className="px-4 py-3">
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                       iRacing
                     </div>
@@ -174,34 +176,38 @@ export default async function PublicSeasonRoster({
                   team.registrations.map((reg, ri) => (
                     <tr
                       key={reg.id}
-                      className={
-                        ri === 0
-                          ? "border-t-2 border-zinc-700 bg-zinc-950/40"
-                          : "border-t border-zinc-800 hover:bg-zinc-900"
-                      }
+                      data-group={team.id}
+                      data-r-registered={team.createdAt.toISOString().slice(0, 10)}
+                      data-r-team={team.name}
+                      data-r-name={`${reg.user.firstName ?? ""} ${reg.user.lastName ?? ""}`.trim()}
+                      data-r-class={reg.carClass?.name ?? ""}
+                      data-r-car={reg.car?.name ?? ""}
+                      data-r-irid={reg.user.iracingMemberId ?? ""}
+                      data-r-irating={reg.iRating != null ? String(reg.iRating) : ""}
+                      data-r-invsent={reg.iracingInvitationSent === "YES" ? "Sent" : "Not sent"}
+                      data-r-invaccepted={reg.iracingInvitationAccepted === "YES" ? "Accepted" : "Not accepted"}
+                      className={`hover:bg-zinc-900 ${ri === 0 ? "cw-group-start" : "cw-group-cont"}`}
                     >
                       <td className="px-4 py-3 align-top text-zinc-400">
-                        {ri === 0 ? fmtDate(team.createdAt) : ""}
+                        <div className="cw-group-cell">{fmtDate(team.createdAt)}</div>
                       </td>
                       <td className="px-4 py-3 align-top">
-                        {ri === 0 && (
-                          <div>
-                            <div className="font-semibold text-zinc-100">
-                              {team.name}
-                            </div>
-                            {viewerId &&
-                              (viewerIsAdmin ||
-                                team.leaderUserId === viewerId ||
-                                team.managerUserId === viewerId) && (
-                                <Link
-                                  href={`/teams/${team.id}/manage`}
-                                  className="mt-1 inline-block rounded border border-orange-700 bg-orange-950/30 px-2 py-0.5 text-[11px] font-medium text-orange-300 hover:bg-orange-900/40"
-                                >
-                                  Manage team →
-                                </Link>
-                              )}
+                        <div className="cw-group-cell">
+                          <div className="font-semibold text-zinc-100">
+                            {team.name}
                           </div>
-                        )}
+                          {viewerId &&
+                            (viewerIsAdmin ||
+                              team.leaderUserId === viewerId ||
+                              team.managerUserId === viewerId) && (
+                              <Link
+                                href={`/teams/${team.id}/manage`}
+                                className="mt-1 inline-block rounded border border-orange-700 bg-orange-950/30 px-2 py-0.5 text-[11px] font-medium text-orange-300 hover:bg-orange-900/40"
+                              >
+                                Manage team →
+                              </Link>
+                            )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 driver-col">
                         <div className="font-medium">

@@ -22,6 +22,7 @@ import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
 import GdcToggle from "@/components/GdcToggle";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
+import { SortableGroupedTableEnhancer } from "@/components/SortableGroupedTableEnhancer";
 import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
 import { DoubleScrollWrapper } from "@/components/DoubleScrollWrapper";
 
@@ -166,31 +167,31 @@ export default async function RosterPage({
           </p>
         ) : (
           <>
-            <TableFilter tableId="teamRosterTable" placeholder="Filter by driver, team, car…" />
+            <SortableGroupedTableEnhancer tableId="teamRosterTable" />
             <DoubleScrollWrapper>
               <table id="teamRosterTable" className="w-max min-w-full text-sm freeze-driver-col">
               <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
                 <tr>
-                  <th className="px-3 py-3 whitespace-nowrap w-28">Registered</th>
-                  <th className="px-3 py-3 min-w-[10rem]">Team</th>
-                  <th className="px-3 py-3 driver-col whitespace-nowrap">Driver</th>
-                  <th className="px-2 py-3 whitespace-nowrap">Class</th>
-                  <th className="px-3 py-3 min-w-[14rem]">Car</th>
-                  <th className="px-2 py-3 whitespace-nowrap">iRacing ID</th>
-                  <th className="px-2 py-3 whitespace-nowrap">iRating</th>
-                  <th className="px-2 py-3 whitespace-nowrap">
+                  <th data-col="registered" className="px-3 py-3 whitespace-nowrap w-28">Registered</th>
+                  <th data-col="team" className="px-3 py-3 min-w-[10rem]">Team</th>
+                  <th data-col="name" className="px-3 py-3 driver-col whitespace-nowrap">Driver</th>
+                  <th data-col="class" className="px-2 py-3 whitespace-nowrap">Class</th>
+                  <th data-col="car" className="px-3 py-3 min-w-[14rem]">Car</th>
+                  <th data-col="irid" className="px-2 py-3 whitespace-nowrap">iRacing ID</th>
+                  <th data-col="irating" className="px-2 py-3 whitespace-nowrap">iRating</th>
+                  <th data-col="invsent" className="px-2 py-3 whitespace-nowrap">
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                       iRacing
                     </div>
                     Invite
                   </th>
-                  <th className="px-2 py-3 whitespace-nowrap">
+                  <th data-col="invaccepted" className="px-2 py-3 whitespace-nowrap">
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500">
                       iRacing
                     </div>
                     Accepted
                   </th>
-                  <th className="px-2 py-3 whitespace-nowrap">Status</th>
+                  <th data-col="status" className="px-2 py-3 whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -198,75 +199,66 @@ export default async function RosterPage({
                   team.registrations.map((reg, ri) => (
                     <tr
                       key={reg.id}
-                      data-filter={[
-                        team.name,
-                        reg.user.firstName,
-                        reg.user.lastName,
-                        reg.user.name,
-                        reg.user.iracingMemberId,
-                        reg.user.email,
-                        reg.carClass?.name,
-                        reg.car?.name,
-                        reg.status,
-                      ]
-                        .filter((x) => x != null && x !== "")
-                        .join(" ")
-                        .toLowerCase()}
-                      className={
-                        ri === 0
-                          ? "team-leader-row border-t-2 border-zinc-700 bg-zinc-950/40"
-                          : "border-t border-zinc-800 hover:bg-zinc-900"
-                      }
+                      data-group={team.id}
+                      data-r-registered={team.createdAt.toISOString().slice(0, 10)}
+                      data-r-team={team.name}
+                      data-r-name={`${reg.user.firstName ?? ""} ${reg.user.lastName ?? ""}`.trim()}
+                      data-r-class={reg.carClass?.name ?? ""}
+                      data-r-car={reg.car?.name ?? ""}
+                      data-r-irid={reg.user.iracingMemberId ?? ""}
+                      data-r-irating={reg.iRating != null ? String(reg.iRating) : ""}
+                      data-r-invsent={reg.iracingInvitationSent === "YES" ? "Sent" : "Not sent"}
+                      data-r-invaccepted={reg.iracingInvitationAccepted === "YES" ? "Accepted" : "Not accepted"}
+                      data-r-status={reg.status}
+                      className={`hover:bg-zinc-900 ${ri === 0 ? "team-leader-row cw-group-start" : "cw-group-cont"}`}
                     >
                       <td className="px-3 py-3 align-top text-zinc-400 whitespace-nowrap">
-                        {ri === 0 ? fmtDate(team.createdAt) : ""}
+                        <div className="cw-group-cell">{fmtDate(team.createdAt)}</div>
                       </td>
                       <td className="px-3 py-3 align-top">
-                        {ri === 0 && (
-                          <div className="space-y-1.5">
-                            <div className="font-semibold text-zinc-100">
-                              {team.name}
-                            </div>
-                            <Link
-                              href={`/teams/${team.id}/manage`}
-                              className="inline-block rounded border border-orange-700 bg-orange-950/30 px-2 py-0.5 text-[11px] font-medium text-orange-300 hover:bg-orange-900/40"
-                            >
-                              Manage team →
-                            </Link>
-                            {team.registrations.some(
-                              (rr) => rr.status === "PENDING"
-                            ) && (
-                              <div className="flex flex-wrap gap-1.5">
-                                <form action={approveTeamRegistrations}>
-                                  <input
-                                    type="hidden"
-                                    name="teamId"
-                                    value={team.id}
-                                  />
-                                  <button
-                                    type="submit"
-                                    className="rounded bg-emerald-600 px-2 py-0.5 text-xs font-medium text-zinc-50 hover:bg-emerald-500"
-                                  >
-                                    Approve team
-                                  </button>
-                                </form>
-                                <form action={rejectTeamRegistrations}>
-                                  <input
-                                    type="hidden"
-                                    name="teamId"
-                                    value={team.id}
-                                  />
-                                  <button
-                                    type="submit"
-                                    className="rounded border border-red-800 bg-red-950/40 px-2 py-0.5 text-xs text-red-300 hover:bg-red-900/60"
-                                  >
-                                    Reject team
-                                  </button>
-                                </form>
-                              </div>
-                            )}
+                        <div className="cw-group-cell space-y-1.5">
+                          <div className="font-semibold text-zinc-100">
+                            {team.name}
                           </div>
-                        )}
+                          <Link
+                            href={`/teams/${team.id}/manage`}
+                            className="inline-block rounded border border-orange-700 bg-orange-950/30 px-2 py-0.5 text-[11px] font-medium text-orange-300 hover:bg-orange-900/40"
+                          >
+                            Manage team →
+                          </Link>
+                          {team.registrations.some(
+                            (rr) => rr.status === "PENDING"
+                          ) && (
+                            <div className="flex flex-wrap gap-1.5">
+                              <form action={approveTeamRegistrations}>
+                                <input
+                                  type="hidden"
+                                  name="teamId"
+                                  value={team.id}
+                                />
+                                <button
+                                  type="submit"
+                                  className="rounded bg-emerald-600 px-2 py-0.5 text-xs font-medium text-zinc-50 hover:bg-emerald-500"
+                                >
+                                  Approve team
+                                </button>
+                              </form>
+                              <form action={rejectTeamRegistrations}>
+                                <input
+                                  type="hidden"
+                                  name="teamId"
+                                  value={team.id}
+                                />
+                                <button
+                                  type="submit"
+                                  className="rounded border border-red-800 bg-red-950/40 px-2 py-0.5 text-xs text-red-300 hover:bg-red-900/60"
+                                >
+                                  Reject team
+                                </button>
+                              </form>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 driver-col whitespace-nowrap">
                         <div className="font-medium">
