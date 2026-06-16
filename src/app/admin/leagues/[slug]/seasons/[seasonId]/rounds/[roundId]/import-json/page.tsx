@@ -13,6 +13,8 @@ interface Props {
     races?: string;
     unmatchedCount?: string;
     unmatched?: string;
+    dqCount?: string;
+    dq?: string;
   }>;
 }
 
@@ -40,6 +42,13 @@ export default async function ImportIracingJsonPage({
     ? sp.unmatched.split("|").map((s) => {
         const [custId, ...nameParts] = s.split(":");
         return { custId, name: nameParts.join(":") };
+      })
+    : [];
+  const dqCount = sp.dqCount ? parseInt(sp.dqCount, 10) : 0;
+  const dqList = sp.dq
+    ? sp.dq.split("|").map((s) => {
+        const [name, drove, registered] = s.split("~");
+        return { name, drove, registered };
       })
     : [];
 
@@ -96,6 +105,33 @@ export default async function ImportIracingJsonPage({
               <p className="mt-2 text-xs text-amber-200/80">
                 Add these drivers to the roster (with their iRacing customer ID),
                 then re-import the JSON to capture their results.
+              </p>
+            </div>
+          )}
+          {dqCount > 0 && (
+            <div className="rounded border border-red-800 bg-red-950/50 p-3 text-sm text-red-200">
+              <p className="font-medium">
+                {dqCount} driver{dqCount === 1 ? " was" : "s were"} disqualified
+                (DSQ) for racing a car other than the one they registered:
+              </p>
+              <ul className="mt-2 space-y-1 text-xs">
+                {dqList.map((d, i) => (
+                  <li key={i}>
+                    <span className="font-medium text-red-100">{d.name}</span> —
+                    drove <span className="text-red-300">{d.drove}</span>,
+                    registered{" "}
+                    <span className="text-red-300">{d.registered}</span>
+                  </li>
+                ))}
+                {dqCount > dqList.length && (
+                  <li className="text-red-300/70">
+                    …and {dqCount - dqList.length} more
+                  </li>
+                )}
+              </ul>
+              <p className="mt-2 text-xs text-red-200/80">
+                Their points are forfeited for this round. If a car change was
+                approved, edit the result and clear the DSQ status.
               </p>
             </div>
           )}

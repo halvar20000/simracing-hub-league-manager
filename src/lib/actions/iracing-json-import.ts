@@ -11,6 +11,14 @@ import {
   type ParsedEvent,
 } from "@/lib/iracing-json";
 
+// CAR-MATCH ENFORCEMENT — leagues where a driver MUST race the exact car they
+// registered. If the car driven in the imported JSON differs from the
+// registered car, the result is disqualified (finishStatus = DSQ). Compared by
+// the resolved season Car row, so it works regardless of whether the
+// registered car carries an iRacing car_id (resolveCarId canonicalises by
+// iRacing id then by name). See CLAUDE.md "Leagues".
+const CAR_ENFORCED_LEAGUE_SLUGS = new Set(["cas-iec", "cas-gt3-wct"]);
+
 // CAR LOOKUP — resolve a season's Car for an iRacing car_id.
 // Auto-creates a season-wide Car (carClassId NULL) when nothing matches.
 
@@ -72,15 +80,23 @@ interface UnmatchedDriver {
   displayName: string;
 }
 
+interface DqDriver {
+  displayName: string;
+  drovenCar: string;
+  registeredCar: string;
+}
+
 function buildSummaryQuery(
   imported: number,
   races: number,
-  unmatched: UnmatchedDriver[]
+  unmatched: UnmatchedDriver[],
+  dq: DqDriver[]
 ): string {
   const params = new URLSearchParams({
     imported: String(imported),
     races: String(races),
     unmatchedCount: String(unmatched.length),
+    dqCount: String(dq.length),
   });
   // Pack the first 12 unmatched as "custId:name|custId:name" to keep URL short.
   if (unmatched.length > 0) {
@@ -89,6 +105,16 @@ function buildSummaryQuery(
       .map((u) => `${u.custId}:${u.displayName.replace(/[|:]/g, " ")}`)
       .join("|");
     params.set("unmatched", list);
+  }
+  // Pack the first 12 DQs as "name~drove~registered|..." (~ separates fields,
+  // | separates rows). Strip the separators from the values first.
+  if (dq.length > 0) {
+    const clean = (s: string) => s.replace(/[|~]/g, " ");
+    const list = dq
+      .slice(0, 12)
+      .map((d) => `${clean(d.displayName)}~${clean(d.drovenCar)}~${clean(d.registeredCar)}`)
+      .join("|");
+    params.set("dq", list);
   }
   return params.toString();
 }
@@ -127,12 +153,27 @@ export async function importIracingJson(
     );
   }
 
+  // Does this league enforce that drivers race the car they registered?
+  const carEnforced = CAR_ENFORCED_LEAGUE_SLUGS.has(leagueSlug);
+
   // Pull season roster + build cust_id → registrationId map
   const registrations = await prisma.registration.findMany({
     where: { seasonId, status: "APPROVED" },
-    include: { user: true },
+    include: { user: true, car: { select: { id: true, name: true } } },
   });
-  const memberMap = new Map<number, { regId: string; userId: string; currentCountry: string | null; currentCarId: string | null; currentStartNumber: string | null }>();
+  const memberMap = new Map<
+    number,
+    {
+      regId: string;
+      userId: string;
+      currentCountry: string | null;
+      currentCarId: string | null;
+      currentStartNumber: string | null;
+      /** Car the driver registered with — the source of truth for enforcement. */
+      registeredCarId: string | null;
+      registeredCarName: string | null;
+    }
+  >();
   for (const reg of registrations) {
     const raw = reg.user.iracingMemberId;
     if (!raw) continue;
@@ -144,6 +185,8 @@ export async function importIracingJson(
       currentCountry: reg.user.countryCode,
       currentCarId: reg.carId,
       currentStartNumber: reg.startNumber,
+      registeredCarId: reg.carId,
+      registeredCarName: reg.car?.name ?? null,
     });
   }
 
@@ -161,6 +204,7 @@ export async function importIracingJson(
   }
 
   const unmatchedSet = new Map<number, UnmatchedDriver>();
+  const dqDrivers: DqDriver[] = [];
   let totalCreated = 0;
   const raceSessions = parsed.sessions.filter((s) => s.kind === "RACE");
 
@@ -212,6 +256,21 @@ export async function importIracingJson(
         d.carClassShortName
       );
 
+      // CAR-MATCH ENFORCEMENT (IEC + GT3 WCT): the driver must race the exact
+      // car they registered. A deviation disqualifies the result. We only flag
+      // when we can prove a mismatch — i.e. both the registered car and the
+      // resolved driven car are known and differ.
+      const carMismatch =
+        carEnforced &&
+        !!reg.registeredCarId &&
+        !!resolvedCarId &&
+        resolvedCarId !== reg.registeredCarId;
+
+      const finishStatus = carMismatch ? "DSQ" : d.finishStatus;
+      const dqNote = carMismatch
+        ? `Auto-DQ: drove "${d.carName ?? "unknown car"}" but registered "${reg.registeredCarName ?? "unknown car"}"`
+        : null;
+
       await prisma.raceResult.create({
         data: {
           roundId,
@@ -225,13 +284,24 @@ export async function importIracingJson(
           qualifyingTimeMs: qualByCustId.get(d.custId) ?? null,
           iRating: d.iRating,
           incidents: d.incidents,
-          finishStatus: d.finishStatus,
+          finishStatus,
           carId: resolvedCarId,
+          notes: dqNote,
         },
       });
 
-      // Keep the registration's "current car" in sync with latest result.
-      if (resolvedCarId && resolvedCarId !== reg.currentCarId) {
+      if (carMismatch) {
+        dqDrivers.push({
+          displayName: d.displayName,
+          drovenCar: d.carName ?? "unknown car",
+          registeredCar: reg.registeredCarName ?? "unknown car",
+        });
+      }
+
+      // Keep the registration's "current car" in sync with the latest result —
+      // but NOT for car-enforced leagues, where the registered car is the fixed
+      // source of truth (otherwise a deviation could never be detected).
+      if (!carEnforced && resolvedCarId && resolvedCarId !== reg.currentCarId) {
         await prisma.registration.update({
           where: { id: reg.regId },
           data: { carId: resolvedCarId },
@@ -257,7 +327,8 @@ export async function importIracingJson(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}/import-json?${buildSummaryQuery(
       totalCreated,
       raceSessions.length,
-      unmatched
+      unmatched,
+      dqDrivers
     )}`
   );
 }

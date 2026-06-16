@@ -13,14 +13,15 @@ A Next.js 15 App Router application that manages race leagues, seasons, registra
 - NextAuth.js with PrismaAdapter + Discord OAuth
 - Tailwind CSS — dark zinc-based theme
 - PayPal integration for registration fees (per-league config on `League`)
-- Vercel deployment + Vercel Cron (Hobby tier — daily only) + GitHub Actions cron for sub-daily schedules
+- **Vercel deployment + Neon Postgres** is the LIVE stack (still active). A Hetzner/Coolify self-host migration is STAGED in `deploy/` but NOT live yet — do not route deploys there. + Vercel Cron (Hobby — daily) + GitHub Actions cron for sub-daily schedules.
 
 ## Repo & deployment
 
 - **Local path**: `~/Nextcloud/AI/league-manager` (Nextcloud-synced)
 - **GitHub**: https://github.com/halvar20000/simracing-hub-league-manager — branch `main`
-- **Deploy flow**: any push to `main` triggers a Vercel build. The sandboxed Claude environment cannot push directly — Claude writes a shell script to `outputs/` and the user runs it in their Mac terminal.
-- **Standard footer for change scripts**: `npx tsc --noEmit -p tsconfig.json` → `git add -A` → `git commit -m "..."` → `git push`.
+- **Deploy flow (LIVE = Vercel/Neon)**: the live site `league.simracing-hub.com` is served by **Vercel** (DB = **Neon**). Any push to `main` triggers a Vercel build. The sandboxed Claude environment cannot push directly — Claude writes a shell script to `outputs/` and the user runs it in their Mac terminal. **Verify a build actually started** (Vercel can silently miss a pushed commit); if it didn't, force it with an empty commit (`outputs/trigger_vercel_deploy.sh`). NOTE: the Vercel MCP token here lists team "halvar20000's projects" with **zero projects** — that's the wrong team/scope for CLS, so the MCP cannot see the real project; check the Vercel dashboard directly.
+- **Hetzner/Coolify is NOT live**: `deploy/` (Dockerfile, Coolify runbook, `output:"standalone"`) is a staged future migration. Until cutover is explicitly done, every change must ship to Vercel/Neon. Do not tell the user to "Redeploy in Coolify".
+- **Standard footer for change scripts**: `npx tsc --noEmit -p tsconfig.json` → `git add <paths>` → `git commit -m "..."` → `git push`.
 
 ## CRITICAL: schema changes on Neon
 
@@ -94,6 +95,10 @@ Target per-season config:
 3. `league-templates.ts` — `endurance-pro-am` template set to `isMulticlass=false` so new GT3 WCT seasons start clean.
 4. Admin season-edit page — relabel the two checkboxes to "Multiclass season (multiple car classes)" and "Pro/Am driver split".
 5. No data migration: the legacy GT3 WCT season is untouched; these changes are safe for it because its `proAmClass` is already populated.
+
+## Wrong-car DSQ (IEC + GT3 WCT)
+
+On JSON import, leagues in `CAR_ENFORCED_LEAGUE_SLUGS` (`cas-iec`, `cas-gt3-wct`, in `src/lib/actions/iracing-json-import.ts`) require the driver to race the car they registered. Per result: resolve the driven car to a season `Car`, compare to `Registration.carId`; if both are known and differ → `finishStatus = DSQ` + a `RaceResult.notes` reason (`Auto-DQ: drove "X" but registered "Y"`). `recomputeRoundScoring` then forfeits the whole round for that driver (existing DSQ-forfeit rule). For these leagues the importer **does not** sync `Registration.carId` to the driven car (registration is the source of truth); all other leagues keep that auto-sync. Admin overrides by editing the result and clearing DSQ. Import summary lists every auto-DQ.
 
 ## URL structure
 
