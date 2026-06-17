@@ -123,6 +123,82 @@ export async function getChannelAsBot(
   return discordFetch(`/channels/${channelId}`, { method: "GET" });
 }
 
+// ── Guild Scheduled Events ────────────────────────────────────────────────
+// Server-level "events" that appear in the Events tab and trigger Discord's
+// native start reminder (~15 min before). Bot needs the MANAGE_EVENTS perm.
+
+export type GuildScheduledEvent = {
+  id: string;
+  guild_id: string;
+  name: string;
+  description?: string | null;
+  scheduled_start_time: string;
+  scheduled_end_time: string | null;
+  /** 1 = EXTERNAL, 2 = STAGE_INSTANCE, 3 = VOICE */
+  entity_type: number;
+  /** 1 SCHEDULED, 2 ACTIVE, 3 COMPLETED, 4 CANCELED */
+  status: number;
+  entity_metadata?: { location?: string } | null;
+};
+
+/** Payload for an EXTERNAL scheduled event (location string, no channel). */
+export type ExternalEventPayload = {
+  name: string;
+  description?: string;
+  /** ISO8601 */
+  scheduled_start_time: string;
+  /** ISO8601 — required for EXTERNAL events. */
+  scheduled_end_time: string;
+  location: string;
+};
+
+/** List all (active + upcoming) scheduled events for a guild. */
+export async function listGuildScheduledEvents(
+  guildId: string
+): Promise<Result<GuildScheduledEvent[]>> {
+  return discordFetch(`/guilds/${guildId}/scheduled-events`, { method: "GET" });
+}
+
+/** Create an EXTERNAL scheduled event (privacy GUILD_ONLY). */
+export async function createGuildScheduledEvent(
+  guildId: string,
+  payload: ExternalEventPayload
+): Promise<Result<GuildScheduledEvent>> {
+  return discordFetch(`/guilds/${guildId}/scheduled-events`, {
+    method: "POST",
+    body: JSON.stringify({
+      name: payload.name,
+      description: payload.description,
+      scheduled_start_time: payload.scheduled_start_time,
+      scheduled_end_time: payload.scheduled_end_time,
+      privacy_level: 2, // GUILD_ONLY (only valid value)
+      entity_type: 1, // EXTERNAL
+      entity_metadata: { location: payload.location },
+    }),
+  });
+}
+
+/** Update an existing scheduled event (e.g. when a round is rescheduled). */
+export async function modifyGuildScheduledEvent(
+  guildId: string,
+  eventId: string,
+  payload: Partial<ExternalEventPayload>
+): Promise<Result<GuildScheduledEvent>> {
+  const body: Record<string, unknown> = {};
+  if (payload.name != null) body.name = payload.name;
+  if (payload.description != null) body.description = payload.description;
+  if (payload.scheduled_start_time != null)
+    body.scheduled_start_time = payload.scheduled_start_time;
+  if (payload.scheduled_end_time != null)
+    body.scheduled_end_time = payload.scheduled_end_time;
+  if (payload.location != null)
+    body.entity_metadata = { location: payload.location };
+  return discordFetch(`/guilds/${guildId}/scheduled-events/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 /**
  * Open (or fetch the existing) DM channel between the bot and a user.
  * Discord returns the same channel on repeated calls, so this is idempotent.

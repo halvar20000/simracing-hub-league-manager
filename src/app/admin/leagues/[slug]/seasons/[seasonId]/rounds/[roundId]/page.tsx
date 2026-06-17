@@ -8,6 +8,7 @@ import { CountryFlag } from "@/components/CountryFlag";
 import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
 import { PullFromIRLMButton } from "@/components/PullFromIRLMButton";
 import { setRoundPublished } from "@/lib/actions/rounds";
+import { createRaceEventAction } from "@/lib/actions/race-events";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { formatDateTime } from "@/lib/date";
 import { compareStartNumber } from "@/lib/start-number";
@@ -23,11 +24,12 @@ export default async function AdminRoundResults({
     cls?: string;
     published?: string;
     unpublished?: string;
+    event?: string;
   }>;
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
-  const { imported, skipped, cls: clsRaw, published, unpublished } =
+  const { imported, skipped, cls: clsRaw, published, unpublished, event } =
     await searchParams;
   type Cls = "combined" | "pro" | "am" | "team";
   const cls: Cls =
@@ -151,6 +153,18 @@ export default async function AdminRoundResults({
             >
               RSVP
             </Link>
+            {round.season.league.discordGuildId && (
+              <form action={createRaceEventAction}>
+                <input type="hidden" name="slug" value={slug} />
+                <input type="hidden" name="seasonId" value={seasonId} />
+                <input type="hidden" name="roundId" value={roundId} />
+                <SubmitWithSpinner
+                  label="📅 Discord event"
+                  pendingLabel="Creating…"
+                  className="rounded border border-indigo-700/60 bg-indigo-950/30 px-3 py-1.5 text-sm text-indigo-200 hover:bg-indigo-900/40"
+                />
+              </form>
+            )}
             <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/stream`}
               className="rounded border border-purple-700/60 bg-purple-950/30 px-3 py-1.5 text-sm text-purple-200 hover:bg-purple-900/40"
@@ -200,6 +214,22 @@ export default async function AdminRoundResults({
           Results unpublished — they are hidden from the public again (admin
           preview only) and removed from the public standings.
         </div>
+      )}
+
+      {event && (
+        event.startsWith("failed") ? (
+          <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
+            Could not create the Discord event ({event.replace("failed:", "")}).
+            Check that the bot is in the server with the “Manage Events”
+            permission and the league’s Discord server ID is set.
+          </div>
+        ) : (
+          <div className="rounded border border-indigo-800 bg-indigo-950 p-3 text-sm text-indigo-200">
+            Discord race event {event === "updated" ? "updated" : "created"} — it
+            now shows in the server’s Events tab and members get the start
+            reminder ~15 min before.
+          </div>
+        )
       )}
 
       {!isPublished && (

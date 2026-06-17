@@ -1,0 +1,267 @@
+/**
+ * Create / sync Discord Guild Scheduled Events for upcoming races.
+ *
+ * Each upcoming round becomes an EXTERNAL scheduled event in the league's
+ * Discord guild. Discord then shows it in the server's Events tab and fires
+ * its native "starting soon" reminder (~15 min before) — exactly the small
+ * pop-up window the league wants. The event is not tied to a channel; it is
+ * purely a reminder.
+ *
+ * Idempotent WITHOUT a schema change: we list the guild's existing scheduled
+ * events and match by the deterministic event name. If a match exists we
+ * update it when the start/end/location drifted (e.g. a reschedule); otherwise
+ * we create it. `force` recreates/updates regardless.
+ *
+ * Gating: any league with `discordGuildId` set. The bot needs the
+ * MANAGE_EVENTS permission in that guild.
+ *
+ * Not a "use server" module — imported by both the cron route and the admin
+ * server action.
+ */
+
+import { prisma } from "@/lib/prisma";
+import {
+  listGuildScheduledEvents,
+  createGuildScheduledEvent,
+  modifyGuildScheduledEvent,
+  type GuildScheduledEvent,
+} from "@/lib/discord-bot";
+
+/** Default race duration when a round has no raceLengthMinutes set. */
+const DEFAULT_DURATION_MIN = 120;
+/** How far ahead the cron creates events. */
+export const RACE_EVENT_DAYS_AHEAD = 30;
+
+export type EnsureRaceEventResult =
+  | { ok: true; action: "created" | "updated" | "unchanged"; eventId: string }
+  | {
+      ok: false;
+      reason:
+        | "round-not-found"
+        | "not-configured" // league has no discordGuildId
+        | "start-in-past"
+        | "list-failed"
+        | "create-failed"
+        | "update-failed";
+      detail?: string;
+    };
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 1).trimEnd() + "…";
+}
+
+export function buildEventName(
+  leagueName: string,
+  roundNumber: number,
+  track: string
+): string {
+  return truncate(`${leagueName} · R${roundNumber} ${track}`, 100);
+}
+
+export function buildEventLocation(
+  track: string,
+  trackConfig: string | null
+): string {
+  return truncate(
+    `${track}${trackConfig ? ` (${trackConfig})` : ""}` || "iRacing",
+    100
+  );
+}
+
+type RoundForEvent = {
+  id: string;
+  roundNumber: number;
+  name: string;
+  track: string;
+  trackConfig: string | null;
+  startsAt: Date;
+  raceLengthMinutes: number | null;
+  seasonId: string;
+  season: {
+    name: string;
+    year: number;
+    league: {
+      name: string;
+      slug: string;
+      discordGuildId: string | null;
+    };
+  };
+};
+
+function buildPayload(round: RoundForEvent) {
+  const league = round.season.league;
+  const start = round.startsAt;
+  const end = new Date(
+    start.getTime() +
+      (round.raceLengthMinutes ?? DEFAULT_DURATION_MIN) * 60 * 1000
+  );
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
+  const roundUrl = `${baseUrl}/leagues/${league.slug}/seasons/${round.seasonId}/rounds/${round.id}`;
+  return {
+    name: buildEventName(league.name, round.roundNumber, round.track),
+    description: truncate(
+      `Round ${round.roundNumber} of ${league.name} — ${round.season.name} ${round.season.year}.\n${roundUrl}`,
+      1000
+    ),
+    location: buildEventLocation(round.track, round.trackConfig),
+    scheduled_start_time: start.toISOString(),
+    scheduled_end_time: end.toISOString(),
+  };
+}
+
+/** An existing event is "live" (worth matching) when SCHEDULED or ACTIVE. */
+function isLiveEvent(e: GuildScheduledEvent): boolean {
+  return e.status === 1 || e.status === 2;
+}
+
+/**
+ * Ensure a Discord scheduled event exists (and is up to date) for one round.
+ * Pass `existing` to reuse a guild event list already fetched by the caller
+ * (the cron fetches once per guild).
+ */
+export async function ensureRaceEventForRound(
+  roundId: string,
+  opts: { force?: boolean; existing?: GuildScheduledEvent[] } = {}
+): Promise<EnsureRaceEventResult> {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      season: {
+        include: {
+          league: {
+            select: { name: true, slug: true, discordGuildId: true },
+          },
+        },
+      },
+    },
+  });
+  if (!round) return { ok: false, reason: "round-not-found" };
+
+  const guildId = round.season.league.discordGuildId;
+  if (!guildId) return { ok: false, reason: "not-configured" };
+
+  if (round.startsAt.getTime() <= Date.now())
+    return { ok: false, reason: "start-in-past" };
+
+  const payload = buildPayload(round as RoundForEvent);
+
+  // Resolve the guild's current scheduled events (reuse if provided).
+  let events = opts.existing;
+  if (!events) {
+    const list = await listGuildScheduledEvents(guildId);
+    if (!list.ok) return { ok: false, reason: "list-failed", detail: list.body };
+    events = list.data;
+  }
+
+  const match = events.find(
+    (e) => isLiveEvent(e) && e.name === payload.name
+  );
+
+  if (match) {
+    const drifted =
+      match.scheduled_start_time !== payload.scheduled_start_time ||
+      match.scheduled_end_time !== payload.scheduled_end_time ||
+      (match.entity_metadata?.location ?? "") !== payload.location;
+    if (!opts.force && !drifted)
+      return { ok: true, action: "unchanged", eventId: match.id };
+
+    const upd = await modifyGuildScheduledEvent(guildId, match.id, payload);
+    if (!upd.ok) return { ok: false, reason: "update-failed", detail: upd.body };
+    return { ok: true, action: "updated", eventId: match.id };
+  }
+
+  const created = await createGuildScheduledEvent(guildId, payload);
+  if (!created.ok)
+    return { ok: false, reason: "create-failed", detail: created.body };
+  return { ok: true, action: "created", eventId: created.data.id };
+}
+
+export type CreateUpcomingSummary = {
+  created: string[];
+  updated: string[];
+  unchanged: string[];
+  skipped: { id: string; reason: string }[];
+};
+
+/**
+ * Cron entrypoint: create/sync scheduled events for every upcoming round
+ * (within RACE_EVENT_DAYS_AHEAD) in an active season whose league has a
+ * Discord guild configured. Fetches each guild's event list once.
+ */
+export async function createRaceEventsForUpcomingRounds(): Promise<CreateUpcomingSummary> {
+  const now = Date.now();
+  const horizon = new Date(now + RACE_EVENT_DAYS_AHEAD * 24 * 3600 * 1000);
+
+  const rounds = await prisma.round.findMany({
+    where: {
+      status: "UPCOMING",
+      startsAt: { gt: new Date(now), lte: horizon },
+      season: {
+        status: { in: ["OPEN_REGISTRATION", "ACTIVE"] },
+        league: { discordGuildId: { not: null } },
+      },
+    },
+    include: {
+      season: {
+        include: {
+          league: {
+            select: { name: true, slug: true, discordGuildId: true },
+          },
+        },
+      },
+    },
+    orderBy: { startsAt: "asc" },
+    take: 200,
+  });
+
+  const summary: CreateUpcomingSummary = {
+    created: [],
+    updated: [],
+    unchanged: [],
+    skipped: [],
+  };
+
+  // Cache one event-list fetch per guild.
+  const listCache = new Map<string, GuildScheduledEvent[] | null>();
+
+  for (const round of rounds) {
+    const guildId = round.season.league.discordGuildId!;
+    if (!listCache.has(guildId)) {
+      const list = await listGuildScheduledEvents(guildId);
+      listCache.set(guildId, list.ok ? list.data : null);
+    }
+    const existing = listCache.get(guildId);
+    if (existing == null) {
+      summary.skipped.push({ id: round.id, reason: "list-failed" });
+      continue;
+    }
+
+    const res = await ensureRaceEventForRound(round.id, { existing });
+    if (res.ok) {
+      if (res.action === "created") {
+        summary.created.push(round.id);
+        // Keep the local cache coherent so a duplicate isn't created within
+        // the same run (unlikely, but cheap insurance).
+        existing.push({
+          id: res.eventId,
+          guild_id: guildId,
+          name: buildEventName(
+            round.season.league.name,
+            round.roundNumber,
+            round.track
+          ),
+          scheduled_start_time: round.startsAt.toISOString(),
+          scheduled_end_time: null,
+          entity_type: 1,
+          status: 1,
+        });
+      } else if (res.action === "updated") summary.updated.push(round.id);
+      else summary.unchanged.push(round.id);
+    } else {
+      summary.skipped.push({ id: round.id, reason: res.reason });
+    }
+  }
+
+  return summary;
+}

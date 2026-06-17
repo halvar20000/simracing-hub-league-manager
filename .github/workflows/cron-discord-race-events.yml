@@ -1,0 +1,27 @@
+name: Create Discord race events
+
+on:
+  schedule:
+    # Every 6 hours (UTC). Creating/syncing is idempotent (matches existing
+    # guild scheduled events by name), so re-running is harmless.
+    - cron: "20 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call cron endpoint
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            https://league.simracing-hub.com/api/cron/discord-race-events)
+          echo "$response"
+          status=$(echo "$response" | tail -1 | sed 's/HTTP_STATUS://')
+          if [ "$status" != "200" ]; then
+            echo "::error::Endpoint returned HTTP $status"
+            exit 1
+          fi

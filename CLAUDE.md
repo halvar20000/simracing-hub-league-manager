@@ -188,6 +188,15 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - New-member welcome: the REST bot has no gateway, so a daily cron (`/api/cron/discord-welcome` + `.github/workflows/cron-discord-welcome.yml`, 16:00 UTC) runs `src/lib/notify-welcome.ts:runWelcome()` — it lists guild members, batches everyone who joined since the `League.discordWelcomeAfter` watermark, and posts ONE message to `League.discordWelcomeChannelId` naming them (no @mention; `allowed_mentions.parse=[]`). The first run just sets the watermark so existing members aren't bulk-welcomed. `League.discordWelcomeMessage` is an optional template (`{names}` placeholder).
 - Both features are off until their channel IDs are set on the admin league-edit page.
 
+## Discord race events (Guild Scheduled Events)
+
+- Each upcoming round gets a Discord **Guild Scheduled Event** (EXTERNAL type, location = track) so Discord shows it in the server's Events tab and fires its native "starting soon" reminder (~15 min before). It is NOT tied to a channel — purely a reminder.
+- Helper: `src/lib/notify-race-event.ts` — `ensureRaceEventForRound(roundId, {force?, existing?})` (create/update one round) and `createRaceEventsForUpcomingRounds()` (cron sweep, `RACE_EVENT_DAYS_AHEAD=30`). Pure, not `"use server"`; imported by the cron route and the admin action.
+- **Idempotency without a schema change**: events are matched against the guild's existing scheduled events by the deterministic name `"<League> · R<n> <track>"` (`listGuildScheduledEvents`). Found + drifted (start/end/location) → PATCH; found + same → skip; missing → create. Reschedules self-heal. Event end = `Round.raceLengthMinutes` (default 120 min); description links to the round page.
+- REST helpers in `src/lib/discord-bot.ts`: `listGuildScheduledEvents`, `createGuildScheduledEvent` (EXTERNAL, privacy_level 2), `modifyGuildScheduledEvent`.
+- Triggers: cron `/api/cron/discord-race-events` (Bearer `CRON_SECRET`) + `.github/workflows/cron-discord-race-events.yml` (every 6h); manual `createRaceEventAction` ("📅 Discord event" button on the admin round page, `force=true`).
+- Gating: any league with `League.discordGuildId` set; round `UPCOMING`, season `OPEN_REGISTRATION`/`ACTIVE`, start within the horizon. **The bot must have the `MANAGE_EVENTS` permission** in the guild (ask Andreas — see [[project_cas_discord_admin]]).
+
 ## Logos
 
 - `public/logos/site-logo.png` — top nav logo (CAS LEAGUE SCORING SYSTEM)
