@@ -134,7 +134,7 @@ export type GuildScheduledEvent = {
   description?: string | null;
   scheduled_start_time: string;
   scheduled_end_time: string | null;
-  /** 1 = EXTERNAL, 2 = STAGE_INSTANCE, 3 = VOICE */
+  /** 1 = STAGE_INSTANCE, 2 = VOICE, 3 = EXTERNAL */
   entity_type: number;
   /** 1 SCHEDULED, 2 ACTIVE, 3 COMPLETED, 4 CANCELED */
   status: number;
@@ -174,7 +174,7 @@ export async function createGuildScheduledEvent(
       scheduled_start_time: payload.scheduled_start_time,
       scheduled_end_time: payload.scheduled_end_time,
       privacy_level: 2, // GUILD_ONLY (only valid value)
-      entity_type: 1, // EXTERNAL
+      entity_type: 3, // EXTERNAL (1=STAGE_INSTANCE, 2=VOICE, 3=EXTERNAL)
       entity_metadata: { location: payload.location },
       ...(payload.image ? { image: payload.image } : {}),
     }),

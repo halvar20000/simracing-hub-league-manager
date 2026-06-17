@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.9.3",
+    date: "2026-06-17",
+    changes: [
+      "Fixed Discord race events failing to create — they are now correctly created as external (location-based) events, so the automatic reminder works as intended.",
+    ],
+  },
+  {
     version: "1.9.2",
     date: "2026-06-17",
     changes: [

@@ -300,8 +300,8 @@ export async function createRaceEventsForUpcomingRounds(): Promise<CreateUpcomin
           ),
           scheduled_start_time: round.startsAt.toISOString(),
           scheduled_end_time: null,
-          entity_type: 1,
-          status: 1,
+          entity_type: 3, // EXTERNAL
+          status: 1, // SCHEDULED
         });
       } else if (res.action === "updated") summary.updated.push(round.id);
       else summary.unchanged.push(round.id);
