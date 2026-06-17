@@ -27,6 +27,7 @@ import {
   type GuildScheduledEvent,
 } from "@/lib/discord-bot";
 import { resolveLogoUrl } from "@/lib/discord-rsvp-embed";
+import { buildEventCoverDataUri } from "@/lib/race-event-cover";
 
 /** Default race duration when a round has no raceLengthMinutes set. */
 const DEFAULT_DURATION_MIN = 120;
@@ -155,6 +156,11 @@ async function fetchLogoDataUri(
 ): Promise<string | undefined> {
   const url = resolveLogoUrl(logoUrl);
   if (!url) return undefined;
+  // Preferred: the logo padded onto a correctly-sized banner so Discord
+  // doesn't scale it up to fill the cover.
+  const cover = await buildEventCoverDataUri(url);
+  if (cover) return cover;
+  // Fallback: raw logo bytes (may look large) — better than no logo at all.
   try {
     const res = await fetch(url);
     if (!res.ok) return undefined;

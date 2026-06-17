@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.9.5",
+    date: "2026-06-17",
+    changes: [
+      "Discord race events: the league logo is now centered with padding on a properly proportioned banner, so it no longer appears oversized/zoomed in the event cover.",
+    ],
+  },
+  {
     version: "1.9.4",
     date: "2026-06-17",
     changes: [
