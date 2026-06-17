@@ -20,13 +20,17 @@ export async function createRaceEventAction(formData: FormData): Promise<void> {
 
   const res = await ensureRaceEventForRound(roundId, { force: true });
 
-  let flag: string;
+  const params = new URLSearchParams();
   if (res.ok) {
-    flag = res.action === "updated" ? "updated" : "created";
+    params.set("event", res.action === "updated" ? "updated" : "created");
   } else {
-    flag = `failed:${res.reason}`;
+    params.set("event", `failed:${res.reason}`);
+    if (res.detail) {
+      // Surface the raw Discord error (truncated) so failures are diagnosable.
+      params.set("eventDetail", res.detail.slice(0, 300));
+    }
   }
 
   revalidatePath(base);
-  redirect(`${base}?event=${encodeURIComponent(flag)}`);
+  redirect(`${base}?${params.toString()}`);
 }

@@ -202,12 +202,23 @@ export async function ensureRaceEventForRound(
     if (!opts.force && !drifted)
       return { ok: true, action: "unchanged", eventId: match.id };
 
-    const upd = await modifyGuildScheduledEvent(guildId, match.id, payload);
+    // Try with the cover image; if Discord rejects it (unsupported format,
+    // too large, etc.) retry without the image so a bad logo never blocks
+    // the event itself.
+    let upd = await modifyGuildScheduledEvent(guildId, match.id, payload);
+    if (!upd.ok && payload.image) {
+      const { image: _drop, ...noImage } = payload;
+      upd = await modifyGuildScheduledEvent(guildId, match.id, noImage);
+    }
     if (!upd.ok) return { ok: false, reason: "update-failed", detail: upd.body };
     return { ok: true, action: "updated", eventId: match.id };
   }
 
-  const created = await createGuildScheduledEvent(guildId, payload);
+  let created = await createGuildScheduledEvent(guildId, payload);
+  if (!created.ok && payload.image) {
+    const { image: _drop, ...noImage } = payload;
+    created = await createGuildScheduledEvent(guildId, noImage);
+  }
   if (!created.ok)
     return { ok: false, reason: "create-failed", detail: created.body };
   return { ok: true, action: "created", eventId: created.data.id };

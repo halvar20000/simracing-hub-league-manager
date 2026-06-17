@@ -25,11 +25,12 @@ export default async function AdminRoundResults({
     published?: string;
     unpublished?: string;
     event?: string;
+    eventDetail?: string;
   }>;
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
-  const { imported, skipped, cls: clsRaw, published, unpublished, event } =
+  const { imported, skipped, cls: clsRaw, published, unpublished, event, eventDetail } =
     await searchParams;
   type Cls = "combined" | "pro" | "am" | "team";
   const cls: Cls =
@@ -219,9 +220,16 @@ export default async function AdminRoundResults({
       {event && (
         event.startsWith("failed") ? (
           <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
-            Could not create the Discord event ({event.replace("failed:", "")}).
-            Check that the bot is in the server with the “Manage Events”
-            permission and the league’s Discord server ID is set.
+            <p>
+              Could not create the Discord event ({event.replace("failed:", "")}).
+              Check that the bot is in the server with the “Manage Events”
+              permission and the league’s Discord server ID is set.
+            </p>
+            {eventDetail && (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-red-950/60 p-2 text-xs text-red-300">
+                {eventDetail}
+              </pre>
+            )}
           </div>
         ) : (
           <div className="rounded border border-indigo-800 bg-indigo-950 p-3 text-sm text-indigo-200">
