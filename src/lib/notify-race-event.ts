@@ -26,6 +26,7 @@ import {
   modifyGuildScheduledEvent,
   type GuildScheduledEvent,
 } from "@/lib/discord-bot";
+import { resolveLogoUrl } from "@/lib/discord-rsvp-embed";
 
 /** Default race duration when a round has no raceLengthMinutes set. */
 const DEFAULT_DURATION_MIN = 120;
@@ -84,11 +85,39 @@ type RoundForEvent = {
       name: string;
       slug: string;
       discordGuildId: string | null;
+      logoUrl: string | null;
     };
   };
 };
 
-function buildPayload(round: RoundForEvent) {
+/** Discord cover images max out at 10 MB; league logos are far smaller. */
+const MAX_LOGO_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Fetch the league logo and return it as a base64 data URI for Discord's
+ * scheduled-event `image` field. Returns null on any failure (missing logo,
+ * fetch error, non-image, too large) — the event is still created without a
+ * cover image.
+ */
+async function fetchLogoDataUri(
+  logoUrl: string | null
+): Promise<string | undefined> {
+  const url = resolveLogoUrl(logoUrl);
+  if (!url) return undefined;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return undefined;
+    const type = res.headers.get("content-type") ?? "";
+    if (!type.startsWith("image/")) return undefined;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0 || buf.length > MAX_LOGO_BYTES) return undefined;
+    return `data:${type};base64,${buf.toString("base64")}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildPayload(round: RoundForEvent, image?: string) {
   const league = round.season.league;
   const start = round.startsAt;
   const end = new Date(
@@ -107,6 +136,7 @@ function buildPayload(round: RoundForEvent) {
     location: buildEventLocation(round.track, round.trackConfig),
     scheduled_start_time: start.toISOString(),
     scheduled_end_time: end.toISOString(),
+    ...(image ? { image } : {}),
   };
 }
 
@@ -130,7 +160,12 @@ export async function ensureRaceEventForRound(
       season: {
         include: {
           league: {
-            select: { name: true, slug: true, discordGuildId: true },
+            select: {
+              name: true,
+              slug: true,
+              discordGuildId: true,
+              logoUrl: true,
+            },
           },
         },
       },
@@ -144,7 +179,8 @@ export async function ensureRaceEventForRound(
   if (round.startsAt.getTime() <= Date.now())
     return { ok: false, reason: "start-in-past" };
 
-  const payload = buildPayload(round as RoundForEvent);
+  const image = await fetchLogoDataUri(round.season.league.logoUrl);
+  const payload = buildPayload(round as RoundForEvent, image);
 
   // Resolve the guild's current scheduled events (reuse if provided).
   let events = opts.existing;

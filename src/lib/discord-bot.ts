@@ -150,6 +150,8 @@ export type ExternalEventPayload = {
   /** ISO8601 — required for EXTERNAL events. */
   scheduled_end_time: string;
   location: string;
+  /** Cover image as a base64 data URI ("data:image/png;base64,…"). */
+  image?: string;
 };
 
 /** List all (active + upcoming) scheduled events for a guild. */
@@ -174,6 +176,7 @@ export async function createGuildScheduledEvent(
       privacy_level: 2, // GUILD_ONLY (only valid value)
       entity_type: 1, // EXTERNAL
       entity_metadata: { location: payload.location },
+      ...(payload.image ? { image: payload.image } : {}),
     }),
   });
 }
@@ -193,6 +196,7 @@ export async function modifyGuildScheduledEvent(
     body.scheduled_end_time = payload.scheduled_end_time;
   if (payload.location != null)
     body.entity_metadata = { location: payload.location };
+  if (payload.image != null) body.image = payload.image;
   return discordFetch(`/guilds/${guildId}/scheduled-events/${eventId}`, {
     method: "PATCH",
     body: JSON.stringify(body),
