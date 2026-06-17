@@ -33,6 +33,57 @@ const DEFAULT_DURATION_MIN = 120;
 /** How far ahead the cron creates events. */
 export const RACE_EVENT_DAYS_AHEAD = 30;
 
+/**
+ * The league's home timezone. CLS stores round start times as a naive
+ * wall-clock (the admin types e.g. "19:00" with no timezone), so when sending
+ * a real UTC instant to Discord we must interpret that wall-clock in this zone.
+ * All CAS racing is scheduled in German time.
+ */
+const LEAGUE_TIME_ZONE = "Europe/Berlin";
+
+/** How many ms a timezone is ahead of UTC at a given instant (DST-aware). */
+function zoneOffsetMs(at: Date, timeZone: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(at)) p[part.type] = part.value;
+  const asUTC = Date.UTC(
+    Number(p.year),
+    Number(p.month) - 1,
+    Number(p.day),
+    Number(p.hour),
+    Number(p.minute),
+    Number(p.second)
+  );
+  return asUTC - at.getTime();
+}
+
+/**
+ * Reinterpret a Date's runtime-local wall-clock as a wall-clock in `timeZone`
+ * and return the true UTC instant. If the runtime already runs in `timeZone`
+ * this is a no-op, so it's safe regardless of the server's TZ setting.
+ */
+function reinterpretLocalAsZone(d: Date, timeZone: string): Date {
+  const asUTC = Date.UTC(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds()
+  );
+  const guess = new Date(asUTC);
+  return new Date(asUTC - zoneOffsetMs(guess, timeZone));
+}
+
 export type EnsureRaceEventResult =
   | { ok: true; action: "created" | "updated" | "unchanged"; eventId: string }
   | {
@@ -119,7 +170,9 @@ async function fetchLogoDataUri(
 
 function buildPayload(round: RoundForEvent, image?: string) {
   const league = round.season.league;
-  const start = round.startsAt;
+  // round.startsAt holds a naive wall-clock; interpret it in the league's
+  // home timezone to get the correct instant Discord should localize.
+  const start = reinterpretLocalAsZone(round.startsAt, LEAGUE_TIME_ZONE);
   const end = new Date(
     start.getTime() +
       (round.raceLengthMinutes ?? DEFAULT_DURATION_MIN) * 60 * 1000
