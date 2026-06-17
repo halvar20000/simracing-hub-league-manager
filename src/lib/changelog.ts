@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.9.1",
+    date: "2026-06-17",
+    changes: [
+      "Registration notification emails now include the driver's Discord ID (when known), making it easier to link a new or updated registration to the right Discord member. Shows “— (not linked)” if the driver hasn't connected Discord yet.",
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-06-17",
     changes: [

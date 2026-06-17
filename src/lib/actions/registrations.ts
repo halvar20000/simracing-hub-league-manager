@@ -379,6 +379,18 @@ export async function createRegistration(
         ? (await prisma.carClass.findUnique({ where: { id: carClassId }, select: { name: true } }))?.name ?? "—"
         : null;
 
+      // Discord ID helps the team link the driver to our Discord. Prefer the
+      // numeric ID stored on the User; fall back to the linked OAuth account.
+      const discordId =
+        user.discordId ??
+        (
+          await prisma.account.findFirst({
+            where: { userId: user.id, provider: "discord" },
+            select: { providerAccountId: true },
+          })
+        )?.providerAccountId ??
+        null;
+
       const subject = existing
         ? `Updated registration — ${season.league.name} ${season.name}`
         : `New registration — ${season.league.name} ${season.name}`;
@@ -398,6 +410,7 @@ export async function createRegistration(
           <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
             <tr><td style="padding: 6px 0; color: #71717a; width: 110px;">Driver</td><td>${escape(user.firstName)} ${escape(user.lastName)}</td></tr>
             <tr><td style="padding: 6px 0; color: #71717a;">iRacing ID</td><td>${escape(user.iracingMemberId)}</td></tr>
+            <tr><td style="padding: 6px 0; color: #71717a;">Discord ID</td><td>${discordId ? escape(discordId) : "— (not linked)"}</td></tr>
             <tr><td style="padding: 6px 0; color: #71717a;">Start #</td><td>${startNumber != null ? "#" + escape(startNumber) : "—"}</td></tr>
             <tr><td style="padding: 6px 0; color: #71717a;">Team</td><td>${escape(teamLabel2)}</td></tr>
             ${className2 ? `<tr><td style="padding: 6px 0; color: #71717a;">Class</td><td>${escape(className2)}</td></tr>` : ""}
@@ -416,6 +429,7 @@ export async function createRegistration(
         "",
         `Driver: ${user.firstName} ${user.lastName}`,
         `iRacing ID: ${user.iracingMemberId}`,
+        `Discord ID: ${discordId ?? "— (not linked)"}`,
         `Start #: ${startNumber != null ? "#" + startNumber : "—"}`,
         `Team: ${teamLabel2}`,
         className2 ? `Class: ${className2}` : null,
@@ -1104,7 +1118,8 @@ export async function updateTeamRegistration(formData: FormData) {
   });
   const teammateLines = finalTeammates.map((r) =>
     `${r.user.firstName ?? ''} ${r.user.lastName ?? ''}`.trim() +
-    (r.user.iracingMemberId ? ` (iR ${r.user.iracingMemberId})` : '')
+    (r.user.iracingMemberId ? ` (iR ${r.user.iracingMemberId})` : '') +
+    (r.user.discordId ? ` [Discord ${r.user.discordId}]` : '')
   );
   const leaderReg = team.registrations.find((r) => r.userId === team.leaderUserId);
   await notifyTeamChange({
