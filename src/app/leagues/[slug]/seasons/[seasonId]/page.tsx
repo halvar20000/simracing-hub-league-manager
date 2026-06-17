@@ -7,6 +7,7 @@ import { computeDriverStandings, computeTeamClassStandings } from "@/lib/standin
 import { EmptyState, CalendarIcon, UsersIcon } from "@/components/EmptyState";
 import { SeasonHero } from "@/components/SeasonHero";
 import { CountryFlag } from "@/components/CountryFlag";
+import { SortableGroupedTableEnhancer } from "@/components/SortableGroupedTableEnhancer";
 import Garage61Link from "@/components/Garage61Link";
 import { compareStartNumber } from "@/lib/start-number";
 import type { Metadata } from "next";
@@ -59,7 +60,7 @@ export default async function PublicSeasonDetail({
       },
       registrations: {
         where: { status: "APPROVED" },
-        include: { user: true, team: true, carClass: true },
+        include: { user: true, team: true, carClass: true, car: true },
         orderBy: [{ createdAt: "asc" }],
       },
     },
@@ -86,6 +87,57 @@ export default async function PublicSeasonDetail({
       month: "short",
       year: "numeric",
     });
+
+  // Team-registration seasons (IEC): group the roster so the TEAM is the
+  // primary row and its drivers sit underneath. Non-driving team managers
+  // (isTeamManager) are excluded from the driver rows. Teams are ordered by
+  // creation (registration order); drivers keep their registration order.
+  type RegWithRels = (typeof season.registrations)[number];
+  const teamRoster: {
+    team: { id: string; name: string; leaderUserId: string | null } | null;
+    drivers: RegWithRels[];
+  }[] = [];
+  if (season.teamRegistration) {
+    const byTeam = new Map<
+      string,
+      {
+        team: { id: string; name: string; leaderUserId: string | null };
+        createdAt: number;
+        drivers: RegWithRels[];
+      }
+    >();
+    const noTeam: RegWithRels[] = [];
+    for (const r of confirmedRegs) {
+      if (r.isTeamManager) continue;
+      if (r.team) {
+        let g = byTeam.get(r.team.id);
+        if (!g) {
+          g = {
+            team: {
+              id: r.team.id,
+              name: r.team.name,
+              leaderUserId: r.team.leaderUserId,
+            },
+            createdAt: r.team.createdAt.getTime(),
+            drivers: [],
+          };
+          byTeam.set(r.team.id, g);
+        }
+        g.drivers.push(r);
+      } else {
+        noTeam.push(r);
+      }
+    }
+    const ordered = Array.from(byTeam.values()).sort(
+      (a, b) => a.createdAt - b.createdAt
+    );
+    for (const g of ordered) teamRoster.push({ team: g.team, drivers: g.drivers });
+    if (noTeam.length > 0) teamRoster.push({ team: null, drivers: noTeam });
+  }
+  const teamRosterDriverCount = teamRoster.reduce(
+    (s, g) => s + g.drivers.length,
+    0
+  );
 
   const teamClasses = await computeTeamClassStandings(prisma, seasonId);
   const isTeamEventSeason = teamClasses.length > 0;
@@ -387,7 +439,122 @@ export default async function PublicSeasonDetail({
           ))}
         </section>
       )}
-      {!isTeamEventSeason && (
+      {season.teamRegistration && (
+        <section>
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <h2 className="font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+              Roster ({teamRoster.length} team
+              {teamRoster.length === 1 ? "" : "s"} · {teamRosterDriverCount}{" "}
+              driver{teamRosterDriverCount === 1 ? "" : "s"})
+            </h2>
+            <Link
+              href={`/leagues/${slug}/seasons/${seasonId}/roster`}
+              className="text-xs text-orange-400 hover:underline"
+            >
+              Full roster →
+            </Link>
+          </div>
+          {teamRosterDriverCount === 0 ? (
+            <EmptyState
+              icon={<UsersIcon />}
+              title="No teams registered yet"
+              description="Teams and their drivers will show up here once approved."
+            />
+          ) : (
+            <div className="overflow-x-auto rounded border border-zinc-800">
+              <SortableGroupedTableEnhancer
+                tableId="seasonTeamRosterTable"
+                groupCols={["team"]}
+              />
+              <table id="seasonTeamRosterTable" className="w-full text-sm">
+                <thead className="bg-zinc-900 text-left align-bottom text-zinc-400">
+                  <tr>
+                    <th data-col="team" className="px-3 py-2 font-display tracking-wider">
+                      Team
+                    </th>
+                    <th data-col="name" className="px-3 py-2 font-display tracking-wider">
+                      Driver
+                    </th>
+                    {season.isMulticlass && (
+                      <th data-col="class" className="px-3 py-2 font-display tracking-wider">
+                        Class
+                      </th>
+                    )}
+                    <th data-col="car" className="px-3 py-2 font-display tracking-wider">
+                      Car
+                    </th>
+                    <th data-col="irid" className="px-3 py-2 font-display tracking-wider">
+                      iRacing ID
+                    </th>
+                    <th data-col="irating" className="px-3 py-2 font-display tracking-wider">
+                      iRating
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamRoster.flatMap((g) =>
+                    g.drivers.map((r, ri) => (
+                      <tr
+                        key={r.id}
+                        data-group={g.team?.id ?? "none"}
+                        data-r-team={g.team?.name ?? "No team"}
+                        data-r-name={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim()}
+                        data-r-class={r.carClass?.name ?? ""}
+                        data-r-car={r.car?.name ?? ""}
+                        data-r-irid={r.user.iracingMemberId ?? ""}
+                        data-r-irating={r.iRating != null ? String(r.iRating) : ""}
+                        className={ri === 0 ? "cw-group-start" : "cw-group-cont"}
+                      >
+                        <td className="px-3 py-2 align-top font-medium text-zinc-100">
+                          <div className="cw-group-cell">
+                            {g.team?.name ?? "No team"}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 font-medium">
+                          <CountryFlag code={r.user.countryCode} />
+                          {r.user.iracingMemberId ? (
+                            <Link
+                              href={`/drivers/${r.user.iracingMemberId}`}
+                              className="hover:text-orange-400"
+                            >
+                              {r.user.firstName} {r.user.lastName}
+                            </Link>
+                          ) : (
+                            <>
+                              {r.user.firstName} {r.user.lastName}
+                            </>
+                          )}
+                          {g.team?.leaderUserId === r.userId && (
+                            <span className="ml-1 text-amber-400" title="Team leader">
+                              ★
+                            </span>
+                          )}
+                        </td>
+                        {season.isMulticlass && (
+                          <td className="px-3 py-2 text-zinc-400">
+                            {r.carClass?.name ?? "—"}
+                          </td>
+                        )}
+                        <td className="px-3 py-2 text-zinc-400">
+                          {r.car?.name ?? "—"}
+                        </td>
+                        <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                          {r.user.iracingMemberId ?? "—"}
+                        </td>
+                        <td className="px-3 py-2 text-zinc-400 tabular-nums">
+                          {r.iRating ?? "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!season.teamRegistration && !isTeamEventSeason && (
       <section>
         <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
           Roster ({confirmedRegs.length} approved
