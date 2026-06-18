@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { formatDate, formatDateTime } from "@/lib/date";
 import TableFilter from "@/components/TableFilter";
+import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { refreshDiscordStatsAction } from "@/lib/actions/discord-stats";
 import type { DiscordStatsData, MonthlyRow } from "@/lib/discord-stats";
@@ -111,26 +112,37 @@ function StatsView({
         tableId="discordStatsTable"
         placeholder="Filter members by name, CLS driver, status…"
       />
+      <SortableTableEnhancer tableId="discordStatsTable" />
 
       <div className="overflow-x-auto rounded border border-zinc-800">
         <table id="discordStatsTable" className="w-full min-w-[820px] text-sm">
           <thead className="bg-zinc-900 text-left text-zinc-400">
             <tr>
-              <th className="px-3 py-2">Member</th>
-              <th className="px-3 py-2">CLS driver</th>
-              <th className="px-3 py-2">Joined</th>
-              <th className="px-3 py-2 text-right">Msgs (30d)</th>
-              <th className="px-3 py-2 text-center">Chat</th>
-              <th className="px-3 py-2 text-center">League</th>
-              <th className="px-3 py-2">Status</th>
+              <th data-col="member" className="px-3 py-2">Member</th>
+              <th data-col="cls" className="px-3 py-2">CLS driver</th>
+              <th data-col="joined" className="px-3 py-2">Joined</th>
+              <th data-col="msgs" className="px-3 py-2 text-right">Msgs (30d)</th>
+              <th data-col="chat" className="px-3 py-2 text-center">Chat</th>
+              <th data-col="league" className="px-3 py-2 text-center">League</th>
+              <th data-col="status" className="px-3 py-2">Status</th>
             </tr>
           </thead>
           <tbody>
             {stats.members.map((m) => {
               const active = m.chatActive || m.leagueActive;
+              const joinedKey = m.joinedAt
+                ? String(new Date(m.joinedAt).getTime())
+                : "";
               return (
                 <tr
                   key={m.discordId}
+                  data-r-member={m.name ?? ""}
+                  data-r-cls={m.clsName ?? ""}
+                  data-r-joined={joinedKey}
+                  data-r-msgs={String(m.messages ?? 0)}
+                  data-r-chat={m.chatActive ? "1" : "0"}
+                  data-r-league={m.leagueActive ? "1" : "0"}
+                  data-r-status={active ? "active" : "lurker"}
                   data-filter={[
                     m.name,
                     m.clsName,

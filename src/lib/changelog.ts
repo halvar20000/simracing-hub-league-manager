@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.9.6",
+    date: "2026-06-17",
+    changes: [
+      "Discord community stats: the members table is now sortable — click any column header to sort by member, CLS driver, join date, messages, chat/league activity or status — and each column has its own filter box.",
+    ],
+  },
+  {
     version: "1.9.5",
     date: "2026-06-17",
     changes: [
