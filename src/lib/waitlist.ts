@@ -146,68 +146,6 @@ async function dmUser(userId: string, content: string): Promise<boolean> {
 }
 
 /**
- * Decide whether a just-APPROVED registration should be confirmed or parked on
- * the waiting list, and persist `waitlistedAt` accordingly. Idempotent.
- *
- * Counts confirmed drivers EXCLUDING this registration; if that already meets
- * the cap, this driver goes onto the waiting list. Team managers and excluded
- * registrations never count and are never waitlisted.
- */
-export async function applyWaitlistOnApprove(registrationId: string): Promise<{
-  waitlisted: boolean;
-}> {
-  const reg = await prisma.registration.findUnique({
-    where: { id: registrationId },
-    select: {
-      id: true,
-      seasonId: true,
-      status: true,
-      excludedAt: true,
-      isTeamManager: true,
-      waitlistedAt: true,
-      season: { select: { maxDrivers: true } },
-    },
-  });
-  if (!reg) return { waitlisted: false };
-
-  const cap = reg.season.maxDrivers ?? null;
-
-  // No cap, not approved, excluded, or a team manager → never waitlisted.
-  if (
-    cap == null ||
-    reg.status !== "APPROVED" ||
-    reg.excludedAt != null ||
-    reg.isTeamManager
-  ) {
-    if (reg.waitlistedAt != null) {
-      await prisma.registration.update({
-        where: { id: reg.id },
-        data: { waitlistedAt: null },
-      });
-    }
-    return { waitlisted: false };
-  }
-
-  const confirmedOthers = await prisma.registration.count({
-    where: { seasonId: reg.seasonId, ...CONFIRMED_WHERE, id: { not: reg.id } },
-  });
-
-  const shouldWaitlist = confirmedOthers >= cap;
-  if (shouldWaitlist && reg.waitlistedAt == null) {
-    await prisma.registration.update({
-      where: { id: reg.id },
-      data: { waitlistedAt: new Date() },
-    });
-  } else if (!shouldWaitlist && reg.waitlistedAt != null) {
-    await prisma.registration.update({
-      where: { id: reg.id },
-      data: { waitlistedAt: null },
-    });
-  }
-  return { waitlisted: shouldWaitlist };
-}
-
-/**
  * Manually move a registration on/off the waiting list (admin override —
  * not cap-checked). Promoting (onList=false) DMs the driver. Idempotent.
  */
@@ -244,47 +182,94 @@ export async function setRegistrationWaitlisted(
 }
 
 /**
- * Fill any open confirmed seats from the waiting list (FIFO by registration
- * date) and DM each promoted driver. Call after a confirmed driver permanently
- * leaves (withdraw / reject / exclude) or after the cap is raised. Idempotent.
+ * Order-proof waiting-list reconciliation for a whole season — the single
+ * source of truth for who is a confirmed grid driver vs. on the waiting list.
+ *
+ * Ranks every "active" registration (PENDING or APPROVED, not excluded, not a
+ * team manager) by registration date (`createdAt` ascending). The earliest
+ * `cap` ranks are grid seats; everyone beyond the cap is the waiting list —
+ * REGARDLESS of the order in which the admin approves them. This removes the
+ * old foot-gun where approving a later registration before an earlier (still
+ * pending) one could hand the later driver a grid seat.
+ *
+ * Only APPROVED registrations actually carry the `waitlistedAt` flag (a PENDING
+ * registration is shown as pending, not "on the waiting list"), but a pending
+ * entry still OCCUPIES its registration-date rank — so an earlier pending
+ * registration reserves a seat ahead of a later one. If an earlier registration
+ * is later rejected/withdrawn, ranks shift and the next approved driver is
+ * promoted (and DM'd).
+ *
+ * Pure, idempotent, safe to call after any approve / reject / withdraw / status
+ * change. No cap configured → clears any stray `waitlistedAt` and returns.
  */
-export async function promoteFromWaitlist(seasonId: string): Promise<number> {
+export async function recomputeWaitlistForSeason(
+  seasonId: string
+): Promise<void> {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     select: {
       maxDrivers: true,
       name: true,
-      league: { select: { slug: true, name: true } },
+      league: { select: { name: true } },
     },
   });
   const cap = season?.maxDrivers ?? null;
-  if (cap == null) return 0;
 
-  let promoted = 0;
-  // Loop, re-counting each round so we never over-promote past the cap.
-  // Bounded by the waiting-list length.
-  for (;;) {
-    const confirmed = await countConfirmedDrivers(seasonId);
-    if (confirmed >= cap) break;
-    const next = await prisma.registration.findFirst({
-      where: { seasonId, ...WAITLIST_WHERE },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, userId: true },
-    });
-    if (!next) break;
-    await prisma.registration.update({
-      where: { id: next.id },
-      data: { waitlistedAt: null },
-    });
-    promoted++;
-    await dmUser(
-      next.userId,
-      `🟢 A spot opened up in **${season!.league.name} — ${season!.name}** and ` +
-        `you were next on the waiting list. You now have a confirmed seat for the ` +
-        `season. See you on track! ${SITE_URL}`
-    );
+  // Active registrations in registration-date order. Both PENDING and APPROVED
+  // occupy a rank; REJECTED / WITHDRAWN / excluded / managers do not.
+  const active = await prisma.registration.findMany({
+    where: {
+      seasonId,
+      status: { in: ["PENDING", "APPROVED"] },
+      excludedAt: null,
+      isTeamManager: false,
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, userId: true, status: true, waitlistedAt: true },
+  });
+
+  if (cap == null) {
+    // Feature off: nobody should be flagged waitlisted.
+    const stray = active.filter((r) => r.waitlistedAt != null);
+    if (stray.length > 0) {
+      await prisma.registration.updateMany({
+        where: { id: { in: stray.map((r) => r.id) } },
+        data: { waitlistedAt: null },
+      });
+    }
+    return;
   }
-  return promoted;
+
+  const promotedUserIds: string[] = [];
+  for (let rank = 0; rank < active.length; rank++) {
+    const reg = active[rank];
+    // Pending entries hold their rank but never carry the waitlist flag.
+    if (reg.status !== "APPROVED") continue;
+
+    const shouldBeWaitlisted = rank >= cap; // first `cap` ranks are grid seats
+    const isWaitlisted = reg.waitlistedAt != null;
+    if (shouldBeWaitlisted === isWaitlisted) continue;
+
+    await prisma.registration.update({
+      where: { id: reg.id },
+      data: { waitlistedAt: shouldBeWaitlisted ? new Date() : null },
+    });
+    // Flipping OFF the flag = promotion into a confirmed seat → DM the driver.
+    if (!shouldBeWaitlisted) promotedUserIds.push(reg.userId);
+  }
+
+  for (const userId of promotedUserIds) {
+    try {
+      await dmUser(
+        userId,
+        `🟢 A spot opened up in **${season!.league.name} — ${season!.name}** ` +
+          `and you've moved off the waiting list into a confirmed seat for the ` +
+          `season. See you on track! ${SITE_URL}`
+      );
+    } catch {
+      /* best-effort — the seat change already persisted */
+    }
+  }
 }
 
 /**

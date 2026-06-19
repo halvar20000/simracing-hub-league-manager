@@ -8,8 +8,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 import { parseStartNumberInput } from "@/lib/start-number";
 import {
-  applyWaitlistOnApprove,
-  promoteFromWaitlist,
+  recomputeWaitlistForSeason,
   setRegistrationWaitlisted,
 } from "@/lib/waitlist";
 import type { RegistrationStatus, ProAmClass } from "@prisma/client";
@@ -27,8 +26,9 @@ export async function approveRegistration(registrationId: string) {
     include: { season: { include: { league: true } } },
   });
 
-  // Park this approval on the waiting list if it is over the season cap.
-  await applyWaitlistOnApprove(reg.id);
+  // Reconcile the whole season's waiting list by registration order (so the
+  // earliest 50 always hold the grid, regardless of approval order).
+  await recomputeWaitlistForSeason(reg.seasonId);
 
   revalidatePath(
     `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
@@ -55,7 +55,7 @@ export async function rejectRegistration(registrationId: string) {
   // A confirmed driver leaving may free a seat for the next on the waiting list.
   after(async () => {
     try {
-      await promoteFromWaitlist(reg.seasonId);
+      await recomputeWaitlistForSeason(reg.seasonId);
     } catch {
       /* swallow — promotion is best-effort */
     }
@@ -172,20 +172,10 @@ export async function updateRegistration(
     data: status === "APPROVED" ? data : { ...data, waitlistedAt: null },
   });
 
-  // Keep the waiting list consistent with the new status.
-  if (status === "APPROVED") {
-    // May park this driver on the waiting list if the season is now over cap.
-    await applyWaitlistOnApprove(registrationId);
-  } else {
-    // A confirmed driver leaving the grid may free a seat for the next in line.
-    after(async () => {
-      try {
-        await promoteFromWaitlist(seasonId);
-      } catch {
-        /* swallow */
-      }
-    });
-  }
+  // Keep the waiting list consistent (order-proof, by registration date) —
+  // handles both "now approved → maybe waitlist" and "left the grid → promote
+  // the next in line".
+  await recomputeWaitlistForSeason(seasonId);
 
   revalidatePath(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`

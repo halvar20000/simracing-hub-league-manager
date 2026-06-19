@@ -5,7 +5,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-helpers";
-import { promoteFromWaitlist } from "@/lib/waitlist";
+import { recomputeWaitlistForSeason } from "@/lib/waitlist";
 import { postDiscordWebhook } from "@/lib/discord-webhook";
 import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
@@ -472,10 +472,11 @@ export async function withdrawRegistration(registrationId: string) {
     data: { status: "WITHDRAWN", waitlistedAt: null },
   });
 
-  // If this driver held a confirmed seat, promote the next on the waiting list.
+  // If this driver held a confirmed seat, promote the next on the waiting list
+  // (order-proof, by registration date).
   after(async () => {
     try {
-      await promoteFromWaitlist(reg.seasonId);
+      await recomputeWaitlistForSeason(reg.seasonId);
     } catch {
       /* swallow */
     }
