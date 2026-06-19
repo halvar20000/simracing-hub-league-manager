@@ -6,8 +6,8 @@ Web-based league management tool for iRacing communities.
 
 - Next.js 15 (App Router, TypeScript, Tailwind)
 - Auth.js v5 with Discord provider
-- Prisma + Postgres (hosted on Neon)
-- Deployed on Vercel
+- Prisma + Postgres (self-hosted, Coolify-managed, on Hetzner)
+- Deployed on a self-hosted Hetzner VPS via Coolify (migrated off Vercel/Neon, June 2026)
 
 ## Local development
 
@@ -21,7 +21,7 @@ The app runs at [http://localhost:3000](http://localhost:3000).
 
 Copy `.env.example` to `.env.local` and fill in the real values:
 
-- `DATABASE_URL` — Neon Postgres connection string
+- `DATABASE_URL` — Postgres connection string (Coolify-managed Postgres; locally, your own dev DB)
 - `AUTH_SECRET` — random 32-byte base64 string (`openssl rand -base64 32`)
 - `AUTH_DISCORD_ID`, `AUTH_DISCORD_SECRET` — Discord OAuth credentials
 

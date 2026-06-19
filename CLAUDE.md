@@ -4,32 +4,35 @@ This file briefs a fresh Claude conversation on the league-manager project so it
 
 ## What this is
 
-A Next.js 15 App Router application that manages race leagues, seasons, registrations, results, incident reports, decisions, and penalty pools for the CAS sim racing community. Backed by Postgres (Neon) via Prisma. Deployed on Vercel.
+A Next.js 15 App Router application that manages race leagues, seasons, registrations, results, incident reports, decisions, and penalty pools for the CAS sim racing community. Backed by self-hosted Postgres via Prisma. Deployed on a self-hosted Hetzner VPS via Coolify (migrated off Vercel/Neon on 2026-06-19; both are now decommissioned).
 
 ## Tech stack
 
 - Next.js 15 App Router — Server Components by default, Server Actions for mutations
-- Prisma ORM + Postgres (Neon serverless, pooler URL)
+- Prisma ORM + Postgres (self-hosted, Coolify-managed, on the Hetzner box; reached over Coolify's internal Docker network)
 - NextAuth.js with PrismaAdapter + Discord OAuth
 - Tailwind CSS — dark zinc-based theme
 - PayPal integration for registration fees (per-league config on `League`)
-- **Vercel deployment + Neon Postgres** is the LIVE stack (still active). A Hetzner/Coolify self-host migration is STAGED in `deploy/` but NOT live yet — do not route deploys there. + Vercel Cron (Hobby — daily) + GitHub Actions cron for sub-daily schedules.
+- **Self-hosted Hetzner VPS + Coolify is the LIVE stack** (migrated off Vercel/Neon on 2026-06-19; both decommissioned). App + Postgres run as Docker containers on one Hetzner CX23 box (IP `5.75.174.170`), fronted by Coolify's Traefik with automatic Let's Encrypt. Scheduling is **GitHub Actions crons only** (they hit the live endpoints); the old `vercel.json` daily cron is dead.
 
 ## Repo & deployment
 
 - **Local path**: `~/Nextcloud/AI/league-manager` (Nextcloud-synced)
 - **GitHub**: https://github.com/halvar20000/simracing-hub-league-manager — branch `main`
-- **Deploy flow (LIVE = Vercel/Neon)**: the live site `league.simracing-hub.com` is served by **Vercel** (DB = **Neon**). Any push to `main` triggers a Vercel build. The sandboxed Claude environment cannot push directly — Claude writes a shell script to `outputs/` and the user runs it in their Mac terminal. **Verify a build actually started** (Vercel can silently miss a pushed commit); if it didn't, force it with an empty commit (`outputs/trigger_vercel_deploy.sh`). NOTE: the Vercel MCP token here lists team "halvar20000's projects" with **zero projects** — that's the wrong team/scope for CLS, so the MCP cannot see the real project; check the Vercel dashboard directly.
-- **Hetzner/Coolify is NOT live**: `deploy/` (Dockerfile, Coolify runbook, `output:"standalone"`) is a staged future migration. Until cutover is explicitly done, every change must ship to Vercel/Neon. Do not tell the user to "Redeploy in Coolify".
-- **Standard footer for change scripts**: `npx tsc --noEmit -p tsconfig.json` → `git add <paths>` → `git commit -m "..."` → `git push`.
+- **Deploy flow (LIVE = Hetzner/Coolify)**: the live site `league.simracing-hub.com` is served by **Coolify on a Hetzner CX23** (IP `5.75.174.170`); DB = **Coolify-managed Postgres** on the same box. DNS is a Cloudflare **`league` A-record → 5.75.174.170, DNS-only (grey cloud, NOT proxied)** — leave the apex/`www` GitHub-Pages records alone. Deploys are **NOT automatic**: push to `main`, then **trigger a redeploy in Coolify** (Coolify pulls `main` via a read-only GitHub **deploy key**; there is no push webhook). The sandboxed Claude environment cannot push — write a shell script to `outputs/` for the user to run. Coolify dashboard: `http://5.75.174.170:8000` → project "My first project" → app `league-manager`.
+- **Build specifics**: Coolify builds from `deploy/Dockerfile` (Next.js standalone — `output:"standalone"` in next.config). The runtime image ships the Prisma **client + query engine only, NOT the Prisma CLI**, so the container entrypoint just runs `node server.js` and does **not** apply schema. The app requires the env var **`HOSTNAME=0.0.0.0`** (set in Coolify) or Next binds to the container-id hostname and Traefik returns 502. All ~20 env vars (DATABASE_URL → internal Coolify PG, AUTH_*, DISCORD_*, CRON_SECRET, CAS_DISCORD_*, RESEND_*, IRLM_*, IRACING_*, BLOB_READ_WRITE_TOKEN, AUTH_URL, AUTH_TRUST_HOST, HOSTNAME) live in Coolify → app → Environment Variables.
+- **Vercel + Neon are DEAD** (decommissioned 2026-06-19). Ignore all old Vercel/Neon instructions, the Vercel MCP, and `outputs/trigger_vercel_deploy.sh`. The final Neon backup is `cls-final-backup.dump` (on the server at `/root/` and copied to Nextcloud). `@vercel/blob` is still used for uploads (works off-Vercel via `BLOB_READ_WRITE_TOKEN`).
+- **Standard footer for change scripts**: `npx tsc --noEmit -p tsconfig.json` → `git add <paths>` → `git commit -m "..."` → `git push` → **then redeploy in Coolify** (a push alone does NOT deploy).
 
-## CRITICAL: schema changes on Neon
+## CRITICAL: schema changes (Coolify Postgres)
 
 **Use `npx prisma db push`. Do NOT run `prisma migrate dev`.**
 
-The migration files in `prisma/migrations/` do not match Neon's actual schema state. `migrate dev` detects drift and offers `migrate reset`, which wipes all data. `db push` syncs the schema without touching migration history and is safe for additive changes (new columns with defaults, new indexes, new optional relations).
+The migration files in `prisma/migrations/` do not match the live database's actual schema state. `migrate dev` detects drift and offers `migrate reset`, which wipes all data. `db push` syncs the schema without touching migration history and is safe for additive changes (new columns with defaults, new indexes, new optional relations).
 
 After `db push`, run `npx prisma generate` to refresh the typed client.
+
+**Where to run it now (post-migration):** the runtime container has no Prisma CLI and the entrypoint does NOT apply schema, so schema changes must be pushed **manually from a full environment** against the live Coolify Postgres — e.g. from your Mac with `DATABASE_URL` set to the Coolify Postgres URL, or via a one-off `postgres`/`node` container on the `coolify` Docker network. Do this BEFORE (or right after) deploying code that depends on the new schema. The Coolify Postgres is internal-only by default; expose a port temporarily or run from inside the `coolify` network.
 
 ## Scripts directory
 
@@ -148,7 +151,7 @@ On JSON import, leagues in `CAR_ENFORCED_LEAGUE_SLUGS` (`cas-iec`, `cas-gt3-wct`
 - `src/lib/notify-reporting.ts:notifyReportingOpenForRound(roundId)` — pure helper, idempotent via `Round.reportingNotifiedAt`.
 - Cron endpoint: `/api/cron/notify-reporting-open` — requires `Authorization: Bearer ${CRON_SECRET}`. Has `runtime = "nodejs"`, `dynamic = "force-dynamic"`, `maxDuration = 60`.
 - Schedulers:
-  - `vercel.json` cron — daily at 09:00 UTC (Hobby tier ceiling)
+  - `vercel.json` cron — DEAD (Vercel decommissioned 2026-06-19). The GitHub Actions workflows below are now the only schedulers; they call the live `league.simracing-hub.com` endpoints with the `CRON_SECRET` (kept in sync between Coolify and the GitHub Actions repo secret).
   - `.github/workflows/cron-reporting-open.yml` — every 30 min, runs free on GitHub Actions
 - Team-mode change notifications use a similar pattern via `src/lib/actions/registrations.ts:notifyTeamChange`.
 
