@@ -396,11 +396,20 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
 
   // 3) Offer any still-open slots to the next waiting-list drivers (FIFO),
   //    skipping anyone already filling in or who declined this round.
+  //    GT3 WCT only: also skip drivers not flagged "Startberechtigt Round 1"
+  //    (eligibleRound1) — a brand-new, unclassified driver must be approved by
+  //    the admin before being auto-offered a freed race slot. Other leagues
+  //    ignore the flag, so the gate is scoped by league slug.
+  const enforceEligibility = round.season.league.slug === "cas-gt3-wct";
   let needed = openSlots - existing.length;
   if (needed > 0) {
     const alreadyFilling = new Set(existing.map((e) => e.registrationId));
     const candidates = await prisma.registration.findMany({
-      where: { seasonId: round.seasonId, ...WAITLIST_WHERE },
+      where: {
+        seasonId: round.seasonId,
+        ...WAITLIST_WHERE,
+        ...(enforceEligibility ? { eligibleRound1: true } : {}),
+      },
       orderBy: { createdAt: "asc" },
       select: { id: true, userId: true },
     });

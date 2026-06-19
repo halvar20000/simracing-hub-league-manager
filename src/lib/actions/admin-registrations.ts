@@ -295,6 +295,30 @@ export async function setRegistrationGdc(formData: FormData) {
   );
 }
 
+/**
+ * GT3 WCT only: toggle a driver's "Startberechtigt Round 1" (Eligible R1)
+ * flag. A waitlisted GT3 WCT driver is only auto-offered a freed round slot
+ * when this is true (see src/lib/waitlist.ts:reconcileFillInsForRound).
+ * Ignored for other leagues.
+ */
+export async function setRegistrationEligibleRound1(formData: FormData) {
+  await requireAdmin();
+  const registrationId = String(formData.get("registrationId") ?? "");
+  const value = String(formData.get("value") ?? "");
+  if (!registrationId) throw new Error("registrationId required");
+  if (value !== "YES" && value !== "NO") throw new Error("Invalid value");
+
+  const reg = await prisma.registration.update({
+    where: { id: registrationId },
+    data: { eligibleRound1: value === "YES" },
+    include: { season: { include: { league: true } } },
+  });
+
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+}
+
 export async function applyProAmToTargetSeason(formData: FormData) {
   await requireAdmin();
   const sourceSeasonId = String(formData.get("sourceSeasonId") ?? "");

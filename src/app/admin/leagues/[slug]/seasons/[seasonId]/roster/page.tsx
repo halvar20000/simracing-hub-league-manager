@@ -20,6 +20,7 @@ import {
 } from "@/lib/league-irating-category";
 import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
 import GdcToggle from "@/components/GdcToggle";
+import EligibleRound1Toggle from "@/components/EligibleRound1Toggle";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { SortableGroupedTableEnhancer } from "@/components/SortableGroupedTableEnhancer";
@@ -81,6 +82,10 @@ export default async function RosterPage({
   const showClassColumn = season.isMulticlass && !proAmIsClass;
   // GDC (Gentleman Driver Class) — opt-in parallel class, toggled per driver.
   const showGdcColumn = season.gdcEnabled;
+  // "Startberechtigt Round 1" (Eligible R1) — GT3 WCT only. Admin decides
+  // whether a brand-new, unclassified driver may be offered a freed race slot
+  // from the waiting list. Hidden for every other league.
+  const showEligibleR1Column = season.league.slug === "cas-gt3-wct";
 
   if (season.teamRegistration) {
     const teams = await prisma.team.findMany({
@@ -541,6 +546,15 @@ export default async function RosterPage({
               <th data-col="car" className="px-4 py-3 min-w-[15rem]">Car</th>
               {showProAmColumn && <th data-col="proam" className="px-2 py-3">Pro/Am</th>}
               {showGdcColumn && <th data-col="gdc" className="px-2 py-3">GDC</th>}
+              {showEligibleR1Column && (
+                <th
+                  data-col="eligibler1"
+                  className="px-2 py-3 whitespace-nowrap"
+                  title="Startberechtigt Round 1 — waiting-list drivers are only offered a freed race slot when this is set"
+                >
+                  Eligible R1
+                </th>
+              )}
               <th data-col="status" className="px-2 py-3">Status</th>
               {showFee && (
               <th data-col="fee" className="px-2 py-3">Fee</th>
@@ -592,6 +606,7 @@ export default async function RosterPage({
                 data-r-car={r.car?.name ?? ""}
                 data-r-proam={r.proAmClass ?? ""}
                 data-r-gdc={r.inGdc ? "GDC" : ""}
+                data-r-eligibler1={r.eligibleRound1 ? "Eligible" : "Not eligible"}
                 data-r-status={r.status}
                 data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
                 data-r-invsent={r.iracingInvitationSent === "YES" ? "Sent" : r.iracingInvitationSent === "NO" ? "Not sent" : "Pending"}
@@ -651,6 +666,14 @@ export default async function RosterPage({
                 {showGdcColumn && (
                   <td className="px-2 py-3">
                     <GdcToggle registrationId={r.id} value={r.inGdc} />
+                  </td>
+                )}
+                {showEligibleR1Column && (
+                  <td className="px-2 py-3">
+                    <EligibleRound1Toggle
+                      registrationId={r.id}
+                      value={r.eligibleRound1}
+                    />
                   </td>
                 )}
                 <td className="px-4 py-3">

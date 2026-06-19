@@ -347,6 +347,15 @@ model Registration {
   /// list order is by `createdAt` (registration date) ascending — first to
   /// register is first in line. Null = confirmed grid driver. See src/lib/waitlist.ts.
   waitlistedAt              DateTime?
+  /// GT3 WCT only: admin-set "Startberechtigt Round 1" flag. A brand-new
+  /// driver who raced neither last season nor the test race has no Pro/Am
+  /// classification yet, so the admin decides whether they may take a race
+  /// slot. Defaults to false (new registrations are NOT eligible until the
+  /// admin checks the box); existing GT3 WCT registrations were backfilled to
+  /// true. Gates the automatic waiting-list fill-in offer: a waitlisted GT3
+  /// WCT driver is only DM'd a freed round slot when this is true
+  /// (src/lib/waitlist.ts:reconcileFillInsForRound). Ignored for other leagues.
+  eligibleRound1            Boolean          @default(false)
   startingFeePaid           AdminCheckStatus @default(NO)
   iracingInvitationSent     AdminCheckStatus @default(NO)
   iracingInvitationAccepted AdminCheckStatus @default(NO)
