@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.10.1",
+    date: "2026-06-19",
+    changes: [
+      "Infrastructure: CLS now runs on a self-hosted Hetzner server (managed with Coolify), moved off Vercel and Neon. Same site and features — just a new, fully self-hosted home.",
+    ],
+  },
+  {
     version: "1.10.0",
     date: "2026-06-19",
     changes: [
