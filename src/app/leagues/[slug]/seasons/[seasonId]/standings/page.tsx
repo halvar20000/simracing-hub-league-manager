@@ -337,7 +337,7 @@ export default async function StandingsPage({
         </section>
       )}
 
-      {!isTeamEventSeason && cls === "combined" && season.isMulticlass && season.carClasses.length > 0 &&
+      {!isTeamEventSeason && cls === "combined" && !perCarTabs && season.isMulticlass && season.carClasses.length > 0 &&
         season.carClasses.map((cc) => {
           const carsInClass = cars.filter(
             (c) => (c.carClassShortCode ?? "").toUpperCase() === cc.shortCode.toUpperCase()
