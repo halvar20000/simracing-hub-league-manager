@@ -26,12 +26,18 @@ import {
 const LEAGUE_TIME_ZONE = "Europe/Berlin";
 
 /**
- * Search window around the race start: a stream VOD's publish instant is
- * roughly when the broadcast went live (sometimes a pre-show before the
- * green flag, and the VOD lingers as it's processed afterwards).
+ * Date windows (in days) around the race. Channels often RE-UPLOAD the stream
+ * as a VOD hours-to-days after the race (CAS uploads the Twitch recording the
+ * next day, at arbitrary times), so the publish time is NOT a reliable "live"
+ * timestamp. We therefore match mainly by TITLE (round number + track) within a
+ * generous window, and only fall back to pure date proximity for channels whose
+ * titles carry no useful info. The window's job is just to keep us in the right
+ * season (same round-number+track repeats across seasons, months apart).
  */
-const WINDOW_BEFORE_H = 12;
-const WINDOW_AFTER_H = 18;
+const WINDOW_TITLE_DAYS = 45; // title round# + track match
+const WINDOW_TRACK_DAYS = 30; // track-only match
+const WINDOW_ROUND_DAYS = 4; // round#-only match (weak: repeats across series)
+const WINDOW_DATE_DAYS = 1.5; // last-resort date-only match
 
 /** How far back the cron sweep looks for completed rounds still missing a video. */
 export const MATCH_LOOKBACK_DAYS = 45;
@@ -84,32 +90,86 @@ function norm(s: string): string {
 }
 
 /**
- * Title-relevance bonus (in "hours" so it can offset the time-distance score).
- * Rewards titles that name the round number or the track — useful when a
- * channel posts several videos on race day.
+ * Pull the round number out of a video title. Handles the German "Lauf N"
+ * (CAS uses this) plus English "Round N" / "Race N" / "RN". Returns null if
+ * none is present (e.g. a "Finale …" title).
  */
-function titleBonusHours(
-  title: string,
+function parseRoundNumber(title: string): number | null {
+  const t = norm(title);
+  const m =
+    t.match(/\blauf\s*(\d{1,2})\b/) ||
+    t.match(/\bround\s*(\d{1,2})\b/) ||
+    t.match(/\brace\s*(\d{1,2})\b/) ||
+    t.match(/\br(\d{1,2})\b/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// Words that appear in titles/track names but don't identify a venue.
+const TRACK_STOPWORDS = new Set([
+  "the", "gp", "circuit", "international", "speedway", "grand", "prix",
+  "street", "park", "raceway", "motorsport", "motor", "sim", "tv", "cas",
+  "gt3", "gt4", "wct", "iec", "pccd", "sfl", "tss", "season", "finale",
+  "lauf", "round", "race", "und", "der", "die",
+]);
+
+/**
+ * True if the title mentions the round's track. Driven by the (short) track
+ * name's own tokens: every venue word of 3+ chars that isn't a stopword must
+ * appear somewhere in the title. e.g. track "Spa-Francorchamps" → token "spa".
+ */
+function trackMatches(title: string, track: string): boolean {
+  const t = norm(title);
+  const tokens = norm(track)
+    .split(" ")
+    .filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !TRACK_STOPWORDS.has(w));
+  return tokens.length > 0 && tokens.some((w) => t.includes(w));
+}
+
+/**
+ * Pick the best upload for a round. CAS re-uploads stream VODs days after the
+ * race with clean titles ("Lauf 11 CAS - GT3 WCT - Thruxton Circuit"), so we
+ * rank by title match first and use the date only to stay in the right season.
+ * Tiers (best first):
+ *   3  round number AND track match  (±45d)
+ *   2  track match                   (±30d)
+ *   1  round number match            (±4d — weak: numbers repeat across series)
+ *   0  date proximity only           (±1.5d — channels with uninformative titles)
+ * Within a tier, the upload closest to the race date wins.
+ */
+export function pickBestUpload(
+  uploads: YoutubeUpload[],
+  raceInstant: Date,
   roundNumber: number,
   track: string
-): number {
-  const t = norm(title);
-  let bonus = 0;
-  // Round number: "r5", "round 5", "race 5".
-  const rn = String(roundNumber);
-  if (
-    new RegExp(`\\br${rn}\\b`).test(t) ||
-    new RegExp(`\\bround ${rn}\\b`).test(t) ||
-    new RegExp(`\\brace ${rn}\\b`).test(t)
-  ) {
-    bonus += 6;
+): YoutubeUpload | null {
+  const startMs = raceInstant.getTime();
+  const DAY = 86_400_000;
+
+  let best: { up: YoutubeUpload; tier: number; absDays: number } | null = null;
+  for (const up of uploads) {
+    const pub = new Date(up.publishedAt).getTime();
+    if (Number.isNaN(pub)) continue;
+    const absDays = Math.abs(pub - startMs) / DAY;
+
+    const rnMatch = parseRoundNumber(up.title) === roundNumber;
+    const tkMatch = trackMatches(up.title, track);
+
+    let tier = -1;
+    if (rnMatch && tkMatch && absDays <= WINDOW_TITLE_DAYS) tier = 3;
+    else if (tkMatch && absDays <= WINDOW_TRACK_DAYS) tier = 2;
+    else if (rnMatch && absDays <= WINDOW_ROUND_DAYS) tier = 1;
+    else if (absDays <= WINDOW_DATE_DAYS) tier = 0;
+    if (tier < 0) continue;
+
+    if (
+      !best ||
+      tier > best.tier ||
+      (tier === best.tier && absDays < best.absDays)
+    ) {
+      best = { up, tier, absDays };
+    }
   }
-  // Track: any track word of 4+ chars appearing in the title.
-  const trackWords = norm(track)
-    .split(" ")
-    .filter((w) => w.length >= 4);
-  if (trackWords.some((w) => t.includes(w))) bonus += 6;
-  return bonus;
+  return best?.up ?? null;
 }
 
 export type MatchResult =
@@ -126,31 +186,6 @@ export type MatchResult =
         | "api-error";
       detail?: string;
     };
-
-/** Pick the best upload for a race start from a pre-fetched upload list. */
-export function pickBestUpload(
-  uploads: YoutubeUpload[],
-  raceInstant: Date,
-  roundNumber: number,
-  track: string
-): YoutubeUpload | null {
-  const startMs = raceInstant.getTime();
-  const before = WINDOW_BEFORE_H * 3600_000;
-  const after = WINDOW_AFTER_H * 3600_000;
-
-  let best: { up: YoutubeUpload; score: number } | null = null;
-  for (const up of uploads) {
-    const pub = new Date(up.publishedAt).getTime();
-    if (Number.isNaN(pub)) continue;
-    const diffMs = pub - startMs;
-    if (diffMs < -before || diffMs > after) continue; // outside window
-    const distH = Math.abs(diffMs) / 3600_000;
-    // Lower is better: time distance minus title relevance.
-    const score = distH - titleBonusHours(up.title, roundNumber, track);
-    if (!best || score < best.score) best = { up, score };
-  }
-  return best?.up ?? null;
-}
 
 /**
  * Match (and store) a YouTube VOD for one round.
@@ -197,7 +232,7 @@ export async function matchYoutubeForRound(
             : "api-error";
       return { ok: false, reason, detail: playlist.detail };
     }
-    const list = await listRecentUploads(playlist.data, 50);
+    const list = await listRecentUploads(playlist.data, 100);
     if (!list.ok) {
       const reason = list.reason === "no-key" ? "no-key" : "api-error";
       opts.uploadsCache?.set(channel, null);
