@@ -212,7 +212,7 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - **Matcher**: `src/lib/match-youtube.ts` (pure, not `"use server"`) — `pickBestUpload` scores uploads by publish-time distance to the race start (window −12h/+18h) minus a title bonus for round-number/track mentions; `matchYoutubeForRound(roundId,{force,uploadsCache})` stores the pick; `matchYoutubeForRecentRounds()` is the cron sweep (COMPLETED rounds in the last `MATCH_LOOKBACK_DAYS`=45, channel set, video null). Race start is `reinterpretLocalAsZone(startsAt,"Europe/Berlin")` (naive-walltime convention — see [[project_cls_naive_walltime]]).
 - **Cron**: `/api/cron/youtube-match` (Bearer `CRON_SECRET`) + `.github/workflows/cron-youtube-match.yml` (every 3h).
 - **Admin actions**: `src/lib/actions/race-videos.ts` — `matchYoutubeAction` ("📺 Match YouTube" button, force) and `setRoundYoutubeAction` (paste URL/ID or clear). Round page shows a thumbnail + status panel; redirect status flag is `yt=`.
-- **Public**: embedded player section at the top of the round results page when `youtubeVideoId` is set.
+- **Public**: embedded player section at the top of the round results page when `youtubeVideoId` is set. Plus a site-wide **`/streams`** page (`src/app/streams/page.tsx`, linked in `nav.tsx`) listing every COMPLETED round with a `youtubeVideoId` across non-archived leagues, newest first, as thumbnail cards linking straight to YouTube, with `?league=<slug>` filter chips.
 
 ## Logos
 

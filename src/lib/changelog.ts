@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.12.0",
+    date: "2026-06-20",
+    changes: [
+      "New “Streams” page in the top menu: every race-stream replay across all leagues in one place, newest first, with thumbnails and a direct link to each YouTube video. Filter by league with the chips at the top.",
+    ],
+  },
+  {
     version: "1.11.3",
     date: "2026-06-20",
     changes: [
