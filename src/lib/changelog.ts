@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.11.2",
+    date: "2026-06-20",
+    changes: [
+      "Race stream matching now scans the whole YouTube channel (not just the ~100 newest videos), so earlier rounds of past seasons are found too, and it understands the “5. Lauf” title spelling in addition to “Lauf 5”.",
+    ],
+  },
+  {
     version: "1.11.1",
     date: "2026-06-20",
     changes: [

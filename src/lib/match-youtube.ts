@@ -95,12 +95,15 @@ function norm(s: string): string {
  * none is present (e.g. a "Finale …" title).
  */
 function parseRoundNumber(title: string): number | null {
-  const t = norm(title);
+  const t = norm(title); // lowercased; non-alphanumerics become spaces
   const m =
-    t.match(/\blauf\s*(\d{1,2})\b/) ||
-    t.match(/\bround\s*(\d{1,2})\b/) ||
-    t.match(/\brace\s*(\d{1,2})\b/) ||
-    t.match(/\br(\d{1,2})\b/);
+    t.match(/\blauf\s*(\d{1,2})\b/) || // "Lauf 5"
+    t.match(/\b(\d{1,2})\s*lauf\b/) || // "5. Lauf" -> "5 lauf"
+    t.match(/\brunde\s*(\d{1,2})\b/) || // "Runde 5"
+    t.match(/\bround\s*(\d{1,2})\b/) || // "Round 5"
+    t.match(/\b(\d{1,2})\s*round\b/) || // "5. Round"
+    t.match(/\brace\s*(\d{1,2})\b/) || // "Race 5"
+    t.match(/\br(\d{1,2})\b/); // "R5"
   return m ? parseInt(m[1], 10) : null;
 }
 
@@ -232,7 +235,10 @@ export async function matchYoutubeForRound(
             : "api-error";
       return { ok: false, reason, detail: playlist.detail };
     }
-    const list = await listRecentUploads(playlist.data, 100);
+    // Fetch deep enough to cover the whole channel (paging stops at the end,
+    // so this is "all uploads" for channels up to 500 videos). Needed because
+    // older seasons' early rounds sit far down a busy channel's upload list.
+    const list = await listRecentUploads(playlist.data, 500);
     if (!list.ok) {
       const reason = list.reason === "no-key" ? "no-key" : "api-error";
       opts.uploadsCache?.set(channel, null);
