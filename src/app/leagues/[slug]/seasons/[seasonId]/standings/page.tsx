@@ -134,7 +134,11 @@ export default async function StandingsPage({
       ? computeDriverStandings(prisma, seasonId, [latestRound.id], previewOpts)
       : Promise.resolve(null as DriverStanding[] | null),
     computeTeamStandings(prisma, seasonId, previewOpts),
-  computeCarStandings(prisma, seasonId, previewOpts),
+  computeCarStandings(prisma, seasonId, {
+    ...previewOpts,
+    // Combined Cup: participation counts only toward the Combined standing.
+    excludeParticipation: slug === "cas-combined-cup",
+  }),
   computeTeamClassStandings(prisma, seasonId, previewOpts),
   ]);
 

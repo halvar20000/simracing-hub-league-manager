@@ -73,6 +73,10 @@ export interface TeamStanding {
  */
 export type StandingsOptions = {
   includeUnpublishedRounds?: boolean;
+  /** Per-car standings only: when true, participation points are NOT added to
+   *  the per-car total (race points − penalties + corrections). Participation
+   *  is a Combined-championship-only bonus for the Combined Cup. */
+  excludeParticipation?: boolean;
 };
 
 export async function computeDriverStandings(
@@ -586,6 +590,11 @@ export async function computeTeamStandings(
   // participation, no manual penalty deduction).
   const rawOnly = !!season.teamScoringRawOnly;
 
+  // Combined Cup: participation is a Combined-championship-only bonus, so a
+  // driver's team contribution excludes it — but penalties still reduce it
+  // (unlike rawOnly, which drops both). Contribution = raw − manual penalty.
+  const excludeParticipation = season.league.slug === "cas-combined-cup";
+
   const rounds = await prisma.round.findMany({
     where: { seasonId, ...completedRoundWhere },
     include: {
@@ -635,6 +644,8 @@ export async function computeTeamStandings(
       if (!teamId) continue;
       const points = rawOnly
         ? r.rawPointsAwarded
+        : excludeParticipation
+        ? r.rawPointsAwarded - r.manualPenaltyPoints
         : r.rawPointsAwarded +
           r.participationPointsAwarded -
           r.manualPenaltyPoints;
@@ -837,7 +848,10 @@ export async function computeCarStandings(
     const drivers: CarStandingDriver[] = [];
     let totalPoints = 0;
     for (const [regId, b] of car.drivers.entries()) {
-      const total = b.raw + b.participation - b.manual + b.correction;
+      // Combined Cup excludes participation from the per-car championship
+      // (participation only counts toward the Combined standing).
+      const participationForTotal = opts.excludeParticipation ? 0 : b.participation;
+      const total = b.raw + participationForTotal - b.manual + b.correction;
       totalPoints += total;
       drivers.push({
         registrationId: regId,
