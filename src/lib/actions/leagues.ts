@@ -156,6 +156,11 @@ export async function updateLeague(id: string, formData: FormData) {
     String(formData.get("discordStreamChannelId") ?? "").trim() || null;
   const twitchUrl = String(formData.get("twitchUrl") ?? "").trim() || null;
 
+  // YouTube channel for auto-linking each round's stream VOD. Stored as the
+  // admin typed it (an @handle or a "UC…" channel ID); resolved at match time.
+  const youtubeChannelId =
+    String(formData.get("youtubeChannelId") ?? "").trim() || null;
+
   // Discord results-post + new-member welcome bot config.
   const discordResultsChannelId =
     String(formData.get("discordResultsChannelId") ?? "").trim() || null;
@@ -246,6 +251,7 @@ export async function updateLeague(id: string, formData: FormData) {
       discordEmbedColor,
       discordStreamChannelId,
       twitchUrl,
+      youtubeChannelId,
       discordResultsChannelId,
       discordWelcomeChannelId,
       discordWelcomeMessage,

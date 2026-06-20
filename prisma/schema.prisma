@@ -153,6 +153,13 @@ model League {
   /// override this; if both are unset the embed has no Twitch link.
   twitchUrl              String?
 
+  /// YouTube channel the league's races are streamed on — accepts a
+  /// channel ID ("UC…") OR an @handle (e.g. "@cas-tech-performance7363").
+  /// Used by the YouTube auto-match cron (src/lib/match-youtube.ts) to find
+  /// the stream VOD for a completed round and link it on the round page.
+  /// Null = auto-matching off for this league. Requires YOUTUBE_API_KEY.
+  youtubeChannelId       String?
+
   /// Optional public Garage 61 team URL for the league. Rendered as a
   /// small "Garage 61 team →" link on league / season pages so members
   /// can jump straight to the shared setups + practice laps.
@@ -300,6 +307,16 @@ model Round {
 
   // Per-round Race Center — narrative, curated cards, charts, replay (1:1).
   raceCenter RaceCenter?
+
+  /// YouTube video ID (11 chars) of the race-stream VOD for this round,
+  /// embedded on the public round page. Set automatically by the YouTube
+  /// auto-match cron (src/lib/match-youtube.ts) from League.youtubeChannelId,
+  /// or pasted/cleared manually by an admin. A manual value is never
+  /// overwritten by the cron (the cron only fills rounds where this is null).
+  youtubeVideoId   String?
+  /// When the video was linked (auto-match run or manual save). Doubles as
+  /// the cron's idempotency marker.
+  youtubeMatchedAt DateTime?
 
   @@unique([seasonId, roundNumber])
 }

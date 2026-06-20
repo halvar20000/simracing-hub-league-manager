@@ -590,6 +590,24 @@ export default async function PublicRoundResults({
         </div>
       </div>
 
+      {round.youtubeVideoId && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-zinc-300">
+            📺 Race stream
+          </h2>
+          <div className="relative w-full overflow-hidden rounded-lg border border-zinc-800 bg-black pt-[56.25%]">
+            <iframe
+              className="absolute inset-0 h-full w-full"
+              src={`https://www.youtube-nocookie.com/embed/${round.youtubeVideoId}`}
+              title="Race stream replay"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+        </section>
+      )}
+
       {isAdminViewer && !resultsPublished && hasAnyResults && (
         <div className="rounded border border-orange-500/60 bg-orange-500/10 px-4 py-3 text-sm text-orange-200">
           <span className="font-semibold">Preview — admin only.</span>{" "}

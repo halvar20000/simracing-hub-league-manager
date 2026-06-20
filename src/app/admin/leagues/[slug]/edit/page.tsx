@@ -221,6 +221,23 @@ export default async function EditLeaguePage({
             </label>
             <label className="block flex-1 min-w-[16rem]">
               <span className="mb-1 block text-xs text-zinc-400">
+                YouTube channel — auto-link race stream (optional)
+              </span>
+              <input
+                name="youtubeChannelId"
+                type="text"
+                defaultValue={league.youtubeChannelId ?? ""}
+                placeholder="@cas-tech-performance7363 or UC…"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+              <span className="mt-1 block text-[11px] text-zinc-500">
+                Channel @handle (from the channel URL) or ID. A cron finds the
+                stream VOD for each completed round and embeds it on the round
+                page. Requires <code>YOUTUBE_API_KEY</code> in env.
+              </span>
+            </label>
+            <label className="block flex-1 min-w-[16rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
                 Garage 61 team URL (optional)
               </span>
               <input

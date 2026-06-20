@@ -34,6 +34,8 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 
 **Where to run it now (post-migration):** the runtime container has no Prisma CLI and the entrypoint does NOT apply schema, so schema changes must be pushed **manually from a full environment** against the live Coolify Postgres — e.g. from your Mac with `DATABASE_URL` set to the Coolify Postgres URL, or via a one-off `postgres`/`node` container on the `coolify` Docker network. Do this BEFORE (or right after) deploying code that depends on the new schema. The Coolify Postgres is internal-only by default; expose a port temporarily or run from inside the `coolify` network.
 
+**Heads-up (2026-06): the local `.env`/`.env.local` still point at the DEAD Neon DB** (read-only), so `prisma db push` from the Mac fails with `cannot execute ... in a read-only transaction` and would target the wrong DB anyway. Until those are repointed, apply additive DDL directly on the server's CLS Postgres container and deploy the code with `SKIP_DB_PUSH=1`. SSH (key, not password): `ssh -i ~/.ssh/hetzner_cls root@5.75.174.170`. Find the container whose DB has a `Round` table (not Coolify's own DB), then `docker exec -i <c> sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'` and run `ALTER TABLE "X" ADD COLUMN IF NOT EXISTS ...`.
+
 ## Scripts directory
 
 - TS/Node one-offs go in `scripts/` (not `/tmp`). `tsx` resolves `@prisma/client` relative to the script file's location — keeping scripts inside the project means `node_modules` is reachable.
@@ -200,6 +202,17 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - REST helpers in `src/lib/discord-bot.ts`: `listGuildScheduledEvents`, `createGuildScheduledEvent` (EXTERNAL, privacy_level 2), `modifyGuildScheduledEvent`. The league logo (`League.logoUrl` → `resolveLogoUrl` → fetched + base64 by `fetchLogoDataUri`) is sent as the event cover `image`; failures degrade gracefully to no image.
 - Triggers: cron `/api/cron/discord-race-events` (Bearer `CRON_SECRET`) + `.github/workflows/cron-discord-race-events.yml` (every 6h); manual `createRaceEventAction` ("📅 Discord event" button on the admin round page, `force=true`).
 - Gating: any league with `League.discordGuildId` set; round `UPCOMING`, season `OPEN_REGISTRATION`/`ACTIVE`, start within the horizon. **The bot must have the `MANAGE_EVENTS` permission** in the guild (ask Andreas — see [[project_cas_discord_admin]]).
+
+## YouTube race-stream auto-match (all leagues)
+
+- Links each completed round to its stream VOD and embeds a `youtube-nocookie` player on the public round page.
+- **Config**: `League.youtubeChannelId` (an `@handle` e.g. `@cas-tech-performance7363`, or a `UC…` channel ID) on the admin league-edit page. Null = off for that league. Requires env var **`YOUTUBE_API_KEY`** (Google Cloud YouTube Data API v3 key).
+- **Schema**: `Round.youtubeVideoId` (11-char ID) + `Round.youtubeMatchedAt`. The cron only fills rounds where `youtubeVideoId` is null, so a manually pasted link is never clobbered.
+- **API client**: `src/lib/youtube.ts` — `resolveUploadsPlaylistId` (channels.list, handles `@handle`/`UC…`), `listRecentUploads` (playlistItems.list), `extractYoutubeVideoId` (URL/ID parser for manual paste).
+- **Matcher**: `src/lib/match-youtube.ts` (pure, not `"use server"`) — `pickBestUpload` scores uploads by publish-time distance to the race start (window −12h/+18h) minus a title bonus for round-number/track mentions; `matchYoutubeForRound(roundId,{force,uploadsCache})` stores the pick; `matchYoutubeForRecentRounds()` is the cron sweep (COMPLETED rounds in the last `MATCH_LOOKBACK_DAYS`=45, channel set, video null). Race start is `reinterpretLocalAsZone(startsAt,"Europe/Berlin")` (naive-walltime convention — see [[project_cls_naive_walltime]]).
+- **Cron**: `/api/cron/youtube-match` (Bearer `CRON_SECRET`) + `.github/workflows/cron-youtube-match.yml` (every 3h).
+- **Admin actions**: `src/lib/actions/race-videos.ts` — `matchYoutubeAction` ("📺 Match YouTube" button, force) and `setRoundYoutubeAction` (paste URL/ID or clear). Round page shows a thumbnail + status panel; redirect status flag is `yt=`.
+- **Public**: embedded player section at the top of the round results page when `youtubeVideoId` is set.
 
 ## Logos
 

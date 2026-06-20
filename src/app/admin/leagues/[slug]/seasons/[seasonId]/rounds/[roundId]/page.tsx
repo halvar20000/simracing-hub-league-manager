@@ -9,6 +9,7 @@ import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
 import { PullFromIRLMButton } from "@/components/PullFromIRLMButton";
 import { setRoundPublished } from "@/lib/actions/rounds";
 import { createRaceEventAction } from "@/lib/actions/race-events";
+import { matchYoutubeAction, setRoundYoutubeAction } from "@/lib/actions/race-videos";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { formatDateTime } from "@/lib/date";
 import { compareStartNumber } from "@/lib/start-number";
@@ -26,11 +27,13 @@ export default async function AdminRoundResults({
     unpublished?: string;
     event?: string;
     eventDetail?: string;
+    yt?: string;
+    ytDetail?: string;
   }>;
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
-  const { imported, skipped, cls: clsRaw, published, unpublished, event, eventDetail } =
+  const { imported, skipped, cls: clsRaw, published, unpublished, event, eventDetail, yt, ytDetail } =
     await searchParams;
   type Cls = "combined" | "pro" | "am" | "team";
   const cls: Cls =
@@ -172,6 +175,18 @@ export default async function AdminRoundResults({
             >
               📡 Stream announcement
             </Link>
+            {round.season.league.youtubeChannelId && (
+              <form action={matchYoutubeAction}>
+                <input type="hidden" name="slug" value={slug} />
+                <input type="hidden" name="seasonId" value={seasonId} />
+                <input type="hidden" name="roundId" value={roundId} />
+                <SubmitWithSpinner
+                  label="📺 Match YouTube"
+                  pendingLabel="Searching…"
+                  className="rounded border border-red-700/60 bg-red-950/30 px-3 py-1.5 text-sm text-red-200 hover:bg-red-900/40"
+                />
+              </form>
+            )}
             <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/race-center`}
               className="rounded border border-red-700/60 bg-red-950/30 px-3 py-1.5 text-sm text-red-200 hover:bg-red-900/40"
@@ -239,6 +254,100 @@ export default async function AdminRoundResults({
           </div>
         )
       )}
+
+      {yt && (
+        yt.startsWith("failed") ? (
+          <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
+            <p>
+              {yt === "failed:no-candidate"
+                ? "No stream video found in the time window around this race. The VOD may not be up yet — try again later, or paste the link manually below."
+                : yt === "failed:not-configured"
+                  ? "This league has no YouTube channel set. Add it on the league edit page."
+                  : yt === "failed:no-key"
+                    ? "YOUTUBE_API_KEY is not set in the environment."
+                    : yt === "failed:channel-not-found"
+                      ? "Could not resolve the league's YouTube channel — check the @handle / channel ID on the league edit page."
+                      : yt === "failed:bad-url"
+                        ? "That doesn't look like a YouTube URL or video ID."
+                        : `Could not match a YouTube video (${yt.replace("failed:", "")}).`}
+            </p>
+            {ytDetail && (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-red-950/60 p-2 text-xs text-red-300">
+                {ytDetail}
+              </pre>
+            )}
+          </div>
+        ) : (
+          <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
+            {yt === "cleared"
+              ? "Stream video cleared."
+              : yt === "yt-unchanged"
+                ? "Already linked to the best-matching video — no change."
+                : "Stream video linked — it now embeds on the public round page."}
+          </div>
+        )
+      )}
+
+      <section className="rounded border border-zinc-800 bg-zinc-900/50 p-4">
+        <h2 className="text-sm font-semibold text-zinc-200">📺 Stream video</h2>
+        {round.youtubeVideoId ? (
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <a
+              href={`https://www.youtube.com/watch?v=${round.youtubeVideoId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`https://i.ytimg.com/vi/${round.youtubeVideoId}/mqdefault.jpg`}
+                alt="Stream thumbnail"
+                className="h-16 w-28 rounded object-cover"
+              />
+            </a>
+            <span className="text-xs text-zinc-400">
+              Linked video{" "}
+              <code className="rounded bg-zinc-800 px-1.5 py-0.5">
+                {round.youtubeVideoId}
+              </code>
+              {round.youtubeMatchedAt && (
+                <span className="ml-1 text-zinc-500">
+                  · {formatDateTime(round.youtubeMatchedAt)}
+                </span>
+              )}
+            </span>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-zinc-500">
+            No stream video linked yet.
+            {round.season.league.youtubeChannelId
+              ? " Use “📺 Match YouTube” above to auto-find it, or paste a link below."
+              : " Set the league's YouTube channel to enable auto-matching, or paste a link below."}
+          </p>
+        )}
+        <form action={setRoundYoutubeAction} className="mt-3 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="slug" value={slug} />
+          <input type="hidden" name="seasonId" value={seasonId} />
+          <input type="hidden" name="roundId" value={roundId} />
+          <label className="block flex-1 min-w-[16rem]">
+            <span className="mb-1 block text-xs text-zinc-400">
+              Paste YouTube URL or video ID (leave empty + save to clear)
+            </span>
+            <input
+              name="youtubeUrl"
+              type="text"
+              defaultValue=""
+              placeholder="https://www.youtube.com/watch?v=…"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <SubmitWithSpinner
+            label="Save"
+            pendingLabel="Saving…"
+            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+          />
+        </form>
+      </section>
 
       {!isPublished && (
         <div className="rounded border border-orange-500/40 bg-orange-500/5 p-3 text-sm text-orange-200/90">
