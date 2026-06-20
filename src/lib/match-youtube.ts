@@ -39,8 +39,14 @@ const WINDOW_TRACK_DAYS = 30; // track-only match
 const WINDOW_ROUND_DAYS = 4; // round#-only match (weak: repeats across series)
 const WINDOW_DATE_DAYS = 1.5; // last-resort date-only match
 
-/** How far back the cron sweep looks for completed rounds still missing a video. */
-export const MATCH_LOOKBACK_DAYS = 45;
+/**
+ * How far back the cron sweep looks for completed rounds still missing a video.
+ * Set to cover a whole season (~3-4 months) so the routine cron / a plain manual
+ * run picks up every round of the current season without needing the ?days
+ * override. Already-matched rounds are skipped, so a wide window is cheap. Use
+ * the ?days override only to reach further-back seasons.
+ */
+export const MATCH_LOOKBACK_DAYS = 150;
 
 /** How DST-aware-many ms a timezone is ahead of UTC at a given instant. */
 function zoneOffsetMs(at: Date, timeZone: string): number {

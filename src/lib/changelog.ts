@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.11.3",
+    date: "2026-06-20",
+    changes: [
+      "Race stream matching now looks back across the whole current season by default (previously only ~45 days), so all of a season's rounds get their YouTube stream linked automatically — not just the most recent few.",
+    ],
+  },
+  {
     version: "1.11.2",
     date: "2026-06-20",
     changes: [
