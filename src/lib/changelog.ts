@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.13.0",
+    date: "2026-06-20",
+    changes: [
+      "Combined Cup standings now have a dedicated tab for each car (BMW M2, Ray F1600, SpecRacer Ford) alongside the Combined and Team tabs, so you can see the championship for one car at a glance. Every race counts in the per-car standings — the combined drop-week doesn't apply there.",
+    ],
+  },
+  {
     version: "1.12.0",
     date: "2026-06-20",
     changes: [

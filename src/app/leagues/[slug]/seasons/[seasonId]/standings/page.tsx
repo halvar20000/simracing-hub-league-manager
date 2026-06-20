@@ -53,10 +53,10 @@ export default async function StandingsPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
-  searchParams: Promise<{ view?: string; cls?: string }>;
+  searchParams: Promise<{ view?: string; cls?: string; car?: string }>;
 }) {
   const { slug, seasonId } = await params;
-  const { view: viewRaw, cls: clsRaw } = await searchParams;
+  const { view: viewRaw, cls: clsRaw, car: carRaw } = await searchParams;
   const view: ViewMode = viewRaw === "races" ? "races" : "list";
   type Cls = "combined" | "pro" | "am" | "gdc" | "team" | "car";
   // IEC: collapse all tabs to team view (no driver/per-car views).
@@ -79,9 +79,21 @@ export default async function StandingsPage({
       league: true,
       scoringSystem: true,
       carClasses: { orderBy: { displayOrder: "asc" } },
+      cars: { orderBy: { displayOrder: "asc" } },
     },
   });
   if (!season || season.league.slug !== slug) notFound();
+
+  // Combined Cup: show one top-level standings tab per car (BMW M2 / Ray
+  // F1600 / SpecRacer Ford) instead of the shared single "By Car" tab. The
+  // tab list is sourced from the season's Car rows so the tabs appear even
+  // before any results are imported. Other leagues keep the single By Car tab.
+  const perCarTabs = slug === "cas-combined-cup" && season.cars.length > 0;
+  // Which car is selected when cls === "car" (defaults to the first car).
+  const selectedCarId =
+    perCarTabs && (carRaw && season.cars.some((c) => c.id === carRaw)
+      ? carRaw
+      : season.cars[0]?.id) || undefined;
 
   // Publish gate: standings only reflect COMPLETED rounds for the public.
   // Admins/stewards preview the pending round (and its standings impact)
@@ -230,10 +242,22 @@ export default async function StandingsPage({
           {season.gdcEnabled && (
             <Link href={`${baseHref}?cls=gdc${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "gdc" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>GDC</Link>
           )}
+          {perCarTabs &&
+            season.cars.map((c) => (
+              <Link
+                key={c.id}
+                href={`${baseHref}?cls=car&car=${c.id}`}
+                className={`rounded px-3 py-1.5 ${cls === "car" && selectedCarId === c.id ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+              >
+                {c.name}
+              </Link>
+            ))}
           {showTeams && (
             <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Team</Link>
           )}
-          <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>By Car</Link>
+          {!perCarTabs && (
+            <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>By Car</Link>
+          )}
         </div>
       </div>
 
@@ -403,7 +427,37 @@ export default async function StandingsPage({
         })}
 
 
-      {!isTeamEventSeason && cls === "car" && (
+      {/* Combined Cup: one tab per car — render only the selected car. */}
+      {!isTeamEventSeason && cls === "car" && perCarTabs && (() => {
+        const seasonCar = season.cars.find((c) => c.id === selectedCarId);
+        const carStanding = cars.find((c) => c.carId === selectedCarId);
+        return (
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-lg font-semibold">
+                {seasonCar?.name ?? "Car"} Championship
+              </h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Every race in this car counts — the combined drop-week does not
+                apply to the per-car standings.
+              </p>
+            </div>
+            {carStanding && carStanding.drivers.length > 0 ? (
+              <div className="overflow-hidden rounded border border-zinc-800">
+                <CarDriversTable drivers={carStanding.drivers} />
+              </div>
+            ) : (
+              <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
+                No results yet for {seasonCar?.name ?? "this car"}. Results are
+                car-tagged automatically when an iRacing JSON file is imported.
+              </p>
+            )}
+          </section>
+        );
+      })()}
+
+      {/* Other leagues: single "By Car" tab listing every car. */}
+      {!isTeamEventSeason && cls === "car" && !perCarTabs && (
         <section className="space-y-4">
           {cars.length === 0 ? (
             <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
@@ -433,42 +487,7 @@ export default async function StandingsPage({
                   </span>
                 </summary>
                 <div className="border-t border-zinc-800">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
-                      <tr>
-                        <th className="px-3 py-2 w-10">Pos</th>
-                        <th className="px-3 py-2 driver-col">Driver</th>
-                        <th className="px-3 py-2">Team</th>
-                        <th className="px-3 py-2 text-right">Rounds</th>
-                        <th className="px-3 py-2 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {car.drivers.map((d, i) => (
-                        <tr key={d.registrationId} className="border-t border-zinc-800">
-                          <td className="px-3 py-2 font-medium">{i + 1}</td>
-                          <td className="px-3 py-2 driver-col">
-                            <span className="inline-flex items-center gap-2">
-                              <CountryFlag code={d.countryCode} />
-                              {d.startNumber != null && (
-                                <span className="text-xs text-zinc-500">
-                                  #{d.startNumber}
-                                </span>
-                              )}
-                              <span>
-                                {d.driverFirstName} {d.driverLastName}
-                              </span>
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-zinc-400">{d.teamName ?? "—"}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{d.roundsCompleted}</td>
-                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                            {d.combinedTotal}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <CarDriversTable drivers={car.drivers} />
                 </div>
               </details>
             ))
@@ -888,6 +907,47 @@ function GdcTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Per-car driver table (shared by the Combined Cup per-car tabs and the
+ *  generic "By Car" tab). Drivers are already sorted by combinedTotal. */
+function CarDriversTable({ drivers }: { drivers: CarStanding["drivers"] }) {
+  return (
+    <table className="w-full text-sm">
+      <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
+        <tr>
+          <th className="px-3 py-2 w-10">Pos</th>
+          <th className="px-3 py-2 driver-col">Driver</th>
+          <th className="px-3 py-2">Team</th>
+          <th className="px-3 py-2 text-right">Rounds</th>
+          <th className="px-3 py-2 text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {drivers.map((d, i) => (
+          <tr key={d.registrationId} className="border-t border-zinc-800">
+            <td className="px-3 py-2 font-medium">{i + 1}</td>
+            <td className="px-3 py-2 driver-col">
+              <span className="inline-flex items-center gap-2">
+                <CountryFlag code={d.countryCode} />
+                {d.startNumber != null && (
+                  <span className="text-xs text-zinc-500">#{d.startNumber}</span>
+                )}
+                <span>
+                  {d.driverFirstName} {d.driverLastName}
+                </span>
+              </span>
+            </td>
+            <td className="px-3 py-2 text-zinc-400">{d.teamName ?? "—"}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{d.roundsCompleted}</td>
+            <td className="px-3 py-2 text-right font-semibold tabular-nums">
+              {d.combinedTotal}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
