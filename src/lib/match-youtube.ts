@@ -273,8 +273,10 @@ export type MatchSweepSummary = {
  * don't have one yet, across every league with `youtubeChannelId` set.
  * Fetches each channel's uploads once.
  */
-export async function matchYoutubeForRecentRounds(): Promise<MatchSweepSummary> {
-  const since = new Date(Date.now() - MATCH_LOOKBACK_DAYS * 24 * 3600 * 1000);
+export async function matchYoutubeForRecentRounds(
+  lookbackDays: number = MATCH_LOOKBACK_DAYS
+): Promise<MatchSweepSummary> {
+  const since = new Date(Date.now() - lookbackDays * 24 * 3600 * 1000);
 
   const rounds = await prisma.round.findMany({
     where: {

@@ -6,19 +6,28 @@ on:
     # so re-running is harmless. Streams usually appear within hours of a race.
     - cron: "40 */3 * * *"
   workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "How many days back to scan for completed rounds (manual backfill). Leave blank for the default ~45 days. Use e.g. 400 to backfill a whole season."
+        required: false
+        default: ""
 
 jobs:
   match:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
       - name: Call cron endpoint
         run: |
           set -euo pipefail
+          URL="https://league.simracing-hub.com/api/cron/youtube-match"
+          DAYS="${{ github.event.inputs.lookback_days }}"
+          if [ -n "$DAYS" ]; then URL="$URL?days=$DAYS"; fi
+          echo "Calling $URL"
           response=$(curl -fsS \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -w "\nHTTP_STATUS:%{http_code}" \
-            https://league.simracing-hub.com/api/cron/youtube-match)
+            "$URL")
           echo "$response"
           status=$(echo "$response" | tail -1 | sed 's/HTTP_STATUS://')
           if [ "$status" != "200" ]; then
