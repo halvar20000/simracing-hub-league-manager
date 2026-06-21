@@ -125,6 +125,8 @@ export const TEAM_LOGOS: Record<string, string> = {
   // CAS-Tech Performance — self-hosted. NOTE the hyphen in the key (the team's
   // canonical display name is "CAS-Tech Performance").
   "cas-tech performance": "/logos/teams/cas-tech-performance.png",
+  // CAS-DRT Synergy — self-hosted (provided by Thomas).
+  "cas-drt synergy": "/logos/teams/cas-drt-synergy.png",
 };
 
 // Suffix tokens that mark a subteam variant. Lower-cased, no punctuation.
