@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.14.0",
+    date: "2026-06-21",
+    changes: [
+      "New “Teams” page in the top menu: every team across all leagues and seasons shown as a grid of boxes — click a box to see the drivers behind it (with their number, the leagues/seasons they raced under, and a link to each driver's profile). Subteams are grouped under their main team, so “CAS Tech Performance Green/Blue” or “Alemannia Aachen White/Black” show as a single team. There's a search box to filter by name.",
+    ],
+  },
+  {
     version: "1.13.0",
     date: "2026-06-20",
     changes: [

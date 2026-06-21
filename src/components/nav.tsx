@@ -34,6 +34,7 @@ export default async function Nav() {
           <NavLink href="/leagues">Leagues</NavLink>
           <NavLink href="/calendar">Calendar</NavLink>
           <NavLink href="/rosters">Rosters</NavLink>
+          <NavLink href="/teams">Teams</NavLink>
           <NavLink href="/incidents">Incidents</NavLink>
           <NavLink href="/streams">Streams</NavLink>
           {session?.user && (
