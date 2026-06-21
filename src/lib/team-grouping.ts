@@ -111,6 +111,15 @@ export const TEAM_LOGOS: Record<string, string> = {
   // Alemannia Aachen — official club crest (Wikimedia Commons, rendered PNG).
   "alemannia aachen":
     "https://commons.wikimedia.org/wiki/Special:FilePath/Alemannia_Aachen_2010.svg?width=200",
+  // WS Racing eSports e.V. — profile logo from wsracing-esports.de.
+  "ws racing esports":
+    "https://wsracing-esports.de/wp-content/uploads/2020/04/FB-Profil.png",
+  // GermanSimRacing (GSR) — site logo.
+  "germansimracing":
+    "https://www.germansimracing.de/images/style-10/pageLogo-9e88a613.png",
+  // Melanzani Racing e.V. — site logo (270×270).
+  "melanzani racing":
+    "https://melanzani-racing.net/wp-content/uploads/2025/07/cropped-Melli-scaled-1-270x270.png",
 };
 
 // Suffix tokens that mark a subteam variant. Lower-cased, no punctuation.
