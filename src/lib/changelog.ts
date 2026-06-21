@@ -19,17 +19,24 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.15.0",
+    date: "2026-06-21",
+    changes: [
+      "Combined Cup team championship now matches the rulebook: each round it counts a team's best two drivers ranked by their combined (Race 1 + Race 2) result, scored on race points only (penalties included; participation and fair-play bonuses stay driver-only). Previously it scored the best two per individual race.",
+    ],
+  },
+  {
     version: "1.14.0",
     date: "2026-06-21",
     changes: [
-      "New “Teams” page in the top menu: every team across all leagues and seasons shown as a grid of boxes — click a box to see the drivers behind it (with their number, the leagues/seasons they raced under, and a link to each driver's profile). Subteams are grouped under their main team, so “CAS Tech Performance Green/Blue” or “Alemannia Aachen White/Black” show as a single team. There's a search box to filter by name.",
+      "New “Teams” page in the top menu: every team across all leagues and seasons shown as a grid of boxes — click a box to open a popup with the drivers behind it (with their number, the leagues/seasons they raced under, and a link to each driver's profile). Subteams are grouped under their main team, so “CAS Tech Performance Green/Blue” or “Alemannia Aachen White/Black” show as a single team. There's a search box to filter by name.",
     ],
   },
   {
     version: "1.13.0",
     date: "2026-06-20",
     changes: [
-      "Combined Cup standings now have a dedicated tab for each car (BMW M2, Ray F1600, SpecRacer Ford) alongside the Combined and Team tabs, so you can see the championship for one car at a glance. Every race counts in the per-car standings — the combined drop-week doesn't apply there. The Combined tab now shows just the overall table (the per-car breakdown that used to repeat below it has moved into its own tabs). Participation points now count only toward the Combined standing — the per-car and team championships are scored on race points (team scoring still applies penalties).",
+      "Combined Cup standings now have a dedicated tab for each car (BMW M2, Ray F1600, SpecRacer Ford) alongside the Combined and Team tabs, so you can see the championship for one car at a glance. Every race counts in the per-car standings — the combined drop-week doesn't apply there. The Combined tab now shows just the overall table (the per-car breakdown that used to repeat below it has moved into its own tabs). Participation points now count only toward the Combined standing — the per-car and team championships are scored on race points only.",
     ],
   },
   {

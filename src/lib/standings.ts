@@ -590,10 +590,13 @@ export async function computeTeamStandings(
   // participation, no manual penalty deduction).
   const rawOnly = !!season.teamScoringRawOnly;
 
-  // Combined Cup: participation is a Combined-championship-only bonus, so a
-  // driver's team contribution excludes it — but penalties still reduce it
-  // (unlike rawOnly, which drops both). Contribution = raw − manual penalty.
-  const excludeParticipation = season.league.slug === "cas-combined-cup";
+  // Combined Cup (latest rulebook §5.2): the team championship takes the two
+  // best team results "aus der kombinierten Wertung" — i.e. the best N drivers
+  // per team per ROUND, ranked by their COMBINED (Race1+Race2) result, scored
+  // on RACE POINTS ONLY (penalties apply; participation/FPR are driver-only
+  // bonuses and never count for teams). This differs from the default
+  // best-N-per-race path used by e.g. SFL.
+  const perRoundCombined = season.league.slug === "cas-combined-cup";
 
   const rounds = await prisma.round.findMany({
     where: { seasonId, ...completedRoundWhere },
@@ -627,71 +630,102 @@ export async function computeTeamStandings(
   }
 
   for (const round of rounds) {
-    // Multi-race rounds (raceNumber 1, 2, …) are scored per race: best N
-    // driver results per team within EACH race, summed across the round's
-    // races. This mirrors iRLM's team scoring (Race 1 + Race 2 sessions
-    // scored independently, then combined). Single-race rounds behave
-    // exactly as before.
-    type Entry = {
-      teamId: string;
-      registrationId: string;
-      raceNumber: number;
-      points: number;
-    };
-    const entries: Entry[] = [];
-    for (const r of round.raceResults) {
-      const teamId = r.registration.teamId;
-      if (!teamId) continue;
-      const points = rawOnly
-        ? r.rawPointsAwarded
-        : excludeParticipation
-        ? r.rawPointsAwarded - r.manualPenaltyPoints
-        : r.rawPointsAwarded +
-          r.participationPointsAwarded -
-          r.manualPenaltyPoints;
-      entries.push({
-        teamId,
-        registrationId: r.registrationId,
-        raceNumber: r.raceNumber,
-        points,
-      });
-    }
-    // Per-race penalty mode: subtract the driver's incident penalties for
-    // this round from their contribution (once, from their highest-scoring
-    // race of the round) BEFORE the best-N pick below.
-    if (perRacePenalties) {
-      const byReg = new Map<string, Entry[]>();
+    if (perRoundCombined) {
+      // Combined Cup: aggregate each driver's RACE points across the round's
+      // races (Race1 + Race2), subtract penalties (no participation/bonus),
+      // then take the best N driver contributions per team for the round.
+      const byDriver = new Map<string, { teamId: string; points: number }>();
+      for (const r of round.raceResults) {
+        const teamId = r.registration.teamId;
+        if (!teamId) continue;
+        const cur = byDriver.get(r.registrationId) ?? { teamId, points: 0 };
+        cur.points += r.rawPointsAwarded - r.manualPenaltyPoints;
+        byDriver.set(r.registrationId, cur);
+      }
+      // Per-race penalty mode (not used by CC today, but kept correct): the
+      // round's incident penalty is already summed per driver above only if it
+      // lives on RaceResult; the separate per-round pool is subtracted here.
+      if (perRacePenalties) {
+        for (const [regId, cur] of byDriver) {
+          cur.points -= incidentPenaltyByRegRound.get(`${regId}::${round.id}`) ?? 0;
+        }
+      }
+      const byTeam = new Map<string, number[]>();
+      for (const { teamId, points } of byDriver.values()) {
+        if (!byTeam.has(teamId)) byTeam.set(teamId, []);
+        byTeam.get(teamId)!.push(points);
+      }
+      for (const [teamId, list] of byTeam) {
+        const sorted = [...list].sort((a, b) => b - a);
+        const taken = Number.isFinite(bestN) ? sorted.slice(0, bestN as number) : sorted;
+        const sum = taken.reduce((s, p) => s + p, 0);
+        const t = teamMap.get(teamId);
+        if (t) t.roundContributions.push(sum);
+      }
+    } else {
+      // Default (e.g. SFL): best N driver results per team within EACH race,
+      // summed across the round's races. Mirrors iRLM's team scoring (Race 1 +
+      // Race 2 sessions scored independently, then combined). Single-race
+      // rounds behave exactly the same.
+      type Entry = {
+        teamId: string;
+        registrationId: string;
+        raceNumber: number;
+        points: number;
+      };
+      const entries: Entry[] = [];
+      for (const r of round.raceResults) {
+        const teamId = r.registration.teamId;
+        if (!teamId) continue;
+        const points = rawOnly
+          ? r.rawPointsAwarded
+          : r.rawPointsAwarded +
+            r.participationPointsAwarded -
+            r.manualPenaltyPoints;
+        entries.push({
+          teamId,
+          registrationId: r.registrationId,
+          raceNumber: r.raceNumber,
+          points,
+        });
+      }
+      // Per-race penalty mode: subtract the driver's incident penalties for
+      // this round from their contribution (once, from their highest-scoring
+      // race of the round) BEFORE the best-N pick below.
+      if (perRacePenalties) {
+        const byReg = new Map<string, Entry[]>();
+        for (const e of entries) {
+          const list = byReg.get(e.registrationId) ?? [];
+          list.push(e);
+          byReg.set(e.registrationId, list);
+        }
+        for (const [regId, list] of byReg) {
+          const pen =
+            incidentPenaltyByRegRound.get(`${regId}::${round.id}`) ?? 0;
+          if (pen <= 0) continue;
+          const target = list.reduce((a, b) => (b.points > a.points ? b : a));
+          target.points -= pen;
+        }
+      }
+      const byTeamRace = new Map<string, Map<number, number[]>>();
       for (const e of entries) {
-        const list = byReg.get(e.registrationId) ?? [];
-        list.push(e);
-        byReg.set(e.registrationId, list);
+        if (!byTeamRace.has(e.teamId)) byTeamRace.set(e.teamId, new Map());
+        const races = byTeamRace.get(e.teamId)!;
+        if (!races.has(e.raceNumber)) races.set(e.raceNumber, []);
+        races.get(e.raceNumber)!.push(e.points);
       }
-      for (const [regId, list] of byReg) {
-        const pen =
-          incidentPenaltyByRegRound.get(`${regId}::${round.id}`) ?? 0;
-        if (pen <= 0) continue;
-        const target = list.reduce((a, b) => (b.points > a.points ? b : a));
-        target.points -= pen;
+      for (const [teamId, races] of byTeamRace) {
+        let sum = 0;
+        for (const pointsList of races.values()) {
+          const sorted = [...pointsList].sort((a, b) => b - a);
+          const taken = Number.isFinite(bestN)
+            ? sorted.slice(0, bestN as number)
+            : sorted;
+          sum += taken.reduce((s, p) => s + p, 0);
+        }
+        const t = teamMap.get(teamId);
+        if (t) t.roundContributions.push(sum);
       }
-    }
-    const byTeamRace = new Map<string, Map<number, number[]>>();
-    for (const e of entries) {
-      if (!byTeamRace.has(e.teamId)) byTeamRace.set(e.teamId, new Map());
-      const races = byTeamRace.get(e.teamId)!;
-      if (!races.has(e.raceNumber)) races.set(e.raceNumber, []);
-      races.get(e.raceNumber)!.push(e.points);
-    }
-    for (const [teamId, races] of byTeamRace) {
-      let sum = 0;
-      for (const pointsList of races.values()) {
-        const sorted = [...pointsList].sort((a, b) => b - a);
-        const taken = Number.isFinite(bestN)
-          ? sorted.slice(0, bestN as number)
-          : sorted;
-        sum += taken.reduce((s, p) => s + p, 0);
-      }
-      const t = teamMap.get(teamId);
-      if (t) t.roundContributions.push(sum);
     }
     for (const award of round.fprAwards) {
       const t = teamMap.get(award.teamId);
