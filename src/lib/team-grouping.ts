@@ -120,6 +120,8 @@ export const TEAM_LOGOS: Record<string, string> = {
   // Melanzani Racing e.V. — site logo (270×270).
   "melanzani racing":
     "https://melanzani-racing.net/wp-content/uploads/2025/07/cropped-Melli-scaled-1-270x270.png",
+  // NEON Simsports — self-hosted (provided by Thomas).
+  "neon simsports": "/logos/teams/neon-simsports.jpg",
 };
 
 // Suffix tokens that mark a subteam variant. Lower-cased, no punctuation.
