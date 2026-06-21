@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.16.0",
+    date: "2026-06-21",
+    changes: [
+      "Teams page: much smarter grouping so each org shows as ONE box. It now merges spelling and punctuation variants (e.g. “CAS Tech Performance” and “CAS-Tech Performance”, “Neon Simsports” and the “Simsport” typo, “DanKüchen” and “DAN Küchen”), the different subteam tags (colours, numbers, brackets like “[petrol]”, dinosaur and Greek-letter names), and an org's division/class/sponsor entries (e.g. AUT/GER, GT3/LMP2, “…by Wallmeier Selected”) into the single main team. Non-teams like “Independent” and “Free Agent” are hidden. Teams can now show their logo on the card — starting with Alemannia Aachen — with a clean initials badge as fallback.",
+    ],
+  },
+  {
     version: "1.15.0",
     date: "2026-06-21",
     changes: [

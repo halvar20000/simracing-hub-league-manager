@@ -26,13 +26,91 @@
  *   - two teams share a prefix but must stay SEPARATE (map each to a
  *     distinct main name).
  *
- * Example:
- *   "cas tech performance junior": "CAS Tech Performance",
+ * Keys must match the raw team name exactly (lower-cased, single spaces),
+ * INCLUDING any brackets/hash characters.
  */
 export const TEAM_NAME_OVERRIDES: Record<string, string> = {
-  // Seed examples (the heuristic already handles the simple colour cases —
-  // these are here as documentation / safety net).
-  // "alemannia aachen youth": "Alemannia Aachen",
+  // Exact full-name fixes the prefix/heuristic rules below can't express.
+  "fmm#1 tak-automation.com": "FMM tak-automation.com",
+  "fmm#2 tak-automation.com": "FMM tak-automation.com",
+  "prrime eracing": "Prime eRacing", // typo of Prime eRacing
+  "team raycing black $iec": "Team RaYcing",
+};
+
+/**
+ * Prefix rules — if the (lower-cased) raw name equals OR begins with one of
+ * these prefixes (on a word/hyphen boundary), it maps to the given main team.
+ * This is the main tool for "show the main team only": it merges every
+ * subteam variant (colour, number, class, division, sponsor, bracket tag)
+ * under one box. Order doesn't matter — the longest matching prefix wins.
+ *
+ * Add a line here to merge a newly-split team.
+ */
+export const TEAM_NAME_PREFIXES: Record<string, string> = {
+  "jurassic kart racing": "Jurassic Kart Racing",
+  "ws racing esports": "WS Racing eSports",
+  "dat muss kesseln": "Dat muss Kesseln",
+  "alemannia aachen": "Alemannia Aachen",
+  "danküchen": "DanKüchen Motorsport",
+  "dan küchen": "DanKüchen Motorsport",
+  "cas tech performance": "CAS-Tech Performance",
+  "cas-tech performance": "CAS-Tech Performance",
+  "cas tech endurance": "CAS-Tech Endurance",
+  "cas-tech endurance": "CAS-Tech Endurance",
+  "neon simsports": "NEON Simsports",
+  "neon simsport": "NEON Simsports", // covers the "Simsport" typo
+  "atzen motorsport": "Atzen Motorsport",
+  "speed monkeys": "Speed Monkeys",
+  "melanzani racing": "Melanzani Racing",
+  "pure performance esports": "Pure Performance eSports",
+  "cbs racing": "CBS Racing",
+  "pwa e-sports": "PWA E-Sports",
+  "pacemonkey simracing": "PaceMonkey SimRacing",
+  "nolimit motorsport": "NoLimit Motorsport",
+  "next curve performance": "Next Curve Performance",
+  "mt-performance esport": "MT-Performance eSport",
+  "teamspirit-simracing": "TeamSpirit-SimRacing",
+  "austrian simracers cas endurance": "Austrian Simracers CAS Endurance",
+  "duck knife x sundi company": "Duck Knife x Sundi Company",
+};
+
+/**
+ * Normalise the heuristic OUTPUT to a single canonical spelling/casing.
+ * Keyed by the lower-cased post-strip name → final display name. Unifies
+ * variants that don't share a word-prefix (e.g. ".de" suffix, casing).
+ */
+export const CANONICAL_ALIASES: Record<string, string> = {
+  "germansimracing.de": "GermanSimRacing",
+  "germansimracing": "GermanSimRacing",
+  "neon simsports": "NEON Simsports",
+};
+
+/**
+ * Names that are NOT real teams and should be hidden from the overview.
+ * Lower-cased canonical names.
+ */
+export const EXCLUDED_TEAM_NAMES = new Set<string>([
+  "independent",
+  "privateer",
+  "free agent",
+  "no team",
+  "none",
+]);
+
+/**
+ * Main-team logos. Keyed by the GROUP KEY (lower-cased canonical name, i.e.
+ * the output of teamGroupKey). Values are image URLs (external or local under
+ * /public). Used only as a fallback when no per-team DB logoUrl is set.
+ * A missing/blocked image degrades gracefully to initials (the card <img>
+ * has an onError fallback).
+ *
+ * To add a logo: add a line keyed by the team's group key (lower-cased
+ * canonical name) → image URL.
+ */
+export const TEAM_LOGOS: Record<string, string> = {
+  // Alemannia Aachen — official club crest (Wikimedia Commons, rendered PNG).
+  "alemannia aachen":
+    "https://commons.wikimedia.org/wiki/Special:FilePath/Alemannia_Aachen_2010.svg?width=200",
 };
 
 // Suffix tokens that mark a subteam variant. Lower-cased, no punctuation.
@@ -40,11 +118,13 @@ const SUFFIX_TOKENS = new Set<string>([
   // English colours
   "red", "blue", "green", "yellow", "black", "white", "orange", "purple",
   "pink", "gold", "silver", "grey", "gray", "cyan", "magenta", "bronze",
-  "teal", "violet", "brown", "navy", "lime", "aqua", "maroon",
+  "teal", "violet", "brown", "navy", "lime", "aqua", "maroon", "petrol",
   // German colours
   "rot", "blau", "gruen", "grün", "gelb", "schwarz", "weiss", "weiß",
   "lila", "violett", "gold", "silber", "grau", "tuerkis", "türkis",
   "braun", "rosa",
+  // Greek letters used as subteam designators (e.g. "… Delta")
+  "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "omega", "sigma",
   // NOTE: deliberately NOT stripping generic words like "Team", "Junior",
   // "Academy", "Reserve" — they appear in real distinct team names and would
   // cause silent over-merging. Handle those edge cases via TEAM_NAME_OVERRIDES.
@@ -78,17 +158,48 @@ export function canonicalTeamName(rawName: string): string {
   const name = collapseWhitespace(rawName ?? "");
   if (name.length === 0) return name;
 
-  // 1. Explicit override wins.
-  const override = TEAM_NAME_OVERRIDES[name.toLowerCase()];
-  if (override) return override;
+  const lower = name.toLowerCase();
 
-  // 2. Heuristic: peel trailing suffix tokens, but never reduce below the
-  //    first token (a single-word team name is always kept whole).
-  const tokens = name.split(" ");
-  while (tokens.length > 1 && isSuffixToken(tokens[tokens.length - 1])) {
-    tokens.pop();
+  // 1. Explicit override wins (raw full-name match).
+  let base: string | undefined = TEAM_NAME_OVERRIDES[lower];
+
+  // 2. Prefix rule (longest match wins) — merges every subteam variant.
+  if (!base) base = matchPrefix(lower);
+
+  // 3. Otherwise heuristic: peel trailing suffix tokens, but never reduce
+  //    below the first token (a single-word team name is kept whole).
+  if (!base) {
+    const tokens = name.split(" ");
+    while (tokens.length > 1 && isSuffixToken(tokens[tokens.length - 1])) {
+      tokens.pop();
+    }
+    base = tokens.join(" ");
   }
-  return tokens.join(" ");
+
+  // 4. Normalise spelling/casing variants to one canonical display name.
+  return CANONICAL_ALIASES[base.toLowerCase()] ?? base;
+}
+
+/**
+ * Return the main team for a lower-cased raw name if it matches a prefix rule
+ * on a word boundary (exact, or followed by a space or hyphen). Longest
+ * matching prefix wins so more-specific rules take precedence.
+ */
+function matchPrefix(lower: string): string | undefined {
+  let best: string | undefined;
+  let bestLen = -1;
+  for (const prefix in TEAM_NAME_PREFIXES) {
+    if (prefix.length <= bestLen) continue;
+    if (
+      lower === prefix ||
+      lower.startsWith(prefix + " ") ||
+      lower.startsWith(prefix + "-")
+    ) {
+      best = TEAM_NAME_PREFIXES[prefix];
+      bestLen = prefix.length;
+    }
+  }
+  return best;
 }
 
 /** Grouping key: case-insensitive canonical name. */
@@ -169,6 +280,7 @@ export function groupTeamsAcrossSeasons(teams: AggTeamInput[]): TeamGroup[] {
   for (const team of teams) {
     const key = teamGroupKey(team.name);
     if (key.length === 0) continue;
+    if (EXCLUDED_TEAM_NAMES.has(key)) continue;
     let g = groups.get(key);
     if (!g) {
       g = {
@@ -236,7 +348,7 @@ export function groupTeamsAcrossSeasons(teams: AggTeamInput[]): TeamGroup[] {
     out.push({
       key: g.key,
       name: g.name,
-      logoUrl: g.logoUrl,
+      logoUrl: g.logoUrl ?? TEAM_LOGOS[g.key] ?? null,
       driverCount: drivers.length,
       seasonCount: g.seasonKeys.size,
       leagueNames: [...g.leagueSet].sort(),

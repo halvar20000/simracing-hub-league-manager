@@ -11,6 +11,41 @@ function initials(name: string): string {
   return letters.join("") || "?";
 }
 
+/**
+ * Team logo with a graceful fallback: if the image is missing or fails to
+ * load (e.g. a broken/blocked external URL), it shows the team initials
+ * instead of a broken-image icon.
+ */
+function TeamLogo({
+  logoUrl,
+  name,
+  size,
+}: {
+  logoUrl: string | null;
+  name: string;
+  size: string; // tailwind h-/w- classes, e.g. "h-14 w-14"
+}) {
+  const [failed, setFailed] = useState(false);
+  if (logoUrl && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt=""
+        onError={() => setFailed(true)}
+        className={`${size} rounded object-contain`}
+      />
+    );
+  }
+  return (
+    <span
+      className={`${size} flex items-center justify-center rounded bg-zinc-800 font-display font-bold text-zinc-300`}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
 export default function TeamsOverview({ groups }: { groups: TeamGroup[] }) {
   const [query, setQuery] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -64,18 +99,7 @@ export default function TeamsOverview({ groups }: { groups: TeamGroup[] }) {
               onClick={() => setSelectedKey(g.key)}
               className="flex flex-col items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-center transition-colors hover:border-[#ff6b35] hover:bg-zinc-900"
             >
-              {g.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={g.logoUrl}
-                  alt=""
-                  className="h-14 w-14 rounded object-contain"
-                />
-              ) : (
-                <span className="flex h-14 w-14 items-center justify-center rounded bg-zinc-800 font-display text-lg font-bold text-zinc-300">
-                  {initials(g.name)}
-                </span>
-              )}
+              <TeamLogo logoUrl={g.logoUrl} name={g.name} size="h-14 w-14 text-lg" />
               <span className="line-clamp-2 text-sm font-semibold leading-tight text-zinc-100">
                 {g.name}
               </span>
@@ -115,18 +139,7 @@ function TeamModal({
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-3">
-          {team.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={team.logoUrl}
-              alt=""
-              className="h-10 w-10 rounded object-contain"
-            />
-          ) : (
-            <span className="flex h-10 w-10 items-center justify-center rounded bg-zinc-800 text-sm font-bold text-zinc-300">
-              {initials(team.name)}
-            </span>
-          )}
+          <TeamLogo logoUrl={team.logoUrl} name={team.name} size="h-10 w-10 text-sm" />
           <div className="flex-1">
             <h2 className="font-display text-lg font-bold">{team.name}</h2>
             <p className="text-xs text-zinc-500">
