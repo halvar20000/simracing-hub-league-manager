@@ -14,6 +14,8 @@ import {
 } from "@/lib/actions/race-center";
 import { RACE_CENTER_CHART_TYPES, defaultTitleForChartType } from "@/lib/race-center-charts";
 import { skiesLabel } from "@/lib/iracing-weather";
+import { computeAndSaveDotd, deleteDotd } from "@/lib/actions/driver-of-the-day";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 export default async function AdminRaceCenterPage({
   params,
@@ -31,6 +33,7 @@ export default async function AdminRaceCenterPage({
     include: {
       season: { include: { league: true } },
       raceCenter: { include: { charts: { orderBy: { sortOrder: "asc" } } } },
+      driverOfTheDay: true,
       raceResults: {
         where: { finishStatus: "CLASSIFIED" },
         orderBy: { finishPosition: "asc" },
@@ -49,6 +52,10 @@ export default async function AdminRaceCenterPage({
   }
 
   const rc = round.raceCenter;
+  const dotd = round.driverOfTheDay;
+  const dotdRanking = (dotd?.ranking as DotdRankingEntry[] | undefined) ?? [];
+  const dotdMetrics = (dotd?.winnerMetrics as DotdWinnerMetrics | undefined) ?? null;
+  const dotdClassWinners = (dotd?.classWinners as DotdClassWinner[] | undefined) ?? [];
   const charts = rc?.charts ?? [];
   const chartByType = new Map(charts.map((c) => [c.chartType, c]));
 
@@ -145,6 +152,189 @@ export default async function AdminRaceCenterPage({
             </form>
           )}
         </div>
+      </section>
+
+      {/* === Driver of the Day === */}
+      <section className="space-y-4 rounded border border-amber-800/40 bg-amber-950/10 p-4">
+        <div>
+          <div className="text-sm font-semibold uppercase tracking-wider text-amber-300">
+            🏆 Driver of the Day
+          </div>
+          <p className="mt-1 text-xs text-zinc-400">
+            Recognition only — no championship points. Upload the iRacing{" "}
+            <span className="font-mono">eventresult-XXXX.json</span> (authoritative
+            start/finish/incidents) and the race-logger{" "}
+            <span className="font-mono">…_race.jsonl</span> (overtakes + recovery). The award
+            blends positions gained (40%), overtakes (25%), recovery (20%) and clean racing
+            (15%), so it is <strong>not</strong> automatically the race winner. The previous
+            round&rsquo;s winner is blocked from a back-to-back win.
+          </p>
+        </div>
+
+        {dotd ? (
+          <div className="space-y-3">
+            <div className="rounded border border-amber-700/40 bg-zinc-900 p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+                Winner
+              </div>
+              <div className="text-lg font-semibold text-zinc-100">
+                {dotd.winnerCarNumber ? `#${dotd.winnerCarNumber} ` : ""}
+                {dotd.winnerName}
+                <span className="ml-2 text-sm font-normal text-zinc-400">
+                  score {dotd.score.toFixed(3)}
+                </span>
+              </div>
+              {dotdMetrics && (
+                <div className="mt-1 text-xs text-zinc-400">
+                  {dotdMetrics.positionsGained >= 0 ? "+" : ""}
+                  {dotdMetrics.positionsGained} positions (P{dotdMetrics.startPos}→P
+                  {dotdMetrics.finishPos}) · recovered {dotdMetrics.recovery} from P
+                  {dotdMetrics.worstPos} · {dotdMetrics.overtakes} overtakes ·{" "}
+                  {dotdMetrics.incidents} inc
+                </div>
+              )}
+              {dotd.previousWinnerBlocked && dotd.previousWinnerName && (
+                <div className="mt-1 text-xs italic text-cyan-300">
+                  No back-to-back: {dotd.previousWinnerName} won the previous round and was
+                  blocked here.
+                </div>
+              )}
+            </div>
+
+            {dotdClassWinners.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {dotdClassWinners.map((cw) => (
+                  <div
+                    key={cw.carClassShortName}
+                    className="rounded border border-zinc-800 bg-zinc-900 p-2 text-sm"
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-300">
+                      {cw.carClassShortName}
+                    </span>
+                    <div className="text-zinc-200">
+                      {cw.winnerCarNumber ? `#${cw.winnerCarNumber} ` : ""}
+                      {cw.winnerName}{" "}
+                      <span className="text-xs text-zinc-500">{cw.score.toFixed(3)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {dotdRanking.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs tabular-nums">
+                  <thead className="text-zinc-500">
+                    <tr className="border-b border-zinc-800">
+                      <th className="py-1 pr-2">#</th>
+                      <th className="py-1 pr-2">Driver</th>
+                      <th className="py-1 pr-2 text-right">Gain</th>
+                      <th className="py-1 pr-2 text-right">Rec</th>
+                      <th className="py-1 pr-2 text-right">OT</th>
+                      <th className="py-1 pr-2 text-right">Inc</th>
+                      <th className="py-1 pr-2 text-right">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dotdRanking.map((r) => (
+                      <tr
+                        key={`${r.rank}-${r.name}`}
+                        className={`border-t border-zinc-800/60 ${
+                          r.rank === 1 && r.eligible ? "text-amber-200" : "text-zinc-300"
+                        }`}
+                      >
+                        <td className="py-1 pr-2">{r.rank}</td>
+                        <td className="py-1 pr-2">
+                          {r.carNumber ? `#${r.carNumber} ` : ""}
+                          {r.name}
+                          {r.blockedRepeat ? (
+                            <span className="ml-1 text-cyan-400">(prev)</span>
+                          ) : !r.eligible ? (
+                            <span className="ml-1 text-zinc-600">(x)</span>
+                          ) : null}
+                        </td>
+                        <td className="py-1 pr-2 text-right">
+                          {r.positionsGained >= 0 ? "+" : ""}
+                          {r.positionsGained}
+                        </td>
+                        <td className="py-1 pr-2 text-right">{r.recovery}</td>
+                        <td className="py-1 pr-2 text-right">{r.overtakes}</td>
+                        <td className="py-1 pr-2 text-right">{r.incidents}</td>
+                        <td className="py-1 pr-2 text-right">{r.score.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="mt-1 text-[10px] text-zinc-600">
+                  (prev) = blocked from back-to-back · (x) = ineligible (DNF or under distance)
+                </div>
+              </div>
+            )}
+            <div className="text-xs text-zinc-500">
+              Computed {dotd.computedAt.toISOString()}. Re-upload below to recompute.
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">Not computed yet.</p>
+        )}
+
+        <form
+          action={computeAndSaveDotd}
+          encType="multipart/form-data"
+          className="space-y-3 rounded border border-zinc-800 bg-zinc-900 p-3"
+        >
+          <input type="hidden" name="leagueSlug" value={slug} />
+          <input type="hidden" name="seasonId" value={seasonId} />
+          <input type="hidden" name="roundId" value={roundId} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs text-zinc-400">
+              eventresult JSON
+              <input
+                type="file"
+                name="eventResult"
+                accept="application/json,.json"
+                required
+                className="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-orange-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-950 hover:file:bg-orange-500"
+              />
+            </label>
+            <label className="block text-xs text-zinc-400">
+              race-logger log (.jsonl)
+              <input
+                type="file"
+                name="log"
+                accept=".jsonl,.json,.ndjson,text/plain,application/json"
+                required
+                className="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-orange-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-950 hover:file:bg-orange-500"
+              />
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <SubmitWithSpinner
+              label={dotd ? "Recompute Driver of the Day" : "Compute Driver of the Day"}
+              pendingLabel="Computing…"
+              className="rounded bg-amber-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-amber-400"
+              spinnerColor="#000"
+            />
+          </div>
+        </form>
+
+        {dotd && (
+          <details>
+            <summary className="cursor-pointer text-xs text-red-300/80 hover:text-red-200">
+              Danger zone
+            </summary>
+            <form action={deleteDotd} className="mt-2">
+              <input type="hidden" name="leagueSlug" value={slug} />
+              <input type="hidden" name="seasonId" value={seasonId} />
+              <input type="hidden" name="roundId" value={roundId} />
+              <SubmitWithSpinner
+                label="Delete Driver of the Day"
+                pendingLabel="Deleting…"
+                className="rounded border border-red-800 bg-zinc-900 px-3 py-1.5 text-sm font-semibold text-red-300 hover:bg-zinc-800"
+              />
+            </form>
+          </details>
+        )}
       </section>
 
       {/* === Auto-derived preview === */}
@@ -561,3 +751,36 @@ function formatMs(ms: number): string {
   const sec = (totalSec - min * 60).toFixed(3);
   return min > 0 ? `${min}:${sec.padStart(6, "0")}` : sec;
 }
+
+// Shapes of the JSON columns on RoundDriverOfTheDay (kept in sync with
+// src/lib/actions/driver-of-the-day.ts).
+type DotdRankingEntry = {
+  rank: number;
+  name: string;
+  carNumber: string | null;
+  carClassShortName: string | null;
+  score: number;
+  positionsGained: number;
+  recovery: number;
+  overtakes: number;
+  incidents: number;
+  eligible: boolean;
+  blockedRepeat: boolean;
+};
+
+type DotdWinnerMetrics = {
+  startPos: number | null;
+  finishPos: number | null;
+  worstPos: number | null;
+  positionsGained: number;
+  recovery: number;
+  overtakes: number;
+  incidents: number;
+};
+
+type DotdClassWinner = {
+  carClassShortName: string;
+  winnerName: string;
+  winnerCarNumber: string | null;
+  score: number;
+};

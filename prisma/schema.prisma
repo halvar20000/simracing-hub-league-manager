@@ -40,6 +40,7 @@ model User {
   incidentComments      IncidentReportComment[]
   incidentDecisions     IncidentDecision[]
   raceCenterComebacks   RaceCenter[]             @relation("RaceCenterComeback")
+  driverOfTheDayWins    RoundDriverOfTheDay[]    @relation("DotdWinner")
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -307,6 +308,9 @@ model Round {
 
   // Per-round Race Center — narrative, curated cards, charts, replay (1:1).
   raceCenter RaceCenter?
+
+  // Per-round Driver of the Day — recognition badge, no points (1:1).
+  driverOfTheDay RoundDriverOfTheDay?
 
   /// YouTube video ID (11 chars) of the race-stream VOD for this round,
   /// embedded on the public round page. Set automatically by the YouTube
@@ -1100,4 +1104,63 @@ model RaceCenterChart {
   createdAt DateTime @default(now())
 
   @@unique([raceCenterId, chartType])
+}
+
+/// Per-round "Driver of the Day" (1:1 with Round). A recognition badge ONLY —
+/// it never awards championship points and never touches standings. Computed by
+/// src/lib/driver-of-the-day.ts from an uploaded iRacing eventresult JSON
+/// (authoritative start/finish/incidents + cust_id identity) blended with the
+/// race-logger JSONL (overtakes counter + worst position reached for the
+/// recovery metric). The winner is deliberately NOT the race winner by default:
+/// a clean pole-to-flag win scores ~0 on positions-gained / recovery /
+/// overtakes, so the charger who carved through the field wins instead.
+model RoundDriverOfTheDay {
+  id      String @id @default(cuid())
+  roundId String @unique
+  round   Round  @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  /// Overall winner linked to a CLS user where the identity bridge resolved
+  /// (eventresult cust_id -> User.iracingMemberId). Null when unmatched; the
+  /// display name is always stored as a fallback.
+  winnerUserId    String?
+  winnerUser      User?   @relation("DotdWinner", fields: [winnerUserId], references: [id])
+  winnerName      String
+  winnerCarNumber String?
+
+  /// Final weighted score (0..1).
+  score Float
+  /// Weighted component breakdown for the winner — each value is already
+  /// multiplied by its weight: { positionsGained, recovery, overtakes, clean }.
+  breakdown Json
+  /// Raw winner metrics for display:
+  /// { startPos, finishPos, worstPos, positionsGained, recovery, overtakes, incidents }.
+  winnerMetrics Json
+
+  /// Full field ranking (sorted by score desc) for the public "also
+  /// outstanding" list and the admin review table. Array of row objects.
+  ranking Json
+
+  /// Per-car-class winners for multiclass seasons; [] for single-class.
+  /// Array of { carClassShortName, winnerUserId?, winnerName, winnerCarNumber?,
+  /// score, ranking? }.
+  classWinners Json @default("[]")
+
+  /// Weight profile used ("positions" default) + the resolved weights map.
+  weightsProfile String @default("positions")
+  weights        Json
+
+  /// No-back-to-back rule context: the previous round's winner in this season
+  /// is blocked from winning again (still ranked normally, just not crowned).
+  previousWinnerUserId  String?
+  previousWinnerName    String?
+  previousWinnerBlocked Boolean @default(false)
+
+  /// Archived raw uploads (Vercel Blob) so a round can be recomputed without
+  /// re-uploading. Cleaned up on delete.
+  eventResultBlobUrl String?
+  logBlobUrl         String?
+
+  computedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

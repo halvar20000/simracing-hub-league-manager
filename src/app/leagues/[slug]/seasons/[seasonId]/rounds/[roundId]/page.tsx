@@ -15,6 +15,7 @@ import { RsvpWidget } from "@/components/RsvpWidget";
 import { isRsvpClosed } from "@/lib/rsvp-window";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { RaceCenterView } from "@/components/RaceCenterView";
+import { DriverOfTheDayHero } from "@/components/DriverOfTheDayHero";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 
@@ -155,6 +156,7 @@ export default async function PublicRoundResults({
           comebackUser: { select: { id: true, firstName: true, lastName: true, name: true, countryCode: true } },
         },
       },
+      driverOfTheDay: true,
     },
   });
   if (
@@ -606,6 +608,10 @@ export default async function PublicRoundResults({
             />
           </div>
         </section>
+      )}
+
+      {round.driverOfTheDay && showResults && (
+        <DriverOfTheDayHero dotd={round.driverOfTheDay} />
       )}
 
       {isAdminViewer && !resultsPublished && hasAnyResults && (

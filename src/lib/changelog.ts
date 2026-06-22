@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.17.0",
+    date: "2026-06-22",
+    changes: [
+      "New “Driver of the Day” for each round. After a race, an admin uploads the iRacing result file plus the race log, and the site picks the standout drive of the day — shown as a hero card at the top of the round page. It deliberately isn't just the race winner: it rewards positions gained, overtakes, fighting back from a bad moment, and clean racing, so the driver who carved through the field gets the spotlight. A driver can't win it two rounds in a row in the same season, and on multiclass events there's a winner per car class. It's recognition only — no championship points.",
+    ],
+  },
+  {
     version: "1.16.0",
     date: "2026-06-21",
     changes: [

@@ -214,6 +214,18 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - **Admin actions**: `src/lib/actions/race-videos.ts` — `matchYoutubeAction` ("📺 Match YouTube" button, force) and `setRoundYoutubeAction` (paste URL/ID or clear). Round page shows a thumbnail + status panel; redirect status flag is `yt=`.
 - **Public**: embedded player section at the top of the round results page when `youtubeVideoId` is set. Plus a site-wide **`/streams`** page (`src/app/streams/page.tsx`, linked in `nav.tsx`) listing every COMPLETED round with a `youtubeVideoId` across non-archived leagues, newest first, as thumbnail cards linking straight to YouTube, with `?league=<slug>` filter chips.
 
+## Driver of the Day (all leagues)
+
+Per-round recognition badge — **no championship points, never touches standings**. Admin uploads the iRacing `eventresult.json` (authoritative start/finish/incidents + `cust_id` identity) + the race-logger `…_race.jsonl` (overtakes counter + worst position for the recovery metric); CLS computes the winner and shows a hero card on the public round page.
+
+- **Engine**: `src/lib/driver-of-the-day.ts` — pure (not `"use server"`), a faithful TS port of `driver_of_the_day.py` from the iRacing-overlays project (`~/Nextcloud/iRacing/python/files/`). Blends four min-max-normalised metrics, weighted: positions gained 0.40, overtakes 0.25, recovery (worst→finish) 0.20, clean racing 0.15. Normalises across the **eligible** pool only (DNF / under-50%-distance ineligible; ineligible drivers still ranked, clamped). The winner is deliberately **not** the race winner: a clean pole-to-flag win scores ~0 on gained/recovery/overtakes. `computeDriverOfTheDay(candidates, opts)` is called once for the overall award and once per car class on multiclass seasons.
+- **Log parser**: `src/lib/dotd-log.ts` (pure) — parses the JSONL into per-driver overtakes + worst position, keyed by car number (then name). The eventresult is parsed via the existing `parseIracingEventJson` (`src/lib/iracing-json.ts`).
+- **Identity bridge**: eventresult `cust_id` → `User.iracingMemberId` → CLS user (for linking + the no-back-to-back query). Log↔eventresult join is by `livery.car_number`, falling back to normalised name.
+- **No back-to-back**: a driver can't win two consecutive rounds in the same season. The action excludes the previous round's winner (most recent prior round with a DotD); on multiclass it excludes the previous round's winner **per class** (from `classWinners`). The excluded driver is still ranked, marked `blockedRepeat`, and the crown passes to the next eligible driver.
+- **Schema**: `RoundDriverOfTheDay` (1:1 with `Round`) — winner (`winnerUserId` + name/number fallback), `score`, `breakdown`/`winnerMetrics`/`ranking`/`classWinners`/`weights` (JSON), `previousWinner*`, archived raw uploads (`eventResultBlobUrl`/`logBlobUrl` on Vercel Blob). **Applied to the live DB via `outputs/dotd_table.sql`** on the Hetzner Postgres (the runtime container has no Prisma CLI — see schema-change note); the model is in `schema.prisma` so the Coolify build's `prisma generate` types the client.
+- **Admin**: `src/lib/actions/driver-of-the-day.ts` (`computeAndSaveDotd`, `deleteDotd`) + an "🏆 Driver of the Day" panel on the round Race Center admin page (upload, full ranking table, per-class winners, recompute, danger-zone delete).
+- **Public**: `src/components/DriverOfTheDayHero.tsx` — hero card near the top of the round page, gated by `round.driverOfTheDay && showResults` (so it follows the same publish gate as results; admins preview early).
+
 ## Logos
 
 - `public/logos/site-logo.png` — top nav logo (CAS LEAGUE SCORING SYSTEM)
