@@ -8,11 +8,17 @@
  * the mode is OFF no penalty is applied.
  *
  * Rule (when active):
- *   - When a round flips to COMPLETED, every Registration in the season
- *     that has NO RaceResult for the round AND NO RoundRsvp row at all
- *     gets a POINTS_DEDUCTION penalty (source = NO_RSVP_NO_SHOW), with
+ *   - When a round flips to COMPLETED, every *confirmed grid* Registration in
+ *     the season that has NO RaceResult for the round AND NO RoundRsvp row at
+ *     all gets a POINTS_DEDUCTION penalty (source = NO_RSVP_NO_SHOW), with
  *     pointsValue = ScoringSystem.noRsvpNoShowPenaltyPoints.
  *   - Accept, Decline, Tentative are all exempt — only true silence + no-show.
+ *   - "Confirmed grid" means: status = APPROVED, not excluded, not a non-driving
+ *     team manager, and not on the waiting list (waitlistedAt = null). A driver
+ *     who is still PENDING (not yet approved) or waitlisted was never expected
+ *     to race, so they are NOT penalised — they often can't even RSVP yet.
+ *   - GT3 WCT only: additionally requires eligibleRound1 = true. A driver the
+ *     admin has not yet cleared to take a slot ("Startberechtigt") is exempt.
  *
  * Idempotent: re-running on an already-processed round does nothing new.
  *
@@ -49,8 +55,17 @@ export async function applyNoRsvpNoShowPenalties(
             },
           },
           registrations: {
-            where: { excludedAt: null },
-            select: { id: true },
+            // Only confirmed grid drivers can incur a no-show penalty:
+            // approved, not excluded, not a non-driving team manager, and not
+            // on the waiting list. Pending / waitlisted drivers were never
+            // expected to race (and often can't RSVP yet), so they're exempt.
+            where: {
+              excludedAt: null,
+              status: "APPROVED",
+              isTeamManager: false,
+              waitlistedAt: null,
+            },
+            select: { id: true, eligibleRound1: true },
           },
         },
       },
@@ -80,8 +95,16 @@ export async function applyNoRsvpNoShowPenalties(
   const ranRegIds = new Set(round.raceResults.map((r) => r.registrationId));
   const rsvpRegIds = new Set(round.rsvps.map((r) => r.registrationId));
 
+  // GT3 WCT only: a driver not yet cleared for a slot (eligibleRound1 = false)
+  // is exempt. The flag defaults to false and is "ignored for other leagues",
+  // so we must NOT apply it outside GT3 WCT or it would exempt everyone.
+  const requireEligible = slug === "cas-gt3-wct";
+
   const silentNoShows = round.season.registrations.filter(
-    (reg) => !ranRegIds.has(reg.id) && !rsvpRegIds.has(reg.id)
+    (reg) =>
+      !ranRegIds.has(reg.id) &&
+      !rsvpRegIds.has(reg.id) &&
+      (!requireEligible || reg.eligibleRound1)
   );
 
   // Idempotency: skip drivers who already have an auto-penalty for this round.

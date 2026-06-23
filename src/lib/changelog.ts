@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.17.1",
+    date: "2026-06-23",
+    changes: [
+      "Fixed the no-show penalty so it only applies to confirmed grid drivers. A driver who is still pending approval, on the waiting list, or (in GT3 WCT) not yet cleared to take a slot no longer receives a no-show penalty point — they were never expected to race and often can't even RSVP yet. Only approved, confirmed entrants who go silent and don't show up are affected.",
+    ],
+  },
+  {
     version: "1.17.0",
     date: "2026-06-22",
     changes: [
