@@ -90,16 +90,44 @@ export default async function PenaltyPoolPublicPage({
       round: { seasonId },
       finishStatus: { in: ["CLASSIFIED", "DNF", "DSQ"] },
     },
+    select: { roundId: true, registrationId: true, finishStatus: true },
+  });
+  // "Entered/raced cleanly" (green ✓) = CLASSIFIED or DNF only — mirrors the
+  // forgiveness engine. DSQ does NOT count as a clean race; it gets its own
+  // white "DSQ" marker instead.
+  const enteredByReg = new Map<string, Set<string>>();
+  const dsqByReg = new Map<string, Set<string>>();
+  for (const rr of raceResults) {
+    if (rr.finishStatus === "DSQ") {
+      let dset = dsqByReg.get(rr.registrationId);
+      if (!dset) {
+        dset = new Set();
+        dsqByReg.set(rr.registrationId, dset);
+      }
+      dset.add(rr.roundId);
+    } else {
+      let set = enteredByReg.get(rr.registrationId);
+      if (!set) {
+        set = new Set();
+        enteredByReg.set(rr.registrationId, set);
+      }
+      set.add(rr.roundId);
+    }
+  }
+
+  // Drivers who declined a round via RSVP — shown as a red ✕ cell.
+  const declinedRsvps = await prisma.roundRsvp.findMany({
+    where: { round: { seasonId }, status: "DECLINED" },
     select: { roundId: true, registrationId: true },
   });
-  const enteredByReg = new Map<string, Set<string>>();
-  for (const rr of raceResults) {
-    let set = enteredByReg.get(rr.registrationId);
+  const declinedByReg = new Map<string, Set<string>>();
+  for (const rv of declinedRsvps) {
+    let set = declinedByReg.get(rv.registrationId);
     if (!set) {
       set = new Set();
-      enteredByReg.set(rr.registrationId, set);
+      declinedByReg.set(rv.registrationId, set);
     }
-    set.add(rr.roundId);
+    set.add(rv.roundId);
   }
 
   type DriverRow = {
@@ -206,21 +234,33 @@ export default async function PenaltyPoolPublicPage({
                   const pts = d.cellsByRound.get(r.id) ?? 0;
                   const entered =
                     enteredByReg.get(d.registrationId)?.has(r.id) ?? false;
+                  const isDsq =
+                    (dsqByReg.get(d.registrationId)?.has(r.id) ?? false) &&
+                    r.status === "COMPLETED";
+                  const declined =
+                    declinedByReg.get(d.registrationId)?.has(r.id) ?? false;
                   // Clean-race highlighting only makes sense when there's a
                   // forgiveness mechanism — i.e. in FULL mode.
                   const cleanCompleted =
                     isFull && pts === 0 && entered && r.status === "COMPLETED";
+                  // Display priority: penalty points → DSQ → clean ✓ →
+                  // declined ✕ → nothing. (A DSQ still counts toward
+                  // forgiveness in the engine; only the cell display differs.)
                   return (
                     <td
                       key={r.id}
-                      className={`px-2 py-2 text-center tabular-nums ${cleanCompleted ? "bg-emerald-900/40" : ""}`}
+                      className={`px-2 py-2 text-center tabular-nums ${cleanCompleted && !isDsq ? "bg-emerald-900/40" : ""}`}
                     >
                       {pts > 0 ? (
                         <span className="rounded bg-amber-900/40 px-2 py-0.5 text-amber-200">
                           {pts}
                         </span>
+                      ) : isDsq ? (
+                        <span className="font-semibold text-zinc-100" title="Disqualified">DSQ</span>
                       ) : cleanCompleted ? (
                         <span className="text-emerald-300" title="Clean race">✓</span>
+                      ) : declined ? (
+                        <span className="font-semibold text-red-400" title="Declined">✕</span>
                       ) : (
                         <span className="text-zinc-700">—</span>
                       )}

@@ -19,6 +19,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.7",
+    date: "2026-06-23",
+    changes: [
+      "Penalty pool: a disqualified race no longer counts as a clean race, so it does not advance auto-forgiveness. It still shows as a white “DSQ” marker in the table.",
+    ],
+  },
+  {
+    version: "1.18.6",
+    date: "2026-06-23",
+    changes: [
+      "Penalty pool table now shows two more per-round markers: a red ✕ when a driver declined that round via RSVP, and a white “DSQ” when a driver raced but was disqualified.",
+    ],
+  },
+  {
     version: "1.18.5",
     date: "2026-06-23",
     changes: [
