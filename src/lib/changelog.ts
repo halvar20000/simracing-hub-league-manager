@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.4",
+    date: "2026-06-23",
+    changes: [
+      "Fixed the Combined tab on the round results page for Pro/Am seasons (GT3 WCT): it now awards points by overall finishing position (P1=35, P2=33, …) across the whole field, instead of showing class-relative points. The Pro and Am tabs still show class-relative points for the championship.",
+    ],
+  },
+  {
     version: "1.18.3",
     date: "2026-06-23",
     changes: [

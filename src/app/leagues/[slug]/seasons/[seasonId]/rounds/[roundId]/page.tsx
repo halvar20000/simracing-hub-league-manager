@@ -865,12 +865,16 @@ export default async function PublicRoundResults({
             classRacePoints={classRacePointsByResult}
           />
         ) : (
+          // Combined tab: overall-position points (P1=35, P2=33, …) for the
+          // whole field, NOT class-relative. Pass classRacePoints={null} so the
+          // Pts column uses the stored overall-position rawPointsAwarded. The
+          // Pro/Am tabs (above) keep the class-relative map.
           <ResultsTable
             rows={allRows}
             isMulticlass={isMulticlass}
             renumberWithinGroup={false}
             winnerTotalTimeMs={combinedWinner?.totalTimeMs ?? null}
-            classRacePoints={classRacePointsByResult}
+            classRacePoints={null}
             includeParticipation={includeParticipationInCombined}
           />
         )}
