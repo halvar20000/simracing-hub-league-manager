@@ -103,17 +103,17 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
     orderBy: [{ createdAt: "asc" }],
   });
 
-  // "Entered" for the clean-race counter means the driver STARTED the race.
-  // CLASSIFIED, DNF and DSQ all count — all three mean the driver took the
-  // start, and forgiveness is about not receiving new penalty POINTS, not
-  // about the result status (a DSQ with no penalty points is still a race the
-  // driver took part in without earning pool points). Only DNS (didn't start)
-  // and "no result at all" do not count toward forgiveness.
+  // "Entered and raced cleanly" for the forgiveness counter means CLASSIFIED
+  // or DNF only. DSQ does NOT count toward forgiveness (a disqualified race is
+  // not a clean race), and DNS / no-result obviously don't either. The penalty
+  // pool table still shows a DSQ marker, but it neither advances nor resets the
+  // forgiveness counter (unless a penalty was also issued that round, which is
+  // tracked separately via the penalty rounds).
   const allResults = await prisma.raceResult.findMany({
     where: {
       roundId: { in: completedRounds.map((r) => r.id) },
       registrationId: { in: regIds },
-      finishStatus: { in: ["CLASSIFIED", "DNF", "DSQ"] },
+      finishStatus: { in: ["CLASSIFIED", "DNF"] },
     },
     select: { roundId: true, registrationId: true },
   });
