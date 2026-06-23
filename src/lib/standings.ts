@@ -494,6 +494,11 @@ export async function computeDriverStandings(
 
   standings.sort(
     (a, b) =>
+      // Drivers who have raced at least one round always rank above drivers who
+      // have not raced at all — non-participants sink to the bottom and are
+      // never interleaved with drivers who drove (even on 0 points / 0 incidents
+      // where the incident tiebreaker would otherwise float a non-racer up).
+      Number(b.roundsCompleted > 0) - Number(a.roundsCompleted > 0) ||
       b.classTotal - a.classTotal ||
       // Tiebreaker: fewer total incidents ranks higher (applies to all leagues).
       a.totalIncidents - b.totalIncidents ||

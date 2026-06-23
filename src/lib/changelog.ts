@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.5",
+    date: "2026-06-23",
+    changes: [
+      "Standings now always list drivers who have raced above drivers who haven't raced yet. Registered drivers with no result are pushed to the bottom of the Combined, Pro and Am tables instead of being mixed in among drivers who scored zero or took incidents.",
+    ],
+  },
+  {
     version: "1.18.4",
     date: "2026-06-23",
     changes: [
