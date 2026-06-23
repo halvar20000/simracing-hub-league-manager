@@ -14,9 +14,11 @@ import {
 // CAR-MATCH ENFORCEMENT — leagues where a driver MUST race the exact car they
 // registered. If the car driven in the imported JSON differs from the
 // registered car, the result is disqualified (finishStatus = DSQ). Compared by
-// the resolved season Car row, so it works regardless of whether the
-// registered car carries an iRacing car_id (resolveCarId canonicalises by
-// iRacing id then by name). See CLAUDE.md "Leagues".
+// iRacing car_id (registered car's iracingCarId vs the driven car_id), NOT by
+// internal Car-row id — the latter produced false DSQs when iRacing renamed a
+// car and resolveCarId minted a fresh row for the same physical car. Only flags
+// when the registered car has a known iRacing id that differs from the driven
+// one. See CLAUDE.md "Wrong-car DSQ".
 const CAR_ENFORCED_LEAGUE_SLUGS = new Set(["cas-iec", "cas-gt3-wct"]);
 
 // CAR LOOKUP — resolve a season's Car for an iRacing car_id.
@@ -159,7 +161,10 @@ export async function importIracingJson(
   // Pull season roster + build cust_id → registrationId map
   const registrations = await prisma.registration.findMany({
     where: { seasonId, status: "APPROVED" },
-    include: { user: true, car: { select: { id: true, name: true } } },
+    include: {
+      user: true,
+      car: { select: { id: true, name: true, iracingCarId: true } },
+    },
   });
   const memberMap = new Map<
     number,
@@ -172,6 +177,8 @@ export async function importIracingJson(
       /** Car the driver registered with — the source of truth for enforcement. */
       registeredCarId: string | null;
       registeredCarName: string | null;
+      /** iRacing car_id of the registered car (null on legacy/unlinked rows). */
+      registeredCarIracingId: number | null;
     }
   >();
   for (const reg of registrations) {
@@ -187,6 +194,7 @@ export async function importIracingJson(
       currentStartNumber: reg.startNumber,
       registeredCarId: reg.carId,
       registeredCarName: reg.car?.name ?? null,
+      registeredCarIracingId: reg.car?.iracingCarId ?? null,
     });
   }
 
@@ -257,14 +265,21 @@ export async function importIracingJson(
       );
 
       // CAR-MATCH ENFORCEMENT (IEC + GT3 WCT): the driver must race the exact
-      // car they registered. A deviation disqualifies the result. We only flag
-      // when we can prove a mismatch — i.e. both the registered car and the
-      // resolved driven car are known and differ.
+      // car they registered. A deviation disqualifies the result. We compare by
+      // iRacing car_id — NOT internal Car-row id — because resolveCarId may
+      // create a fresh Car row when iRacing's car name has drifted (e.g. "BMW
+      // M4 GT3 EVO", "Mercedes-AMG GT3 2020"), which would make the same
+      // physical car resolve to a different row and trigger a false DSQ.
+      // We only flag when we can PROVE a mismatch: the registered car has a
+      // known iRacing id AND the driven car_id is known AND they differ. If the
+      // registered car has no iRacing id (legacy/unlinked row), we cannot prove
+      // anything, so we do not disqualify.
+      const drivenCarIracingId = d.carIracingId ?? null;
       const carMismatch =
         carEnforced &&
-        !!reg.registeredCarId &&
-        !!resolvedCarId &&
-        resolvedCarId !== reg.registeredCarId;
+        reg.registeredCarIracingId != null &&
+        !!drivenCarIracingId &&
+        drivenCarIracingId !== reg.registeredCarIracingId;
 
       const finishStatus = carMismatch ? "DSQ" : d.finishStatus;
       const dqNote = carMismatch

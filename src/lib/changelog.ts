@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.1",
+    date: "2026-06-23",
+    changes: [
+      "Fixed a results-import bug in the car-enforced leagues (GT3 WCT, IEC) that wrongly disqualified drivers for “driving the wrong car”. The check now compares the actual iRacing car, so a car simply being renamed by iRacing (e.g. “BMW M4 GT3 EVO”, “Mercedes-AMG GT3 2020”) no longer triggers a false disqualification. Re-import the affected round to clear any wrongly applied DSQs.",
+    ],
+  },
+  {
     version: "1.18.0",
     date: "2026-06-23",
     changes: [
