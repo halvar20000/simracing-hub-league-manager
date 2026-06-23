@@ -477,12 +477,17 @@ export default async function PublicRoundResults({
     (a, b) => b.totalPoints - a.totalPoints
   );
 
-  // Pro / Am views still operate on per-race-result rows
+  // Pro / Am views still operate on per-race-result rows.
+  // Filter on the driver's Pro/Am tier (Registration.proAmClass) — NOT on
+  // carClass.shortCode. The clean Pro/Am model (proAmEnabled, isMulticlass
+  // false) has no car class on the registration, so the old carClass filter
+  // left both tabs empty. proAmClass is populated for the legacy season too
+  // (it duplicates the fake "Pro"/"Am" car classes), so this works for both.
   const proRows = sortByFinish(
-    allRows.filter((r) => r.registration.carClass?.shortCode === "PRO")
+    allRows.filter((r) => r.registration.proAmClass === "PRO")
   );
   const amRows = sortByFinish(
-    allRows.filter((r) => r.registration.carClass?.shortCode === "AM")
+    allRows.filter((r) => r.registration.proAmClass === "AM")
   );
 
   // Team groupings (aggregated across all the team's drivers, multi-race aware)

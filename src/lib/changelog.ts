@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.2",
+    date: "2026-06-23",
+    changes: [
+      "Fixed empty Pro and Am tabs on the round results page for Pro/Am seasons (GT3 WCT). The tabs now split drivers by their Pro/Am tier instead of by car class, so they populate correctly. Affects both the public round page and the admin race-center view.",
+    ],
+  },
+  {
     version: "1.18.1",
     date: "2026-06-23",
     changes: [

@@ -454,6 +454,7 @@ function ResultRow({
     user: { firstName: string | null; lastName: string | null; countryCode: string | null };
     team: { name: string } | null;
     carClass: { name: string; shortCode: string } | null;
+    proAmClass: "PRO" | "AM" | null;
       excludedAt: Date | null;
     raceResults: Array<{
       id: string;
@@ -707,16 +708,15 @@ function AdminRegList({
   // participation. Combined/Team match combinedTotal which is gated.
   const includeParticipation =
     cls === "pro" || cls === "am" ? true : participationInCombined;
-  // Class filter
+  // Class filter — on the driver's Pro/Am tier (Registration.proAmClass), NOT
+  // carClass.shortCode. The clean Pro/Am model has no car class on the
+  // registration, so the old carClass filter left the tabs empty. proAmClass is
+  // populated for the legacy season too, so this works for both.
   let filtered = registrations;
   if (cls === "pro") {
-    filtered = registrations.filter(
-      (r) => r.carClass?.shortCode === "PRO"
-    );
+    filtered = registrations.filter((r) => r.proAmClass === "PRO");
   } else if (cls === "am") {
-    filtered = registrations.filter(
-      (r) => r.carClass?.shortCode === "AM"
-    );
+    filtered = registrations.filter((r) => r.proAmClass === "AM");
   }
 
   if (cls !== "team") {
