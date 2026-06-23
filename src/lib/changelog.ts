@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.3",
+    date: "2026-06-23",
+    changes: [
+      "Penalty pool: a driver who started the race now counts as a clean race even if they were disqualified (as long as they took no penalty points). Disqualified drivers get the green check and their two-clean-races forgiveness still progresses. Only drivers who did not start (DNS) or have no result at all are left blank.",
+    ],
+  },
+  {
     version: "1.18.2",
     date: "2026-06-23",
     changes: [

@@ -81,12 +81,14 @@ export default async function PenaltyPoolPublicPage({
     },
   });
 
-  // Mirror the penalty-pool engine: only CLASSIFIED and DNF count as "entered
-  // and raced cleanly". DNS (didn't start) and DSQ (disqualified) do not.
+  // Mirror the penalty-pool engine: a driver counts as "entered/raced" when
+  // they STARTED the race — CLASSIFIED, DNF and DSQ all count. Only DNS
+  // (didn't start) and no-result do not. (A DSQ with no penalty points is
+  // still a clean race for forgiveness.)
   const raceResults = await prisma.raceResult.findMany({
     where: {
       round: { seasonId },
-      finishStatus: { in: ["CLASSIFIED", "DNF"] },
+      finishStatus: { in: ["CLASSIFIED", "DNF", "DSQ"] },
     },
     select: { roundId: true, registrationId: true },
   });
