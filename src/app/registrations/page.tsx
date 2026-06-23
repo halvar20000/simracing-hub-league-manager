@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { withdrawRegistration } from "@/lib/actions/registrations";
 import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
+import TeamManageModal from "@/components/TeamManageModal";
 
 export default async function MyRegistrationsPage({
   searchParams,
@@ -191,13 +192,12 @@ export default async function MyRegistrationsPage({
                   return (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {[...links].map(([id, name]) => (
-                        <Link
+                        <TeamManageModal
                           key={id}
-                          href={`/teams/${id}/manage`}
+                          teamId={id}
+                          label={`Manage ${links.size > 1 ? name : "team"} →`}
                           className="inline-block rounded border border-orange-700 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-300 hover:bg-orange-900/40"
-                        >
-                          Manage {links.size > 1 ? name : "team"} →
-                        </Link>
+                        />
                       ))}
                     </div>
                   );

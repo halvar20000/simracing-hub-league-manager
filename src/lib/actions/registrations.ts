@@ -13,6 +13,15 @@ import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 import { parseStartNumberInput } from "@/lib/start-number";
 
+// Append a query param to a redirect target, using "&" if the base already
+// carries a query string (e.g. the embedded Manage Team view passes
+// `redirectTo=/teams/<id>/manage?embed=1`). Keeps the iframe chrome-free by
+// returning to the same embed URL instead of the full-page /registrations.
+function withQuery(base: string, key: string, value: string): string {
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}${key}=${encodeURIComponent(value)}`;
+}
+
 export async function createRegistration(
   leagueSlug: string,
   seasonId: string,
@@ -1147,7 +1156,12 @@ export async function updateTeamRegistration(formData: FormData) {
 
   revalidatePath(`/teams/${teamId}/manage`);
   revalidatePath(`/registrations`);
-  redirect(`/registrations?success=team_updated`);
+  const updRedirect = String(formData.get("redirectTo") ?? "").trim();
+  redirect(
+    updRedirect
+      ? withQuery(updRedirect, "success", "Team updated")
+      : `/registrations?success=team_updated`
+  );
 }
 
 export async function withdrawTeam(formData: FormData) {
@@ -1190,7 +1204,12 @@ export async function withdrawTeam(formData: FormData) {
     `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
   );
   revalidatePath(`/registrations`);
-  redirect(`/registrations?success=team_withdrawn`);
+  const wdRedirect = String(formData.get("redirectTo") ?? "").trim();
+  redirect(
+    wdRedirect
+      ? withQuery(wdRedirect, "success", "Team withdrawn")
+      : `/registrations?success=team_withdrawn`
+  );
 }
 
 export async function transferTeamLeadership(formData: FormData) {
@@ -1263,7 +1282,12 @@ export async function transferTeamLeadership(formData: FormData) {
     `/admin/leagues/${team.season.league.slug}/seasons/${team.seasonId}/roster`
   );
   revalidatePath(`/registrations`);
-  redirect(`/registrations?success=leadership_transferred`);
+  const ltRedirect = String(formData.get("redirectTo") ?? "").trim();
+  redirect(
+    ltRedirect
+      ? withQuery(ltRedirect, "success", "Leadership transferred")
+      : `/registrations?success=leadership_transferred`
+  );
 }
 
 // ============================================================================
@@ -1280,9 +1304,11 @@ export async function updateTeamClassCar(formData: FormData) {
   if (!teamId) throw new Error("teamId required");
   const { team, isAdmin } = await requireTeamLeader(teamId);
 
-  const back = `/teams/${teamId}/manage`;
+  const back =
+    String(formData.get("redirectTo") ?? "").trim() ||
+    `/teams/${teamId}/manage`;
   const fail = (msg: string): never =>
-    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+    redirect(withQuery(back, "error", msg));
 
   // Locked once the first race of the season has started — admins bypass.
   if (!isAdmin) {
@@ -1350,7 +1376,7 @@ export async function updateTeamClassCar(formData: FormData) {
   );
   revalidatePath(`/teams/${team.id}/manage`);
   redirect(
-    `${back}?success=${encodeURIComponent(`Team switched to ${carClass!.name} — ${car!.name}`)}`
+    withQuery(back, "success", `Team switched to ${carClass!.name} — ${car!.name}`)
   );
 }
 
@@ -1365,9 +1391,11 @@ export async function renameTeam(formData: FormData) {
   if (!teamId) throw new Error("teamId required");
   const { team, isAdmin } = await requireTeamLeader(teamId);
 
-  const back = `/teams/${teamId}/manage`;
+  const back =
+    String(formData.get("redirectTo") ?? "").trim() ||
+    `/teams/${teamId}/manage`;
   const fail = (msg: string): never =>
-    redirect(`${back}?error=${encodeURIComponent(msg)}`);
+    redirect(withQuery(back, "error", msg));
 
   // Locked once the first race of the season has started — admins bypass.
   if (!isAdmin) {
@@ -1385,7 +1413,7 @@ export async function renameTeam(formData: FormData) {
   if (!newName) fail("Team name is required");
   if (newName.length > 60) fail("Team name is too long (max 60 characters)");
   if (newName === team.name) {
-    redirect(`${back}?success=${encodeURIComponent("Team name unchanged")}`);
+    redirect(withQuery(back, "success", "Team name unchanged"));
   }
 
   // Unique per season (case-insensitive check to avoid near-duplicates).
@@ -1436,9 +1464,7 @@ export async function renameTeam(formData: FormData) {
   );
   revalidatePath(`/teams/${team.id}/manage`);
   revalidatePath("/registrations");
-  redirect(
-    `${back}?success=${encodeURIComponent(`Team renamed to ${newName}`)}`
-  );
+  redirect(withQuery(back, "success", `Team renamed to ${newName}`));
 }
 
 // ============================================================================
@@ -1476,7 +1502,7 @@ export async function assignTeamManager(formData: FormData) {
   const { team } = await requireChefOrAdmin(teamId);
 
   const fail = (msg: string): never =>
-    redirect(`${redirectTo}?error=${encodeURIComponent(msg)}`);
+    redirect(withQuery(redirectTo, "error", msg));
 
   // The picker submits a user ID — free text is never accepted. Validate the
   // ID against the User table regardless (the client check is convenience).
@@ -1584,9 +1610,7 @@ export async function assignTeamManager(formData: FormData) {
   );
   revalidatePath(`/teams/${team.id}/manage`);
   revalidatePath(`/registrations`);
-  redirect(
-    `${redirectTo}?success=${encodeURIComponent(`${managerName} is now team manager`)}`
-  );
+  redirect(withQuery(redirectTo, "success", `${managerName} is now team manager`));
 }
 
 export async function removeTeamManager(formData: FormData) {
@@ -1598,7 +1622,7 @@ export async function removeTeamManager(formData: FormData) {
 
   const oldManagerId = team.managerUserId;
   if (!oldManagerId) {
-    redirect(`${redirectTo}?error=${encodeURIComponent("This team has no manager")}`);
+    redirect(withQuery(redirectTo, "error", "This team has no manager"));
   }
 
   await prisma.team.update({
@@ -1651,7 +1675,7 @@ export async function removeTeamManager(formData: FormData) {
   );
   revalidatePath(`/teams/${team.id}/manage`);
   revalidatePath(`/registrations`);
-  redirect(`${redirectTo}?success=${encodeURIComponent("Manager removed")}`);
+  redirect(withQuery(redirectTo, "success", "Manager removed"));
 }
 
 // ============================================================================

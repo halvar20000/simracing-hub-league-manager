@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.18.0",
+    date: "2026-06-23",
+    changes: [
+      "“Manage team” now opens right on the roster in a pop-up window instead of taking you to a separate page. Admins and team leaders can change a team's drivers, name, class/car, leadership and manager without leaving the roster — close the pop-up and the roster refreshes automatically. Works on the admin and public rosters and on the My Registrations page.",
+    ],
+  },
+  {
     version: "1.17.1",
     date: "2026-06-23",
     changes: [

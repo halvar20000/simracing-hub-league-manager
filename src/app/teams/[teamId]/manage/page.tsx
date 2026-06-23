@@ -21,16 +21,35 @@ export default async function ManageTeamPage({
   searchParams,
 }: {
   params: Promise<{ teamId: string }>;
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; embed?: string }>;
 }) {
   const { teamId } = await params;
-  const { error, success } = await searchParams;
+  const { error, success, embed: embedParam } = await searchParams;
+  // Embedded mode: rendered inside an iframe (the in-page "Manage team" modal
+  // on the roster / registrations pages). Strip the site chrome and keep all
+  // post-action redirects pointing back at this embed URL so the iframe never
+  // shows the full nav/footer.
+  const embed = embedParam === "1";
+  const basePath = embed
+    ? `/teams/${teamId}/manage?embed=1`
+    : `/teams/${teamId}/manage`;
   const session = await auth();
   if (!session?.user?.id) {
     redirect(
-      `/api/auth/signin?callbackUrl=/teams/${teamId}/manage`
+      `/api/auth/signin?callbackUrl=${encodeURIComponent(basePath)}`
     );
   }
+
+  // Hides the global nav/footer/contact-FAB and tightens the main padding when
+  // rendered inside the roster modal's iframe.
+  const embedStyle = embed ? (
+    <style
+      dangerouslySetInnerHTML={{
+        __html:
+          'nav,footer{display:none!important}main{max-width:none!important;padding:1rem!important}[aria-label="Report an issue / Contact developer"]{display:none!important}',
+      }}
+    />
+  ) : null;
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -104,12 +123,15 @@ export default async function ManageTeamPage({
   if (!isLeader && !isManager && !isAdmin) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/registrations"
-          className="text-sm text-zinc-400 hover:text-zinc-200"
-        >
-          ← My registrations
-        </Link>
+        {embedStyle}
+        {!embed && (
+          <Link
+            href="/registrations"
+            className="text-sm text-zinc-400 hover:text-zinc-200"
+          >
+            ← My registrations
+          </Link>
+        )}
         <h1 className="text-2xl font-bold">Team management</h1>
         <p className="rounded border border-amber-700/50 bg-amber-950/30 p-3 text-sm text-amber-200">
           Only the current team leader or team manager can manage this team.
@@ -125,14 +147,17 @@ export default async function ManageTeamPage({
 
   return (
     <div className="max-w-3xl space-y-8">
+      {embedStyle}
       <div>
-        <Link
-          href="/registrations"
-          className="text-sm text-zinc-400 hover:text-zinc-200"
-        >
-          ← My registrations
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold">Manage team</h1>
+        {!embed && (
+          <Link
+            href="/registrations"
+            className="text-sm text-zinc-400 hover:text-zinc-200"
+          >
+            ← My registrations
+          </Link>
+        )}
+        <h1 className={`${embed ? "" : "mt-2 "}text-2xl font-bold`}>Manage team</h1>
         <p className="mt-1 text-sm text-zinc-400">
           {team.name} · {team.season.league.name} {team.season.name}{" "}
           {team.season.year} · {leaderReg?.carClass?.name} ·{" "}
@@ -187,6 +212,7 @@ export default async function ManageTeamPage({
               className="flex flex-wrap items-end gap-3 rounded border border-zinc-800 bg-zinc-900/50 p-4"
             >
               <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="redirectTo" value={basePath} />
               <label className="block grow">
                 <span className="mb-1 block text-xs text-zinc-400">
                   Team name
@@ -226,6 +252,7 @@ export default async function ManageTeamPage({
           className="space-y-4 rounded border border-zinc-800 bg-zinc-900/50 p-4"
         >
           <input type="hidden" name="teamId" value={team.id} />
+          <input type="hidden" name="redirectTo" value={basePath} />
 
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">
@@ -361,6 +388,7 @@ export default async function ManageTeamPage({
               className="space-y-4 rounded border border-zinc-800 bg-zinc-900/50 p-4"
             >
               <input type="hidden" name="teamId" value={team.id} />
+              <input type="hidden" name="redirectTo" value={basePath} />
               <TeamClassCarSelect
                 carClasses={carClassesForSelect}
                 defaultClassId={leaderReg?.carClassId ?? teammates[0]?.carClassId ?? undefined}
@@ -391,6 +419,7 @@ export default async function ManageTeamPage({
             className="flex flex-wrap items-end gap-3 rounded border border-zinc-800 bg-zinc-900/50 p-4"
           >
             <input type="hidden" name="teamId" value={team.id} />
+            <input type="hidden" name="redirectTo" value={basePath} />
             <label className="block">
               <span className="mb-1 block text-xs text-zinc-400">
                 New leader
@@ -443,11 +472,7 @@ export default async function ManageTeamPage({
               </p>
               <form action={removeTeamManager}>
                 <input type="hidden" name="teamId" value={team.id} />
-                <input
-                  type="hidden"
-                  name="redirectTo"
-                  value={`/teams/${team.id}/manage`}
-                />
+                <input type="hidden" name="redirectTo" value={basePath} />
                 <button
                   type="submit"
                   className="rounded border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-200 hover:bg-amber-900/50"
@@ -471,11 +496,7 @@ export default async function ManageTeamPage({
                 className="flex flex-wrap items-end gap-3 rounded border border-zinc-800 bg-zinc-900/50 p-4"
               >
                 <input type="hidden" name="teamId" value={team.id} />
-                <input
-                  type="hidden"
-                  name="redirectTo"
-                  value={`/teams/${team.id}/manage`}
-                />
+                <input type="hidden" name="redirectTo" value={basePath} />
                 <div className="block">
                   <span className="mb-1 block text-xs text-zinc-400">
                     Search the manager&apos;s CLS account
@@ -509,6 +530,7 @@ export default async function ManageTeamPage({
           className="rounded border border-red-900/40 bg-red-950/20 p-4"
         >
           <input type="hidden" name="teamId" value={team.id} />
+          <input type="hidden" name="redirectTo" value={basePath} />
           <button
             type="submit"
             className="rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-200 hover:bg-red-900/60"
