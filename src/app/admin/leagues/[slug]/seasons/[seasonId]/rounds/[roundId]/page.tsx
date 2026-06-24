@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { upsertRaceResult } from "@/lib/actions/race-results";
+import { upsertRaceResult, recomputeRoundScoringAction } from "@/lib/actions/race-results";
 import { formatMsToTime } from "@/lib/time";
 import { CountryFlag } from "@/components/CountryFlag";
 import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
@@ -157,6 +157,16 @@ export default async function AdminRoundResults({
             >
               RSVP
             </Link>
+            <form action={recomputeRoundScoringAction}>
+              <input type="hidden" name="slug" value={slug} />
+              <input type="hidden" name="seasonId" value={seasonId} />
+              <input type="hidden" name="roundId" value={roundId} />
+              <SubmitWithSpinner
+                label="♻️ Recompute scoring"
+                pendingLabel="Recomputing…"
+                className="rounded border border-cyan-700/60 bg-cyan-950/30 px-3 py-1.5 text-sm text-cyan-200 hover:bg-cyan-900/40"
+              />
+            </form>
             {round.season.league.discordGuildId && (
               <form action={createRaceEventAction}>
                 <input type="hidden" name="slug" value={slug} />

@@ -270,17 +270,76 @@ export async function recomputeRoundFPR(
  * Recompute everything for a round: per-result raw points + per-round
  * participation + FPR.
  */
+/**
+ * Award overall race points by CLASSIFICATION rank, not raw iRacing finishing
+ * position. Per race (raceNumber) within the round, the drivers who score
+ * position points — i.e. NOT DSQ, NOT DNS, and at/above the race-points
+ * minimum distance — are ranked 1..N by finishing position and given
+ * pointsTable[rank]. Non-scoring drivers (DSQ / DNS / below min distance) are
+ * excluded, so everyone behind them moves up and there are no gaps in the
+ * points (e.g. a disqualified P4 promotes the old P5 into P4's points).
+ *
+ * This mirrors how class (Pro/Am) positions are already computed in
+ * standings.ts, so overall and class scoring now use the same method.
+ */
+async function recomputeClassificationPointsForRound(
+  prisma: PrismaClient,
+  roundId: string
+): Promise<void> {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      season: { include: { scoringSystem: true } },
+      raceResults: true,
+    },
+  });
+  if (!round) return;
+  const scoring = round.season.scoringSystem;
+  const minPct = scoring.racePointsMinDistancePct ?? 0;
+
+  // Group by race (a round may have multiple races, each scored separately).
+  const byRace = new Map<number, typeof round.raceResults>();
+  for (const r of round.raceResults) {
+    const list = byRace.get(r.raceNumber) ?? [];
+    list.push(r);
+    byRace.set(r.raceNumber, list);
+  }
+
+  for (const [raceNumber, list] of byRace) {
+    const pointsTable = (raceNumber > 1 && scoring.pointsTableRace2
+      ? scoring.pointsTableRace2
+      : scoring.pointsTable) as PointsTable;
+
+    // Drivers eligible for position points, ranked by finishing order.
+    const ranked = new Map<string, number>();
+    list
+      .filter(
+        (r) =>
+          r.finishStatus !== "DSQ" &&
+          r.finishStatus !== "DNS" &&
+          r.raceDistancePct >= minPct
+      )
+      .sort((a, b) => a.finishPosition - b.finishPosition)
+      .forEach((r, i) => ranked.set(r.id, i + 1));
+
+    for (const r of list) {
+      const rank = ranked.get(r.id);
+      const raw = rank != null ? pointsTable[String(rank)] ?? 0 : 0;
+      if (r.rawPointsAwarded !== raw) {
+        await prisma.raceResult.update({
+          where: { id: r.id },
+          data: { rawPointsAwarded: raw },
+        });
+      }
+    }
+  }
+}
+
 export async function recomputeRoundScoring(
   prisma: PrismaClient,
   roundId: string
 ): Promise<void> {
-  const results = await prisma.raceResult.findMany({
-    where: { roundId },
-    select: { id: true },
-  });
-  for (const r of results) {
-    await recomputeResultPoints(prisma, r.id);
-  }
+  await recomputeClassificationPointsForRound(prisma, roundId);
   await recomputeParticipationForRound(prisma, roundId);
   await recomputeDsqForfeitForRound(prisma, roundId);
   await recomputeRoundFPR(prisma, roundId);

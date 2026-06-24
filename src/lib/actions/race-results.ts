@@ -111,3 +111,28 @@ export async function deleteRaceResult(
     `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}`
   );
 }
+
+/**
+ * Admin button: re-run the scoring pipeline for a round (classification
+ * points, participation, DSQ forfeit, FPR) without re-importing results.
+ * Used to apply scoring-rule changes to an already-imported round.
+ */
+export async function recomputeRoundScoringAction(
+  formData: FormData
+): Promise<void> {
+  await requireAdmin();
+
+  const slug = String(formData.get("slug") ?? "");
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const roundId = String(formData.get("roundId") ?? "");
+  const base = `/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
+
+  await recomputeRoundScoring(prisma, roundId);
+
+  revalidatePath(base);
+  revalidatePath(`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`);
+  revalidatePath(`/leagues/${slug}/seasons/${seasonId}/standings`);
+  revalidatePath(`/admin/leagues/${slug}/seasons/${seasonId}`);
+  revalidatePath(`/leagues/${slug}/seasons/${seasonId}`);
+  redirect(`${base}?rescored=1`);
+}

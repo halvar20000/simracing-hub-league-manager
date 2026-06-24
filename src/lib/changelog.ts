@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.0",
+    date: "2026-06-24",
+    changes: [
+      "Race points are now awarded by classification, not raw finishing position. When a driver is disqualified (or doesn't score — DNS / below the minimum distance), everyone behind them moves up a place and takes the higher points, so there are no gaps in the points (e.g. a disqualified P4 no longer loses the 29 points — the next driver inherits them). This matches how the Pro/Am class points already worked. Applies to all leagues; existing rounds adopt it the next time their results are imported or re-scored.",
+    ],
+  },
+  {
     version: "1.19.3",
     date: "2026-06-24",
     changes: [
