@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.2",
+    date: "2026-06-24",
+    changes: [
+      "Removed the redundant per-class “Pro”/“Am” sub-tables that appeared below the Combined standings (often showing “No results yet”). The dedicated Pro and Am tabs already cover this.",
+    ],
+  },
+  {
     version: "1.19.1",
     date: "2026-06-24",
     changes: [
