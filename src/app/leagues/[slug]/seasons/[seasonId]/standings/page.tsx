@@ -293,6 +293,7 @@ export default async function StandingsPage({
             kind="combined"
             showTeam
             showClass={season.isMulticlass}
+            showProAm={season.proAmEnabled}
           />
         )}
       </section>
@@ -512,18 +513,36 @@ function ValueCell({
     </>
   );
 }
+function ProAmBadge({ cls }: { cls: "PRO" | "AM" | null }) {
+  if (!cls) return <span className="text-zinc-600">—</span>;
+  const isPro = cls === "PRO";
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        isPro ? "bg-sky-500/15 text-sky-300" : "bg-amber-500/15 text-amber-300"
+      }`}
+    >
+      {isPro ? "Pro" : "Am"}
+    </span>
+  );
+}
+
 function DriversTable({
   rows,
   previousRows,
   kind,
   showTeam,
   showClass,
+  showProAm,
 }: {
   rows: DriverStanding[];
   previousRows: DriverStanding[] | null;
   kind: StandingsKind;
   showTeam?: boolean;
   showClass?: boolean;
+  /** Render the Class column as the driver's Pro/Am tier (from proAmClass)
+   *  instead of the car class. Takes priority over showClass. */
+  showProAm?: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyState icon={<ChartIcon />} title="No standings to show yet" description="Standings will appear after the first round results are imported." />;
@@ -545,7 +564,7 @@ function DriversTable({
             <th className="px-3 py-2">#</th>
             <th className="px-3 py-2 driver-col">Driver</th>
             {showTeam && <th className="px-3 py-2">Team</th>}
-            {showClass && <th className="px-3 py-2">Class</th>}
+            {(showClass || showProAm) && <th className="px-3 py-2">Class</th>}
             <th className="px-3 py-2 text-right">Rounds</th>
             <th className="px-3 py-2 text-right">Inc</th>
             <th className="px-3 py-2 text-right">iR</th>
@@ -598,8 +617,10 @@ function DriversTable({
                 {showTeam && (
                   <td className="px-3 py-2 text-zinc-400">{r.teamName ?? "—"}</td>
                 )}
-                {showClass && (
-                  <td className="px-3 py-2 text-zinc-400">{r.carClassName ?? "—"}</td>
+                {(showClass || showProAm) && (
+                  <td className="px-3 py-2 text-zinc-400">
+                    {showProAm ? <ProAmBadge cls={r.proAmClass} /> : (r.carClassName ?? "—")}
+                  </td>
                 )}
                 <td className="px-3 py-2 text-right text-zinc-400">{r.roundsCompleted}</td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={r.totalIncidents} delta={incDelta} lowerIsBetter /></td>

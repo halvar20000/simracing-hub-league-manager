@@ -827,6 +827,7 @@ export default async function PublicRoundResults({
           <ResultsTable
             rows={race1Rows}
             isMulticlass={isMulticlass}
+            proAmEnabled={proAmEnabled}
             renumberWithinGroup={false}
             heading="Race 1"
             classRacePoints={classRacePointsByResult}
@@ -836,6 +837,7 @@ export default async function PublicRoundResults({
           <ResultsTable
             rows={race2Rows}
             isMulticlass={isMulticlass}
+            proAmEnabled={proAmEnabled}
             renumberWithinGroup={false}
             heading="Race 2"
             classRacePoints={classRacePointsByResult}
@@ -872,6 +874,7 @@ export default async function PublicRoundResults({
           <ResultsTable
             rows={allRows}
             isMulticlass={isMulticlass}
+            proAmEnabled={proAmEnabled}
             renumberWithinGroup={false}
             winnerTotalTimeMs={combinedWinner?.totalTimeMs ?? null}
             classRacePoints={null}
@@ -958,13 +961,29 @@ type Row = {
     user: { firstName: string | null; lastName: string | null; countryCode: string | null };
     team: { name: string } | null;
     carClass: { name: string } | null;
+    proAmClass: "PRO" | "AM" | null;
     excludedAt: Date | null;
   };
 };
 
+function ProAmBadge({ cls }: { cls: "PRO" | "AM" | null }) {
+  if (!cls) return <span className="text-zinc-600">—</span>;
+  const isPro = cls === "PRO";
+  return (
+    <span
+      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        isPro ? "bg-sky-500/15 text-sky-300" : "bg-amber-500/15 text-amber-300"
+      }`}
+    >
+      {isPro ? "Pro" : "Am"}
+    </span>
+  );
+}
+
 function ResultsTable({
   rows,
   isMulticlass,
+  proAmEnabled = false,
   renumberWithinGroup,
   winnerTotalTimeMs = null,
   heading = null,
@@ -973,6 +992,8 @@ function ResultsTable({
 }: {
   rows: Row[];
   isMulticlass: boolean;
+  /** Show the driver's Pro/Am tier in the Class column (priority over car class). */
+  proAmEnabled?: boolean;
   renumberWithinGroup: boolean;
   winnerTotalTimeMs?: number | null;
   heading?: string | null;
@@ -1006,7 +1027,7 @@ function ResultsTable({
             <th className="px-3 py-2">#</th>
             <th className="px-3 py-2 driver-col">Driver</th>
             <th className="px-3 py-2">Team</th>
-            {isMulticlass && <th className="px-3 py-2">Class</th>}
+            {(isMulticlass || proAmEnabled) && <th className="px-3 py-2">Class</th>}
             <th className="px-3 py-2 text-right">Laps</th>
             <th className="px-3 py-2 text-right">Time</th>
             <th className="px-3 py-2 text-right">Quali</th>
@@ -1064,9 +1085,11 @@ function ResultsTable({
                 <td className="px-3 py-2 text-zinc-400">
                   {r.registration.team?.name ?? "—"}
                 </td>
-                {isMulticlass && (
+                {(isMulticlass || proAmEnabled) && (
                   <td className="px-3 py-2 text-zinc-400">
-                    {r.registration.carClass?.name ?? "—"}
+                    {proAmEnabled
+                      ? <ProAmBadge cls={r.registration.proAmClass} />
+                      : (r.registration.carClass?.name ?? "—")}
                   </td>
                 )}
                 <td className="px-3 py-2 text-right text-zinc-400">
