@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.0",
+    date: "2026-06-24",
+    changes: [
+      "Race-by-race standings are now interactive: a search box filters by driver name or number, every column (Pos, Total, Inc, iR and each round) is sortable by clicking its header, and the Driver column stays frozen on the left when you scroll right. The same search, sort and frozen-column behaviour applies to the team race-by-race view (IEC, SFL).",
+    ],
+  },
+  {
     version: "1.18.7",
     date: "2026-06-23",
     changes: [

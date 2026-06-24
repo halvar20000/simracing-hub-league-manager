@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/date";
@@ -20,6 +19,8 @@ import {
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { isAdminOrSteward } from "@/lib/auth-helpers";
+import { RaceByRaceDriverTable } from "@/components/RaceByRaceDriverTable";
+import { RaceByRaceTeamTable } from "@/components/RaceByRaceTeamTable";
 
 type StandingsKind = "combined" | "class";
 type ViewMode = "list" | "races";
@@ -278,7 +279,7 @@ export default async function StandingsPage({
             " Penalty points are deducted in the race they were incurred. Forgiveness earned in the penalty pool is credited back to the season total when the season completes; no-show points are deducted from the season total at the end of the season."}
         </p>
         {view === "races" ? (
-          <RaceByRaceTable
+          <RaceByRaceDriverTable
             rows={combined}
             kind="combined"
             participationInCombined={
@@ -301,7 +302,7 @@ export default async function StandingsPage({
         <section>
           <h2 className="mb-1 text-lg font-semibold">Pro</h2>
           {view === "races" ? (
-            <RaceByRaceTable
+            <RaceByRaceDriverTable
               rows={proDrivers}
               kind="class"
               participationInCombined={
@@ -317,7 +318,7 @@ export default async function StandingsPage({
         <section>
           <h2 className="mb-1 text-lg font-semibold">Am</h2>
           {view === "races" ? (
-            <RaceByRaceTable
+            <RaceByRaceDriverTable
               rows={amDrivers}
               kind="class"
               participationInCombined={
@@ -710,134 +711,6 @@ function DriversTable({
   );
 }
 
-function RaceByRaceTable({
-  rows,
-  kind,
-  participationInCombined,
-}: {
-  rows: DriverStanding[];
-  kind: StandingsKind;
-  /** Mirrors ScoringSystem.participationInCombined. Drives whether the
-   * per-round Bonus (participation) sub-column renders in the Combined
-   * view. The Pro/Am ("class") view always renders it because
-   * classTotal in standings.ts always includes participation. */
-  participationInCombined: boolean;
-}) {
-  if (rows.length === 0) {
-    return <EmptyState icon={<ChartIcon />} title="No standings to show yet" description="Standings will appear after the first round results are imported." />;
-  }
-  // Combined view: hide the Bonus column when participation doesn't count
-  // toward combinedTotal (e.g. GT3 WCT). Pro/Am view: always show it.
-  const showParticipationCol = kind === "class" || participationInCombined;
-  const subColsPerRound = showParticipationCol ? 4 : 3;
-  const rounds = rows[0].roundPoints;
-  const sorted = [...rows].sort((a, b) => {
-    const at = kind === "combined" ? a.combinedTotal : a.classTotal;
-    const bt = kind === "combined" ? b.combinedTotal : b.classTotal;
-    // Drivers who raced at least one round always rank above non-racers, so a
-    // 0-point non-participant never sits between drivers who drove.
-    return (
-      Number(b.roundsCompleted > 0) - Number(a.roundsCompleted > 0) ||
-      bt - at ||
-      // Tiebreaker: fewer total incidents ranks higher (applies to all leagues).
-      a.totalIncidents - b.totalIncidents
-    );
-  });
-
-  function formatShortDate(d: Date): string {
-    const date = new Date(d);
-    const dd = String(date.getDate()).padStart(2, "0");
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const yy = String(date.getFullYear()).slice(2);
-    return `${dd}.${mm}.${yy}`;
-  }
-
-  return (
-    <div className="overflow-x-auto rounded border border-zinc-800">
-      <table className="min-w-full text-[11px]">
-        <thead className="sticky top-0 z-30 bg-zinc-900 text-zinc-400">
-          <tr>
-            <th rowSpan={2} className="sticky left-0 top-0 z-40 bg-zinc-900 px-2 py-2 text-left">Pos</th>
-            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left">#</th>
-            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-left driver-col">Driver</th>
-            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">Total</th>
-            {rounds.map((r) => (
-              <th
-                key={r.roundId}
-                colSpan={subColsPerRound}
-                className="border-l border-zinc-800 bg-zinc-900 px-2 py-2 text-center whitespace-nowrap"
-              >
-                <div className="flex flex-col items-center leading-tight">
-                  <span className="text-[10px] text-zinc-500">R{r.roundNumber} • {formatShortDate(r.roundDate)}</span>
-                  <span className="font-display text-xs">{r.roundName}</span>
-                </div>
-              </th>
-            ))}
-            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">Inc</th>
-            <th rowSpan={2} className="bg-zinc-900 px-2 py-2 text-right">iR</th>
-          </tr>
-          <tr>
-            {rounds.map((r) => (
-              <Fragment key={r.roundId}>
-                <th className="border-l border-zinc-800 bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-400">Total</th>
-                <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">R</th>
-                {showParticipationCol && (
-                  <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">B</th>
-                )}
-                <th className="bg-zinc-900 px-1.5 py-1 text-right text-[9px] font-semibold uppercase text-zinc-500">P</th>
-              </Fragment>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((r, idx) => {
-            const seasonTotal = kind === "combined" ? r.combinedTotal : r.classTotal;
-            return (
-              <tr
-                key={r.registrationId}
-                className="border-t border-zinc-800 hover:bg-zinc-900"
-              >
-                <td className="sticky left-0 z-10 bg-zinc-950 px-2 py-1.5 font-medium">{idx + 1}</td>
-                <td className="px-2 py-1.5 text-zinc-500">{r.startNumber ?? "—"}</td>
-                <td className="px-2 py-1.5 font-medium whitespace-nowrap driver-col">
-                  <CountryFlag code={r.countryCode} />{r.driverFirstName} {r.driverLastName}
-                </td>
-                <td className="px-2 py-1.5 text-right font-bold text-orange-400 tabular-nums">{seasonTotal}</td>
-                {r.roundPoints.map((rp) => {
-                  const cellTotal = kind === "combined" ? rp.combinedPoints : rp.classPoints;
-                  const dash = <span className="text-zinc-700">—</span>;
-                  return (
-                    <Fragment key={rp.roundId}>
-                      <td className={`border-l border-zinc-800 px-1.5 py-1.5 text-right tabular-nums${rp.dropped ? " line-through opacity-60" : ""}`}>
-                        {rp.hasResult ? <span className="font-semibold text-zinc-200">{cellTotal}</span> : dash}
-                      </td>
-                      <td className={`px-1.5 py-1.5 text-right tabular-nums text-zinc-300${rp.dropped ? " line-through opacity-60" : ""}`}>
-                        {rp.hasResult && (kind === "combined" ? rp.rawPoints : rp.classRawPoints) !== 0
-                          ? (kind === "combined" ? rp.rawPoints : rp.classRawPoints)
-                          : dash}
-                      </td>
-                      {showParticipationCol && (
-                        <td className={`px-1.5 py-1.5 text-right tabular-nums text-emerald-400${rp.dropped ? " line-through opacity-60" : ""}`}>
-                          {rp.hasResult && rp.participationPoints !== 0 ? rp.participationPoints : dash}
-                        </td>
-                      )}
-                      <td className="px-1.5 py-1.5 text-right tabular-nums text-red-400">
-                        {rp.hasResult && rp.penaltyPoints !== 0 ? `−${rp.penaltyPoints}` : dash}
-                      </td>
-                    </Fragment>
-                  );
-                })}
-                <td className="px-2 py-1.5 text-right text-zinc-400 tabular-nums">{r.totalIncidents}</td>
-                <td className="px-2 py-1.5 text-right text-zinc-400 tabular-nums">{r.iRating ?? "—"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function GdcTable({
   rows,
   previousRows,
@@ -1037,55 +910,6 @@ function TeamClassTable({
     );
   }
 
-  // Race by race
-  const allRoundsMap = new Map<string, { number: number; name: string }>();
-  for (const t of group.teams) for (const r of t.rounds) {
-    allRoundsMap.set(r.roundId, { number: r.roundNumber, name: r.roundName });
-  }
-  const roundsList = [...allRoundsMap.entries()]
-    .map(([id, v]) => ({ roundId: id, ...v }))
-    .sort((a, b) => a.number - b.number);
-
-  return (
-    <div className="border-t border-zinc-800 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
-          <tr>
-            <th className="px-3 py-2 sticky left-0 bg-zinc-900/50 z-10 w-10">Pos</th>
-            <th className="px-3 py-2 sticky left-10 bg-zinc-900/50 z-10 driver-col">Team</th>
-            {roundsList.map((r) => (
-              <th key={r.roundId} className="px-3 py-2 text-center min-w-[3.5rem]" title={r.name}>
-                R{r.number}
-              </th>
-            ))}
-            <th className="px-3 py-2 text-right">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {group.teams.map((t, i) => {
-            const byRound = new Map(t.rounds.map((r) => [r.roundId, r]));
-            return (
-              <tr key={t.teamId} className="border-t border-zinc-800">
-                <td className="px-3 py-2 font-medium sticky left-0 bg-zinc-900/30 z-10">{i + 1}</td>
-                <td className="px-3 py-2 font-medium sticky left-10 bg-zinc-900/30 z-10 driver-col">{t.teamName}</td>
-                {roundsList.map((r) => {
-                  const cell = byRound.get(r.roundId);
-                  if (!cell) return <td key={r.roundId} className="px-3 py-2 text-center text-zinc-600">—</td>;
-                  return (
-                    <td key={r.roundId} className="px-3 py-2 text-center">
-                      <div className="text-xs text-zinc-500">
-                        {cell.classPosition != null ? "P" + cell.classPosition : cell.finishStatus}
-                      </div>
-                      <div className="font-semibold tabular-nums">{cell.points}</div>
-                    </td>
-                  );
-                })}
-                <td className="px-3 py-2 text-right font-semibold tabular-nums">{t.totalPoints}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+  // Race by race — interactive (search, sort, frozen Team column).
+  return <RaceByRaceTeamTable group={group} />;
 }
