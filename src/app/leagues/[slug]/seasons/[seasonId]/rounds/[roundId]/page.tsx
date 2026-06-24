@@ -816,7 +816,7 @@ export default async function PublicRoundResults({
         ) : cls === "teams" ? (
           <RoundTeamSection teamResults={teamResultsForRound} />
         ) : cls === "quali" ? (
-          <QualifyingTable rows={aggRows} isMulticlass={isMulticlass} />
+          <QualifyingTable rows={aggRows} isMulticlass={isMulticlass} proAmEnabled={proAmEnabled} />
         ) : cls === "team" ? (
           <TeamView
             teams={teamRows}
@@ -1379,9 +1379,11 @@ function TeamView({
 function QualifyingTable({
   rows,
   isMulticlass,
+  proAmEnabled = false,
 }: {
   rows: Agg[];
   isMulticlass: boolean;
+  proAmEnabled?: boolean;
 }) {
   // For each driver, take the smallest non-null qualifyingTimeMs across
   // their RaceResult rows (in multi-race rounds R1 and R2 carry the same
@@ -1406,6 +1408,7 @@ function QualifyingTable({
         startNumber: sample.registration.startNumber,
         teamName: sample.registration.team?.name ?? null,
         carClassName: sample.registration.carClass?.name ?? null,
+        proAmClass: sample.registration.proAmClass,
         qualifyingTimeMs: bestQuali,
         excludedAt: sample.registration.excludedAt,
       };
@@ -1430,7 +1433,7 @@ function QualifyingTable({
             <th className="px-3 py-2">#</th>
             <th className="px-3 py-2 driver-col">Driver</th>
             <th className="px-3 py-2">Team</th>
-            {isMulticlass && <th className="px-3 py-2">Class</th>}
+            {(isMulticlass || proAmEnabled) && <th className="px-3 py-2">Class</th>}
             <th className="px-3 py-2 text-right">Quali time</th>
             <th className="px-3 py-2 text-right">Gap to pole</th>
           </tr>
@@ -1466,9 +1469,11 @@ function QualifyingTable({
                 <td className="px-3 py-2 text-zinc-400">
                   {d.teamName ?? "—"}
                 </td>
-                {isMulticlass && (
+                {(isMulticlass || proAmEnabled) && (
                   <td className="px-3 py-2 text-zinc-400">
-                    {d.carClassName ?? "—"}
+                    {proAmEnabled
+                      ? <ProAmBadge cls={d.proAmClass} />
+                      : (d.carClassName ?? "—")}
                   </td>
                 )}
                 <td className="px-3 py-2 text-right text-zinc-300 tabular-nums">
