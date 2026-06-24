@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.1",
+    date: "2026-06-24",
+    changes: [
+      "Race-by-race standings: the Driver column header (and the Team header on the team view) is now sortable too — click it to sort alphabetically by name.",
+    ],
+  },
+  {
     version: "1.19.0",
     date: "2026-06-24",
     changes: [

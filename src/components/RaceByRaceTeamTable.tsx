@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { TeamClassGroup } from "@/lib/standings";
 
 type SortDir = "asc" | "desc";
-type SortKey = "pos" | "total" | `round:${string}`;
+type SortKey = "pos" | "name" | "total" | `round:${string}`;
 
 /**
  * Interactive race-by-race team standings table (IEC / SFL team championship).
@@ -54,6 +54,10 @@ export function RaceByRaceTeamTable({ group }: { group: TeamClassGroup }) {
       return entry.rank;
     };
     return [...list].sort((a, b) => {
+      if (sortKey === "name") {
+        const cmp = a.team.teamName.toLowerCase().localeCompare(b.team.teamName.toLowerCase());
+        return cmp !== 0 ? cmp * dir : a.rank - b.rank;
+      }
       const av = valueFor(a);
       const bv = valueFor(b);
       if (av === bv) return a.rank - b.rank;
@@ -103,8 +107,11 @@ export function RaceByRaceTeamTable({ group }: { group: TeamClassGroup }) {
               >
                 Pos{arrow("pos")}
               </th>
-              <th className="sticky left-10 z-10 bg-zinc-900/50 border-r border-zinc-700 px-3 py-2 driver-col">
-                Team
+              <th
+                onClick={() => toggleSort("name", "asc")}
+                className="sticky left-10 z-10 cursor-pointer bg-zinc-900/50 border-r border-zinc-700 px-3 py-2 driver-col hover:text-zinc-300"
+              >
+                Team{arrow("name")}
               </th>
               {roundsList.map((r) => (
                 <th

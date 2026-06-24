@@ -8,7 +8,7 @@ import type { DriverStanding } from "@/lib/standings";
 type StandingsKind = "combined" | "class";
 type SortDir = "asc" | "desc";
 // Sort keys: fixed columns plus one per round ("round:<roundId>").
-type SortKey = "pos" | "total" | "inc" | "ir" | `round:${string}`;
+type SortKey = "pos" | "name" | "total" | "inc" | "ir" | `round:${string}`;
 
 function formatShortDate(d: Date | string): string {
   const date = new Date(d);
@@ -88,6 +88,8 @@ export function RaceByRaceDriverTable({
       });
     }
     const dir = sortDir === "asc" ? 1 : -1;
+    const nameOf = (row: DriverStanding) =>
+      `${row.driverLastName ?? ""} ${row.driverFirstName ?? ""}`.trim().toLowerCase();
     const valueFor = (entry: { row: DriverStanding; rank: number }): number => {
       const { row, rank } = entry;
       if (sortKey === "pos") return rank;
@@ -99,6 +101,10 @@ export function RaceByRaceDriverTable({
       return rank;
     };
     return [...list].sort((a, b) => {
+      if (sortKey === "name") {
+        const cmp = nameOf(a.row).localeCompare(nameOf(b.row));
+        return cmp !== 0 ? cmp * dir : a.rank - b.rank;
+      }
       const av = valueFor(a);
       const bv = valueFor(b);
       if (av === bv) return a.rank - b.rank; // stable tiebreak by rank
@@ -172,9 +178,10 @@ export function RaceByRaceDriverTable({
               <th rowSpan={2} className={`${stickyHeadBg} px-2 py-2 text-left`}>#</th>
               <th
                 rowSpan={2}
-                className={`sticky left-10 top-0 z-40 ${stickyHeadBg} border-r border-zinc-700 px-2 py-2 text-left driver-col`}
+                onClick={() => toggleSort("name", "asc")}
+                className={`sticky left-10 top-0 z-40 cursor-pointer ${stickyHeadBg} border-r border-zinc-700 px-2 py-2 text-left driver-col hover:text-zinc-100`}
               >
-                Driver
+                Driver{arrow("name")}
               </th>
               <th
                 rowSpan={2}
