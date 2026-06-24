@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.19.3",
+    date: "2026-06-24",
+    changes: [
+      "Fixed standings showing 0 points for every driver early in a season that uses drop-weeks. The “drop worst N rounds” rule was dropping rounds even when fewer than N had been run (e.g. after Round 1 of a season that drops 3), which subtracted everyone back to zero. Drops now only apply once a driver has more results than the counting allotment (best “total − N” rounds).",
+    ],
+  },
+  {
     version: "1.19.2",
     date: "2026-06-24",
     changes: [

@@ -112,7 +112,7 @@ export async function computeDriverStandings(
     number
   >;
 
-  const [registrations, rounds] = await Promise.all([
+  const [registrations, rounds, totalScheduledRounds] = await Promise.all([
     prisma.registration.findMany({
       where: { seasonId, status: "APPROVED" },
       include: {
@@ -152,6 +152,9 @@ export async function computeDriverStandings(
       orderBy: { roundNumber: "asc" },
       select: { id: true, roundNumber: true, name: true, startsAt: true },
     }),
+    // Full season schedule size — drives the "best (total − dropN)" cap so
+    // early-season drops never zero a driver (see the drop block below).
+    prisma.round.count({ where: { seasonId } }),
   ]);
 
   // Compute "class position" per result (rank within Pro or AM only) and
@@ -426,16 +429,24 @@ export async function computeDriverStandings(
     let combParticipation = participation;
     let classParticipation = participation;
     const dropN = season?.scoringSystem.dropWorstNRounds ?? 0;
-    if (dropN > 0 && roundPoints.length > 0) {
+    // Drop-worst-N is relative to the FULL season: a driver counts their best
+    // (totalScheduledRounds − dropN) rounds. Early in the season — when a
+    // driver has no more results than that counting allotment — NOTHING is
+    // dropped. Without this cap the engine dropped up to dropN rounds from
+    // whatever rounds had results, which zeroed every driver's points as soon
+    // as a round was scored but fewer than dropN rounds were completed (e.g.
+    // R1 of a 12-round season with dropN=3 dropped that only round → 0 points).
+    const resultRoundCount = roundPoints.filter((rp) => rp.hasResult).length;
+    const keepCount = Math.max(1, totalScheduledRounds - dropN);
+    const numToDrop = Math.min(dropN, Math.max(0, resultRoundCount - keepCount));
+    if (numToDrop > 0) {
       const pickDropped = (metric: (rp: RoundPoints) => number) => {
-        const sorted = [...roundPoints].sort((a, b) => {
-          if (a.hasResult !== b.hasResult) {
-            // false (no result) < true (has result), so missed rounds sort first
-            return Number(a.hasResult) - Number(b.hasResult);
-          }
-          return metric(a) - metric(b);
-        });
-        return new Set(sorted.slice(0, dropN).map((rp) => rp.roundId));
+        // Only rounds that actually have a result are droppable; pick the
+        // worst `numToDrop` of them by the given metric.
+        const sorted = roundPoints
+          .filter((rp) => rp.hasResult)
+          .sort((a, b) => metric(a) - metric(b));
+        return new Set(sorted.slice(0, numToDrop).map((rp) => rp.roundId));
       };
       const droppedCombined = pickDropped((rp) => rp.combinedPoints);
       const droppedClass = pickDropped((rp) => rp.classPoints);
