@@ -7,6 +7,7 @@ import { computeDriverStandings, computeTeamClassStandings } from "@/lib/standin
 import { EmptyState, CalendarIcon, UsersIcon } from "@/components/EmptyState";
 import { SeasonHero } from "@/components/SeasonHero";
 import { CountryFlag } from "@/components/CountryFlag";
+import { ProAmBadge } from "@/components/ProAmBadge";
 import { SortableGroupedTableEnhancer } from "@/components/SortableGroupedTableEnhancer";
 import Garage61Link from "@/components/Garage61Link";
 import { compareStartNumber } from "@/lib/start-number";
@@ -574,7 +575,7 @@ export default async function PublicSeasonDetail({
                   <th className="px-3 py-2 font-display tracking-wider">#</th>
                   <th className="px-3 py-2 font-display tracking-wider">Driver</th>
                   <th className="px-3 py-2 font-display tracking-wider">Team</th>
-                  {season.isMulticlass && (
+                  {season.isMulticlass && !season.proAmEnabled && (
                     <th className="px-3 py-2 font-display tracking-wider">Class</th>
                   )}
                   {season.proAmEnabled && (
@@ -595,14 +596,14 @@ export default async function PublicSeasonDetail({
                     <td className="px-3 py-2 text-zinc-400">
                       {r.team?.name ?? "—"}
                     </td>
-                    {season.isMulticlass && (
+                    {season.isMulticlass && !season.proAmEnabled && (
                       <td className="px-3 py-2 text-zinc-400">
                         {r.carClass?.name ?? "—"}
                       </td>
                     )}
                     {season.proAmEnabled && (
                       <td className="px-3 py-2 text-zinc-400">
-                        {r.proAmClass ?? "—"}
+                        <ProAmBadge cls={r.proAmClass} />
                       </td>
                     )}
                   </tr>

@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/date";
 import { CountryFlag } from "@/components/CountryFlag";
 import { EmptyState, ChartIcon } from "@/components/EmptyState";
 import { IRatingChip } from "@/components/IRatingChip";
+import { ProAmBadge } from "@/components/ProAmBadge";
 import {
   computeDriverStandings,
   computeTeamStandings,
@@ -513,20 +514,6 @@ function ValueCell({
     </>
   );
 }
-function ProAmBadge({ cls }: { cls: "PRO" | "AM" | null }) {
-  if (!cls) return <span className="text-zinc-600">—</span>;
-  const isPro = cls === "PRO";
-  return (
-    <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-        isPro ? "bg-sky-500/15 text-sky-300" : "bg-amber-500/15 text-amber-300"
-      }`}
-    >
-      {isPro ? "Pro" : "Am"}
-    </span>
-  );
-}
-
 function DriversTable({
   rows,
   previousRows,

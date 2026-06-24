@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatMsToTime } from "@/lib/time";
 import { CountryFlag } from "@/components/CountryFlag";
+import { ProAmBadge } from "@/components/ProAmBadge";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { protestWindowState, formatCountdown } from "@/lib/protest-window";
 import type { Metadata } from "next";
@@ -966,19 +967,6 @@ type Row = {
   };
 };
 
-function ProAmBadge({ cls }: { cls: "PRO" | "AM" | null }) {
-  if (!cls) return <span className="text-zinc-600">—</span>;
-  const isPro = cls === "PRO";
-  return (
-    <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-        isPro ? "bg-sky-500/15 text-sky-300" : "bg-amber-500/15 text-amber-300"
-      }`}
-    >
-      {isPro ? "Pro" : "Am"}
-    </span>
-  );
-}
 
 function ResultsTable({
   rows,

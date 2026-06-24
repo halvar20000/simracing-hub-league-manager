@@ -22,7 +22,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.20.1",
     date: "2026-06-24",
     changes: [
-      "On Pro/Am seasons (e.g. GT3 WCT), the Class column in the combined standings and in the round results, race and qualifying tables now shows each driver's Pro or Am tier as a colored badge, instead of being blank.",
+      "On Pro/Am seasons (e.g. GT3 WCT), the driver's Pro or Am tier now shows as a colored badge across the combined standings, the round results / race / qualifying tables, and the season roster. The redundant empty car-class Class column is hidden on these seasons.",
     ],
   },
   {
