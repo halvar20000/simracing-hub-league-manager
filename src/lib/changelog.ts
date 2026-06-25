@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.8",
+    date: "2026-06-25",
+    changes: [
+      "Incident stewarding penalty section is now in German (“Beschuldigter Fahrer”, “Strafpunkte”, “Strafgrund”, “Strafempfänger”) and only the Strafpunkte field remains — the Time penalty and Grid positions inputs were removed, since CAS penalises only with penalty points.",
+    ],
+  },
+  {
     version: "1.20.7",
     date: "2026-06-25",
     changes: [

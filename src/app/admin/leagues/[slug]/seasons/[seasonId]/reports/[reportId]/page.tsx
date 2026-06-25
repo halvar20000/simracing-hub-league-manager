@@ -340,17 +340,17 @@ export default async function AdminReportDetail({
           {accusedDrivers.length > 0 && (
             <div className="rounded border border-zinc-800 p-3">
               <p className="text-xs text-zinc-500">
-                Penalty target — used only for Time / Points / Grid penalties.
+                Strafempfänger — nur für Strafpunkte.
               </p>
               <label className="mt-2 block">
                 <span className="mb-1 block text-sm text-zinc-300">
-                  {teamMode ? "Accused team" : "Accused driver"}
+                  {teamMode ? "Beschuldigtes Team" : "Beschuldigter Fahrer"}
                 </span>
                 <select
                   name="accusedRegistrationId"
                   className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
                 >
-                  <option value="">— Select —</option>
+                  <option value="">— Auswählen —</option>
                   {teamMode
                     ? Array.from(
                         accusedDrivers.reduce((map, d) => {
@@ -378,47 +378,23 @@ export default async function AdminReportDetail({
                 </select>
               </label>
 
-              <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="mt-3">
                 <label className="block">
                   <span className="mb-1 block text-xs text-zinc-400">
-                    Points deduction
+                    Strafpunkte
                   </span>
                   <input
                     name="pointsValue"
                     type="number"
                     min={0}
-                    placeholder="e.g. 5"
-                    className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-400">
-                    Time penalty (sec)
-                  </span>
-                  <input
-                    name="timePenaltySeconds"
-                    type="number"
-                    min={0}
-                    placeholder="e.g. 5"
-                    className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-400">
-                    Grid positions
-                  </span>
-                  <input
-                    name="gridPositions"
-                    type="number"
-                    min={0}
-                    placeholder="e.g. 3"
+                    placeholder="z. B. 5"
                     className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
                   />
                 </label>
               </div>
               <label className="mt-3 block">
                 <span className="mb-1 block text-xs text-zinc-400">
-                  Penalty reason (defaults to public summary)
+                  Strafgrund (Standard: öffentliche Zusammenfassung)
                 </span>
                 <input
                   name="penaltyReason"
