@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.9",
+    date: "2026-06-25",
+    changes: [
+      "The steward incident review page is now fully in German — headings, labels, buttons, helper texts, status badges (Eingereicht / In Prüfung / Entschieden / Abgewiesen) and the danger zone.",
+    ],
+  },
+  {
     version: "1.20.8",
     date: "2026-06-25",
     changes: [

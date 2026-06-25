@@ -98,13 +98,13 @@ export default async function AdminReportDetail({
         href={`/admin/leagues/${slug}/seasons/${seasonId}/reports`}
         className="text-sm text-zinc-400 hover:text-zinc-200"
       >
-        ← Reports queue
+        ← Meldungsübersicht
       </Link>
 
       <div>
-        <h1 className="text-2xl font-bold">Incident Report</h1>
+        <h1 className="text-2xl font-bold">Vorfallmeldung</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Round {report.round.roundNumber} {report.round.name} • Filed{" "}
+          Rennen {report.round.roundNumber} {report.round.name} • Eingereicht{" "}
           {formatDateTime(report.submittedAt)} • Status:{" "}
           <StatusBadge status={report.status} />
         </p>
@@ -120,7 +120,7 @@ export default async function AdminReportDetail({
         <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
           <div>
             <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-              Replay timestamp
+              Replay-Zeitstempel
             </span>
             <div className="font-mono text-2xl font-bold text-amber-200">
               {report.replayTimestamp ?? "—"}
@@ -136,7 +136,7 @@ export default async function AdminReportDetail({
           </div>
           <div>
             <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-              Lap
+              Runde
             </span>
             <div className="text-base text-zinc-200">
               {report.lapNumber ?? "—"}
@@ -144,7 +144,7 @@ export default async function AdminReportDetail({
           </div>
           <div>
             <span className="text-[10px] uppercase tracking-widest text-zinc-500">
-              Turn / Sector
+              Kurve / Sektor
             </span>
             <div className="text-base text-zinc-200">
               {report.turnOrSector ?? "—"}
@@ -156,7 +156,7 @@ export default async function AdminReportDetail({
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
           <h2 className="font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-            Reporter
+            Melder
           </h2>
           <p className="mt-1 font-medium">
             {report.reporterUser.firstName} {report.reporterUser.lastName}
@@ -167,7 +167,7 @@ export default async function AdminReportDetail({
             )}
           </p>
           {report.lapNumber != null && (
-            <p className="text-sm text-zinc-400">Lap {report.lapNumber}</p>
+            <p className="text-sm text-zinc-400">Runde {report.lapNumber}</p>
           )}
           {report.turnOrSector && (
             <p className="text-sm text-zinc-400">{report.turnOrSector}</p>
@@ -175,15 +175,15 @@ export default async function AdminReportDetail({
         </div>
         <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
           <h2 className="font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-            Accused
+            Beschuldigt
           </h2>
           {accusedDrivers.length === 0 ? (
-            <p className="text-sm text-zinc-500">No drivers tagged.</p>
+            <p className="text-sm text-zinc-500">Keine Fahrer markiert.</p>
           ) : teamMode ? (
             <ul className="space-y-2 text-sm">
               {Array.from(
                 accusedDrivers.reduce((map, d) => {
-                  const key = d.registration.team?.name ?? "(No team)";
+                  const key = d.registration.team?.name ?? "(Kein Team)";
                   const arr = map.get(key) ?? [];
                   arr.push(d);
                   map.set(key, arr);
@@ -222,7 +222,7 @@ export default async function AdminReportDetail({
 
       <section>
         <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-          Description
+          Beschreibung
         </h2>
         <div className="whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-900 p-3 text-sm">
           {report.description}
@@ -232,7 +232,7 @@ export default async function AdminReportDetail({
       {report.evidence.length > 0 && (
         <section>
           <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-            Evidence
+            Beweise
           </h2>
           <ul className="space-y-1 text-sm">
             {report.evidence.map((e) => (
@@ -257,12 +257,12 @@ export default async function AdminReportDetail({
           <>
             <form action={setStatusUnderReview}>
               <button className="rounded bg-blue-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600">
-                Mark Under Review
+                In Prüfung nehmen
               </button>
             </form>
             <form action={setStatusDismissed}>
               <button className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800">
-                Dismiss (no action)
+                Abweisen (kein Vergehen)
               </button>
             </form>
           </>
@@ -271,12 +271,13 @@ export default async function AdminReportDetail({
 
       <section className="rounded border border-zinc-800 bg-zinc-900/40 p-5">
         <h2 className="font-display text-lg font-bold">
-          {report.decision ? "Edit decision" : "Issue decision"}
+          {report.decision ? "Urteil bearbeiten" : "Urteil fällen"}
         </h2>
         <p className="text-xs text-zinc-500">
-          For points or time penalties, pick the accused driver and the value.
-          Save as draft (unchecked) keeps the report UNDER_REVIEW; publish
-          marks it DECIDED and shows the verdict on the public Decisions page.
+          Für Strafpunkte den beschuldigten Fahrer und den Wert wählen. Als
+          Entwurf speichern (Häkchen aus) belässt die Meldung auf „In Prüfung“;
+          Veröffentlichen setzt sie auf „Entschieden“ und zeigt das Urteil auf
+          der öffentlichen Urteilsseite.
         </p>
 
         <form action={submit} className="mt-4 space-y-4">
@@ -305,29 +306,30 @@ export default async function AdminReportDetail({
               pointsTable={categoryPointsTable}
             />
             <span className="mt-1 block text-xs text-zinc-500">
-              When the Urteil is "Strafpunkte", the category determines
-              how many points are removed (per this scoring system's table).
+              Wenn das Urteil „Strafpunkte“ ist, bestimmt die Kategorie, wie
+              viele Punkte abgezogen werden (gemäß der Tabelle dieses
+              Wertungssystems).
             </span>
           </label>
 
 
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">
-              Public summary <span className="text-orange-400">*</span>
+              Öffentliche Zusammenfassung <span className="text-orange-400">*</span>
             </span>
             <textarea
               name="publicSummary"
               required
               rows={3}
               defaultValue={report.decision?.publicSummary ?? ""}
-              placeholder="Shown on the public Decisions page. Be concise and factual."
+              placeholder="Wird auf der öffentlichen Urteilsseite angezeigt. Kurz und sachlich."
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
           </label>
 
           <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">
-              Internal notes (admin-only)
+              Interne Notizen (nur Admin)
             </span>
             <textarea
               name="internalNotes"
@@ -354,7 +356,7 @@ export default async function AdminReportDetail({
                   {teamMode
                     ? Array.from(
                         accusedDrivers.reduce((map, d) => {
-                          const key = d.registration.team?.name ?? "(No team)";
+                          const key = d.registration.team?.name ?? "(Kein Team)";
                           const arr = map.get(key) ?? [];
                           arr.push(d);
                           map.set(key, arr);
@@ -411,7 +413,7 @@ export default async function AdminReportDetail({
               name="publish"
               defaultChecked={report.decision?.publishedAt != null}
             />
-            Publish (mark as DECIDED and show on public Decisions page)
+            Veröffentlichen (als „Entschieden“ markieren und auf der öffentlichen Urteilsseite anzeigen)
           </label>
 
           <div className="flex flex-wrap gap-2">
@@ -419,7 +421,7 @@ export default async function AdminReportDetail({
               type="submit"
               className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550]"
             >
-              Save decision
+              Urteil speichern
             </button>
             {report.decision && (
               <form action={removeDecision}>
@@ -427,7 +429,7 @@ export default async function AdminReportDetail({
                   type="submit"
                   className="rounded border border-red-800 px-4 py-2 text-sm text-red-300 hover:bg-red-950"
                 >
-                  Delete decision
+                  Urteil löschen
                 </button>
               </form>
             )}
@@ -436,20 +438,20 @@ export default async function AdminReportDetail({
       </section>
       <section className="mt-8 rounded border border-red-900/60 bg-red-950/20 p-4">
         <h2 className="font-display text-[10px] font-semibold uppercase tracking-widest text-red-300">
-          Danger zone
+          Gefahrenzone
         </h2>
         <details className="mt-2">
           <summary className="cursor-pointer text-sm text-red-300 hover:text-red-200">
-            Delete this report permanently
+            Diese Meldung endgültig löschen
           </summary>
           <div className="mt-3 space-y-2">
             <p className="text-xs text-zinc-400">
-              This removes the report, its evidence, comments, involved drivers, the decision and any penalties tied to it. The penalty pool will be recomputed. This action cannot be undone.
+              Dies entfernt die Meldung, ihre Beweise, Kommentare, beteiligten Fahrer, das Urteil und alle damit verbundenen Strafen. Der Strafpunkte-Pool wird neu berechnet. Diese Aktion kann nicht rückgängig gemacht werden.
             </p>
             <form action={deleteReport}>
               <SubmitWithSpinner
-                label="Yes, permanently delete this report"
-                pendingLabel="Deleting…"
+                label="Ja, diese Meldung endgültig löschen"
+                pendingLabel="Wird gelöscht…"
                 className="rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600"
               />
             </form>
@@ -467,11 +469,17 @@ function StatusBadge({ status }: { status: string }) {
     DECIDED: "bg-emerald-900 text-emerald-200",
     DISMISSED: "bg-zinc-800 text-zinc-400",
   };
+  const labels: Record<string, string> = {
+    SUBMITTED: "Eingereicht",
+    UNDER_REVIEW: "In Prüfung",
+    DECIDED: "Entschieden",
+    DISMISSED: "Abgewiesen",
+  };
   return (
     <span
       className={`inline-block rounded px-2 py-0.5 text-xs ${styles[status] ?? ""}`}
     >
-      {status.replace("_", " ")}
+      {labels[status] ?? status.replace("_", " ")}
     </span>
   );
 }
