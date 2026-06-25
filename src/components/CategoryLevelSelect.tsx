@@ -26,7 +26,7 @@ export function CategoryLevelSelect({
         onChange={(e) => setLevel(e.target.value)}
         className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
       >
-        <option value="">— (no category)</option>
+        <option value="">— (keine Kategorie)</option>
         {PENALTY_LEVELS.map((lv) => (
           <option key={lv} value={String(lv)}>
             {PENALTY_LEVEL_LABEL[lv]} — {pointsTable[String(lv)] ?? 0} pts
@@ -44,7 +44,7 @@ export function CategoryLevelSelect({
       )}
       {pts === 0 && level !== "" && (
         <div className="mt-2 rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-400">
-          Warning category — no penalty points deducted.
+          Kategorie 0 — keine Strafpunkte.
         </div>
       )}
     </>

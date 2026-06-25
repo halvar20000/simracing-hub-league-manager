@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.7",
+    date: "2026-06-25",
+    changes: [
+      "Incident stewarding: the penalty category field and its options are now labelled “Kategorie” (e.g. “Kategorie 0 — 0 pts”), and the “Warning” wording was removed from Kategorie 0.",
+    ],
+  },
+  {
     version: "1.20.6",
     date: "2026-06-25",
     changes: [

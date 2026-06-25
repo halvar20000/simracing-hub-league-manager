@@ -295,7 +295,7 @@ export default async function AdminReportDetail({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">Penalty category</span>
+            <span className="mb-1 block text-sm text-zinc-300">Kategorie</span>
             <CategoryLevelSelect
               initialLevel={
                 report.decision?.penalties?.[0]?.categoryLevel != null

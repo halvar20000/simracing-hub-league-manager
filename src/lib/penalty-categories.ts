@@ -2,10 +2,10 @@ export const PENALTY_LEVELS = [0, 1, 2, 3] as const;
 export type PenaltyLevel = (typeof PENALTY_LEVELS)[number];
 
 export const PENALTY_LEVEL_LABEL: Record<number, string> = {
-  0: "Category 0 — Warning",
-  1: "Category 1",
-  2: "Category 2",
-  3: "Category 3",
+  0: "Kategorie 0",
+  1: "Kategorie 1",
+  2: "Kategorie 2",
+  3: "Kategorie 3",
 };
 
 export const DEFAULT_CATEGORY_POINTS: Record<string, number> = {
