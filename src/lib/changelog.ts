@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.4",
+    date: "2026-06-25",
+    changes: [
+      "Penalty pool table: the “DSQ” marker now only shows for a round when the driver was disqualified in every race of that round. A driver who finished at least one race of a multi-race round cleanly is no longer marked DSQ there — they showed up, so the cell is blank.",
+    ],
+  },
+  {
     version: "1.20.3",
     date: "2026-06-25",
     changes: [

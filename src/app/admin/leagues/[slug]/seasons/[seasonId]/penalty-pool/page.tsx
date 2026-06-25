@@ -285,8 +285,12 @@ export default async function PenaltyPoolAdminPage({
                     const pts = d.cellsByRound.get(r.id) ?? 0;
                     const entered =
                       enteredByReg.get(d.registrationId)?.has(r.id) ?? false;
+                    // DSQ marker only when ALL of the driver's races in the
+                    // round were DSQ. A clean finish in any race (CLASSIFIED/DNF
+                    // → `entered`) means they showed up → no DSQ mark.
                     const isDsq =
                       (dsqByReg.get(d.registrationId)?.has(r.id) ?? false) &&
+                      !entered &&
                       r.status === "COMPLETED";
                     const declined =
                       declinedByReg.get(d.registrationId)?.has(r.id) ?? false;
