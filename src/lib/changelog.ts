@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.2",
+    date: "2026-06-25",
+    changes: [
+      "Fixed multi-race rounds (e.g. SFL Cup, 2 sprints per round) wrongly zeroing a driver's whole round when they were disqualified in just one race. A DSQ now forfeits only the race it happened in — points earned in the other race of the same round are kept. Single-race leagues (GT3 WCT, IEC) are unaffected. Re-score affected rounds via the admin “Recompute scoring” button to apply.",
+    ],
+  },
+  {
     version: "1.20.1",
     date: "2026-06-24",
     changes: [

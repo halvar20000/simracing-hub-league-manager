@@ -141,24 +141,59 @@ async function recomputeParticipationForRound(
 }
 
 /**
- * If a driver has a DSQ status on any RaceResult of a round, zero out their
- * race + participation points across ALL their RaceResults in that round
- * (round forfeit rule).
+ * DSQ forfeit rule.
+ *
+ * Single-race rounds (racesPerRound === 1, e.g. GT3 WCT / IEC): a DSQ on the
+ * round's only race forfeits that race — race + participation points zeroed.
+ *
+ * Multi-race rounds (racesPerRound > 1, e.g. SFL Cup's 2 sprints): each race is
+ * scored independently, so a DSQ forfeits ONLY the DSQ'd race, leaving sibling
+ * races (where the driver finished clean) untouched. A DSQ race already scores
+ * 0 raw points via recomputeClassificationPointsForRound; here we additionally
+ * zero its participation points. (Previously a DSQ in any race wiped the whole
+ * round, wrongly zeroing clean races — fixed.)
  */
 async function recomputeDsqForfeitForRound(
   prisma: PrismaClient,
   roundId: string
 ): Promise<void> {
-  const results = await prisma.raceResult.findMany({
-    where: { roundId },
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
     select: {
-      id: true,
-      registrationId: true,
-      finishStatus: true,
-      rawPointsAwarded: true,
-      participationPointsAwarded: true,
+      season: { select: { scoringSystem: { select: { racesPerRound: true } } } },
+      raceResults: {
+        select: {
+          id: true,
+          registrationId: true,
+          finishStatus: true,
+          rawPointsAwarded: true,
+          participationPointsAwarded: true,
+        },
+      },
     },
   });
+  if (!round) return;
+  const multiRace = (round.season.scoringSystem?.racesPerRound ?? 1) > 1;
+  const results = round.raceResults;
+
+  if (multiRace) {
+    // Per-race forfeit: only the DSQ'd race loses its participation points
+    // (raw is already 0 from classification scoring). Clean sibling races keep
+    // their points.
+    for (const r of results) {
+      if (r.finishStatus !== "DSQ") continue;
+      if (r.rawPointsAwarded !== 0 || r.participationPointsAwarded !== 0) {
+        await prisma.raceResult.update({
+          where: { id: r.id },
+          data: { rawPointsAwarded: 0, participationPointsAwarded: 0 },
+        });
+      }
+    }
+    return;
+  }
+
+  // Single-race rounds: a DSQ on any of the driver's results forfeits the
+  // whole round (in practice the round has one race per driver).
   const byReg = new Map<string, typeof results>();
   for (const r of results) {
     const list = byReg.get(r.registrationId) ?? [];
