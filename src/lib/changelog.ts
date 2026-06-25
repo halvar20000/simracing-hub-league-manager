@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.3",
+    date: "2026-06-25",
+    changes: [
+      "Fixed the round results page (Combined view and podium) ordering drivers tied on points inconsistently with the season standings. Ties are now broken the same way everywhere: equal points → fewer incidents ranks higher → more race points → more races completed. Previously two drivers on equal points could appear in a different order on the round page than in the standings.",
+    ],
+  },
+  {
     version: "1.20.2",
     date: "2026-06-25",
     changes: [

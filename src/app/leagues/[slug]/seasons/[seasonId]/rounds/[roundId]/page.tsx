@@ -475,7 +475,17 @@ export default async function PublicRoundResults({
       a.penaltyPoints;
   }
   const aggRows = [...aggMap.values()].sort(
-    (a, b) => b.totalPoints - a.totalPoints
+    (a, b) =>
+      b.totalPoints - a.totalPoints ||
+      // Tiebreaker — mirrors the season standings rule (src/lib/standings.ts):
+      // on equal points, fewer incidents ranks higher, then more race points
+      // (before bonus), then more races completed, then last name for stability.
+      a.incidents - b.incidents ||
+      b.combinedRacePoints - a.combinedRacePoints ||
+      b.rows.length - a.rows.length ||
+      (a.rows[0]?.registration.user.lastName ?? "").localeCompare(
+        b.rows[0]?.registration.user.lastName ?? ""
+      )
   );
 
   // Pro / Am views still operate on per-race-result rows.
