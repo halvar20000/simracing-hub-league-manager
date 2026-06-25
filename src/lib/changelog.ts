@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.6",
+    date: "2026-06-25",
+    changes: [
+      "Incident stewarding: the decision field is now labelled “Urteil”, and the only penalty option is “Strafpunkte (Penalty-Points)” alongside “Kein Vergehen (No action)”. The other verdict types (warning, reprimand, time penalty, grid penalty, suspension) were removed from the steward form, since CAS penalises purely with penalty points.",
+    ],
+  },
+  {
     version: "1.20.5",
     date: "2026-06-25",
     changes: [

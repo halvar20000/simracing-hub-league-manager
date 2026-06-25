@@ -13,14 +13,13 @@ import {
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { CategoryLevelSelect } from "@/components/CategoryLevelSelect";
 
+// CAS uses penalty points as the only penalty type. The stewarding form offers
+// just "No action" (incident cleared, no penalty) and "Strafpunkte" (points
+// deduction). The other FinishStatus/Verdict enum values still exist for any
+// historical decisions but are no longer selectable here.
 const VERDICTS = [
-  { value: "NO_ACTION", label: "No action" },
-  { value: "WARNING", label: "Warning" },
-  { value: "REPRIMAND", label: "Reprimand" },
-  { value: "TIME_PENALTY", label: "Time penalty" },
-  { value: "POINTS_DEDUCTION", label: "Points deduction" },
-  { value: "GRID_PENALTY_NEXT_ROUND", label: "Grid penalty next round" },
-  { value: "SUSPENSION", label: "Suspension" },
+  { value: "NO_ACTION", label: "Kein Vergehen (No action)" },
+  { value: "POINTS_DEDUCTION", label: "Strafpunkte (Penalty-Points)" },
 ];
 
 export default async function AdminReportDetail({
@@ -282,7 +281,7 @@ export default async function AdminReportDetail({
 
         <form action={submit} className="mt-4 space-y-4">
           <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">Verdict</span>
+            <span className="mb-1 block text-sm text-zinc-300">Urteil</span>
             <select
               name="verdict"
               defaultValue={report.decision?.verdict ?? "NO_ACTION"}
@@ -306,7 +305,7 @@ export default async function AdminReportDetail({
               pointsTable={categoryPointsTable}
             />
             <span className="mt-1 block text-xs text-zinc-500">
-              When the verdict is "Points deduction", the category determines
+              When the Urteil is "Strafpunkte", the category determines
               how many points are removed (per this scoring system's table).
             </span>
           </label>
