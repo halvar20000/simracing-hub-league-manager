@@ -842,7 +842,7 @@ export default async function PublicRoundResults({
             renumberWithinGroup={false}
             heading="Race 1"
             classRacePoints={classRacePointsByResult}
-            includeParticipation={includeParticipationInCombined}
+            includeParticipation={false}
           />
         ) : cls === "race2" ? (
           <ResultsTable
@@ -852,7 +852,7 @@ export default async function PublicRoundResults({
             renumberWithinGroup={false}
             heading="Race 2"
             classRacePoints={classRacePointsByResult}
-            includeParticipation={includeParticipationInCombined}
+            includeParticipation={false}
           />
         ) : cls === "pro" ? (
           <ResultsTable

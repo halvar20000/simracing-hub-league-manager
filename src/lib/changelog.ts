@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.10",
+    date: "2026-06-25",
+    changes: [
+      "Multi-race rounds (e.g. SFL Cup): the participation/PCP bonus no longer appears in the individual Race 1 and Race 2 result tabs — those now show pure race points. The PCP bonus is still included in the Combined rating, as per the regulation.",
+    ],
+  },
+  {
     version: "1.20.9",
     date: "2026-06-25",
     changes: [
