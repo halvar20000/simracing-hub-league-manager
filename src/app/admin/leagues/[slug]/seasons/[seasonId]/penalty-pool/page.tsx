@@ -295,7 +295,10 @@ export default async function PenaltyPoolAdminPage({
                     const declined =
                       declinedByReg.get(d.registrationId)?.has(r.id) ?? false;
                     const cleanCompleted =
-                      isFull && pts === 0 && entered && r.status === "COMPLETED";
+                      (isFull || isNoShowOnly) &&
+                      pts === 0 &&
+                      entered &&
+                      r.status === "COMPLETED";
                     // Display priority: penalty points → DSQ → clean ✓ →
                     // declined ✕ → nothing. (A DSQ still counts toward
                     // forgiveness in the engine; only the cell display differs.)

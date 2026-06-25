@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.5",
+    date: "2026-06-25",
+    changes: [
+      "Penalty pool table for no-show-only leagues (e.g. SFL Cup) now shows the green “clean race” ✓ marker for rounds a driver raced, matching the GT3 WCT pool table design.",
+    ],
+  },
+  {
     version: "1.20.4",
     date: "2026-06-25",
     changes: [

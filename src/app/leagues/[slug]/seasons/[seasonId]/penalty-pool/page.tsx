@@ -246,7 +246,10 @@ export default async function PenaltyPoolPublicPage({
                   // Clean-race highlighting only makes sense when there's a
                   // forgiveness mechanism — i.e. in FULL mode.
                   const cleanCompleted =
-                    isFull && pts === 0 && entered && r.status === "COMPLETED";
+                    (isFull || isNoShowOnly) &&
+                    pts === 0 &&
+                    entered &&
+                    r.status === "COMPLETED";
                   // Display priority: penalty points → DSQ → clean ✓ →
                   // declined ✕ → nothing. (A DSQ still counts toward
                   // forgiveness in the engine; only the cell display differs.)
