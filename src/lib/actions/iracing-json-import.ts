@@ -158,6 +158,16 @@ export async function importIracingJson(
   // Does this league enforce that drivers race the car they registered?
   const carEnforced = CAR_ENFORCED_LEAGUE_SLUGS.has(leagueSlug);
 
+  // Minimum race distance (%) needed to be classified. Drives the disconnect
+  // rule below: a disconnect at/above this counts as DNF (driver completed
+  // enough to be scored), below it counts as DSQ (treated as a forfeit).
+  const seasonScoring = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: { scoringSystem: { select: { racePointsMinDistancePct: true } } },
+  });
+  const racePointsMinPct =
+    seasonScoring?.scoringSystem?.racePointsMinDistancePct ?? 50;
+
   // Pull season roster + build cust_id → registrationId map
   const registrations = await prisma.registration.findMany({
     where: { seasonId, status: "APPROVED" },
@@ -281,10 +291,27 @@ export async function importIracingJson(
         !!drivenCarIracingId &&
         drivenCarIracingId !== reg.registeredCarIracingId;
 
-      const finishStatus = carMismatch ? "DSQ" : d.finishStatus;
-      const dqNote = carMismatch
+      // Result status. A wrong-car DSQ (car-enforced leagues) takes precedence.
+      // Disconnect rule (all leagues): a disconnect is recorded as DNF when the
+      // driver completed at least the minimum race distance to be classified,
+      // otherwise DSQ (forfeit — no clean-race credit). iRacing reports a drop
+      // as reason_out = "Disconnected"; the parser maps that to DSQ by default,
+      // so we re-decide here using the actual distance.
+      let finishStatus: "CLASSIFIED" | "DNF" | "DNS" | "DSQ" = carMismatch
+        ? "DSQ"
+        : d.finishStatus;
+      let dqNote: string | null = carMismatch
         ? `Auto-DQ: drove "${d.carName ?? "unknown car"}" but registered "${reg.registeredCarName ?? "unknown car"}"`
         : null;
+      if (!carMismatch && /disconnect/i.test(d.reasonOut)) {
+        if (distancePct >= racePointsMinPct) {
+          finishStatus = "DNF";
+          dqNote = `Disconnect at ${distancePct}% distance — classified as DNF (≥ ${racePointsMinPct}% minimum)`;
+        } else {
+          finishStatus = "DSQ";
+          dqNote = `Disconnect at ${distancePct}% distance — DSQ (below ${racePointsMinPct}% minimum)`;
+        }
+      }
 
       await prisma.raceResult.create({
         data: {

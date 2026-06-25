@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.11",
+    date: "2026-06-25",
+    changes: [
+      "Disconnects are now scored sensibly on import (all leagues): a driver who loses connection but completed at least the minimum race distance is recorded as DNF (and scores), instead of being disqualified. A disconnect below the minimum distance still counts as DSQ. Previously every disconnect became a DSQ regardless of how much of the race was completed. Re-import a round's JSON to apply it to existing results.",
+    ],
+  },
+  {
     version: "1.20.10",
     date: "2026-06-25",
     changes: [
