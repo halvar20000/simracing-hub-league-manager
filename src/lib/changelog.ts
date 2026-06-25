@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.20.12",
+    date: "2026-06-25",
+    changes: [
+      "Round results: when driver FPR (Fair Play Rating) is enabled, the FPR points a driver earns for the round are now included in the Combined view — folded into the Bonus column and the Total — matching the season standings. Previously FPR only showed up in the championship standings, not on the round page.",
+    ],
+  },
+  {
     version: "1.20.11",
     date: "2026-06-25",
     changes: [

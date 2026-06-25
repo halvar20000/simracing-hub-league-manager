@@ -418,6 +418,7 @@ export default async function PublicRoundResults({
     totalPoints: number;                 // total using class-relative race pts
     combinedTotalPoints: number;         // total using combined race pts
     incidents: number;
+    fprPoints: number;                   // driver FPR for the round (0 if off)
   };
   const aggMap = new Map<string, Agg>();
   for (const r of allRows) {
@@ -434,6 +435,7 @@ export default async function PublicRoundResults({
         totalPoints: 0,
         combinedTotalPoints: 0,
         incidents: 0,
+        fprPoints: 0,
       };
       aggMap.set(r.registrationId, a);
     }
@@ -465,10 +467,27 @@ export default async function PublicRoundResults({
     }
   }
   for (const a of aggMap.values()) {
+    // Driver FPR for the round — mirrors computeDriverStandings: based on the
+    // driver's total incidents across the round, awarded only when every race
+    // met the min-distance threshold. Folded into the Bonus column + Total so
+    // the round page matches the season standings.
+    const fprEligible =
+      a.rows.length > 0 &&
+      a.rows.every(
+        (r) =>
+          (r.raceDistancePct ?? 0) >= teamScoringFlags.driverFprMinDistancePct
+      );
+    a.fprPoints =
+      teamScoringFlags.driverFprEnabled && fprEligible
+        ? fprPointsForIncidents(a.incidents, teamScoringFlags.driverFprTiers)
+        : 0;
     a.totalPoints =
       a.racePoints +
-      (includeParticipationInCombined ? a.participationPoints : 0) -
+      (includeParticipationInCombined ? a.participationPoints : 0) +
+      a.fprPoints -
       a.penaltyPoints;
+    // combinedTotalPoints feeds the Team view, whose championship is raw-based —
+    // keep FPR out of it (FPR only affects the driver Combined total above).
     a.combinedTotalPoints =
       a.combinedRacePoints +
       (includeParticipationInCombined ? a.participationPoints : 0) -
@@ -1132,6 +1151,7 @@ type Agg = {
   totalPoints: number;
   combinedTotalPoints: number;    // total using combinedRacePoints
   incidents: number;
+  fprPoints: number;              // driver FPR for the round (0 if off)
 };
 
 function CombinedMultiRaceTable({
@@ -1236,7 +1256,7 @@ function CombinedMultiRaceTable({
                   );
                 })}
                 <td className="px-3 py-2 text-right text-emerald-400 tabular-nums">
-                  {a.participationPoints || ""}
+                  {(a.participationPoints + a.fprPoints) || ""}
                 </td>
                 <td className="px-3 py-2 text-right text-red-400 tabular-nums">
                   {a.penaltyPoints ? `−${a.penaltyPoints}` : ""}
