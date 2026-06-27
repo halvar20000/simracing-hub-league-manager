@@ -60,10 +60,10 @@ export default async function RegisterPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
-  searchParams: Promise<{ error?: string; t?: string }>;
+  searchParams: Promise<{ error?: string; t?: string; manager?: string }>;
 }) {
   const { slug, seasonId } = await params;
-  const { error, t } = await searchParams;
+  const { error, t, manager } = await searchParams;
 
   const session = await auth();
   if (!session?.user?.id) {
@@ -247,6 +247,14 @@ export default async function RegisterPage({
       t ?? ""
     );
 
+    // "Register another team as Teammanager" entry (?manager=1): force the
+    // form into manager mode for a NEW team, with no prefill from the user's
+    // own (driver) registration. createTeamRegistration already leaves an
+    // existing driver registration untouched and stores the manager role on
+    // Team.managerUserId only, so a driver can manage extra teams.
+    const addManagerTeam = manager === "1";
+    const prefill = addManagerTeam ? null : activeRegistration;
+
     // Per-team driver cap from the season (e.g. IEC: 3 = leader + 2). When
     // unset (uncapped), keep the historical 4-teammate row maximum.
     const teamLimit = teamSizeLimit({
@@ -261,7 +269,9 @@ export default async function RegisterPage({
       { length: maxManagerRows },
       (_, i) => i + 1
     );
-    const isManagerReg = activeRegistration?.isTeamManager ?? false;
+    const isManagerReg = addManagerTeam
+      ? true
+      : prefill?.isTeamManager ?? false;
     // Teams this user already manages in this season — a manager can register
     // several teams (each submit with a NEW team name creates another team).
     const myManagedTeams = await prisma.team.findMany({
@@ -271,7 +281,7 @@ export default async function RegisterPage({
     });
 
     // Pre-fill teammate rows from existing team if user is the leader.
-    const leaderTeamId = activeRegistration?.teamId ?? null;
+    const leaderTeamId = prefill?.teamId ?? null;
     const teammateRegs = leaderTeamId
       ? await prisma.registration.findMany({
           where: {
@@ -287,9 +297,9 @@ export default async function RegisterPage({
     const tmRow = (i: number) => teammateRegs[i] ?? null;
     // Teamchef preselect: the row whose user is the current team leader.
     const chefDefaultIndex =
-      (activeRegistration?.team?.leaderUserId
+      (prefill?.team?.leaderUserId
         ? teammateRegs.findIndex(
-            (r) => r.userId === activeRegistration.team!.leaderUserId
+            (r) => r.userId === prefill.team!.leaderUserId
           )
         : -1) + 1; // 0 = none → first row checked below via `|| i === 1`
 
@@ -303,14 +313,27 @@ export default async function RegisterPage({
             ← {season.league.name} {season.name}
           </Link>
           <h1 className="mt-2 text-2xl font-bold">
-            {activeRegistration
+            {addManagerTeam
+              ? "Register another team as Teammanager"
+              : prefill
               ? "Update your team registration"
               : "Register your team"}
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Multiclass team season. Add up to {maxTeammates} teammates —
-            they&apos;ll show on the roster automatically. Each driver gets
-            their own iRacing invitation tracked.
+            {addManagerTeam ? (
+              <>
+                You&apos;re registering an additional team that you will manage
+                but not drive for. Add the drivers and mark one of them as
+                Teamchef — your own driver registration in another team stays
+                exactly as it is.
+              </>
+            ) : (
+              <>
+                Multiclass team season. Add up to {maxTeammates} teammates —
+                they&apos;ll show on the roster automatically. Each driver gets
+                their own iRacing invitation tracked.
+              </>
+            )}
           </p>
         </div>
 
@@ -333,7 +356,25 @@ export default async function RegisterPage({
         <form action={createTeam} className="space-y-4">
           <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
             <legend className="px-2 text-sm text-zinc-300">Team</legend>
-            <TeamManagerToggle defaultChecked={isManagerReg} />
+            {addManagerTeam ? (
+              <>
+                {/* Manager role is pre-determined for this entry; no toggle. */}
+                <input type="hidden" name="isTeamManager" value="1" />
+                <div className="rounded border border-cyan-800/60 bg-cyan-950/30 p-3 text-sm">
+                  <span className="font-semibold text-cyan-200">
+                    You are the Teammanager (not driving)
+                  </span>
+                  <span className="mt-0.5 block text-xs text-zinc-400">
+                    You organise this team but don&apos;t race. You won&apos;t
+                    count against the driver limit, need no iRacing invitation
+                    and are approved automatically. Register the drivers below
+                    and mark one of them as Teamchef (it can&apos;t be you).
+                  </span>
+                </div>
+              </>
+            ) : (
+              <TeamManagerToggle defaultChecked={isManagerReg} />
+            )}
             {myManagedTeams.length > 0 && (
               <p className="rounded border border-zinc-700 bg-zinc-900 p-2 text-xs text-zinc-400">
                 You already manage{" "}
@@ -358,7 +399,7 @@ export default async function RegisterPage({
               <input
                 name="teamName"
                 required
-                defaultValue={activeRegistration?.team?.name ?? ""}
+                defaultValue={prefill?.team?.name ?? ""}
                 placeholder="e.g. CAS Racing #1"
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
@@ -379,7 +420,7 @@ export default async function RegisterPage({
                 required={!isManagerReg}
                 disabled={isManagerReg}
                 data-was-required="1"
-                defaultValue={activeRegistration?.iRating ?? ""}
+                defaultValue={prefill?.iRating ?? ""}
                 placeholder="e.g. 2400"
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
@@ -397,8 +438,8 @@ export default async function RegisterPage({
               isLocked: c.isLocked,
               cars: c.cars.map((car) => ({ id: car.id, name: car.name })),
             }))}
-            defaultClassId={activeRegistration?.carClassId ?? undefined}
-            defaultCarId={activeRegistration?.carId ?? undefined}
+            defaultClassId={prefill?.carClassId ?? undefined}
+            defaultCarId={prefill?.carId ?? undefined}
           />
 
           <fieldset className="space-y-3 rounded border border-zinc-800 bg-zinc-900/50 p-4">
@@ -557,7 +598,7 @@ export default async function RegisterPage({
             <textarea
               name="notes"
               rows={3}
-              defaultValue={activeRegistration?.notes ?? ""}
+              defaultValue={prefill?.notes ?? ""}
               placeholder="Anything you want the admin to know"
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
@@ -572,7 +613,13 @@ export default async function RegisterPage({
 
           <div className="flex gap-2">
             <SubmitWithSpinner
-              label={activeRegistration ? "Update team registration" : "Submit team registration"}
+              label={
+                addManagerTeam
+                  ? "Register team as Teammanager"
+                  : prefill
+                  ? "Update team registration"
+                  : "Submit team registration"
+              }
               className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
             />
           </div>

@@ -202,6 +202,26 @@ export default async function MyRegistrationsPage({
                     </div>
                   );
                 })()}
+              {r.season.teamRegistration &&
+                (r.season.status === "OPEN_REGISTRATION" ||
+                  r.season.status === "ACTIVE") && (
+                  <div className="mt-3">
+                    <Link
+                      href={`/leagues/${r.season.league.slug}/seasons/${r.season.id}/register?manager=1${
+                        r.season.registrationToken
+                          ? `&t=${encodeURIComponent(r.season.registrationToken)}`
+                          : ""
+                      }`}
+                      className="inline-block rounded border border-cyan-700 bg-cyan-950/30 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-cyan-900/40"
+                    >
+                      + Register another team as Teammanager →
+                    </Link>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Manage a second team without driving for it — your own
+                      registration here stays unchanged.
+                    </p>
+                  </div>
+                )}
               {(() => {
                 const pi = getLeaguePayment(r.season.league);
                 if (!pi) return null;

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.21.0",
+    date: "2026-06-27",
+    changes: [
+      "Team seasons (IEC): you can now register an additional team as a non-driving Teammanager even if you already drive (and are Teamchef) in another team. On the My Registrations page, each open team season shows a “+ Register another team as Teammanager” button that opens a form pre-set with you as the manager — add the team, its drivers and pick a Teamchef (which can't be you). Your existing driver registration stays untouched.",
+    ],
+  },
+  {
     version: "1.20.12",
     date: "2026-06-25",
     changes: [
