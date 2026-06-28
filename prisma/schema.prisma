@@ -642,6 +642,9 @@ model RoundFillIn {
   replacesRegistrationId String?
   /// Set once the fill-in driver has been DM'd. Null = not yet notified (retry).
   notifiedAt             DateTime?
+  /// Set when the fill-in driver clicks Accept on the offer DM. Null = not yet
+  /// accepted (still pending the driver's response or already passed on/deleted).
+  acceptedAt             DateTime?
 
   createdAt DateTime @default(now())
 

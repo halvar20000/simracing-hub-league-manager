@@ -27,9 +27,19 @@
 
 import { prisma } from "@/lib/prisma";
 import { sendDirectMessage } from "@/lib/discord-bot";
+import { sendResendEmail } from "@/lib/resend-email";
+import { buildFillInOfferComponents } from "@/lib/discord-rsvp-embed";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
+
+/** Minimal HTML wrapper for the transactional fill-in emails. */
+function emailHtml(bodyHtml: string): string {
+  return (
+    `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;` +
+    `font-size:15px;line-height:1.5;color:#18181b">${bodyHtml}</div>`
+  );
+}
 
 /** Confirmed-driver filter: counts against the season cap. */
 const CONFIRMED_WHERE = {
@@ -143,6 +153,169 @@ async function dmUser(userId: string, content: string): Promise<boolean> {
     allowed_mentions: { parse: [] },
   });
   return res.ok;
+}
+
+/** Context shared by every fill-in offer notification for a round. */
+type FillInOfferContext = {
+  roundId: string;
+  leagueName: string;
+  roundLabel: string; // e.g. "Round 3: Spa"
+  track: string;
+  raceWhen: string;
+  roundLink: string;
+  /** League admin recipients (registrationNotifyEmails). */
+  adminEmails: string[];
+};
+
+/** Resolve a user's display name + email for notifications. */
+async function userContact(
+  userId: string
+): Promise<{ name: string; email: string | null }> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, firstName: true, lastName: true, email: true },
+  });
+  const name =
+    [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.name || "Driver";
+  return { name, email: u?.email ?? null };
+}
+
+/**
+ * Notify a waiting-list driver that they've been offered a one-race fill-in.
+ *
+ *  - Discord DM with interactive Accept / Decline buttons (primary channel).
+ *  - Email to the driver ALWAYS, alongside the DM (chosen behaviour): reliable
+ *    even when Discord DMs are closed/unlinked; the email links to the round
+ *    page and tells them to Accept in Discord or reply to their admin.
+ *  - Email to the league admin list on every fresh offer, so they can have the
+ *    iRacing invite ready.
+ *
+ * Returns true if the driver was reached by at least one channel (DM or email).
+ */
+async function notifyFillInOffer(
+  userId: string,
+  ctx: FillInOfferContext,
+  opts: { notifyAdmin: boolean } = { notifyAdmin: true }
+): Promise<boolean> {
+  const { name, email } = await userContact(userId);
+
+  const dmContent =
+    `🏁 A spot just opened for **${ctx.leagueName} — ${ctx.roundLabel}** ` +
+    `(${ctx.track}, ${ctx.raceWhen}). As the next driver on the waiting list, ` +
+    `you're invited to take this race. Click **Accept this race** below to ` +
+    `lock it in — your league admin will then send your iRacing race invite. ` +
+    `Can't make it? Click **Can't make it** and we'll offer it to the next ` +
+    `driver. Details: ${ctx.roundLink}`;
+
+  const discordId = await discordIdForUser(userId);
+  let dmOk = false;
+  if (discordId) {
+    const res = await sendDirectMessage(discordId, {
+      content: dmContent,
+      components: buildFillInOfferComponents(ctx.roundId),
+      allowed_mentions: { parse: [] },
+    });
+    dmOk = res.ok;
+  }
+
+  let emailOk = false;
+  if (email) {
+    const html = emailHtml(
+      `<p>🏁 A spot just opened in <strong>${ctx.leagueName} — ${ctx.roundLabel}</strong> ` +
+        `(${ctx.track}, ${ctx.raceWhen}).</p>` +
+        `<p>As the next driver on the waiting list, you're invited to take this race.</p>` +
+        `<p><strong>To accept:</strong> open Discord and click <em>Accept this race</em> on the ` +
+        `message from the league bot, or reply to your league admin to confirm your entry. ` +
+        `Your admin will send your iRacing race invite once you accept.</p>` +
+        `<p><a href="${ctx.roundLink}">View the round &rarr;</a></p>`
+    );
+    const res = await sendResendEmail({
+      to: email,
+      subject: `🏁 You're invited to fill in — ${ctx.leagueName}, ${ctx.roundLabel}`,
+      html,
+      text:
+        `A spot just opened in ${ctx.leagueName} — ${ctx.roundLabel} ` +
+        `(${ctx.track}, ${ctx.raceWhen}). As the next driver on the waiting list, ` +
+        `you're invited to take this race. Open Discord and click "Accept this race" ` +
+        `on the bot's message, or reply to your league admin to confirm. ` +
+        `Round: ${ctx.roundLink}`,
+    });
+    emailOk = res.ok;
+  }
+
+  if (opts.notifyAdmin && ctx.adminEmails.length > 0) {
+    const html = emailHtml(
+      `<p>🏁 <strong>${name}</strong> was offered the open fill-in slot for ` +
+        `<strong>${ctx.leagueName} — ${ctx.roundLabel}</strong> (${ctx.track}, ${ctx.raceWhen}).</p>` +
+        `<p>They've been notified by Discord DM${email ? " and email" : ""}. ` +
+        `If they accept, have their iRacing race invite ready.</p>` +
+        `<p><a href="${ctx.roundLink}">Open the round &rarr;</a></p>`
+    );
+    await sendResendEmail({
+      to: ctx.adminEmails,
+      subject: `Fill-in offered: ${name} — ${ctx.leagueName}, ${ctx.roundLabel}`,
+      html,
+      text:
+        `${name} was offered the open fill-in slot for ${ctx.leagueName} — ` +
+        `${ctx.roundLabel} (${ctx.track}, ${ctx.raceWhen}). ` +
+        `If they accept, have their iRacing race invite ready. ${ctx.roundLink}`,
+    });
+  }
+
+  return dmOk || emailOk;
+}
+
+/**
+ * Email the league admin list that a fill-in driver ACCEPTED their offer, so
+ * the admin can send the iRacing race invite. Called from the Discord
+ * interactions route when the Accept button is clicked.
+ */
+export async function notifyAdminFillInAccepted(roundId: string, userId: string): Promise<void> {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: {
+      name: true,
+      roundNumber: true,
+      track: true,
+      startsAt: true,
+      seasonId: true,
+      season: {
+        select: {
+          league: {
+            select: { slug: true, name: true, registrationNotifyEmails: true },
+          },
+        },
+      },
+    },
+  });
+  if (!round) return;
+  const adminEmails = (round.season.league.registrationNotifyEmails ?? []).filter(
+    (e) => e && e.includes("@")
+  );
+  if (adminEmails.length === 0) return;
+
+  const { name } = await userContact(userId);
+  const roundLabel = `Round ${round.roundNumber}: ${round.name}`;
+  const raceWhen = round.startsAt.toLocaleString("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Berlin",
+  });
+  const roundLink = `${SITE_URL}/admin/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${roundId}/rsvp`;
+  const html = emailHtml(
+    `<p>✅ <strong>${name}</strong> ACCEPTED the fill-in for ` +
+      `<strong>${round.season.league.name} — ${roundLabel}</strong> (${round.track}, ${raceWhen}).</p>` +
+      `<p>Send their iRacing race invite to lock in the entry.</p>` +
+      `<p><a href="${roundLink}">Open the round RSVP overview &rarr;</a></p>`
+  );
+  await sendResendEmail({
+    to: adminEmails,
+    subject: `✅ Fill-in accepted: ${name} — ${round.season.league.name}, ${roundLabel}`,
+    html,
+    text:
+      `${name} accepted the fill-in for ${round.season.league.name} — ${roundLabel} ` +
+      `(${round.track}, ${raceWhen}). Send their iRacing race invite to lock in the entry. ${roundLink}`,
+  });
 }
 
 /**
@@ -289,6 +462,7 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
     select: {
       id: true,
       name: true,
+      roundNumber: true,
       track: true,
       startsAt: true,
       seasonId: true,
@@ -296,7 +470,9 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
         select: {
           maxDrivers: true,
           name: true,
-          league: { select: { slug: true, name: true } },
+          league: {
+            select: { slug: true, name: true, registrationNotifyEmails: true },
+          },
         },
       },
     },
@@ -339,12 +515,20 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
     timeZone: "Europe/Berlin",
   });
   const roundLink = `${SITE_URL}/leagues/${round.season.league.slug}/seasons/${round.seasonId}/rounds/${round.id}`;
-  const offerMessage = (verb: string) =>
-    `🏁 A spot ${verb} for **${round.season.league.name} — ${round.name}** ` +
-    `(${round.track}, ${raceWhen}). As the next driver on the waiting list, ` +
-    `you're invited to take this race. Reply to your league admin to confirm ` +
-    `your iRacing entry. Can't make it? Just click Decline on the round and ` +
-    `we'll offer it to the next driver. Details: ${roundLink}`;
+
+  // Shared context for every fill-in offer notification (DM + driver email +
+  // admin email) sent below.
+  const offerCtx: FillInOfferContext = {
+    roundId: round.id,
+    leagueName: round.season.league.name,
+    roundLabel: `Round ${round.roundNumber}: ${round.name}`,
+    track: round.track,
+    raceWhen,
+    roundLink,
+    adminEmails: (round.season.league.registrationNotifyEmails ?? []).filter(
+      (e) => e && e.includes("@")
+    ),
+  };
 
   // 1) A fill-in driver who DECLINED the offer → drop their fill-in (silently;
   //    they chose to pass) so the slot reopens for the next driver. They keep
@@ -405,7 +589,9 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
         data: { roundId, registrationId: c.id },
         select: { id: true },
       });
-      const ok = await dmUser(c.userId, offerMessage("just opened"));
+      // Fresh offer: DM with Accept/Decline buttons + email the driver + email
+      // the league admin list.
+      const ok = await notifyFillInOffer(c.userId, offerCtx, { notifyAdmin: true });
       if (ok) {
         await prisma.roundFillIn.update({
           where: { id: created.id },
@@ -416,7 +602,9 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
     }
   }
 
-  // 4) Retry DM for kept fill-ins that were never successfully notified.
+  // 4) Retry notification for kept fill-ins that were never successfully
+  //    notified (an earlier DM + email both failed). Don't re-notify the admin
+  //    here — they were already emailed when the offer was first created.
   const kept = await prisma.roundFillIn.findMany({
     where: { roundId, notifiedAt: null },
     select: { id: true, registrationId: true },
@@ -427,7 +615,7 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
       select: { userId: true },
     });
     if (!reg) continue;
-    const ok = await dmUser(reg.userId, offerMessage("is open"));
+    const ok = await notifyFillInOffer(reg.userId, offerCtx, { notifyAdmin: false });
     if (ok) {
       await prisma.roundFillIn.update({
         where: { id: f.id },

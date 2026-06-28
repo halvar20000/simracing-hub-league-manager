@@ -22,9 +22,9 @@ import {
   refreshDiscordRsvpMessage,
   driverDisplayName,
 } from "@/lib/rsvp";
-import { parseRsvpCustomId } from "@/lib/discord-rsvp-embed";
+import { parseRsvpCustomId, parseFillInCustomId } from "@/lib/discord-rsvp-embed";
 import { isRsvpClosed } from "@/lib/rsvp-window";
-import { reconcileFillInsForRound } from "@/lib/waitlist";
+import { reconcileFillInsForRound, notifyAdminFillInAccepted } from "@/lib/waitlist";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -121,10 +121,6 @@ export async function POST(req: NextRequest) {
   }
 
   const customId = body.data?.custom_id ?? "";
-  const parsed = parseRsvpCustomId(customId);
-  if (!parsed) {
-    return ephemeral("Unrecognised button.");
-  }
 
   // Discord user: in a guild interaction it's `member.user`, in a DM it's `user`.
   const discordUserId = body.member?.user?.id ?? body.user?.id;
@@ -140,6 +136,18 @@ export async function POST(req: NextRequest) {
       `Your Discord account isn't linked to a CLS profile yet. ` +
         `Sign in once with Discord at ${baseUrl}/api/auth/signin and try again.`
     );
+  }
+
+  // Waiting-list fill-in offer buttons (custom_id = "fillin:<roundId>:<ACCEPT|DECLINE>").
+  // Handled before the RSVP parse since they share the interactions endpoint.
+  const fillIn = parseFillInCustomId(customId);
+  if (fillIn) {
+    return handleFillInClick(fillIn.roundId, fillIn.action, user.id);
+  }
+
+  const parsed = parseRsvpCustomId(customId);
+  if (!parsed) {
+    return ephemeral("Unrecognised button.");
   }
 
   // Look up the league's rsvpMode + close window so we know whether to
@@ -285,4 +293,93 @@ export async function POST(req: NextRequest) {
       flags: EPHEMERAL,
     },
   });
+}
+
+/**
+ * Handle a click on a waiting-list fill-in offer DM (Accept / Decline).
+ *
+ *  - ACCEPT  → stamp `RoundFillIn.acceptedAt`; email the league admin so they
+ *              can send the iRacing race invite.
+ *  - DECLINE → record a DECLINED RSVP for the driver (so they're not re-offered)
+ *              then reconcile, which drops their fill-in and offers the slot to
+ *              the next driver on the waiting list. The driver keeps their place
+ *              for future rounds.
+ */
+async function handleFillInClick(
+  roundId: string,
+  action: "ACCEPT" | "DECLINE",
+  userId: string
+) {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: { id: true, seasonId: true },
+  });
+  if (!round) return ephemeral("This round no longer exists.");
+
+  const registration = await prisma.registration.findUnique({
+    where: { seasonId_userId: { seasonId: round.seasonId, userId } },
+    select: { id: true, excludedAt: true, isTeamManager: true },
+  });
+  if (!registration || registration.excludedAt || registration.isTeamManager) {
+    return ephemeral("You're not on the waiting list for this season.");
+  }
+
+  const fill = await prisma.roundFillIn.findUnique({
+    where: {
+      roundId_registrationId: { roundId, registrationId: registration.id },
+    },
+    select: { id: true, acceptedAt: true },
+  });
+
+  if (action === "ACCEPT") {
+    if (!fill) {
+      return ephemeral(
+        "This fill-in offer is no longer open — it may have been filled or the " +
+          "driver came back. You keep your place on the waiting list."
+      );
+    }
+    if (!fill.acceptedAt) {
+      await prisma.roundFillIn.update({
+        where: { id: fill.id },
+        data: { acceptedAt: new Date() },
+      });
+    }
+    // Tell the admin (out of band) so they can send the iRacing invite.
+    after(async () => {
+      try {
+        await notifyAdminFillInAccepted(roundId, userId);
+      } catch {
+        /* swallow */
+      }
+    });
+    return ephemeral(
+      "✅ You're in for this race! Your league admin will send your iRacing " +
+        "race invite to lock in your entry. See you on track."
+    );
+  }
+
+  // DECLINE: record the decline, then reconcile to offer the next driver.
+  await upsertRsvp({
+    roundId,
+    userId,
+    status: "DECLINED",
+    source: "DISCORD",
+    skipRefresh: true,
+  });
+  after(async () => {
+    try {
+      await refreshDiscordRsvpMessage(roundId);
+    } catch {
+      /* swallow */
+    }
+    try {
+      await reconcileFillInsForRound(roundId);
+    } catch {
+      /* swallow */
+    }
+  });
+  return ephemeral(
+    "Got it — you've passed on this race, and we'll offer it to the next driver " +
+      "on the waiting list. You keep your place in the queue for future rounds."
+  );
 }

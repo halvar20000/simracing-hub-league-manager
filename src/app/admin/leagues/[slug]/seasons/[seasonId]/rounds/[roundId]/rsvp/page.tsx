@@ -70,6 +70,7 @@ export default async function AdminRoundRsvp({
     select: {
       id: true,
       notifiedAt: true,
+      acceptedAt: true,
       registration: {
         select: {
           startNumber: true,
@@ -266,8 +267,11 @@ export default async function AdminRoundRsvp({
           </h2>
           <p className="text-xs text-zinc-400">
             A confirmed driver declined, so these waiting-list drivers were
-            auto-invited for this round and DM&apos;d on Discord. Send them the
-            iRacing race invite to lock in their entry.
+            auto-invited for this round by Discord DM (with Accept / Decline
+            buttons) and email. Once a driver shows{" "}
+            <span className="text-emerald-200">✓ Accepted</span>, send them the
+            iRacing race invite to lock in their entry. You&apos;re also emailed
+            on every offer and acceptance.
           </p>
           <ul className="space-y-1 text-sm">
             {fillIns.map((f) => {
@@ -291,8 +295,17 @@ export default async function AdminRoundRsvp({
                         : "bg-amber-900/40 text-amber-200"
                     }`}
                   >
-                    {f.notifiedAt ? "DM sent" : "DM pending"}
+                    {f.notifiedAt ? "Notified" : "Notify pending"}
                   </span>
+                  {f.acceptedAt ? (
+                    <span className="rounded bg-emerald-600/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-100">
+                      ✓ Accepted
+                    </span>
+                  ) : (
+                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                      Awaiting reply
+                    </span>
+                  )}
                 </li>
               );
             })}

@@ -89,6 +89,57 @@ export function parseRsvpCustomId(
   return { roundId: parts[1], status: status as RsvpStatus };
 }
 
+// ── Waiting-list fill-in offer buttons ─────────────────────────────────────
+// The offer DM sent to the next waiting-list driver when a confirmed driver
+// declines a round carries its own Accept / Decline buttons, distinct from the
+// public RSVP embed's buttons. custom_id = "fillin:<roundId>:<ACCEPT|DECLINE>".
+
+const FILLIN_ID_PREFIX = "fillin";
+
+export type FillInAction = "ACCEPT" | "DECLINE";
+
+export function fillInCustomId(roundId: string, action: FillInAction): string {
+  return `${FILLIN_ID_PREFIX}:${roundId}:${action}`;
+}
+
+export function parseFillInCustomId(
+  customId: string
+): { roundId: string; action: FillInAction } | null {
+  const parts = customId.split(":");
+  if (parts.length !== 3 || parts[0] !== FILLIN_ID_PREFIX) return null;
+  const action = parts[2];
+  if (action !== "ACCEPT" && action !== "DECLINE") return null;
+  return { roundId: parts[1], action: action as FillInAction };
+}
+
+/**
+ * Build the Accept / Decline button row for a fill-in offer DM. Returns the
+ * `components` array for a MessagePayload (the caller supplies `content`).
+ */
+export function buildFillInOfferComponents(roundId: string): MessagePayload["components"] {
+  return [
+    {
+      type: ROW,
+      components: [
+        {
+          type: BUTTON,
+          style: BTN_SUCCESS,
+          label: "Accept this race",
+          emoji: { name: "🏁" },
+          custom_id: fillInCustomId(roundId, "ACCEPT"),
+        },
+        {
+          type: BUTTON,
+          style: BTN_DANGER,
+          label: "Can't make it",
+          emoji: { name: "❌" },
+          custom_id: fillInCustomId(roundId, "DECLINE"),
+        },
+      ],
+    },
+  ];
+}
+
 function bulletList(names: string[], limit = 25): string {
   if (names.length === 0) return "_no responses yet_";
   const shown = names.slice(0, limit);
