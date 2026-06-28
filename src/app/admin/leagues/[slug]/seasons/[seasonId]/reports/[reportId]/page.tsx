@@ -11,7 +11,10 @@ import {
   deleteIncidentReport,
 } from "@/lib/actions/admin-reports";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
-import { CategoryLevelSelect } from "@/components/CategoryLevelSelect";
+import {
+  PenaltyRowsEditor,
+  type PenaltyDriverOption,
+} from "@/components/PenaltyRowsEditor";
 
 // CAS uses penalty points as the only penalty type. The stewarding form offers
 // just "No action" (incident cleared, no penalty) and "Strafpunkte" (points
@@ -47,7 +50,9 @@ export default async function AdminReportDetail({
         },
       },
       reporterUser: true,
-      reporterRegistration: { include: { team: { select: { name: true } } } },
+      reporterRegistration: {
+        include: { user: true, team: { select: { name: true } } },
+      },
       involvedDrivers: {
         include: {
           registration: {
@@ -73,6 +78,57 @@ export default async function AdminReportDetail({
   const categoryPointsTable = readCategoryPoints(
     report.round.season.scoringSystem.categoryPointsTable
   );
+
+  // Build the pool of selectable penalty recipients: every driver who has a
+  // result in this round, plus everyone already involved in the report
+  // (accused + reporter). Any of them can receive a penalty point.
+  const roundResults = await prisma.raceResult.findMany({
+    where: { roundId: report.roundId },
+    select: {
+      registration: {
+        select: {
+          id: true,
+          startNumber: true,
+          user: { select: { firstName: true, lastName: true } },
+          team: { select: { name: true } },
+        },
+      },
+    },
+  });
+
+  type RegLike = {
+    id: string;
+    startNumber: string | null;
+    user: { firstName: string | null; lastName: string | null };
+    team: { name: string } | null;
+  };
+  const driverMap = new Map<string, PenaltyDriverOption & { sort: number }>();
+  const addOpt = (reg: RegLike | null | undefined) => {
+    if (!reg || driverMap.has(reg.id)) return;
+    const name = `${reg.user.firstName ?? ""} ${reg.user.lastName ?? ""}`.trim();
+    const numPart = reg.startNumber ? `#${reg.startNumber} ` : "";
+    const teamPart = teamMode && reg.team?.name ? ` — ${reg.team.name}` : "";
+    driverMap.set(reg.id, {
+      registrationId: reg.id,
+      label: `${numPart}${name || "(ohne Name)"}${teamPart}`,
+      sort: reg.startNumber ? parseInt(reg.startNumber, 10) || 9999 : 9999,
+    });
+  };
+  roundResults.forEach((r) => addOpt(r.registration as RegLike));
+  report.involvedDrivers.forEach((d) => addOpt(d.registration as RegLike));
+  addOpt(report.reporterRegistration as RegLike | null);
+
+  const driverOptions: PenaltyDriverOption[] = Array.from(driverMap.values())
+    .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label))
+    .map(({ registrationId, label }) => ({ registrationId, label }));
+
+  const initialPenaltyRows = (report.decision?.penalties ?? [])
+    .filter((p) => p.type === "POINTS_DEDUCTION")
+    .map((p) => ({
+      registrationId: p.registrationId,
+      level: p.categoryLevel != null ? String(p.categoryLevel) : "",
+      reason: p.reason ?? "",
+    }));
 
   const submit = submitDecision.bind(null, slug, seasonId, reportId);
   const setStatusUnderReview = setReportStatus.bind(
@@ -296,24 +352,6 @@ export default async function AdminReportDetail({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">Kategorie</span>
-            <CategoryLevelSelect
-              initialLevel={
-                report.decision?.penalties?.[0]?.categoryLevel != null
-                  ? String(report.decision.penalties[0].categoryLevel)
-                  : ""
-              }
-              pointsTable={categoryPointsTable}
-            />
-            <span className="mt-1 block text-xs text-zinc-500">
-              Wenn das Urteil „Strafpunkte“ ist, bestimmt die Kategorie, wie
-              viele Punkte abgezogen werden (gemäß der Tabelle dieses
-              Wertungssystems).
-            </span>
-          </label>
-
-
-          <label className="block">
             <span className="mb-1 block text-sm text-zinc-300">
               Öffentliche Zusammenfassung <span className="text-orange-400">*</span>
             </span>
@@ -339,73 +377,17 @@ export default async function AdminReportDetail({
             />
           </label>
 
-          {accusedDrivers.length > 0 && (
-            <div className="rounded border border-zinc-800 p-3">
-              <p className="text-xs text-zinc-500">
-                Strafempfänger — nur für Strafpunkte.
-              </p>
-              <label className="mt-2 block">
-                <span className="mb-1 block text-sm text-zinc-300">
-                  {teamMode ? "Beschuldigtes Team" : "Beschuldigter Fahrer"}
-                </span>
-                <select
-                  name="accusedRegistrationId"
-                  className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-                >
-                  <option value="">— Auswählen —</option>
-                  {teamMode
-                    ? Array.from(
-                        accusedDrivers.reduce((map, d) => {
-                          const key = d.registration.team?.name ?? "(Kein Team)";
-                          const arr = map.get(key) ?? [];
-                          arr.push(d);
-                          map.set(key, arr);
-                          return map;
-                        }, new Map<string, typeof accusedDrivers>())
-                      ).map(([teamName, members]) => (
-                        <option
-                          key={teamName}
-                          value={members[0].registrationId}
-                        >
-                          {teamName}
-                        </option>
-                      ))
-                    : accusedDrivers.map((d) => (
-                        <option key={d.id} value={d.registrationId}>
-                          #{d.registration.startNumber ?? "?"}{" "}
-                          {d.registration.user.firstName}{" "}
-                          {d.registration.user.lastName}
-                        </option>
-                      ))}
-                </select>
-              </label>
-
-              <div className="mt-3">
-                <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-400">
-                    Strafpunkte
-                  </span>
-                  <input
-                    name="pointsValue"
-                    type="number"
-                    min={0}
-                    placeholder="z. B. 5"
-                    className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-                  />
-                </label>
-              </div>
-              <label className="mt-3 block">
-                <span className="mb-1 block text-xs text-zinc-400">
-                  Strafgrund (Standard: öffentliche Zusammenfassung)
-                </span>
-                <input
-                  name="penaltyReason"
-                  type="text"
-                  className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
-                />
-              </label>
-            </div>
-          )}
+          <PenaltyRowsEditor
+            drivers={driverOptions}
+            pointsTable={categoryPointsTable}
+            initialRows={initialPenaltyRows}
+          />
+          <p className="text-xs text-zinc-500">
+            Strafpunkte werden nur vergeben, wenn das Urteil „Strafpunkte“ ist.
+            Die Kategorie pro Zeile bestimmt die Punktezahl gemäß der Tabelle
+            dieses Wertungssystems; der Kommentar pro Zeile erscheint öffentlich
+            neben dem jeweiligen Fahrer.
+          </p>
 
           <label className="flex items-center gap-2 text-sm text-zinc-300">
             <input

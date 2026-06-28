@@ -87,20 +87,27 @@ export default async function PublicDecisions({
                 <p className="mt-2 text-sm text-zinc-300">{d.publicSummary}</p>
                 {d.penalties.length > 0 && (
                   <div className="mt-2 space-y-1 text-xs text-zinc-400">
-                    {d.penalties.map((p) => (
-                      <div key={p.id}>
-                        <span className="text-red-300">
-                          {p.type.replace(/_/g, " ")}
-                        </span>{" "}
-                        — {p.registration.user.firstName}{" "}
-                        {p.registration.user.lastName}
-                        {p.pointsValue != null && `: −${p.pointsValue} pts`}
-                        {p.timePenaltySeconds != null &&
-                          `: +${p.timePenaltySeconds}s`}
-                        {p.gridPositions != null &&
-                          `: −${p.gridPositions} grid next round`}
-                      </div>
-                    ))}
+                    {d.penalties.map((p) => {
+                      const showReason =
+                        p.reason && p.reason.trim() !== d.publicSummary.trim();
+                      return (
+                        <div key={p.id}>
+                          <span className="text-red-300">
+                            {p.type.replace(/_/g, " ")}
+                          </span>{" "}
+                          — {p.registration.user.firstName}{" "}
+                          {p.registration.user.lastName}
+                          {p.pointsValue != null && `: −${p.pointsValue} pts`}
+                          {p.timePenaltySeconds != null &&
+                            `: +${p.timePenaltySeconds}s`}
+                          {p.gridPositions != null &&
+                            `: −${p.gridPositions} grid next round`}
+                          {showReason && (
+                            <span className="text-zinc-500"> — {p.reason}</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

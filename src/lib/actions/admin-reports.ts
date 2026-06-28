@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSteward } from "@/lib/auth-helpers";
 import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
 import { pointsForLevel } from "@/lib/penalty-categories";
-import type { IncidentStatus, Verdict, PenaltyCategory } from "@prisma/client";
+import type { IncidentStatus, Verdict } from "@prisma/client";
 
 export async function setReportStatus(
   leagueSlug: string,
@@ -39,31 +39,40 @@ export async function submitDecision(
     String(formData.get("internalNotes") ?? "").trim() || null;
   const publish = formData.get("publish") === "on";
 
-  const accusedRegistrationId =
-    String(formData.get("accusedRegistrationId") ?? "").trim() || null;
-  let pointsValueRaw = String(formData.get("pointsValue") ?? "").trim();
-  let pointsValue = pointsValueRaw ? Math.abs(parseInt(pointsValueRaw, 10) || 0) : 0;
-  const timePenaltySecondsRaw = String(
-    formData.get("timePenaltySeconds") ?? ""
-  ).trim();
-  const timePenaltySeconds = timePenaltySecondsRaw
-    ? parseInt(timePenaltySecondsRaw, 10)
-    : null;
-  const gridPositionsRaw = String(formData.get("gridPositions") ?? "").trim();
-  const gridPositions = gridPositionsRaw
-    ? parseInt(gridPositionsRaw, 10)
-    : null;
-  const reason = (
-    String(formData.get("penaltyReason") ?? "").trim() || publicSummary
-  );
-  const penaltyCategoryRaw = String(formData.get("penaltyCategory") ?? "").trim();
-  const penaltyCategory = penaltyCategoryRaw
-    ? (penaltyCategoryRaw as PenaltyCategory)
-    : null;
-
-  const categoryLevelRaw = String(formData.get("categoryLevel") ?? "").trim();
-  const categoryLevel =
-    categoryLevelRaw === "" ? null : parseInt(categoryLevelRaw, 10);
+  // Multiple penalty recipients: one row per driver, each with its own
+  // category level (→ points) and its own public reason. The reporter and any
+  // round participant can be selected.
+  type PenaltyRowInput = {
+    registrationId: string;
+    level: number | null;
+    reason: string;
+  };
+  let penaltyRows: PenaltyRowInput[] = [];
+  try {
+    const parsed: unknown = JSON.parse(
+      String(formData.get("penaltiesJson") ?? "[]")
+    );
+    if (Array.isArray(parsed)) {
+      penaltyRows = parsed
+        .filter(
+          (r): r is { registrationId: string; level?: unknown; reason?: unknown } =>
+            !!r &&
+            typeof (r as { registrationId?: unknown }).registrationId ===
+              "string" &&
+            ((r as { registrationId: string }).registrationId.length > 0)
+        )
+        .map((r) => ({
+          registrationId: r.registrationId,
+          level:
+            r.level === null || r.level === undefined
+              ? null
+              : Number(r.level),
+          reason: typeof r.reason === "string" ? r.reason.trim() : "",
+        }));
+    }
+  } catch {
+    penaltyRows = [];
+  }
 
   if (!publicSummary) {
     redirect(
@@ -77,12 +86,7 @@ export async function submitDecision(
       round: { include: { season: { include: { scoringSystem: true } } } },
     },
   });
-  const scoringSystemForCat =
-    report?.round.season.scoringSystem ?? null;
-  const categoryDerivedPoints = pointsForLevel(scoringSystemForCat, categoryLevel);
-  if (categoryLevel != null) {
-    pointsValue = categoryDerivedPoints;
-  }
+  const scoringSystemForCat = report?.round.season.scoringSystem ?? null;
   if (!report) {
     redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
   }
@@ -118,34 +122,27 @@ export async function submitDecision(
     where: { sourceIncidentDecisionId: decision.id },
   });
 
-  if (
-    accusedRegistrationId &&
-    (verdict === "POINTS_DEDUCTION" ||
-      verdict === "TIME_PENALTY" ||
-      verdict === "GRID_PENALTY_NEXT_ROUND")
-  ) {
-    const type =
-      verdict === "POINTS_DEDUCTION"
-        ? "POINTS_DEDUCTION"
-        : verdict === "TIME_PENALTY"
-        ? "TIME_PENALTY"
-        : "GRID_PENALTY";
-
-    await prisma.penalty.create({
-      data: {
-        registrationId: accusedRegistrationId,
-        roundId: report.roundId,
-        source: "INCIDENT_DECISION",
-        sourceIncidentDecisionId: decision.id,
-        type,
-        pointsValue: verdict === "POINTS_DEDUCTION" ? pointsValue : null,
-        timePenaltySeconds: verdict === "TIME_PENALTY" ? timePenaltySeconds : null,
-        gridPositions: verdict === "GRID_PENALTY_NEXT_ROUND" ? gridPositions : null,
-        reason,
-        category: penaltyCategory,
-        categoryLevel,
-      },
-    });
+  if (verdict === "POINTS_DEDUCTION" && penaltyRows.length > 0) {
+    // One penalty per selected driver; de-dupe in case the same driver was
+    // picked twice.
+    const seen = new Set<string>();
+    for (const row of penaltyRows) {
+      if (seen.has(row.registrationId)) continue;
+      seen.add(row.registrationId);
+      const rowPoints = pointsForLevel(scoringSystemForCat, row.level);
+      await prisma.penalty.create({
+        data: {
+          registrationId: row.registrationId,
+          roundId: report.roundId,
+          source: "INCIDENT_DECISION",
+          sourceIncidentDecisionId: decision.id,
+          type: "POINTS_DEDUCTION",
+          pointsValue: rowPoints,
+          reason: row.reason || publicSummary,
+          categoryLevel: row.level,
+        },
+      });
+    }
   }
 
   // Penalty pool: recompute auto-forgiveness (GT3 WCT only; engine guards by slug)

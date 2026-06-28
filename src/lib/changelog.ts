@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.22.0",
+    date: "2026-06-28",
+    changes: [
+      "Steward review: penalty points can now be handed out to several drivers at once. The decision form has a table where each row picks a driver (any participant of the round, including the person who filed the report), a penalty category, and its own public comment — so different drivers can get a different reason for their penalty point. The per-driver reason is shown on the public Steward Decisions page.",
+    ],
+  },
+  {
     version: "1.21.0",
     date: "2026-06-27",
     changes: [
