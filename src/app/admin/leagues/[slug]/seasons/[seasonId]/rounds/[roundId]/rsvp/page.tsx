@@ -55,6 +55,9 @@ export default async function AdminRoundRsvp({
     where: { roundId },
   });
   const league = round.season.league;
+  // The "Eligible" column is only meaningful when a waiting list is active
+  // (the season has a driver cap). Otherwise every driver is eligible.
+  const waitlistActive = round.season.maxDrivers != null;
 
   // Group rows by status for display
   const accepted = rows.filter((r) => r.status === "ACCEPTED");
@@ -325,12 +328,24 @@ export default async function AdminRoundRsvp({
             are stamped <span className="text-zinc-300">admin</span> and the
             Discord embed refreshes automatically.
           </p>
+          {waitlistActive && (
+            <p className="text-xs text-zinc-500">
+              <span className="text-zinc-300">Eligible</span> shows who may drive
+              this round: confirmed grid drivers are always eligible, and each
+              time a confirmed driver declines, the next waiting-list driver
+              becomes eligible for this round (shown as{" "}
+              <span className="text-cyan-300">fill-in</span>).
+            </p>
+          )}
         </div>
         <div className="overflow-x-auto rounded border border-zinc-800">
           <table className="w-full min-w-[760px] text-sm tabular-nums">
             <thead className="bg-zinc-900 text-xs uppercase tracking-wider text-zinc-400">
               <tr>
                 <th className="px-3 py-2 text-left driver-col">Driver</th>
+                {waitlistActive && (
+                  <th className="px-3 py-2 text-left">Eligible</th>
+                )}
                 <th className="px-3 py-2 text-left">Status</th>
                 <th className="px-3 py-2 text-left">Source</th>
                 <th className="px-3 py-2 text-left">Responded</th>
@@ -341,6 +356,11 @@ export default async function AdminRoundRsvp({
               {rows.map((r) => (
                 <tr key={r.registrationId} className="border-t border-zinc-800 hover:bg-zinc-900/60">
                   <td className="px-3 py-2 driver-col">{r.displayName}</td>
+                  {waitlistActive && (
+                    <td className="px-3 py-2">
+                      <EligibleBadge eligibility={r.eligibility} />
+                    </td>
+                  )}
                   <td className="px-3 py-2">
                     {r.status ? STATUS_LABEL[r.status] : <span className="text-zinc-500">— silent —</span>}
                   </td>
@@ -364,6 +384,50 @@ export default async function AdminRoundRsvp({
         </div>
       </div>
     </div>
+  );
+}
+
+function EligibleBadge({
+  eligibility,
+}: {
+  eligibility: "confirmed" | "fillin" | "waitlist" | "pending";
+}) {
+  if (eligibility === "confirmed") {
+    return (
+      <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[11px] font-medium text-emerald-200">
+        ✓ Yes
+      </span>
+    );
+  }
+  if (eligibility === "fillin") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[11px] font-medium text-emerald-200">
+          ✓ Yes
+        </span>
+        <span className="rounded bg-cyan-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200">
+          fill-in
+        </span>
+      </span>
+    );
+  }
+  if (eligibility === "waitlist") {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="text-[11px] text-zinc-500">No</span>
+        <span className="rounded bg-amber-900/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-200/80">
+          waiting list
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="text-[11px] text-zinc-500">No</span>
+      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+        pending
+      </span>
+    </span>
   );
 }
 

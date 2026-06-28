@@ -23,6 +23,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-06-28",
     changes: [
       "Waiting-list fill-ins are now easier to confirm. When a confirmed driver declines a round, the next driver on the waiting list gets a Discord DM with Accept / Decline buttons — clicking Accept locks in the race (no need to message the admin), and Decline passes the offer straight to the next driver. The offer is now also sent by email, so drivers are reached even if their Discord DMs are closed. League admins are emailed whenever a fill-in is offered and again when a driver accepts, so the iRacing invite can be ready. The admin round RSVP page shows each fill-in driver's accepted/awaiting status.",
+      "The admin round RSVP page now has an “Eligible” column in the all-drivers table (shown on seasons with a waiting list). Confirmed grid drivers are always eligible; each time a confirmed driver declines, the next driver on the waiting list becomes eligible for that round and is marked “fill-in” — giving a clear overview of the waiting-list status for the round at a glance.",
     ],
   },
   {

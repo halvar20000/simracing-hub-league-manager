@@ -319,14 +319,31 @@ export async function getRoundRsvpSummary(roundId: string) {
         },
       },
       rsvps: true,
+      fillIns: { select: { registrationId: true } },
     },
   });
   if (!round) return null;
 
   const byRegId = new Map(round.rsvps.map((r) => [r.registrationId, r]));
+  // Registrations that hold a one-race fill-in for this round (a waiting-list
+  // driver who became eligible because a confirmed driver declined).
+  const fillInRegIds = new Set(round.fillIns.map((f) => f.registrationId));
 
   const rows = round.season.registrations.map((reg) => {
     const rsvp = byRegId.get(reg.id);
+    // "Eligible to drive this round": a confirmed grid driver (APPROVED, not on
+    // the waiting list) is always eligible; a waiting-list driver is eligible
+    // only when they hold a fill-in for this round.
+    const isConfirmed = reg.status === "APPROVED" && reg.waitlistedAt == null;
+    const isFillIn = fillInRegIds.has(reg.id);
+    const eligibility: "confirmed" | "fillin" | "waitlist" | "pending" =
+      isConfirmed
+        ? "confirmed"
+        : isFillIn
+        ? "fillin"
+        : reg.waitlistedAt != null
+        ? "waitlist"
+        : "pending";
     return {
       registrationId: reg.id,
       userId: reg.userId,
@@ -334,6 +351,8 @@ export async function getRoundRsvpSummary(roundId: string) {
       status: rsvp?.status ?? null,
       source: rsvp?.source ?? null,
       respondedAt: rsvp?.respondedAt ?? null,
+      eligible: isConfirmed || isFillIn,
+      eligibility,
     };
   });
 
