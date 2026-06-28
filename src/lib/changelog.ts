@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.23.1",
+    date: "2026-06-28",
+    changes: [
+      "Fix: the “Eligible” column on the admin round RSVP page now reflects waiting-list promotions correctly. It is computed live from the number of confirmed drivers who declined the round — the first N waiting-list drivers (by registration date) show as eligible — instead of depending on whether a fill-in invite had already been sent. This means declines made before the fill-in invites existed are now counted too.",
+    ],
+  },
+  {
     version: "1.23.0",
     date: "2026-06-28",
     changes: [

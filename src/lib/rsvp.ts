@@ -319,27 +319,45 @@ export async function getRoundRsvpSummary(roundId: string) {
         },
       },
       rsvps: true,
-      fillIns: { select: { registrationId: true } },
     },
   });
   if (!round) return null;
 
   const byRegId = new Map(round.rsvps.map((r) => [r.registrationId, r]));
-  // Registrations that hold a one-race fill-in for this round (a waiting-list
-  // driver who became eligible because a confirmed driver declined).
-  const fillInRegIds = new Set(round.fillIns.map((f) => f.registrationId));
+
+  // ── Eligibility ("may drive this round") ──────────────────────────────────
+  // Computed LIVE and positionally, independent of whether a fill-in offer was
+  // ever sent (historical declines predate the offer engine, so we can't rely
+  // on stored RoundFillIn rows):
+  //   - A confirmed grid driver (APPROVED, not waitlisted) is always eligible.
+  //   - Each confirmed driver who DECLINED this round frees one seat. The first
+  //     N waiting-list drivers (by registration date) become eligible for this
+  //     round, where N = number of confirmed decliners.
+  // A waiting-list driver's own RSVP (e.g. they declined the fill-in) is shown
+  // in the Status column and does not change their positional eligibility here.
+  const isConfirmedGrid = (reg: (typeof round.season.registrations)[number]) =>
+    reg.status === "APPROVED" && reg.waitlistedAt == null;
+
+  const confirmedDeclineCount = round.season.registrations.filter(
+    (reg) => isConfirmedGrid(reg) && byRegId.get(reg.id)?.status === "DECLINED"
+  ).length;
+
+  const eligibleWaitlistIds = new Set(
+    round.season.registrations
+      .filter((reg) => reg.status === "APPROVED" && reg.waitlistedAt != null)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .slice(0, confirmedDeclineCount)
+      .map((reg) => reg.id)
+  );
 
   const rows = round.season.registrations.map((reg) => {
     const rsvp = byRegId.get(reg.id);
-    // "Eligible to drive this round": a confirmed grid driver (APPROVED, not on
-    // the waiting list) is always eligible; a waiting-list driver is eligible
-    // only when they hold a fill-in for this round.
-    const isConfirmed = reg.status === "APPROVED" && reg.waitlistedAt == null;
-    const isFillIn = fillInRegIds.has(reg.id);
+    const confirmed = isConfirmedGrid(reg);
+    const promoted = eligibleWaitlistIds.has(reg.id);
     const eligibility: "confirmed" | "fillin" | "waitlist" | "pending" =
-      isConfirmed
+      confirmed
         ? "confirmed"
-        : isFillIn
+        : promoted
         ? "fillin"
         : reg.waitlistedAt != null
         ? "waitlist"
@@ -351,7 +369,7 @@ export async function getRoundRsvpSummary(roundId: string) {
       status: rsvp?.status ?? null,
       source: rsvp?.source ?? null,
       respondedAt: rsvp?.respondedAt ?? null,
-      eligible: isConfirmed || isFillIn,
+      eligible: confirmed || promoted,
       eligibility,
     };
   });
