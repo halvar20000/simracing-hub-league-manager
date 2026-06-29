@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.24.0",
+    date: "2026-06-29",
+    changes: [
+      "New public “Grid & Waiting List” page for each round (linked from the round page and the season race calendar). It's a read-only overview showing who is eligible to drive the round, who has been filled in from the waiting list, and who has declined — the same eligibility view admins see, now visible to everyone without any way to change RSVPs.",
+    ],
+  },
+  {
     version: "1.23.1",
     date: "2026-06-28",
     changes: [

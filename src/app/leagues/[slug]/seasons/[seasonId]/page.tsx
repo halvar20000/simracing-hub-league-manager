@@ -357,18 +357,26 @@ export default async function PublicSeasonDetail({
                     {r.status.replace("_", " ")}
                   </td>
                   <td className="px-3 py-2 text-right text-zinc-500">
-                    {r.status === "COMPLETED" && r._count.raceResults > 0 ? (
+                    <div className="flex flex-col items-end gap-0.5">
+                      {r.status === "COMPLETED" && r._count.raceResults > 0 ? (
+                        <Link
+                          href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
+                          className="text-[#ff6b35] hover:underline"
+                        >
+                          Results →
+                        </Link>
+                      ) : r._count.raceResults > 0 ? (
+                        <span className="text-xs text-zinc-500">Pending</span>
+                      ) : (
+                        <span className="text-xs">No results</span>
+                      )}
                       <Link
-                        href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}`}
-                        className="text-[#ff6b35] hover:underline"
+                        href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}/grid`}
+                        className="text-xs text-zinc-400 hover:text-zinc-200"
                       >
-                        Results →
+                        Grid &amp; waiting list →
                       </Link>
-                    ) : r._count.raceResults > 0 ? (
-                      <span className="text-xs text-zinc-500">Pending</span>
-                    ) : (
-                      <span className="text-xs">No results</span>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}

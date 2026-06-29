@@ -6,6 +6,7 @@ import { getRoundRsvpSummary } from "@/lib/rsvp";
 import { formatDateTime } from "@/lib/date";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import AdminRsvpControl from "@/components/AdminRsvpControl";
+import { EligibleBadge } from "@/components/EligibleBadge";
 import {
   postRsvpManually,
   refreshRsvpMessageAction,
@@ -384,50 +385,6 @@ export default async function AdminRoundRsvp({
         </div>
       </div>
     </div>
-  );
-}
-
-function EligibleBadge({
-  eligibility,
-}: {
-  eligibility: "confirmed" | "fillin" | "waitlist" | "pending";
-}) {
-  if (eligibility === "confirmed") {
-    return (
-      <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[11px] font-medium text-emerald-200">
-        ✓ Yes
-      </span>
-    );
-  }
-  if (eligibility === "fillin") {
-    return (
-      <span className="inline-flex items-center gap-1">
-        <span className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[11px] font-medium text-emerald-200">
-          ✓ Yes
-        </span>
-        <span className="rounded bg-cyan-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200">
-          fill-in
-        </span>
-      </span>
-    );
-  }
-  if (eligibility === "waitlist") {
-    return (
-      <span className="inline-flex items-center gap-1">
-        <span className="text-[11px] text-zinc-500">No</span>
-        <span className="rounded bg-amber-900/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-200/80">
-          waiting list
-        </span>
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className="text-[11px] text-zinc-500">No</span>
-      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
-        pending
-      </span>
-    </span>
   );
 }
 

@@ -610,6 +610,12 @@ export default async function PublicRoundResults({
         </div>
         <div className="flex items-center gap-2">
           <CopyLinkButton />
+          <Link
+            href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/grid`}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            🏁 Grid &amp; Waiting List
+          </Link>
           <ReportButton
             href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
             window={protestWindowState({
