@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.25.0",
+    date: "2026-06-29",
+    changes: [
+      "The public Incidents page is now a proper decisions overview. Each report is shown as a card (newest first) that, once the steward's decision is published, displays the verdict, exactly how many penalty points (or time/grid penalty) each driver received, and the public reason — so you no longer have to open each report (which was sign-in-only) to see the outcome. Added league filter chips and a header summary (reports, decided, total penalty points applied).",
+    ],
+  },
+  {
     version: "1.24.1",
     date: "2026-06-29",
     changes: [

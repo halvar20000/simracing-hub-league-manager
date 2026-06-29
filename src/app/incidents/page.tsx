@@ -5,9 +5,9 @@ import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
 
 export const metadata: Metadata = pageMetadata({
-  title: "Incident Reports",
+  title: "Incident Reports & Decisions",
   description:
-    "All incident reports submitted across CAS leagues — grouped by league, sorted by most recent.",
+    "Every incident report across CAS leagues with the steward's verdict, the penalty applied, and the reason — newest first.",
   url: "/incidents",
 });
 
@@ -19,170 +19,286 @@ const STATUS_TONE: Record<string, string> = {
   WITHDRAWN: "bg-zinc-800 text-zinc-500",
 };
 
-export default async function PublicIncidentsList() {
+const VERDICT_TONE: Record<string, string> = {
+  NO_ACTION: "bg-zinc-800 text-zinc-300",
+  WARNING: "bg-amber-900/40 text-amber-200",
+  REPRIMAND: "bg-amber-900/40 text-amber-200",
+  TIME_PENALTY: "bg-orange-900/40 text-orange-200",
+  POINTS_DEDUCTION: "bg-red-900/40 text-red-200",
+  GRID_PENALTY_NEXT_ROUND: "bg-orange-900/40 text-orange-200",
+  SUSPENSION: "bg-red-900/50 text-red-100",
+};
+
+type PenaltyRow = {
+  type: string;
+  pointsValue: number | null;
+  timePenaltySeconds: number | null;
+  gridPositions: number | null;
+  reason: string;
+  registration: {
+    user: { firstName: string | null; lastName: string | null; name: string | null };
+    team: { name: string } | null;
+  };
+};
+
+/** Short, human label for the penalty itself (the "how much"). */
+function penaltyAmount(p: PenaltyRow): string {
+  switch (p.type) {
+    case "POINTS_DEDUCTION":
+      return p.pointsValue != null ? `−${p.pointsValue} pts` : "Points deduction";
+    case "TIME_PENALTY":
+      return p.timePenaltySeconds != null ? `+${p.timePenaltySeconds}s` : "Time penalty";
+    case "GRID_PENALTY":
+      return p.gridPositions != null ? `${p.gridPositions} grid pos` : "Grid penalty";
+    case "WARNING":
+      return "Warning";
+    default:
+      return p.type.replace(/_/g, " ");
+  }
+}
+
+function penaltyDriver(p: PenaltyRow, teamMode: boolean): string {
+  if (teamMode && p.registration.team?.name) return p.registration.team.name;
+  const u = p.registration.user;
+  return (
+    `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.name || "Driver"
+  );
+}
+
+export default async function PublicIncidentsList({
+  searchParams,
+}: {
+  searchParams: Promise<{ league?: string }>;
+}) {
+  const { league: leagueFilter } = await searchParams;
+
   const reports = await prisma.incidentReport.findMany({
     include: {
-      round: {
-        include: {
-          season: {
-            include: { league: true },
-          },
-        },
-      },
+      round: { include: { season: { include: { league: true } } } },
       reporterUser: true,
       reporterRegistration: { include: { team: { select: { name: true } } } },
       involvedDrivers: {
         where: { role: "ACCUSED" },
         include: {
           registration: {
+            include: { user: true, team: { select: { name: true } } },
+          },
+        },
+      },
+      decision: {
+        include: {
+          penalties: {
             include: {
-              user: true,
-              team: { select: { name: true } },
+              registration: {
+                include: {
+                  user: {
+                    select: { firstName: true, lastName: true, name: true },
+                  },
+                  team: { select: { name: true } },
+                },
+              },
             },
           },
         },
       },
-      decision: { select: { verdict: true } },
     },
     orderBy: { submittedAt: "desc" },
   });
 
-  // Group by league
-  type Group = {
-    leagueId: string;
-    leagueName: string;
-    leagueSlug: string;
-    reports: typeof reports;
-  };
-  const byLeague = new Map<string, Group>();
+  // League filter chips (only leagues that actually have reports).
+  const leagueMap = new Map<string, { slug: string; name: string }>();
   for (const r of reports) {
     const lg = r.round.season.league;
-    const existing = byLeague.get(lg.id);
-    if (existing) {
-      existing.reports.push(r);
-    } else {
-      byLeague.set(lg.id, {
-        leagueId: lg.id,
-        leagueName: lg.name,
-        leagueSlug: lg.slug,
-        reports: [r],
-      });
-    }
+    if (!leagueMap.has(lg.slug)) leagueMap.set(lg.slug, { slug: lg.slug, name: lg.name });
   }
-  const groups = [...byLeague.values()].sort((a, b) =>
-    a.leagueName.localeCompare(b.leagueName)
+  const leagues = [...leagueMap.values()].sort((a, b) =>
+    a.name.localeCompare(b.name)
   );
+
+  const visible = leagueFilter
+    ? reports.filter((r) => r.round.season.league.slug === leagueFilter)
+    : reports;
+
+  // Header stats over the visible set.
+  const isPublished = (r: (typeof reports)[number]) =>
+    !!r.decision && !!r.decision.publishedAt;
+  const decidedCount = visible.filter(isPublished).length;
+  const totalPointsApplied = visible.reduce((sum, r) => {
+    if (!isPublished(r)) return sum;
+    return (
+      sum +
+      r.decision!.penalties.reduce(
+        (s, p) => s + (p.type === "POINTS_DEDUCTION" ? p.pointsValue ?? 0 : 0),
+        0
+      )
+    );
+  }, 0);
+
+  const chipBase =
+    "rounded-full border px-3 py-1 text-xs transition-colors";
+  const chipOn = "border-orange-500 bg-orange-500/15 text-orange-200";
+  const chipOff =
+    "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200";
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Incident Reports</h1>
+        <h1 className="text-2xl font-bold">Incident Reports &amp; Decisions</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          {reports.length} report{reports.length === 1 ? "" : "s"} across{" "}
-          {groups.length} league{groups.length === 1 ? "" : "s"}.
+          {visible.length} report{visible.length === 1 ? "" : "s"} ·{" "}
+          {decidedCount} decided · {totalPointsApplied} penalty point
+          {totalPointsApplied === 1 ? "" : "s"} applied.
         </p>
       </div>
 
-      {groups.length === 0 ? (
+      {leagues.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/incidents"
+            className={`${chipBase} ${!leagueFilter ? chipOn : chipOff}`}
+          >
+            All leagues
+          </Link>
+          {leagues.map((lg) => (
+            <Link
+              key={lg.slug}
+              href={`/incidents?league=${lg.slug}`}
+              className={`${chipBase} ${
+                leagueFilter === lg.slug ? chipOn : chipOff
+              }`}
+            >
+              {lg.name}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {visible.length === 0 ? (
         <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
           No reports filed yet.
         </p>
       ) : (
-        groups.map((g) => (
-          <section key={g.leagueId}>
-            <h2 className="mb-2 font-display text-base font-semibold tracking-wide">
-              {g.leagueName}
-            </h2>
-            <div className="overflow-x-auto rounded border border-zinc-800">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-900 text-left text-zinc-400">
-                  <tr>
-                    <th className="px-3 py-2">Submitted</th>
-                    <th className="px-3 py-2">Round</th>
-                    <th className="px-3 py-2">Reporter</th>
-                    <th className="px-3 py-2">Accused</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Verdict</th>
-                    <th className="px-3 py-2 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.reports.map((r) => {
-                    const teamMode = !!r.round.season.teamRegistration;
+        <div className="space-y-3">
+          {visible.map((r) => {
+            const teamMode = !!r.round.season.teamRegistration;
 
-                    const reporterLabel = teamMode
-                      ? r.reporterRegistration?.team?.name ??
-                        `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim()
-                      : `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim();
+            const reporterLabel = teamMode
+              ? r.reporterRegistration?.team?.name ??
+                `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim()
+              : `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim();
 
-                    let accusedLabel: string;
-                    if (teamMode) {
-                      const teams = new Set<string>();
-                      for (const d of r.involvedDrivers) {
-                        const t = d.registration.team?.name;
-                        if (t) teams.add(t);
-                      }
-                      accusedLabel =
-                        teams.size === 0
-                          ? "—"
-                          : [...teams].join(", ");
-                    } else {
-                      const names = r.involvedDrivers.map((d) =>
-                        `${d.registration.user.firstName ?? ""} ${d.registration.user.lastName ?? ""}`.trim()
-                      );
-                      accusedLabel = names.length === 0 ? "—" : names.join(", ");
-                    }
+            let accusedLabel: string;
+            if (teamMode) {
+              const teams = new Set<string>();
+              for (const d of r.involvedDrivers) {
+                const t = d.registration.team?.name;
+                if (t) teams.add(t);
+              }
+              accusedLabel = teams.size === 0 ? "—" : [...teams].join(", ");
+            } else {
+              const names = r.involvedDrivers.map((d) =>
+                `${d.registration.user.firstName ?? ""} ${d.registration.user.lastName ?? ""}`.trim()
+              );
+              accusedLabel = names.length === 0 ? "—" : names.join(", ");
+            }
 
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-t border-zinc-800 hover:bg-zinc-900"
+            const published = isPublished(r);
+            const decision = r.decision;
+
+            return (
+              <article
+                key={r.id}
+                className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span
+                        className={`inline-block rounded px-2 py-0.5 text-xs ${
+                          STATUS_TONE[r.status] ?? STATUS_TONE.SUBMITTED
+                        }`}
                       >
-                        <td className="px-3 py-2 text-xs text-zinc-400">
-                          {formatDateTime(r.submittedAt)}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className="text-zinc-500">
-                            {r.round.season.name} {r.round.season.year}
-                          </span>{" "}
-                          · R{r.round.roundNumber} {r.round.name}
-                        </td>
-                        <td className="px-3 py-2 text-zinc-300">
-                          {reporterLabel || "—"}
-                        </td>
-                        <td className="px-3 py-2 text-zinc-300">
-                          {accusedLabel}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={`inline-block rounded px-2 py-0.5 text-xs ${
-                              STATUS_TONE[r.status] ?? STATUS_TONE.SUBMITTED
-                            }`}
-                          >
-                            {r.status.replace(/_/g, " ")}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-zinc-400">
-                          {r.decision?.verdict
-                            ? r.decision.verdict.replace(/_/g, " ")
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <Link
-                            href={`/reports/${r.id}`}
-                            className="text-orange-400 hover:underline"
-                          >
-                            Open →
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ))
+                        {r.status.replace(/_/g, " ")}
+                      </span>
+                      <span className="font-semibold text-zinc-100">
+                        {r.round.season.league.name}
+                      </span>
+                      <span className="text-zinc-500">
+                        {r.round.season.name} {r.round.season.year} · R
+                        {r.round.roundNumber} {r.round.name}
+                      </span>
+                    </div>
+                    <div className="text-sm text-zinc-300">
+                      <span className="text-zinc-500">Reporter:</span>{" "}
+                      {reporterLabel || "—"}{" "}
+                      <span className="text-zinc-600">→</span>{" "}
+                      <span className="text-zinc-500">Accused:</span>{" "}
+                      {accusedLabel}
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    {formatDateTime(r.submittedAt)}
+                  </div>
+                </div>
+
+                {published && decision ? (
+                  <div className="mt-3 rounded border border-emerald-900/60 bg-emerald-950/20 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                        Verdict
+                      </span>
+                      <span
+                        className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
+                          VERDICT_TONE[decision.verdict] ?? "bg-zinc-800 text-zinc-300"
+                        }`}
+                      >
+                        {decision.verdict.replace(/_/g, " ")}
+                      </span>
+                    </div>
+
+                    {decision.penalties.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-sm">
+                        {decision.penalties.map((p) => (
+                          <li key={p.id} className="text-zinc-200">
+                            <span className="font-medium">
+                              {penaltyDriver(p, teamMode)}
+                            </span>
+                            <span className="mx-1 text-zinc-500">—</span>
+                            <span className="font-semibold text-red-200">
+                              {penaltyAmount(p)}
+                            </span>
+                            {p.reason && p.reason !== decision.publicSummary && (
+                              <span className="text-zinc-400"> · {p.reason}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {decision.publicSummary && (
+                      <p className="mt-2 text-sm text-zinc-300">
+                        <span className="text-zinc-500">Reason: </span>
+                        {decision.publicSummary}
+                      </p>
+                    )}
+
+                    {decision.publishedAt && (
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Published {formatDateTime(decision.publishedAt)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-zinc-500">
+                    {r.status === "DISMISSED" || r.status === "WITHDRAWN"
+                      ? "No penalty — case closed without a verdict."
+                      : "Awaiting the steward's decision."}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
       )}
     </div>
   );
