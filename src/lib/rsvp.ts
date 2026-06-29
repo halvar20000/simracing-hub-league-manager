@@ -281,6 +281,9 @@ export async function refreshDiscordRsvpMessage(roundId: string): Promise<void> 
       trackConfig: round.trackConfig,
       startsAt: round.startsAt,
       roundUrl,
+      // GT3 WCT: link the public "Grid & Waiting List" page for this round.
+      gridUrl:
+        round.season.league.slug === "cas-gt3-wct" ? `${roundUrl}/grid` : null,
       drivers,
       totalRegistered: round.season._count.registrations,
       maxDrivers: round.season.maxDrivers,

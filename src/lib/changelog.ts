@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.24.1",
+    date: "2026-06-29",
+    changes: [
+      "CAS GT3 WCT: the per-round Discord RSVP message now includes a “🏁 Grid & Waiting List” link button to that round's public eligibility overview, so drivers can check who's eligible for the same round straight from the RSVP post.",
+    ],
+  },
+  {
     version: "1.24.0",
     date: "2026-06-29",
     changes: [

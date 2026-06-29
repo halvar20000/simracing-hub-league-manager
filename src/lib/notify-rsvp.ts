@@ -96,6 +96,10 @@ export async function postRsvpForRound(
       trackConfig: round.trackConfig,
       startsAt: round.startsAt,
       roundUrl,
+      // GT3 WCT: include the public "Grid & Waiting List" page link on the RSVP
+      // message so drivers can see who's eligible for THIS round.
+      gridUrl:
+        round.season.league.slug === "cas-gt3-wct" ? `${roundUrl}/grid` : null,
       drivers,
       totalRegistered: round.season._count.registrations,
       maxDrivers: round.season.maxDrivers,

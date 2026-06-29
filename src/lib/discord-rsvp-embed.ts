@@ -8,7 +8,7 @@
  * One canonical shape avoids drift between the initial post and the edits.
  */
 
-import type { Embed, MessagePayload } from "@/lib/discord-bot";
+import type { Component, Embed, MessagePayload } from "@/lib/discord-bot";
 import type { RsvpStatus, RsvpMode } from "@prisma/client";
 import { discordTimestamp } from "@/lib/timezone";
 
@@ -20,6 +20,7 @@ const BUTTON = 2;
 const BTN_SUCCESS = 3; // green — Accept
 const BTN_DANGER = 4; // red   — Decline
 const BTN_SECONDARY = 2; // grey  — Tentative
+const BTN_LINK = 5; // link button — opens a URL, no interaction fired
 
 export type RsvpDriverSummary = {
   registrationId: string;
@@ -37,6 +38,7 @@ export type RsvpEmbedInput = {
   trackConfig?: string | null;
   startsAt: Date;
   roundUrl: string;                // deep link to league-manager round page
+  gridUrl?: string | null;         // optional deep link to the public "Grid & Waiting List" page; renders a link button when set
   drivers: RsvpDriverSummary[];    // current state (used for tallies + name lists)
   totalRegistered?: number;        // used in DECLINE_ONLY mode to compute "expected on grid"
   maxDrivers?: number | null;      // optional grid cap; appended to the tally line when set
@@ -204,10 +206,14 @@ function buildFullPayload(
     ...(input.leagueLogoUrl ? { image: { url: input.leagueLogoUrl } } : {}),
   };
 
-  const buttons = [
+  const buttons: Component[] = [
     { type: BUTTON, style: BTN_SUCCESS, label: "Accept", emoji: { name: "✅" }, custom_id: rsvpCustomId(roundId, "ACCEPTED"), disabled: !!input.closed },
     { type: BUTTON, style: BTN_DANGER, label: "Decline", emoji: { name: "❌" }, custom_id: rsvpCustomId(roundId, "DECLINED"), disabled: !!input.closed },
     { type: BUTTON, style: BTN_SECONDARY, label: "Tentative", emoji: { name: "❔" }, custom_id: rsvpCustomId(roundId, "TENTATIVE"), disabled: !!input.closed },
+    // Link button (style 5) — always enabled; just opens the public overview.
+    ...(input.gridUrl
+      ? [{ type: BUTTON, style: BTN_LINK, label: "Grid & Waiting List", emoji: { name: "🏁" }, url: input.gridUrl }]
+      : []),
   ];
 
   return { embeds: [embed], components: [{ type: ROW, components: buttons }] };
@@ -261,7 +267,7 @@ function buildDeclineOnlyPayload(
     ...(input.leagueLogoUrl ? { image: { url: input.leagueLogoUrl } } : {}),
   };
 
-  const buttons = [
+  const buttons: Component[] = [
     {
       type: BUTTON,
       style: BTN_DANGER,
@@ -270,6 +276,10 @@ function buildDeclineOnlyPayload(
       custom_id: rsvpCustomId(roundId, "DECLINED"),
       disabled: !!input.closed,
     },
+    // Link button (style 5) — always enabled; opens the public overview.
+    ...(input.gridUrl
+      ? [{ type: BUTTON, style: BTN_LINK, label: "Grid & Waiting List", emoji: { name: "🏁" }, url: input.gridUrl }]
+      : []),
   ];
 
   return { embeds: [embed], components: [{ type: ROW, components: buttons }] };

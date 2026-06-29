@@ -13,7 +13,7 @@
 
 const DISCORD_API = "https://discord.com/api/v10";
 
-type Component = {
+export type Component = {
   type: number;
   components?: Component[];
   custom_id?: string;
