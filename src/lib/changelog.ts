@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.25.1",
+    date: "2026-06-30",
+    changes: [
+      "Removed the P1/P2/P3 podium frames from the top of the round results page. The Driver of the Day hero remains the only highlight box above the results; the full classification (with the correct points) is unchanged below it.",
+    ],
+  },
+  {
     version: "1.25.0",
     date: "2026-06-29",
     changes: [
