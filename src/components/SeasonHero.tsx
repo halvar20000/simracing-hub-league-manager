@@ -80,10 +80,6 @@ export function SeasonHero(p: SeasonHeroProps) {
   const progressPct = Math.round(
     (p.completedRounds / Math.max(1, p.totalRounds)) * 100
   );
-  const leaderName = p.currentLeader
-    ? `${p.currentLeader.firstName ?? ""} ${p.currentLeader.lastName ?? ""}`.trim()
-    : null;
-
   return (
     <section className="relative overflow-hidden rounded-xl border border-zinc-800">
       {p.scheduleImageUrl ? (
@@ -128,8 +124,12 @@ export function SeasonHero(p: SeasonHeroProps) {
           {p.proAmEnabled && " • Pro/Am"}
         </p>
 
-        {/* Three-card row: progress / leader / next race */}
-        <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
+        {/* Card row: progress / (class leaders, team seasons only) / next race */}
+        <div
+          className={`mt-5 grid gap-2.5 ${
+            p.classLeaders && p.classLeaders.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"
+          }`}
+        >
           {/* Progress */}
           <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/60 p-3 backdrop-blur-sm">
             <div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
@@ -146,12 +146,12 @@ export function SeasonHero(p: SeasonHeroProps) {
             </div>
           </div>
 
-          {/* Class Leaders (team event) — falls back to driver leader otherwise */}
-          <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/60 p-3 backdrop-blur-sm">
-            <div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
-              {p.classLeaders && p.classLeaders.length > 0 ? "Class Leaders" : "Current Leader"}
-            </div>
-            {p.classLeaders && p.classLeaders.length > 0 ? (
+          {/* Class Leaders (team events only) */}
+          {p.classLeaders && p.classLeaders.length > 0 && (
+            <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/60 p-3 backdrop-blur-sm">
+              <div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                Class Leaders
+              </div>
               <ul className="mt-1 space-y-1">
                 {p.classLeaders.map((cl) => (
                   <li key={cl.shortCode} className="flex items-baseline justify-between gap-2 text-sm">
@@ -165,29 +165,8 @@ export function SeasonHero(p: SeasonHeroProps) {
                   </li>
                 ))}
               </ul>
-            ) : p.currentLeader && leaderName ? (
-              <>
-                <div className="mt-1 font-display text-base font-bold text-zinc-100">
-                  {p.currentLeader.startNumber != null && (
-                    <span className="mr-1.5 text-[#ff6b35]">
-                      #{p.currentLeader.startNumber}
-                    </span>
-                  )}
-                  {leaderName}
-                </div>
-                <div className="text-xs text-zinc-400">
-                  {p.currentLeader.points} pts
-                  {p.currentLeader.teamName
-                    ? ` • ${p.currentLeader.teamName}`
-                    : ""}
-                </div>
-              </>
-            ) : (
-              <div className="mt-1 text-sm text-zinc-500">
-                {p.hasResults ? "—" : "No results yet"}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Next Race */}
           <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/60 p-3 backdrop-blur-sm">

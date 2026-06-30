@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.25.2",
+    date: "2026-06-30",
+    changes: [
+      "Removed the “Current Leader” card from the season header. The season hero now shows Progress and Next Race (plus Class Leaders on team seasons like the IEC); the full standings remain one click away.",
+    ],
+  },
+  {
     version: "1.25.1",
     date: "2026-06-30",
     changes: [
