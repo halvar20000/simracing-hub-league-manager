@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.26.0",
+    date: "2026-07-02",
+    changes: [
+      "Admins/stewards can now issue a manual penalty without an incident report (e.g. wrong or missing league livery). New “Manual penalty” section on the admin Penalty Pool page: pick driver, round, points and a public reason. The penalty behaves like any steward penalty — on deferred-pool seasons (GT3 WCT) it goes into the penalty pool, counts for auto-forgiveness and is released at season end; a Delete button allows mistake correction.",
+    ],
+  },
+  {
     version: "1.25.2",
     date: "2026-06-30",
     changes: [

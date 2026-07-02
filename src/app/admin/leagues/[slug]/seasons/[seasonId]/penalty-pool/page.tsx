@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireSteward } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import {
+  addManualPenalty,
+  deleteManualPenalty,
   releaseAllPending,
   releasePoolForRegistration,
 } from "@/lib/actions/penalty-pool";
@@ -102,6 +104,26 @@ export default async function PenaltyPoolAdminPage({
     }
   }
 
+  // Manual admin penalties (no incident report) — listed for management.
+  const manualPenalties = await prisma.penalty.findMany({
+    where: { source: "ADMIN_MANUAL", round: { seasonId } },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      pointsValue: true,
+      reason: true,
+      releasedAt: true,
+      createdAt: true,
+      registration: {
+        select: {
+          startNumber: true,
+          user: { select: { firstName: true, lastName: true } },
+        },
+      },
+      round: { select: { roundNumber: true } },
+    },
+  });
+
   // Drivers who declined a round via RSVP — shown as a red ✕ cell.
   const declinedRsvps = await prisma.roundRsvp.findMany({
     where: { round: { seasonId }, status: "DECLINED" },
@@ -174,6 +196,7 @@ export default async function PenaltyPoolAdminPage({
     released: drivers.reduce((s, d) => s + d.released, 0),
   };
   const releaseAll = releaseAllPending.bind(null, slug, seasonId);
+  const addManual = addManualPenalty.bind(null, slug, seasonId);
 
   return (
     <div className="space-y-6">
@@ -237,6 +260,154 @@ export default async function PenaltyPoolAdminPage({
           </form>
         )}
       </div>
+
+      <details className="rounded border border-zinc-800 bg-zinc-900/40">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-zinc-200 hover:text-white">
+          ➕ Manual penalty (no incident report)
+          {manualPenalties.length > 0 && (
+            <span className="ml-2 rounded bg-amber-900/40 px-2 py-0.5 text-xs text-amber-200">
+              {manualPenalties.length}
+            </span>
+          )}
+        </summary>
+        <div className="space-y-4 border-t border-zinc-800 px-4 py-4">
+          <p className="text-xs text-zinc-400">
+            Issues penalty points directly — e.g. wrong/missing league livery —
+            without filing an incident report. The penalty behaves like any
+            steward penalty: on deferred-pool seasons it goes into the pool
+            (auto-forgiveness applies, released at season end); on immediate
+            systems it hits the standings right away.
+          </p>
+          <form
+            action={addManual}
+            className="flex flex-wrap items-end gap-3 text-sm"
+          >
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-zinc-400">Driver</span>
+              <select
+                name="registrationId"
+                required
+                className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+              >
+                {[...registrations]
+                  .sort((a, b) => {
+                    const aN = a.startNumber ? parseInt(a.startNumber, 10) : 9999;
+                    const bN = b.startNumber ? parseInt(b.startNumber, 10) : 9999;
+                    return aN - bN;
+                  })
+                  .map((reg) => (
+                    <option key={reg.id} value={reg.id}>
+                      {reg.startNumber ? `#${reg.startNumber} ` : ""}
+                      {`${reg.user.firstName ?? ""} ${reg.user.lastName ?? ""}`.trim() || "—"}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-zinc-400">Round</span>
+              <select
+                name="roundId"
+                required
+                className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+              >
+                {rounds.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    R{r.roundNumber} — {r.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-zinc-400">Points</span>
+              <input
+                type="number"
+                name="pointsValue"
+                defaultValue={1}
+                min={1}
+                required
+                className="w-20 rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+              />
+            </label>
+            <label className="flex min-w-[16rem] flex-1 flex-col gap-1">
+              <span className="text-xs text-zinc-400">Reason (public)</span>
+              <input
+                type="text"
+                name="reason"
+                required
+                placeholder="e.g. Wrong / missing league livery despite reminders"
+                className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5"
+              />
+            </label>
+            <SubmitWithSpinner
+              label="Add penalty"
+              pendingLabel="Adding…"
+              className="rounded bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600"
+            />
+          </form>
+
+          {manualPenalties.length > 0 && (
+            <table className="min-w-full text-sm">
+              <thead className="text-xs uppercase tracking-wider text-zinc-400">
+                <tr>
+                  <th className="px-2 py-1 text-left">Driver</th>
+                  <th className="px-2 py-1 text-left">Round</th>
+                  <th className="px-2 py-1 text-right">Pts</th>
+                  <th className="px-2 py-1 text-left">Reason</th>
+                  <th className="px-2 py-1 text-left">Status</th>
+                  <th className="px-2 py-1 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {manualPenalties.map((p) => {
+                  const deleteManual = deleteManualPenalty.bind(
+                    null,
+                    slug,
+                    seasonId,
+                    p.id
+                  );
+                  const name =
+                    `${p.registration.user.firstName ?? ""} ${p.registration.user.lastName ?? ""}`.trim() ||
+                    "—";
+                  return (
+                    <tr key={p.id} className="border-t border-zinc-800">
+                      <td className="px-2 py-1.5 whitespace-nowrap">
+                        {p.registration.startNumber != null && (
+                          <span className="mr-1 text-xs text-zinc-500">
+                            #{p.registration.startNumber}
+                          </span>
+                        )}
+                        {name}
+                      </td>
+                      <td className="px-2 py-1.5">R{p.round.roundNumber}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {p.pointsValue}
+                      </td>
+                      <td className="px-2 py-1.5 text-zinc-300">{p.reason}</td>
+                      <td className="px-2 py-1.5">
+                        {p.releasedAt ? (
+                          <span className="text-red-300">Released</span>
+                        ) : (
+                          <span className="text-amber-300">In pool</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 text-right">
+                        <form action={deleteManual}>
+                          <button
+                            className="rounded border border-red-800 px-2 py-0.5 text-xs text-red-300 hover:bg-red-900/40"
+                            title="Delete this manual penalty (mistake correction)"
+                          >
+                            Delete
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </details>
 
       <div className="overflow-x-auto rounded border border-zinc-800">
         <table className="min-w-full text-sm">
