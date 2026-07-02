@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.27.0",
+    date: "2026-07-02",
+    changes: [
+      "Direct admin penalties (issued without an incident report, e.g. for a wrong league livery) are now shown on the public Incidents page as their own card — marked “DIRECT PENALTY” with the note “Direct penalty point without a reported incident — issued by race control”, listing the driver, the points and the public reason. They are included in the league filter and the header penalty-points total.",
+    ],
+  },
+  {
     version: "1.26.0",
     date: "2026-07-02",
     changes: [

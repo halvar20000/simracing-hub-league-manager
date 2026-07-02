@@ -105,10 +105,30 @@ export default async function PublicIncidentsList({
     orderBy: { submittedAt: "desc" },
   });
 
+  // Direct admin penalties (no incident report) — shown in the same feed
+  // with a special marker so the public sees who got points and why.
+  const manualPenalties = await prisma.penalty.findMany({
+    where: { source: "ADMIN_MANUAL" },
+    include: {
+      round: { include: { season: { include: { league: true } } } },
+      registration: {
+        include: {
+          user: { select: { firstName: true, lastName: true, name: true } },
+          team: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   // League filter chips (only leagues that actually have reports).
   const leagueMap = new Map<string, { slug: string; name: string }>();
   for (const r of reports) {
     const lg = r.round.season.league;
+    if (!leagueMap.has(lg.slug)) leagueMap.set(lg.slug, { slug: lg.slug, name: lg.name });
+  }
+  for (const p of manualPenalties) {
+    const lg = p.round.season.league;
     if (!leagueMap.has(lg.slug)) leagueMap.set(lg.slug, { slug: lg.slug, name: lg.name });
   }
   const leagues = [...leagueMap.values()].sort((a, b) =>
@@ -118,6 +138,11 @@ export default async function PublicIncidentsList({
   const visible = leagueFilter
     ? reports.filter((r) => r.round.season.league.slug === leagueFilter)
     : reports;
+  const visibleManual = leagueFilter
+    ? manualPenalties.filter(
+        (p) => p.round.season.league.slug === leagueFilter
+      )
+    : manualPenalties;
 
   // Header stats over the visible set.
   const isPublished = (r: (typeof reports)[number]) =>
@@ -133,6 +158,25 @@ export default async function PublicIncidentsList({
       )
     );
   }, 0);
+  const manualPointsApplied = visibleManual.reduce(
+    (s, p) => s + (p.pointsValue ?? 0),
+    0
+  );
+  const totalPoints = totalPointsApplied + manualPointsApplied;
+
+  // Unified feed: incident reports + direct admin penalties, newest first.
+  const feed = [
+    ...visible.map((r) => ({
+      kind: "report" as const,
+      date: r.submittedAt,
+      report: r,
+    })),
+    ...visibleManual.map((p) => ({
+      kind: "manual" as const,
+      date: p.createdAt,
+      penalty: p,
+    })),
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
   const chipBase =
     "rounded-full border px-3 py-1 text-xs transition-colors";
@@ -146,8 +190,12 @@ export default async function PublicIncidentsList({
         <h1 className="text-2xl font-bold">Incident Reports &amp; Decisions</h1>
         <p className="mt-1 text-sm text-zinc-400">
           {visible.length} report{visible.length === 1 ? "" : "s"} ·{" "}
-          {decidedCount} decided · {totalPointsApplied} penalty point
-          {totalPointsApplied === 1 ? "" : "s"} applied.
+          {decidedCount} decided
+          {visibleManual.length > 0 && (
+            <> · {visibleManual.length} direct penalt{visibleManual.length === 1 ? "y" : "ies"}</>
+          )}{" "}
+          · {totalPoints} penalty point
+          {totalPoints === 1 ? "" : "s"} applied.
         </p>
       </div>
 
@@ -173,13 +221,72 @@ export default async function PublicIncidentsList({
         </div>
       )}
 
-      {visible.length === 0 ? (
+      {feed.length === 0 ? (
         <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
           No reports filed yet.
         </p>
       ) : (
         <div className="space-y-3">
-          {visible.map((r) => {
+          {feed.map((item) => {
+            if (item.kind === "manual") {
+              const p = item.penalty;
+              const pTeamMode = !!p.round.season.teamRegistration;
+              const u = p.registration.user;
+              const driverLabel =
+                pTeamMode && p.registration.team?.name
+                  ? p.registration.team.name
+                  : `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() ||
+                    u.name ||
+                    "Driver";
+              return (
+                <article
+                  key={`manual-${p.id}`}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="inline-block rounded bg-red-900/40 px-2 py-0.5 text-xs text-red-200">
+                          DIRECT PENALTY
+                        </span>
+                        <span className="font-semibold text-zinc-100">
+                          {p.round.season.league.name}
+                        </span>
+                        <span className="text-zinc-500">
+                          {p.round.season.name} {p.round.season.year} · R
+                          {p.round.roundNumber} {p.round.name}
+                        </span>
+                      </div>
+                      <div className="text-sm text-zinc-400">
+                        Direct penalty point without a reported incident —
+                        issued by race control.
+                      </div>
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      {formatDateTime(p.createdAt)}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded border border-red-900/60 bg-red-950/20 p-3">
+                    <div className="text-sm text-zinc-200">
+                      <span className="font-medium">{driverLabel}</span>
+                      <span className="mx-1 text-zinc-500">—</span>
+                      <span className="font-semibold text-red-200">
+                        −{p.pointsValue ?? 0} pt{(p.pointsValue ?? 0) === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    {p.reason && (
+                      <p className="mt-2 text-sm text-zinc-300">
+                        <span className="text-zinc-500">Reason: </span>
+                        {p.reason}
+                      </p>
+                    )}
+                  </div>
+                </article>
+              );
+            }
+
+            const r = item.report;
             const teamMode = !!r.round.season.teamRegistration;
 
             const reporterLabel = teamMode
