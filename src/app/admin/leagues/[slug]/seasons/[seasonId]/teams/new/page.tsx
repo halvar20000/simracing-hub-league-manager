@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createTeam } from "@/lib/actions/teams";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 export default async function NewTeamPage({
   params,
@@ -41,7 +42,11 @@ export default async function NewTeamPage({
         </div>
       )}
 
-      <form action={create} className="max-w-xl space-y-4">
+      <form
+        action={create}
+        encType="multipart/form-data"
+        className="max-w-xl space-y-4"
+      >
         <Field
           label="Team name"
           name="name"
@@ -53,18 +58,30 @@ export default async function NewTeamPage({
           name="shortName"
           placeholder="PAGM"
         />
-        <Field
-          label="Logo URL (optional)"
-          name="logoUrl"
-          placeholder="https://…"
-        />
+
+        <div className="space-y-2">
+          <span className="mb-1 block text-sm text-zinc-300">
+            Logo (optional)
+          </span>
+          <input
+            type="file"
+            name="logoFile"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+            className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-sm file:text-zinc-200 hover:file:bg-zinc-700"
+          />
+          <p className="text-xs text-zinc-500">
+            PNG, JPG, WebP, SVG or GIF, up to 5 MB. Or paste an image URL
+            below.
+          </p>
+          <input
+            name="logoUrl"
+            placeholder="https://… (optional)"
+            className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+
         <div className="flex gap-2">
-          <button
-            type="submit"
-            className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-          >
-            Create Team
-          </button>
+          <SubmitWithSpinner label="Create Team" pendingLabel="Creating…" />
           <Link
             href={`/admin/leagues/${slug}/seasons/${seasonId}/teams`}
             className="rounded border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"

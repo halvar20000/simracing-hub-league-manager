@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.28.0",
+    date: "2026-07-04",
+    changes: [
+      "Team logos can now be uploaded directly. When creating or editing a team (admin), you can pick an image file (PNG, JPG, WebP, SVG or GIF, up to 5 MB) instead of having to host it somewhere and paste a URL — it's stored automatically and shown on the Teams page and rosters. Pasting a URL still works, and editing a team offers a “Remove on save” option for the current logo.",
+    ],
+  },
+  {
     version: "1.27.0",
     date: "2026-07-02",
     changes: [

@@ -8,6 +8,7 @@ import {
   removeTeamManager,
 } from "@/lib/actions/registrations";
 import UserSearchPicker from "@/components/UserSearchPicker";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 export default async function EditTeamPage({
   params,
@@ -66,7 +67,11 @@ export default async function EditTeamPage({
         </div>
       )}
 
-      <form action={update} className="max-w-xl space-y-4">
+      <form
+        action={update}
+        encType="multipart/form-data"
+        className="max-w-xl space-y-4"
+      >
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">Team name</span>
           <input
@@ -84,21 +89,47 @@ export default async function EditTeamPage({
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
         </label>
-        <label className="block">
-          <span className="mb-1 block text-sm text-zinc-300">Logo URL</span>
+
+        <div className="space-y-2">
+          <span className="mb-1 block text-sm text-zinc-300">Logo</span>
+          {team.logoUrl && (
+            <div className="flex items-center gap-3 rounded border border-zinc-800 bg-zinc-900 p-2">
+              {/* Plain <img> so SVG / Blob URLs work without Next/Image config. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={team.logoUrl}
+                alt={`${team.name} logo`}
+                className="h-12 w-12 rounded bg-zinc-950 object-contain"
+              />
+              <span className="flex-1 truncate text-xs text-zinc-500">
+                {team.logoUrl}
+              </span>
+              <label className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                <input type="checkbox" name="removeLogo" value="1" />
+                Remove on save
+              </label>
+            </div>
+          )}
+          <input
+            type="file"
+            name="logoFile"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+            className="block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-sm file:text-zinc-200 hover:file:bg-zinc-700"
+          />
+          <p className="text-xs text-zinc-500">
+            Upload a new image (PNG, JPG, WebP, SVG or GIF, up to 5 MB) to
+            replace the logo, or edit the URL below.
+          </p>
           <input
             name="logoUrl"
             defaultValue={team.logoUrl ?? ""}
+            placeholder="https://…"
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
-        </label>
+        </div>
+
         <div className="flex gap-2">
-          <button
-            type="submit"
-            className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-          >
-            Save changes
-          </button>
+          <SubmitWithSpinner label="Save changes" pendingLabel="Saving…" />
           <Link
             href={`/admin/leagues/${slug}/seasons/${seasonId}/teams`}
             className="rounded border border-zinc-700 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
