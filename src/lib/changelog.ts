@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.28.2",
+    date: "2026-07-06",
+    changes: [
+      "Round RSVP & Grid pages: the “Fill-in” badge now points at the driver who actually holds the freed seat. When a waiting-list driver declines their fill-in offer, the seat chains down to the next driver — the badge now follows that same chain instead of always marking the first waiting-list drivers by registration date. Previously a driver who had declined could still show as “Fill-in” while the driver who really took the seat showed only “Waiting list”.",
+    ],
+  },
+  {
     version: "1.28.1",
     date: "2026-07-06",
     changes: [

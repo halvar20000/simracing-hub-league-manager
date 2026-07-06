@@ -348,6 +348,12 @@ export async function getRoundRsvpSummary(roundId: string) {
   const eligibleWaitlistIds = new Set(
     round.season.registrations
       .filter((reg) => reg.status === "APPROVED" && reg.waitlistedAt != null)
+      // A waiting-list driver who DECLINED this round has passed on the offer,
+      // so the seat chains down to the next non-declining waiting-list driver.
+      // Mirror the fill-in engine (src/lib/waitlist.ts:reconcileFillInsForRound),
+      // which skips decliners. Without this the badge marks a driver who
+      // declined as "fill-in" and hides the driver who actually holds the seat.
+      .filter((reg) => byRegId.get(reg.id)?.status !== "DECLINED")
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
       .slice(0, confirmedDeclineCount)
       .map((reg) => reg.id)
