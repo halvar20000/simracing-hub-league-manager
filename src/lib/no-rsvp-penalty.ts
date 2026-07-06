@@ -17,8 +17,9 @@
  *     team manager, and not on the waiting list (waitlistedAt = null). A driver
  *     who is still PENDING (not yet approved) or waitlisted was never expected
  *     to race, so they are NOT penalised — they often can't even RSVP yet.
- *   - GT3 WCT only: additionally requires eligibleRound1 = true. A driver the
- *     admin has not yet cleared to take a slot ("Startberechtigt") is exempt.
+ *   - GT3 WCT Round 1 ONLY: additionally requires eligibleRound1 = true. A
+ *     driver the admin has not yet cleared for the season-opener slot
+ *     ("Startberechtigt") is exempt at R1. From R2 onward the flag is ignored.
  *
  * Idempotent: re-running on an already-processed round does nothing new.
  *
@@ -95,10 +96,14 @@ export async function applyNoRsvpNoShowPenalties(
   const ranRegIds = new Set(round.raceResults.map((r) => r.registrationId));
   const rsvpRegIds = new Set(round.rsvps.map((r) => r.registrationId));
 
-  // GT3 WCT only: a driver not yet cleared for a slot (eligibleRound1 = false)
-  // is exempt. The flag defaults to false and is "ignored for other leagues",
-  // so we must NOT apply it outside GT3 WCT or it would exempt everyone.
-  const requireEligible = slug === "cas-gt3-wct";
+  // GT3 WCT only, and ONLY for Round 1: a driver not yet cleared for the
+  // season-opener slot (eligibleRound1 = false) is exempt from the R1 no-show
+  // penalty. The flag exists solely to protect brand-new, uncleared drivers at
+  // R1 — it does NOT carry over: from R2 onward a confirmed grid driver is a
+  // full participant and is subject to the no-show penalty like everyone else.
+  // The flag defaults to false and is "ignored for other leagues", so we must
+  // NOT apply it outside GT3 WCT (or beyond R1) or it would exempt everyone.
+  const requireEligible = slug === "cas-gt3-wct" && round.roundNumber === 1;
 
   const silentNoShows = round.season.registrations.filter(
     (reg) =>

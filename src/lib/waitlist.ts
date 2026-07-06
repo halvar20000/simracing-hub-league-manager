@@ -565,11 +565,15 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
 
   // 3) Offer any still-open slots to the next waiting-list drivers (FIFO),
   //    skipping anyone already filling in or who declined this round.
-  //    GT3 WCT only: also skip drivers not flagged "Startberechtigt Round 1"
-  //    (eligibleRound1) — a brand-new, unclassified driver must be approved by
-  //    the admin before being auto-offered a freed race slot. Other leagues
-  //    ignore the flag, so the gate is scoped by league slug.
-  const enforceEligibility = round.season.league.slug === "cas-gt3-wct";
+  //    GT3 WCT only, and ONLY for Round 1 of the season: skip drivers not
+  //    flagged "Startberechtigt Round 1" (eligibleRound1). The flag exists so a
+  //    brand-new, unclassified driver isn't auto-offered the SEASON-OPENER slot
+  //    before the admin has cleared them. It does NOT gate later rounds: a
+  //    driver who registers after R1 has run can drive every subsequent round
+  //    regardless of the flag, so from R2 onward every waiting-list driver is a
+  //    valid fill-in candidate. Other leagues ignore the flag entirely.
+  const enforceEligibility =
+    round.season.league.slug === "cas-gt3-wct" && round.roundNumber === 1;
   let needed = openSlots - existing.length;
   if (needed > 0) {
     const alreadyFilling = new Set(existing.map((e) => e.registrationId));

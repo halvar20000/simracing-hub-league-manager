@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.28.1",
+    date: "2026-07-06",
+    changes: [
+      "Waiting list (GT3 WCT): the “Startberechtigt Round 1” eligibility flag now only applies to Round 1 of the season, as intended. A driver who joins the waiting list after Round 1 has run can now be auto-offered a fill-in spot for any later round (and is subject to the no-show penalty like any other grid driver) even without the flag set. Previously the flag was wrongly required for every round, so later-registering waiting-list drivers were never offered freed slots.",
+    ],
+  },
+  {
     version: "1.28.0",
     date: "2026-07-04",
     changes: [
