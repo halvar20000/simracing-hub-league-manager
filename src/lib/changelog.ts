@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.28.3",
+    date: "2026-07-08",
+    changes: [
+      "Driver of the Day (admin Race Center): the uploaded source files are now downloadable again. Once a round's Driver of the Day is computed, an “Uploaded source files” box shows ⬇ download links for the archived eventresult.json and race-log.jsonl, so you can retrieve them later (e.g. for a race summary) without re-exporting from iRacing.",
+    ],
+  },
+  {
     version: "1.28.2",
     date: "2026-07-06",
     changes: [

@@ -270,6 +270,37 @@ export default async function AdminRaceCenterPage({
                 </div>
               </div>
             )}
+            {(dotd.eventResultBlobUrl || dotd.logBlobUrl) && (
+              <div className="rounded border border-zinc-800 bg-zinc-900 p-3 text-xs">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                  Uploaded source files
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {dotd.eventResultBlobUrl && (
+                    <a
+                      href={dotd.eventResultBlobUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download
+                      className="text-orange-300 underline hover:text-orange-200"
+                    >
+                      ⬇ eventresult.json
+                    </a>
+                  )}
+                  {dotd.logBlobUrl && (
+                    <a
+                      href={dotd.logBlobUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download
+                      className="text-orange-300 underline hover:text-orange-200"
+                    >
+                      ⬇ race-log.jsonl
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="text-xs text-zinc-500">
               Computed {dotd.computedAt.toISOString()}. Re-upload below to recompute.
             </div>
