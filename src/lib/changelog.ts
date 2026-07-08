@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.29.0",
+    date: "2026-07-08",
+    changes: [
+      "Round results now have a GDC tab. On seasons with the Gentleman Driver Class enabled (e.g. GT3 WCT), the round results view shows a GDC table alongside Quali, Pro, Am and Teams — listing the GDC drivers with their class-relative GDC points for that race. Previously GDC only appeared in the season standings; now each round's GDC classification is visible too, computed the same way as the standings so the numbers match.",
+    ],
+  },
+  {
     version: "1.28.3",
     date: "2026-07-08",
     changes: [

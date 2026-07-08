@@ -19,7 +19,7 @@ import { DriverOfTheDayHero } from "@/components/DriverOfTheDayHero";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 
-type Cls = "combined" | "pro" | "am" | "team" | "race1" | "race2" | "quali" | "car" | "teams" | "race-center";
+type Cls = "combined" | "pro" | "am" | "gdc" | "team" | "race1" | "race2" | "quali" | "car" | "teams" | "race-center";
 const TEAM_BEST_N = 2;
 
 function sortByFinish<R extends { finishStatus: string; finishPosition: number }>(
@@ -189,6 +189,7 @@ export default async function PublicRoundResults({
 
   const isMulticlass = round.season.isMulticlass;
   const proAmEnabled = round.season.proAmEnabled;
+  const gdcEnabled = round.season.gdcEnabled;
   // Mirror standings.ts: when participationInCombined is false (e.g. GT3 WCT),
   // participation points are EXCLUDED from the Combined / Race 1 / Race 2 /
   // By Car totals. Pro/Am tabs still include participation because the
@@ -317,6 +318,8 @@ export default async function PublicRoundResults({
         ? "pro"
         : clsRaw === "am"
           ? "am"
+          : clsRaw === "gdc"
+          ? "gdc"
           : clsRaw === "team"
             ? "team"
             : clsRaw === "race1"
@@ -517,6 +520,39 @@ export default async function PublicRoundResults({
   );
   const amRows = sortByFinish(
     allRows.filter((r) => r.registration.proAmClass === "AM")
+  );
+
+  // ---- GDC (Gentleman Driver Class) class-relative race points ----------
+  // Independent of Pro/Am: any driver with Registration.inGdc scores points
+  // from their rank WITHIN the GDC cohort (ScoringSystem.gdcPointsTable),
+  // mirroring computeGdcStandings in src/lib/standings.ts so the round table
+  // agrees with the GDC standings. Same eligibility filter + finishing order.
+  const gdcPointsTable = (round.season.scoringSystem.gdcPointsTable ?? {}) as Record<
+    string,
+    number
+  >;
+  let gdcRacePointsByResult: Map<string, number> | null = null;
+  if (gdcEnabled) {
+    gdcRacePointsByResult = new Map<string, number>();
+    const minPct = round.season.scoringSystem.racePointsMinDistancePct ?? 50;
+    const classified = [...allRows]
+      .filter(
+        (r) =>
+          r.finishStatus !== "DSQ" &&
+          r.finishStatus !== "DNS" &&
+          r.raceDistancePct >= minPct
+      )
+      .sort((a, b) => a.finishPosition - b.finishPosition);
+    let gdcRank = 0;
+    for (const r of classified) {
+      if (r.registration.inGdc) {
+        gdcRank++;
+        gdcRacePointsByResult.set(r.id, gdcPointsTable[String(gdcRank)] ?? 0);
+      }
+    }
+  }
+  const gdcRows = sortByFinish(
+    allRows.filter((r) => r.registration.inGdc)
   );
 
   // Team groupings (aggregated across all the team's drivers, multi-race aware)
@@ -754,6 +790,14 @@ export default async function PublicRoundResults({
                 </Link>
               </>
             )}
+            {gdcEnabled && (
+              <Link
+                href={`${baseHref}?cls=gdc`}
+                className={`${pillBase} ${cls === "gdc" ? pillOn : pillOff}`}
+              >
+                GDC
+              </Link>
+            )}
             {showTeams && (
               <Link
                 href={`${baseHref}?cls=team`}
@@ -862,6 +906,14 @@ export default async function PublicRoundResults({
             isMulticlass={false}
             renumberWithinGroup
             classRacePoints={classRacePointsByResult}
+            includeParticipation={true}
+          />
+        ) : cls === "gdc" ? (
+          <ResultsTable
+            rows={gdcRows}
+            isMulticlass={false}
+            renumberWithinGroup
+            classRacePoints={gdcRacePointsByResult}
             includeParticipation={true}
           />
         ) : isMultiRace ? (
