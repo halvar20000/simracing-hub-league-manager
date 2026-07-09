@@ -58,6 +58,22 @@ export type DriverOfTheDayHeroData = {
   previousWinnerBlocked: boolean;
 };
 
+// Build the winner's one-line summary, null-safe for combined multi-race rounds
+// (which carry no single start/finish/worst position).
+function metricsSummary(m: WinnerMetrics): string {
+  const parts: string[] = [];
+  if (m.positionsGained > 0) {
+    const arc = m.startPos != null && m.finishPos != null ? ` (P${m.startPos}→P${m.finishPos})` : "";
+    parts.push(`Gained ${m.positionsGained}${arc}`);
+  }
+  if (m.recovery > 0) {
+    parts.push(`recovered ${m.recovery}${m.worstPos != null ? ` from P${m.worstPos}` : ""}`);
+  }
+  if (m.overtakes > 0) parts.push(`${m.overtakes} overtakes`);
+  parts.push(`${m.incidents} inc`);
+  return parts.join(" · ");
+}
+
 export function DriverOfTheDayHero({ dotd }: { dotd: DriverOfTheDayHeroData }) {
   const metrics = dotd.winnerMetrics as WinnerMetrics | null;
   const breakdown = dotd.breakdown as Breakdown | null;
@@ -91,16 +107,7 @@ export function DriverOfTheDayHero({ dotd }: { dotd: DriverOfTheDayHeroData }) {
             {dotd.winnerName}
           </h2>
           {metrics && (
-            <p className="mt-1 text-sm text-zinc-300">
-              {metrics.positionsGained > 0 &&
-                `Gained ${metrics.positionsGained} (P${metrics.startPos}→P${metrics.finishPos})`}
-              {metrics.positionsGained > 0 && metrics.recovery > 0 && " · "}
-              {metrics.recovery > 0 && `recovered ${metrics.recovery} from P${metrics.worstPos}`}
-              {(metrics.positionsGained > 0 || metrics.recovery > 0) && metrics.overtakes > 0 && " · "}
-              {metrics.overtakes > 0 && `${metrics.overtakes} overtakes`}
-              {" · "}
-              {metrics.incidents} inc
-            </p>
+            <p className="mt-1 text-sm text-zinc-300">{metricsSummary(metrics)}</p>
           )}
         </div>
         <div className="text-right">

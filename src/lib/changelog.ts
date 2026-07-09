@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.30.0",
+    date: "2026-07-09",
+    changes: [
+      "Driver of the Day now works for two-race rounds (SFL, PCCD, Combined Cup): upload both race logs together and the site picks ONE combined Driver of the Day across the two races — positions gained, overtakes, recovery and clean racing are added up over both races. To keep it fair, a driver has to be classified in both races to win it (a DNF or a skipped race is still shown but can't take the award). Single-race rounds (IEC, GT3 WCT, Nascar) are unchanged.",
+    ],
+  },
+  {
     version: "1.29.0",
     date: "2026-07-08",
     changes: [

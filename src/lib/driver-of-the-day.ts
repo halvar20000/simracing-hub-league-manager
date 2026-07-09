@@ -66,6 +66,18 @@ export interface DotdCandidate {
   /** Laps completed from eventresult. */
   lapsCompleted: number;
   finishStatus: DotdFinishStatus;
+
+  // --- Overrides for combined multi-race candidates (single-race leaves unset) ---
+  /** Precomputed positions gained (sum across races); bypasses start−finish. */
+  positionsGainedOverride?: number;
+  /** Precomputed recovery (sum across races); bypasses worst−finish. */
+  recoveryOverride?: number;
+  /**
+   * When set, replaces the engine's finished/distance eligibility (used for
+   * combined rounds where eligibility = "classified in ALL races"). The
+   * no-back-to-back exclusion is still applied on top.
+   */
+  preEligibility?: { eligible: boolean; finished: boolean; reasons: string[] };
 }
 
 export interface DotdComponents {
@@ -182,22 +194,34 @@ export function computeDriverOfTheDay(
     const finishPos = c.finishPos;
     const worstPos = c.worstPos ?? finishPos;
 
-    const positionsGained = startPos != null && finishPos != null ? startPos - finishPos : 0;
+    const positionsGained =
+      c.positionsGainedOverride ??
+      (startPos != null && finishPos != null ? startPos - finishPos : 0);
     const recovery =
-      worstPos != null && finishPos != null ? Math.max(0, worstPos - finishPos) : 0;
+      c.recoveryOverride ??
+      (worstPos != null && finishPos != null ? Math.max(0, worstPos - finishPos) : 0);
 
-    const finished = c.finishStatus === "CLASSIFIED";
+    let finished: boolean;
+    let eligible: boolean;
     const reasons: string[] = [];
-    let eligible = true;
     let blockedRepeat = false;
 
-    if (c.lapsCompleted < minLaps) {
-      eligible = false;
-      reasons.push(`did not complete ${Math.round(minLapsFraction * 100)}% of leader's distance`);
-    }
-    if (!finished && !dnfCanWin) {
-      eligible = false;
-      reasons.push(`did not finish (${c.finishStatus})`);
+    if (c.preEligibility) {
+      // Combined multi-race path: eligibility precomputed by combineRaceCandidates.
+      finished = c.preEligibility.finished;
+      eligible = c.preEligibility.eligible;
+      reasons.push(...c.preEligibility.reasons);
+    } else {
+      finished = c.finishStatus === "CLASSIFIED";
+      eligible = true;
+      if (c.lapsCompleted < minLaps) {
+        eligible = false;
+        reasons.push(`did not complete ${Math.round(minLapsFraction * 100)}% of leader's distance`);
+      }
+      if (!finished && !dnfCanWin) {
+        eligible = false;
+        reasons.push(`did not finish (${c.finishStatus})`);
+      }
     }
     const nameBlocked = blockedNames.has(normalizeName(c.name));
     const idBlocked = c.userId != null && blockedUserIds.has(c.userId);
@@ -307,16 +331,119 @@ export function computeDriverOfTheDay(
   };
 }
 
+/**
+ * Combine the per-race candidate lists of a multi-race (heat-format) round into
+ * a single candidate per driver, for ONE combined Driver of the Day. Metrics
+ * are summed across races (positions gained, recovery, overtakes, incidents);
+ * a driver is eligible only if they were **classified in every race** (finished
+ * + ≥ minLapsFraction of that race's leader distance). Drivers who missed or
+ * DNF'd a race are still ranked (their metrics count) but not crowned.
+ *
+ * Identity is keyed by iRacing cust_id, falling back to car number then name.
+ * Used for leagues that run two races per round (SFL, PCCD, Combined Cup);
+ * single-race rounds never call this.
+ */
+export function combineRaceCandidates(
+  races: DotdCandidate[][],
+  minLapsFraction: number = MIN_LAPS_FRACTION
+): DotdCandidate[] {
+  const nRaces = races.length;
+  const leaderLaps = races.map((list) => list.reduce((m, c) => Math.max(m, c.lapsCompleted), 0));
+
+  const keyOf = (c: DotdCandidate): string =>
+    c.custId != null
+      ? `id:${c.custId}`
+      : c.carNumber
+        ? `cn:${c.carNumber.trim()}`
+        : `nm:${normalizeName(c.name)}`;
+
+  const order: string[] = [];
+  const map = new Map<string, { first: DotdCandidate; entries: (DotdCandidate | undefined)[] }>();
+  races.forEach((list, ri) => {
+    for (const c of list) {
+      const k = keyOf(c);
+      let slot = map.get(k);
+      if (!slot) {
+        slot = { first: c, entries: new Array(nRaces).fill(undefined) };
+        map.set(k, slot);
+        order.push(k);
+      }
+      slot.entries[ri] = c;
+    }
+  });
+
+  const combined: DotdCandidate[] = [];
+  for (const k of order) {
+    const { first, entries } = map.get(k)!;
+    let positionsGained = 0;
+    let recovery = 0;
+    let overtakes = 0;
+    let incidents = 0;
+    let lapsCompleted = 0;
+    let classifiedAll = true;
+    const reasons: string[] = [];
+
+    for (let ri = 0; ri < nRaces; ri++) {
+      const e = entries[ri];
+      if (!e) {
+        classifiedAll = false;
+        reasons.push(`did not race in race ${ri + 1}`);
+        continue;
+      }
+      const pg = e.startPos != null && e.finishPos != null ? e.startPos - e.finishPos : 0;
+      const wp = e.worstPos ?? e.finishPos;
+      const rec = wp != null && e.finishPos != null ? Math.max(0, wp - e.finishPos) : 0;
+      positionsGained += pg;
+      recovery += rec;
+      overtakes += e.overtakes;
+      incidents += e.incidents;
+      lapsCompleted += e.lapsCompleted;
+
+      if (e.finishStatus !== "CLASSIFIED") {
+        classifiedAll = false;
+        reasons.push(`did not finish race ${ri + 1} (${e.finishStatus})`);
+      } else if (e.lapsCompleted < leaderLaps[ri] * minLapsFraction) {
+        classifiedAll = false;
+        reasons.push(`under distance in race ${ri + 1}`);
+      }
+    }
+
+    combined.push({
+      custId: first.custId,
+      userId: first.userId,
+      name: first.name,
+      carNumber: first.carNumber,
+      carClassShortName: first.carClassShortName,
+      // Combined metrics span multiple races → no single start/finish/worst.
+      startPos: null,
+      finishPos: null,
+      worstPos: null,
+      overtakes,
+      incidents,
+      lapsCompleted,
+      finishStatus: classifiedAll ? "CLASSIFIED" : "DNF",
+      positionsGainedOverride: positionsGained,
+      recoveryOverride: recovery,
+      preEligibility: { eligible: classifiedAll, finished: classifiedAll, reasons },
+    });
+  }
+
+  return combined;
+}
+
 function why(r: DotdRow): string {
   const bits: string[] = [];
+  // The "(P a→P b)" suffix is only meaningful for a single race; combined
+  // multi-race rows carry null start/finish (the numbers span both races).
+  const arc = r.startPos != null && r.finishPos != null ? ` (P${r.startPos}→P${r.finishPos})` : "";
   if (r.positionsGained > 0) {
-    bits.push(
-      `gained ${r.positionsGained} position${r.positionsGained === 1 ? "" : "s"} (P${r.startPos}→P${r.finishPos})`
-    );
+    bits.push(`gained ${r.positionsGained} position${r.positionsGained === 1 ? "" : "s"}${arc}`);
   } else if (r.positionsGained < 0) {
-    bits.push(`lost ${-r.positionsGained} (P${r.startPos}→P${r.finishPos})`);
+    bits.push(`lost ${-r.positionsGained}${arc}`);
   }
-  if (r.recovery > 0) bits.push(`recovered ${r.recovery} from P${r.worstPos} low`);
+  if (r.recovery > 0) {
+    bits.push(`recovered ${r.recovery}${r.worstPos != null ? ` from P${r.worstPos} low` : ""}`);
+  }
   if (r.overtakes) bits.push(`${r.overtakes} overtake${r.overtakes === 1 ? "" : "s"}`);
   bits.push(`${r.incidents} incident${r.incidents === 1 ? "" : "s"}`);
   return bits.join(", ");

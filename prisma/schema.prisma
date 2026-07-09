@@ -1159,9 +1159,11 @@ model RoundDriverOfTheDay {
   previousWinnerBlocked Boolean @default(false)
 
   /// Archived raw uploads (Vercel Blob) so a round can be recomputed without
-  /// re-uploading. Cleaned up on delete.
+  /// re-uploading. Cleaned up on delete. `logBlobUrl` is race 1's log;
+  /// `extraLogBlobUrls` holds the remaining race logs for two-race rounds.
   eventResultBlobUrl String?
   logBlobUrl         String?
+  extraLogBlobUrls   String[] @default([])
 
   computedAt DateTime @default(now())
   createdAt  DateTime @default(now())

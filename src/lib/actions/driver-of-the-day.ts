@@ -9,10 +9,13 @@ import { parseIracingEventJson, IracingJsonParseError } from "@/lib/iracing-json
 import { parseDotdLog, normalizeName } from "@/lib/dotd-log";
 import {
   computeDriverOfTheDay,
+  combineRaceCandidates,
   type DotdCandidate,
   type DotdRow,
   type DotdResult,
 } from "@/lib/driver-of-the-day";
+import type { ParsedDriver, ParsedSession } from "@/lib/iracing-json";
+import type { ParsedDotdLog } from "@/lib/dotd-log";
 
 const ACCEPT_JSON = ["application/json", "text/json", "text/plain", "application/octet-stream"];
 const MAX_JSON_BYTES = 10 * 1024 * 1024; // eventresult JSONs are <1 MB
@@ -110,15 +113,17 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
     redirect(adminPath(leagueSlug, seasonId, roundId) + "?error=" + encodeURIComponent(msg));
 
   const eventFile = formData.get("eventResult");
-  const logFile = formData.get("log");
+  // Accept one log per race (two-race/heat rounds upload two). Backward-compat:
+  // also accept the legacy single "log" field name.
+  const logFiles = [...formData.getAll("logs"), ...formData.getAll("log")].filter(
+    (f): f is File => f instanceof File && f.size > 0
+  );
   if (!(eventFile instanceof File) || eventFile.size === 0) fail("Upload the iRacing eventresult JSON");
-  if (!(logFile instanceof File) || logFile.size === 0) fail("Upload the race-logger log (.jsonl)");
+  if (logFiles.length === 0) fail("Upload the race-logger log (.jsonl) — one per race");
   const ev = eventFile as File;
-  const lg = logFile as File;
   if (ev.size > MAX_JSON_BYTES) fail("eventresult JSON too large (max 10 MB)");
-  if (lg.size > MAX_LOG_BYTES) fail("Log file too large (max 60 MB)");
-  if (ev.type && !ACCEPT_JSON.includes(ev.type)) {
-    // not fatal — file managers mis-tag JSON; parse will catch real problems
+  for (const lg of logFiles) {
+    if (lg.size > MAX_LOG_BYTES) fail(`Log "${lg.name}" too large (max 60 MB)`);
   }
 
   // --- parse eventresult (authoritative start/finish/incidents + identity) ---
@@ -131,17 +136,37 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
     fail("Could not parse eventresult JSON");
     return;
   }
-  const raceSession = [...parsed.sessions].reverse().find((s) => s.kind === "RACE");
-  if (!raceSession || raceSession.drivers.length === 0) fail("No RACE session found in eventresult JSON");
-  const evDrivers = raceSession!.drivers;
+  // Every RACE session in the file, in race order (1, 2, …). Two-race rounds
+  // carry two here (e.g. HEAT 1 + FEATURE); single-race rounds carry one.
+  const raceSessions = parsed.sessions.filter((s) => s.kind === "RACE" && s.drivers.length > 0);
+  if (raceSessions.length === 0) fail("No RACE session found in eventresult JSON");
 
-  // --- parse race-logger JSONL (overtakes + worst position) ---
-  const logText = await lg.text();
-  const log = parseDotdLog(logText);
-  if (!log.ok) fail("Could not read the log: " + (log.error ?? "unknown error"));
+  // --- parse every uploaded log ---
+  const logTexts = await Promise.all(logFiles.map((f) => f.text()));
+  const logs = logTexts.map((t) => parseDotdLog(t));
+  const badLog = logs.find((l) => !l.ok);
+  if (badLog) fail("Could not read a log: " + (badLog.error ?? "unknown error"));
 
-  // --- identity bridge: cust_id -> User.iracingMemberId ---
-  const custIds = evDrivers.map((d) => d.custId).filter((n): n is number => typeof n === "number" && n > 0);
+  // Require one log per race.
+  if (logs.length !== raceSessions.length) {
+    fail(
+      `This round has ${raceSessions.length} race${raceSessions.length === 1 ? "" : "s"} in the ` +
+        `eventresult — upload exactly ${raceSessions.length} log file${raceSessions.length === 1 ? "" : "s"} ` +
+        `(you uploaded ${logs.length}).`
+    );
+  }
+
+  // --- match each RACE session to its log (by iRacing session number, else order) ---
+  const orderedLogs = matchLogsToRaces(raceSessions, logs);
+
+  // --- identity bridge: cust_id -> User.iracingMemberId (across all races) ---
+  const custIds = Array.from(
+    new Set(
+      raceSessions.flatMap((s) =>
+        s.drivers.map((d) => d.custId).filter((n): n is number => typeof n === "number" && n > 0)
+      )
+    )
+  );
   const users = await prisma.user.findMany({
     where: { iracingMemberId: { in: custIds.map((n) => String(n)) } },
     select: { id: true, iracingMemberId: true },
@@ -149,29 +174,12 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
   const userByCust = new Map<string, string>();
   for (const u of users) if (u.iracingMemberId) userByCust.set(u.iracingMemberId, u.id);
 
-  // --- join eventresult driver <- log driver (by car number, then name) ---
-  const candidates: DotdCandidate[] = evDrivers.map((d) => {
-    const logDriver =
-      (d.carNumber ? log.byCarNumber.get(d.carNumber.trim()) : undefined) ??
-      log.byName.get(normalizeName(d.displayName)) ??
-      null;
-    const overtakes = logDriver?.overtakes ?? 0;
-    const worstPos = logDriver?.worstPosition ?? d.finishPosition;
-    return {
-      custId: d.custId ?? null,
-      userId: (d.custId != null ? userByCust.get(String(d.custId)) : undefined) ?? null,
-      name: d.displayName,
-      carNumber: d.carNumber,
-      carClassShortName: d.carClassShortName,
-      startPos: d.startingPosition,
-      finishPos: d.finishPosition,
-      worstPos,
-      overtakes,
-      incidents: d.incidents,
-      lapsCompleted: d.lapsComplete,
-      finishStatus: d.finishStatus,
-    };
-  });
+  // --- build per-race candidate lists, then combine when there are 2+ races ---
+  const perRace: DotdCandidate[][] = raceSessions.map((session, i) =>
+    buildCandidatesForRace(session, orderedLogs[i], userByCust)
+  );
+  const isMultiRace = raceSessions.length > 1;
+  const scored: DotdCandidate[] = isMultiRace ? combineRaceCandidates(perRace) : perRace[0];
 
   // --- no-back-to-back: previous round's winner in this season ---
   const prevRound = await prisma.round.findFirst({
@@ -191,12 +199,16 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
     : [];
 
   // --- overall award ---
-  const overall: DotdResult = computeDriverOfTheDay(candidates, {
+  const overall: DotdResult = computeDriverOfTheDay(scored, {
     excludeUserIds: prevWinnerUserId ? [prevWinnerUserId] : [],
     excludeNames: !prevWinnerUserId && prevWinnerName ? [prevWinnerName] : [],
   });
   if (!overall.ok || !overall.winner) {
-    fail("No eligible Driver of the Day (all drivers DNF or under distance)");
+    fail(
+      isMultiRace
+        ? "No eligible Driver of the Day (no driver was classified in both races)"
+        : "No eligible Driver of the Day (all drivers DNF or under distance)"
+    );
   }
   const w = overall.winner!;
 
@@ -204,7 +216,7 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
   const classWinners: ClassWinner[] = [];
   if (round.season.isMulticlass) {
     const classes = new Map<string, DotdCandidate[]>();
-    for (const c of candidates) {
+    for (const c of scored) {
       const key = c.carClassShortName ?? "";
       if (!key) continue;
       if (!classes.has(key)) classes.set(key, []);
@@ -233,7 +245,12 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
   // --- archive raw uploads to Blob (allowDelete + overwrite on recompute) ---
   const base = blobBase(leagueSlug, seasonId, round.roundNumber);
   // clean up previous archives if recomputing
-  for (const old of [round.driverOfTheDay?.eventResultBlobUrl, round.driverOfTheDay?.logBlobUrl]) {
+  const oldUrls = [
+    round.driverOfTheDay?.eventResultBlobUrl,
+    round.driverOfTheDay?.logBlobUrl,
+    ...(round.driverOfTheDay?.extraLogBlobUrls ?? []),
+  ];
+  for (const old of oldUrls) {
     if (old) {
       try {
         await del(old);
@@ -247,11 +264,15 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
     contentType: "application/json",
     addRandomSuffix: true,
   });
-  const logBlob = await put(`${base}/race-log.jsonl`, logText, {
-    access: "public",
-    contentType: "application/x-ndjson",
-    addRandomSuffix: true,
-  });
+  const logBlobs = await Promise.all(
+    logTexts.map((t, i) =>
+      put(`${base}/race-log-${i + 1}.jsonl`, t, {
+        access: "public",
+        contentType: "application/x-ndjson",
+        addRandomSuffix: true,
+      })
+    )
+  );
 
   const winnerMetrics = {
     startPos: w.startPos,
@@ -282,7 +303,8 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
     previousWinnerName: prevWinnerName,
     previousWinnerBlocked: blockedSomeone,
     eventResultBlobUrl: evBlob.url,
-    logBlobUrl: logBlob.url,
+    logBlobUrl: logBlobs[0]?.url ?? null,
+    extraLogBlobUrls: logBlobs.slice(1).map((b) => b.url),
     computedAt: new Date(),
   };
 
@@ -297,7 +319,10 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
   redirect(
     adminPath(leagueSlug, seasonId, roundId) +
       "?ok=" +
-      encodeURIComponent(`Driver of the Day: ${w.name} (score ${w.score.toFixed(3)})`)
+      encodeURIComponent(
+        `Driver of the Day: ${w.name} (score ${w.score.toFixed(3)})` +
+          (isMultiRace ? ` — combined over ${raceSessions.length} races` : "")
+      )
   );
 }
 
@@ -308,7 +333,11 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
 export async function deleteDotd(formData: FormData): Promise<void> {
   const { leagueSlug, seasonId, roundId, round } = await resolveContext(formData);
   if (round.driverOfTheDay) {
-    for (const url of [round.driverOfTheDay.eventResultBlobUrl, round.driverOfTheDay.logBlobUrl]) {
+    for (const url of [
+      round.driverOfTheDay.eventResultBlobUrl,
+      round.driverOfTheDay.logBlobUrl,
+      ...(round.driverOfTheDay.extraLogBlobUrls ?? []),
+    ]) {
       if (url) {
         try {
           await del(url);
@@ -322,4 +351,58 @@ export async function deleteDotd(formData: FormData): Promise<void> {
   revalidatePath(publicRoundPath(leagueSlug, seasonId, roundId));
   revalidatePath(adminPath(leagueSlug, seasonId, roundId));
   redirect(adminPath(leagueSlug, seasonId, roundId) + "?ok=Driver+of+the+Day+removed");
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+
+/**
+ * Pair each RACE session with its log. Prefer matching by iRacing session
+ * number (log.sessionNum ↔ session.simSessionNumber, robust to upload order);
+ * fall back to upload order when the numbers don't line up.
+ */
+function matchLogsToRaces(
+  raceSessions: ParsedSession[],
+  logs: ParsedDotdLog[]
+): ParsedDotdLog[] {
+  const byNum = new Map<number, ParsedDotdLog>();
+  for (const l of logs) if (typeof l.sessionNum === "number") byNum.set(l.sessionNum, l);
+  const allMatch = raceSessions.every((s) => byNum.has(s.simSessionNumber));
+  if (allMatch && byNum.size === logs.length) {
+    return raceSessions.map((s) => byNum.get(s.simSessionNumber)!);
+  }
+  // Fallback: logs sorted by sessionNum (races are already in race order).
+  const sorted = [...logs].sort((a, b) => (a.sessionNum ?? 0) - (b.sessionNum ?? 0));
+  return raceSessions.map((_, i) => sorted[i] ?? logs[i]);
+}
+
+/**
+ * Join one RACE session's eventresult drivers with the matched log (overtakes +
+ * worst position), resolving each to a CLS user via cust_id.
+ */
+function buildCandidatesForRace(
+  session: ParsedSession,
+  log: ParsedDotdLog,
+  userByCust: Map<string, string>
+): DotdCandidate[] {
+  return session.drivers.map((d: ParsedDriver) => {
+    const logDriver =
+      (d.carNumber ? log.byCarNumber.get(d.carNumber.trim()) : undefined) ??
+      log.byName.get(normalizeName(d.displayName)) ??
+      null;
+    return {
+      custId: d.custId ?? null,
+      userId: (d.custId != null ? userByCust.get(String(d.custId)) : undefined) ?? null,
+      name: d.displayName,
+      carNumber: d.carNumber,
+      carClassShortName: d.carClassShortName,
+      startPos: d.startingPosition,
+      finishPos: d.finishPosition,
+      worstPos: logDriver?.worstPosition ?? d.finishPosition,
+      overtakes: logDriver?.overtakes ?? 0,
+      incidents: d.incidents,
+      lapsCompleted: d.lapsComplete,
+      finishStatus: d.finishStatus,
+    };
+  });
 }

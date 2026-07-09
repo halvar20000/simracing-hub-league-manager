@@ -187,10 +187,13 @@ export default async function AdminRaceCenterPage({
               {dotdMetrics && (
                 <div className="mt-1 text-xs text-zinc-400">
                   {dotdMetrics.positionsGained >= 0 ? "+" : ""}
-                  {dotdMetrics.positionsGained} positions (P{dotdMetrics.startPos}→P
-                  {dotdMetrics.finishPos}) · recovered {dotdMetrics.recovery} from P
-                  {dotdMetrics.worstPos} · {dotdMetrics.overtakes} overtakes ·{" "}
-                  {dotdMetrics.incidents} inc
+                  {dotdMetrics.positionsGained} positions
+                  {dotdMetrics.startPos != null && dotdMetrics.finishPos != null
+                    ? ` (P${dotdMetrics.startPos}→P${dotdMetrics.finishPos})`
+                    : ""}{" "}
+                  · recovered {dotdMetrics.recovery}
+                  {dotdMetrics.worstPos != null ? ` from P${dotdMetrics.worstPos}` : ""} ·{" "}
+                  {dotdMetrics.overtakes} overtakes · {dotdMetrics.incidents} inc
                 </div>
               )}
               {dotd.previousWinnerBlocked && dotd.previousWinnerName && (
@@ -295,9 +298,21 @@ export default async function AdminRaceCenterPage({
                       download
                       className="text-orange-300 underline hover:text-orange-200"
                     >
-                      ⬇ race-log.jsonl
+                      ⬇ race-log{(dotd.extraLogBlobUrls?.length ?? 0) > 0 ? " 1" : ""}.jsonl
                     </a>
                   )}
+                  {(dotd.extraLogBlobUrls ?? []).map((url, i) => (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download
+                      className="text-orange-300 underline hover:text-orange-200"
+                    >
+                      ⬇ race-log {i + 2}.jsonl
+                    </a>
+                  ))}
                 </div>
               </div>
             )}
@@ -329,16 +344,22 @@ export default async function AdminRaceCenterPage({
               />
             </label>
             <label className="block text-xs text-zinc-400">
-              race-logger log (.jsonl)
+              race-logger log(s) (.jsonl)
               <input
                 type="file"
-                name="log"
+                name="logs"
                 accept=".jsonl,.json,.ndjson,text/plain,application/json"
+                multiple
                 required
                 className="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-orange-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-950 hover:file:bg-orange-500"
               />
             </label>
           </div>
+          <p className="text-[11px] text-zinc-500">
+            One log per race. Two-race rounds (SFL, PCCD, Combined Cup) have two races in the
+            eventresult — select <strong>both</strong> log files (HEAT&nbsp;1 + FEATURE) and the
+            award is combined across them. Single-race rounds take one log.
+          </p>
           <div className="flex items-center gap-2">
             <SubmitWithSpinner
               label={dotd ? "Recompute Driver of the Day" : "Compute Driver of the Day"}

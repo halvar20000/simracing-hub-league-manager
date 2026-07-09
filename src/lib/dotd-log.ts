@@ -38,6 +38,12 @@ export interface ParsedDotdLog {
   track: string | null;
   trackConfig: string | null;
   official: boolean | null;
+  /** iRacing SessionNum from session_start — matches eventresult simSessionNumber. */
+  sessionNum: number | null;
+  /** iRacing SessionUniqueID — same across heats of one subsession. */
+  sessionUniqueId: number | null;
+  /** e.g. "RACE", "HEAT 1", "FEATURE". */
+  sessionName: string | null;
   drivers: DotdLogDriver[];
   /** Keyed by trimmed car number (e.g. "89"). */
   byCarNumber: Map<string, DotdLogDriver>;
@@ -73,6 +79,9 @@ export function parseDotdLog(text: string): ParsedDotdLog {
     track: null,
     trackConfig: null,
     official: null,
+    sessionNum: null,
+    sessionUniqueId: null,
+    sessionName: null,
     drivers: [],
     byCarNumber: new Map(),
     byName: new Map(),
@@ -106,6 +115,9 @@ export function parseDotdLog(text: string): ParsedDotdLog {
   let track: string | null = null;
   let trackConfig: string | null = null;
   let official: boolean | null = null;
+  let sessionNum: number | null = null;
+  let sessionUniqueId: number | null = null;
+  let sessionName: string | null = null;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -122,6 +134,9 @@ export function parseDotdLog(text: string): ParsedDotdLog {
       sawSessionStart = true;
       if (typeof e["track"] === "string") track = e["track"] as string;
       if (typeof e["track_config"] === "string") trackConfig = e["track_config"] as string;
+      if (typeof e["session_num"] === "number") sessionNum = e["session_num"] as number;
+      if (typeof e["session_unique_id"] === "number") sessionUniqueId = e["session_unique_id"] as number;
+      if (typeof e["session_name"] === "string") sessionName = e["session_name"] as string;
       const drivers = Array.isArray(e["drivers"]) ? (e["drivers"] as unknown[]) : [];
       for (const d of drivers) {
         const dd = d as Record<string, unknown>;
@@ -189,6 +204,9 @@ export function parseDotdLog(text: string): ParsedDotdLog {
     track,
     trackConfig,
     official,
+    sessionNum,
+    sessionUniqueId,
+    sessionName,
     drivers,
     byCarNumber,
     byName,
