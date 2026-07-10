@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.35.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner — three additions: (1) a live “now” tracker — when a session start is set, a green banner shows the current stint, the driver, and a live countdown to the next pit, and the current stint row is highlighted; (2) stint length can now be fuel-limited (default), a fixed time, or a fixed number of laps, plus an optional fuel reserve kept in the tank as a safety margin (with a warning if a stint would need more fuel than the tank holds); (3) a Duplicate button on the plan list clones any plan as a starting point for the next event.",
+    ],
+  },
+  {
     version: "1.34.0",
     date: "2026-07-10",
     changes: [

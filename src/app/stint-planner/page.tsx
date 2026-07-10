@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
+import StintPlanDuplicateButton from "@/components/StintPlanDuplicateButton";
 
 export const metadata: Metadata = pageMetadata({
   title: "Stint Planner",
@@ -58,10 +59,10 @@ export default async function StintPlannerIndexPage() {
               ? peek.drivers.length
               : null;
             return (
-              <li key={p.id} className="hover:bg-zinc-900/60">
+              <li key={p.id} className="flex items-center gap-2 pr-3 hover:bg-zinc-900/60">
                 <Link
                   href={`/stint-planner/${p.id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+                  className="flex flex-1 flex-wrap items-center justify-between gap-2 px-4 py-3"
                 >
                   <span className="min-w-0">
                     <span className="font-medium text-zinc-100">{p.title}</span>
@@ -75,6 +76,7 @@ export default async function StintPlannerIndexPage() {
                     <span>{formatDateTime(p.updatedAt)}</span>
                   </span>
                 </Link>
+                <StintPlanDuplicateButton planId={p.id} />
               </li>
             );
           })}

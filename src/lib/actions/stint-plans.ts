@@ -60,3 +60,24 @@ export async function updateStintPlan(
   });
   return { ok: true, id, editToken };
 }
+
+/** Clone an existing plan into a new one ("Copy of …") the caller can edit. */
+export async function duplicateStintPlan(
+  id: string
+): Promise<SavePlanResult> {
+  const src = await prisma.stintPlan.findUnique({
+    where: { id },
+    select: { title: true, payload: true },
+  });
+  if (!src) return { ok: false, error: "Plan not found." };
+  const editToken = randomBytes(16).toString("hex");
+  const plan = await prisma.stintPlan.create({
+    data: {
+      title: cleanTitle(`Copy of ${src.title}`),
+      payload: (src.payload ?? {}) as object,
+      editToken,
+    },
+    select: { id: true },
+  });
+  return { ok: true, id: plan.id, editToken };
+}

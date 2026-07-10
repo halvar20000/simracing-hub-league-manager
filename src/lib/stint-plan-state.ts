@@ -5,6 +5,7 @@
 import {
   parseDurationToSec,
   type PlannerInput,
+  type StintMode,
   type StintProfileKey,
 } from "@/lib/stint-planner";
 
@@ -48,6 +49,9 @@ export type PlannerState = {
     pitLoss: string; // seconds, "70"
     tankSize: string; // litres, "75"
     sessionStartLocal: string; // datetime-local value, "" = none
+    stintMode: StintMode; // "fuel" (default) | "time" | "laps"
+    stintValue: string; // minutes (time) or laps (laps); ignored for fuel
+    fuelReserve: string; // litres kept in reserve, "" = 0
   };
   standard: { laptime: string; fuelPerLap: string };
   savingEnabled: boolean;
@@ -75,6 +79,9 @@ export function defaultPlannerState(): PlannerState {
       pitLoss: "70",
       tankSize: "75",
       sessionStartLocal: "",
+      stintMode: "fuel",
+      stintValue: "",
+      fuelReserve: "",
     },
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
@@ -113,6 +120,12 @@ export function stateToInput(s: PlannerState): PlannerInput {
         }
       : null,
     sessionStartUtcMs: sessionMs && isFinite(sessionMs) ? sessionMs : null,
+    stintMode: s.event.stintMode,
+    stintSec:
+      s.event.stintMode === "time" ? num(s.event.stintValue) * 60 : undefined,
+    stintLaps:
+      s.event.stintMode === "laps" ? num(s.event.stintValue) : undefined,
+    fuelReserve: num(s.event.fuelReserve),
     drivers: s.drivers.map((d) => ({
       id: d.id,
       name: d.name || "Driver",

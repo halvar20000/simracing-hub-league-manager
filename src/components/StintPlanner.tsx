@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   buildSchedule,
   fmtDuration,
@@ -28,6 +28,15 @@ const fmtClock = (ms: number | null): string =>
 const fmtLaps = (n: number): string =>
   Number.isInteger(n) ? String(n) : n.toFixed(1);
 const fmtFuel = (n: number): string => n.toFixed(1);
+const fmtCountdown = (ms: number): string => {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+};
 
 // Shared input styling.
 const inp =
@@ -66,6 +75,20 @@ export default function StintPlanner({
   );
 
   const result = useMemo(() => buildSchedule(stateToInput(s)), [s]);
+
+  // Ticking wall clock for the live "now" tracker. Starts at 0 (SSR-safe: no
+  // hydration mismatch) and updates every second once mounted. The initial
+  // tick is scheduled async so we never call setState synchronously in effect.
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const t0 = setTimeout(tick, 0);
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(t0);
+      clearInterval(id);
+    };
+  }, []);
 
   // ---- state helpers ----
   const patchEvent = (k: keyof PlannerState["event"], v: string) =>
@@ -207,6 +230,19 @@ export default function StintPlanner({
       : cars;
   const lastStint = result.stints[result.stints.length - 1] ?? null;
 
+  // Live "now" tracker (only when a session start is set).
+  const raceLive = showClock && now > 0 && result.raceStartUtcMs != null;
+  const currentIdx = raceLive
+    ? result.stints.findIndex(
+        (st) =>
+          st.wallStartMs != null &&
+          st.wallEndMs != null &&
+          now >= st.wallStartMs &&
+          now < st.wallEndMs
+      )
+    : -1;
+  const currentStint = currentIdx >= 0 ? result.stints[currentIdx] : null;
+
   return (
     <div className="space-y-6">
       {/* Header: title + actions */}
@@ -312,6 +348,32 @@ export default function StintPlanner({
               <input className={inp} value={s.event.tankSize}
                 onChange={(e) => patchEvent("tankSize", e.target.value)} />
             </div>
+            <div>
+              <label className={lbl}>Fuel reserve (L)</label>
+              <input className={inp} value={s.event.fuelReserve}
+                onChange={(e) => patchEvent("fuelReserve", e.target.value)}
+                placeholder="0"
+                title="Fuel kept in the tank as a safety margin — reduces laps per stint." />
+            </div>
+            <div>
+              <label className={lbl}>Stint length</label>
+              <select className={inp} value={s.event.stintMode}
+                onChange={(e) => patchEvent("stintMode", e.target.value)}>
+                <option value="fuel">Fuel-limited</option>
+                <option value="time">Fixed time</option>
+                <option value="laps">Fixed laps</option>
+              </select>
+            </div>
+            {s.event.stintMode !== "fuel" && (
+              <div>
+                <label className={lbl}>
+                  {s.event.stintMode === "time" ? "Stint minutes" : "Stint laps"}
+                </label>
+                <input className={inp} value={s.event.stintValue}
+                  onChange={(e) => patchEvent("stintValue", e.target.value)}
+                  placeholder={s.event.stintMode === "time" ? "45" : "20"} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -350,6 +412,12 @@ export default function StintPlanner({
                 fuel={sav.fuelPerStint}
               />
             </div>
+          )}
+          {(std.overFuel || (sav != null && sav.overFuel)) && (
+            <p className="mt-3 text-xs text-amber-400">
+              ⚠ This stint length needs more fuel than the usable tank holds.
+              Reduce the stint length or fuel reserve, or increase the tank.
+            </p>
           )}
         </div>
       </div>
@@ -420,6 +488,35 @@ export default function StintPlanner({
         </p>
       )}
 
+      {/* Live "now" banner */}
+      {raceLive && result.raceStartUtcMs != null && lastStint && (
+        <div className="rounded-lg border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-sm">
+          {now < result.raceStartUtcMs ? (
+            <span className="text-emerald-300">
+              ● Green flag in{" "}
+              <span className="font-semibold tabular-nums">
+                {fmtCountdown(result.raceStartUtcMs - now)}
+              </span>
+            </span>
+          ) : lastStint.wallEndMs != null && now >= lastStint.wallEndMs ? (
+            <span className="text-zinc-400">● Race finished</span>
+          ) : currentStint ? (
+            <span className="text-emerald-300">
+              ● LIVE — Stint {currentStint.index}
+              {currentStint.driverName ? ` · ${currentStint.driverName}` : ""} ·
+              next pit in{" "}
+              <span className="font-semibold tabular-nums">
+                {fmtCountdown((currentStint.wallEndMs ?? now) - now)}
+              </span>
+              {currentStint.wallEndMs != null &&
+                ` (${fmtClock(currentStint.wallEndMs)})`}
+            </span>
+          ) : (
+            <span className="text-emerald-300">● LIVE</span>
+          )}
+        </div>
+      )}
+
       {/* Schedule / pit timeline */}
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -463,7 +560,7 @@ export default function StintPlanner({
                 {result.stints.map((st, i) => {
                   const a = assignmentAt(i);
                   return (
-                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${st.correctionMin ? "bg-amber-950/20" : ""}`}>
+                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
                       <td className="py-1 pr-2 text-zinc-500">
                         {st.index}
                         {st.partial && (

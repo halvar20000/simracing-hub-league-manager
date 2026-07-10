@@ -52,6 +52,25 @@ export type PlannerInput = {
   drivers: PlannerDriver[];
   /** Per-stint assignment. Missing/extra entries are handled gracefully. */
   assignments: StintAssignment[];
+  /** Stint-length mode + reserve (applied to both profiles). */
+  stintMode?: StintMode;
+  stintSec?: number;
+  stintLaps?: number;
+  fuelReserve?: number;
+};
+
+export type StintMode = "fuel" | "time" | "laps";
+
+export type StintTemplateOpts = {
+  /** Stint length driver. "fuel" (default) = as many laps as the usable tank
+   *  allows; "time" = a fixed stint duration; "laps" = a fixed lap count. */
+  mode?: StintMode;
+  /** Fixed stint on-track duration in seconds (mode = "time"). */
+  stintSec?: number;
+  /** Fixed lap count per stint (mode = "laps"). */
+  stintLaps?: number;
+  /** Fuel kept in reserve (litres) — subtracted from the tank for all modes. */
+  fuelReserve?: number;
 };
 
 export type StintTemplate = {
@@ -59,21 +78,36 @@ export type StintTemplate = {
   greenTimeSec: number;
   totalTimeSec: number;
   fuelPerStint: number;
+  /** True when the stint needs more fuel than the usable tank holds (only
+   *  possible in time/laps mode) — the UI should warn. */
+  overFuel: boolean;
 };
 
-/** Fuel-limited stint template for one profile. */
+/** Stint template for one profile, honouring stint mode + fuel reserve. */
 export function stintTemplate(
   p: FuelProfile,
   tankSize: number,
-  pitLossSec: number
+  pitLossSec: number,
+  opts: StintTemplateOpts = {}
 ): StintTemplate {
-  const laps = p.fuelPerLap > 0 ? Math.floor(tankSize / p.fuelPerLap) : 0;
+  const usable = Math.max(0, tankSize - Math.max(0, opts.fuelReserve ?? 0));
+  const fuelLaps = p.fuelPerLap > 0 ? Math.floor(usable / p.fuelPerLap) : 0;
+  let laps: number;
+  if (opts.mode === "time" && opts.stintSec && p.laptimeSec > 0) {
+    laps = Math.max(0, Math.floor(opts.stintSec / p.laptimeSec));
+  } else if (opts.mode === "laps" && opts.stintLaps) {
+    laps = Math.max(0, Math.floor(opts.stintLaps));
+  } else {
+    laps = fuelLaps;
+  }
   const greenTimeSec = p.laptimeSec * laps;
+  const fuelPerStint = p.fuelPerLap * laps;
   return {
     laps,
     greenTimeSec,
     totalTimeSec: greenTimeSec + pitLossSec,
-    fuelPerStint: p.fuelPerLap * laps,
+    fuelPerStint,
+    overFuel: fuelPerStint > usable + 1e-9,
   };
 }
 
@@ -141,10 +175,22 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     sessionStartUtcMs,
     drivers,
     assignments,
+    stintMode,
+    stintSec,
+    stintLaps,
+    fuelReserve,
   } = input;
 
-  const stdTpl = stintTemplate(standard, tankSize, pitLossSec);
-  const savTpl = saving ? stintTemplate(saving, tankSize, pitLossSec) : null;
+  const tplOpts: StintTemplateOpts = {
+    mode: stintMode,
+    stintSec,
+    stintLaps,
+    fuelReserve,
+  };
+  const stdTpl = stintTemplate(standard, tankSize, pitLossSec, tplOpts);
+  const savTpl = saving
+    ? stintTemplate(saving, tankSize, pitLossSec, tplOpts)
+    : null;
   const driverById = new Map(drivers.map((d) => [d.id, d]));
 
   const raceStartUtcMs =
@@ -162,6 +208,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     const useSaving = assign.profile === "saving" && saving != null;
     const prof: FuelProfile = useSaving ? saving! : standard;
     const tpl = useSaving && savTpl ? savTpl : stdTpl;
+    if (tpl.laps <= 0) break; // no valid stint (bad inputs) — stop cleanly
     const driver = assign.driverId ? driverById.get(assign.driverId) : null;
     const factor =
       driver?.laptimeSec && prof.laptimeSec > 0
