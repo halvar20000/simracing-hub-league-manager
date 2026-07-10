@@ -37,6 +37,7 @@ export default async function Nav() {
           <NavLink href="/teams">Teams</NavLink>
           <NavLink href="/incidents">Incidents</NavLink>
           <NavLink href="/streams">Streams</NavLink>
+          <NavLink href="/stint-planner">Stint Planner</NavLink>
           {session?.user && (
             <>
               <NavLink href="/registrations">My Registrations</NavLink>

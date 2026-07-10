@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.31.0",
+    date: "2026-07-10",
+    changes: [
+      "New Endurance Stint Planner (/stint-planner, in the top nav). A standalone tool for iRacing Special Events: enter race length, lap time, fuel per lap, tank size and pit loss, and it works out laps and fuel per stint, the number of stops, and a full stint schedule. Assign a driver to each stint (with an optional per-driver lap time that lengthens a slower driver's stints), see per-driver totals, an optional wall-clock timeline if you set a session start, and an optional fuel-saving profile. Plans can be saved and shared via a link, and printed. Modelled on the community Enduro Manager spreadsheet.",
+    ],
+  },
+  {
     version: "1.30.0",
     date: "2026-07-09",
     changes: [

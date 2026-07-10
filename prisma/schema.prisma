@@ -1169,3 +1169,21 @@ model RoundDriverOfTheDay {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+
+/// Saved endurance stint plan produced by the public /stint-planner tool.
+/// Fully self-contained (no league/season FK) so it works for any iRacing
+/// Special Event. `payload` holds the entire planner state as JSON:
+/// { event, standard, saving, drivers[], assignments[] }.
+model StintPlan {
+  id        String   @id @default(cuid())
+  /// Human title shown at the top of the plan (e.g. "6h Road America").
+  title     String   @default("Stint Plan")
+  /// Full planner state (inputs only — results are recomputed on load).
+  payload   Json
+  /// Secret token required to overwrite this plan; viewers without it can
+  /// still open the read-only share link and "Save as new".
+  editToken String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
