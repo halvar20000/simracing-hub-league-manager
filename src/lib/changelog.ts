@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.33.1",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner: the Track and Car menus now list the full synced iRacing catalog (529 tracks, 193 cars) instead of only the tracks/cars CLS had already raced — so Special-Event venues like Road America are selectable even if CAS has never run there.",
+    ],
+  },
+  {
     version: "1.33.0",
     date: "2026-07-10",
     changes: [
