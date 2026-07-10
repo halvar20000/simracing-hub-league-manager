@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.37.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner: driver availability + spotters. A new Availability grid lets you tick, per driver, which race hours they're available (everyone is available by default). Each stint row now also has a Spotter dropdown next to the driver. Both the driver and spotter menus only offer drivers who are available for that stint's hour, and the spotter can never be the stint's own driver.",
+    ],
+  },
+  {
     version: "1.36.0",
     date: "2026-07-10",
     changes: [

@@ -38,6 +38,7 @@ export type PlannerAssignmentState = {
   profile: StintProfileKey;
   driverId: string | null;
   correctionMin?: number; // live ± minutes for this stint (cascades forward)
+  spotterId?: string | null; // driver spotting this stint (never the stint driver)
 };
 export type PlannerState = {
   title: string;
@@ -58,6 +59,9 @@ export type PlannerState = {
   saving: { laptime: string; fuelPerLap: string };
   drivers: PlannerDriverState[];
   assignments: PlannerAssignmentState[];
+  /** Driver availability: driverId → race-hour indices (0-based) the driver is
+   *  NOT available. Missing/empty = available all race (the default). */
+  availability: Record<string, number[]>;
   /** Free-text team notes shown on the plan (saved with it). */
   notes: { pre: string; during: string; post: string };
   /** Archived + parsed end-of-session eventresult, or null. */
@@ -88,6 +92,7 @@ export function defaultPlannerState(): PlannerState {
     saving: { laptime: "1:56", fuelPerLap: "3.20" },
     drivers: [],
     assignments: [],
+    availability: {},
     notes: { pre: "", during: "", post: "" },
     eventResult: null,
   };

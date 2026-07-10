@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   buildSchedule,
   fmtDuration,
+  parseDurationToSec,
   type StintProfileKey,
 } from "@/lib/stint-planner";
 import { createStintPlan, updateStintPlan } from "@/lib/actions/stint-plans";
@@ -115,13 +116,49 @@ export default function StintPlanner({
       drivers: p.drivers.map((d) => (d.id === id ? { ...d, laptime: v } : d)),
     }));
   const removeDriver = (id: string) =>
-    setS((p) => ({
-      ...p,
-      drivers: p.drivers.filter((d) => d.id !== id),
-      assignments: p.assignments.map((a) =>
-        a.driverId === id ? { ...a, driverId: null } : a
-      ),
-    }));
+    setS((p) => {
+      const availability = { ...p.availability };
+      delete availability[id];
+      return {
+        ...p,
+        drivers: p.drivers.filter((d) => d.id !== id),
+        assignments: p.assignments.map((a) => ({
+          ...a,
+          driverId: a.driverId === id ? null : a.driverId,
+          spotterId: a.spotterId === id ? null : a.spotterId,
+        })),
+        availability,
+      };
+    });
+
+  // ---- availability + spotter helpers ----
+  const raceSecForAvail = parseDurationToSec(s.event.raceDuration) ?? 0;
+  const hourCount = Math.max(0, Math.ceil(raceSecForAvail / 3600));
+  const isBlocked = (driverId: string, hour: number) =>
+    (s.availability[driverId] ?? []).includes(hour);
+  const toggleAvail = (driverId: string, hour: number) =>
+    setS((p) => {
+      const cur = new Set(p.availability[driverId] ?? []);
+      if (cur.has(hour)) cur.delete(hour);
+      else cur.add(hour);
+      const next = { ...p.availability };
+      const arr = [...cur].sort((a, b) => a - b);
+      if (arr.length === 0) delete next[driverId];
+      else next[driverId] = arr;
+      return { ...p, availability: next };
+    });
+  const coveredHours = (startSec: number, endSec: number): number[] => {
+    const h0 = Math.floor(startSec / 3600);
+    const h1 = Math.floor(Math.max(startSec, endSec - 1) / 3600);
+    const out: number[] = [];
+    for (let h = h0; h <= h1; h++) out.push(h);
+    return out;
+  };
+  const driverFreeForStint = (
+    driverId: string,
+    startSec: number,
+    endSec: number
+  ) => coveredHours(startSec, endSec).every((h) => !isBlocked(driverId, h));
 
   const assignmentAt = (i: number): PlannerAssignmentState =>
     s.assignments[i] ?? { profile: "standard", driverId: null };
@@ -491,6 +528,51 @@ export default function StintPlanner({
         </p>
       </div>
 
+      {/* Availability */}
+      {s.drivers.length > 0 && hourCount > 0 && (
+        <div className={card}>
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Availability
+          </h2>
+          <p className="mb-3 text-xs text-zinc-500">
+            Everyone is available by default — untick an hour to mark a driver
+            unavailable. Stint driver &amp; spotter menus only offer drivers
+            available for that stint&rsquo;s hour.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="text-left text-sm tabular-nums">
+              <thead className="text-zinc-500">
+                <tr className="border-b border-zinc-800">
+                  <th className="py-1 pr-3">Driver</th>
+                  {Array.from({ length: hourCount }, (_, h) => (
+                    <th key={h} className="px-1.5 py-1 text-center font-normal" title={`Hour ${h + 1}`}>
+                      H{h + 1}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {s.drivers.map((d) => (
+                  <tr key={d.id} className="border-t border-zinc-800/60">
+                    <td className="py-1 pr-3 text-zinc-200 whitespace-nowrap">{d.name}</td>
+                    {Array.from({ length: hourCount }, (_, h) => (
+                      <td key={h} className="px-1.5 py-1 text-center">
+                        <input
+                          type="checkbox"
+                          checked={!isBlocked(d.id, h)}
+                          onChange={() => toggleAvail(d.id, h)}
+                          title={`${d.name} — Hour ${h + 1}`}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Stints" value={String(result.totals.stintCount)} />
@@ -569,6 +651,7 @@ export default function StintPlanner({
                 <tr className="border-b border-zinc-800">
                   <th className="py-1 pr-2">#</th>
                   <th className="py-1 pr-2">Driver</th>
+                  <th className="py-1 pr-2">Spotter</th>
                   {s.savingEnabled && <th className="py-1 pr-2">Profile</th>}
                   <th className="py-1 pr-2 text-right">Race start</th>
                   {showClock && <th className="py-1 pr-2 text-right">Clock in</th>}
@@ -582,6 +665,19 @@ export default function StintPlanner({
               <tbody>
                 {result.stints.map((st, i) => {
                   const a = assignmentAt(i);
+                  const driverOpts = s.drivers.filter(
+                    (d) =>
+                      driverFreeForStint(d.id, st.startSec, st.endSec) ||
+                      d.id === a.driverId
+                  );
+                  const spotterOpts = s.drivers.filter(
+                    (d) =>
+                      d.id !== a.driverId &&
+                      (driverFreeForStint(d.id, st.startSec, st.endSec) ||
+                        d.id === a.spotterId)
+                  );
+                  const spotterName =
+                    s.drivers.find((d) => d.id === a.spotterId)?.name ?? null;
                   return (
                     <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
                       <td className="py-1 pr-2 text-zinc-500">
@@ -594,16 +690,39 @@ export default function StintPlanner({
                         <select
                           className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
                           value={a.driverId ?? ""}
-                          onChange={(e) => setAssignment(i, { driverId: e.target.value || null })}
+                          onChange={(e) => {
+                            const v = e.target.value || null;
+                            setAssignment(i, {
+                              driverId: v,
+                              ...(a.spotterId && a.spotterId === v
+                                ? { spotterId: null }
+                                : {}),
+                            });
+                          }}
                         >
                           <option value="">— Unassigned —</option>
-                          {s.drivers.map((d) => (
+                          {driverOpts.map((d) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
                           ))}
                         </select>
                       </td>
                       <td className="hidden py-1 pr-2 print:table-cell">
                         {st.driverName ?? "—"}
+                      </td>
+                      <td className="py-1 pr-2 print:hidden">
+                        <select
+                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+                          value={a.spotterId ?? ""}
+                          onChange={(e) => setAssignment(i, { spotterId: e.target.value || null })}
+                        >
+                          <option value="">— none —</option>
+                          {spotterOpts.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="hidden py-1 pr-2 print:table-cell">
+                        {spotterName ?? "—"}
                       </td>
                       {s.savingEnabled && (
                         <td className="py-1 pr-2 print:hidden">
