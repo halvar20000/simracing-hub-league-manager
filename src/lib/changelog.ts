@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.34.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner: each plan now doubles as a race document. Three comment boxes — Pre-Race, During-Race and Post-Race — are saved with the plan and shown on the shared link. And at the end of the session you can upload the iRacing eventresult.json: it's archived (with a download link) and parsed into a finishing-order table (position, car number, driver, car, laps, incidents) right on the plan.",
+    ],
+  },
+  {
     version: "1.33.1",
     date: "2026-07-10",
     changes: [

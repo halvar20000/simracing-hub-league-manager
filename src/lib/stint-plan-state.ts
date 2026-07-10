@@ -13,6 +13,26 @@ export type PlannerDriverState = {
   name: string;
   laptime: string; // "" = use standard profile pace
 };
+
+/** One row of the parsed eventresult finishing order (stored in the payload so
+ *  the shared plan renders the table without re-fetching the raw JSON). */
+export type ResultRow = {
+  pos: number | null; // classified finishing position, null for DNF/DNS/DSQ
+  status: string; // CLASSIFIED | DNF | DNS | DSQ
+  name: string;
+  carNumber: string | null;
+  car: string | null;
+  laps: number;
+  incidents: number;
+};
+
+/** Archived + parsed end-of-session eventresult attached to a plan. */
+export type PlannerEventResult = {
+  url: string; // Vercel Blob URL of the raw eventresult.json
+  name: string; // original file name
+  summary: ResultRow[];
+  parsedAt: string; // ISO timestamp
+};
 export type PlannerAssignmentState = {
   profile: StintProfileKey;
   driverId: string | null;
@@ -34,6 +54,10 @@ export type PlannerState = {
   saving: { laptime: string; fuelPerLap: string };
   drivers: PlannerDriverState[];
   assignments: PlannerAssignmentState[];
+  /** Free-text team notes shown on the plan (saved with it). */
+  notes: { pre: string; during: string; post: string };
+  /** Archived + parsed end-of-session eventresult, or null. */
+  eventResult: PlannerEventResult | null;
 };
 
 let uidCounter = 0;
@@ -57,6 +81,8 @@ export function defaultPlannerState(): PlannerState {
     saving: { laptime: "1:56", fuelPerLap: "3.20" },
     drivers: [],
     assignments: [],
+    notes: { pre: "", during: "", post: "" },
+    eventResult: null,
   };
 }
 

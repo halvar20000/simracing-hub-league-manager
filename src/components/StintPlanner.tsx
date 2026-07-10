@@ -7,6 +7,7 @@ import {
   type StintProfileKey,
 } from "@/lib/stint-planner";
 import { createStintPlan, updateStintPlan } from "@/lib/actions/stint-plans";
+import { uploadStintPlanEventResult } from "@/lib/actions/stint-plan-eventresult";
 import {
   stateToInput,
   type PlannerAssignmentState,
@@ -123,6 +124,39 @@ export default function StintPlanner({
       return { ...p, assignments: next };
     });
   const clearAssignments = () => setS((p) => ({ ...p, assignments: [] }));
+
+  const patchNote = (k: "pre" | "during" | "post", v: string) =>
+    setS((p) => ({ ...p, notes: { ...p.notes, [k]: v } }));
+
+  const [uploadingResult, setUploadingResult] = useState(false);
+  async function onEventResultFile(file: File | null) {
+    if (!file) return;
+    setUploadingResult(true);
+    setStatus(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await uploadStintPlanEventResult(fd);
+      if (!res.ok) {
+        setStatus(res.error);
+        return;
+      }
+      setS((p) => ({
+        ...p,
+        eventResult: {
+          url: res.url,
+          name: res.name,
+          summary: res.summary,
+          parsedAt: new Date().toISOString(),
+        },
+      }));
+      setStatus("Eventresult parsed. Click Save to keep it with the plan.");
+    } finally {
+      setUploadingResult(false);
+    }
+  }
+  const removeEventResult = () =>
+    setS((p) => ({ ...p, eventResult: null }));
 
   const shareUrl =
     typeof window !== "undefined" && curId
@@ -532,6 +566,110 @@ export default function StintPlanner({
           </div>
         </div>
       )}
+
+      {/* Race notes */}
+      <div className={card}>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
+          Comments
+        </h2>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {(
+            [
+              ["pre", "Pre-Race"],
+              ["during", "During-Race"],
+              ["post", "Post-Race"],
+            ] as const
+          ).map(([k, label]) => (
+            <div key={k}>
+              <label className={lbl}>{label}</label>
+              <textarea
+                className={`${inp} mt-1 h-32 resize-y`}
+                value={s.notes[k]}
+                onChange={(e) => patchNote(k, e.target.value)}
+                placeholder={`${label} notes…`}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* End-of-session eventresult */}
+      <div className={card}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Event result
+          </h2>
+          <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+            {uploadingResult
+              ? "Parsing…"
+              : s.eventResult
+                ? "Replace eventresult.json"
+                : "Upload eventresult.json"}
+            <input
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              disabled={uploadingResult}
+              onChange={(e) => onEventResultFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
+        {!s.eventResult ? (
+          <p className="text-sm text-zinc-500">
+            After the session, upload the iRacing{" "}
+            <span className="font-mono">eventresult.json</span> to archive it with
+            this plan and show the finishing order. Remember to Save afterwards.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <a
+                href={s.eventResult.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="text-orange-300 underline hover:text-orange-200"
+              >
+                ⬇ {s.eventResult.name}
+              </a>
+              <button
+                onClick={removeEventResult}
+                className="print:hidden text-xs text-red-300/80 hover:text-red-200"
+              >
+                Remove
+              </button>
+            </div>
+            {s.eventResult.summary.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm tabular-nums">
+                  <thead className="text-zinc-500">
+                    <tr className="border-b border-zinc-800">
+                      <th className="py-1 pr-2">Pos</th>
+                      <th className="py-1 pr-2">#</th>
+                      <th className="py-1 pr-2">Driver</th>
+                      <th className="py-1 pr-2">Car</th>
+                      <th className="py-1 pr-2 text-right">Laps</th>
+                      <th className="py-1 pr-2 text-right">Inc</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.eventResult.summary.map((r, i) => (
+                      <tr key={i} className="border-t border-zinc-800/60 text-zinc-200">
+                        <td className="py-1 pr-2">{r.pos ?? r.status}</td>
+                        <td className="py-1 pr-2 text-zinc-500">{r.carNumber ?? "—"}</td>
+                        <td className="py-1 pr-2">{r.name}</td>
+                        <td className="py-1 pr-2 text-zinc-400">{r.car ?? "—"}</td>
+                        <td className="py-1 pr-2 text-right">{r.laps}</td>
+                        <td className="py-1 pr-2 text-right">{r.incidents}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
