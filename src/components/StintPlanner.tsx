@@ -9,10 +9,10 @@ import {
 import { createStintPlan, updateStintPlan } from "@/lib/actions/stint-plans";
 import {
   stateToInput,
-  uid,
   type PlannerAssignmentState,
   type PlannerState,
 } from "@/lib/stint-plan-state";
+import type { ClsDriverOption } from "@/lib/cls-drivers";
 
 const fmtClock = (ms: number | null): string =>
   ms == null
@@ -39,9 +39,11 @@ const emptyStoreSubscribe = () => () => {};
 export default function StintPlanner({
   initial,
   planId = null,
+  clsDrivers,
 }: {
   initial: PlannerState;
   planId?: string | null;
+  clsDrivers: ClsDriverOption[];
 }) {
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
@@ -67,18 +69,20 @@ export default function StintPlanner({
   const patchSav = (k: "laptime" | "fuelPerLap", v: string) =>
     setS((p) => ({ ...p, saving: { ...p.saving, [k]: v } }));
 
-  const addDriver = () =>
+  const addClsDriver = (userId: string) =>
+    setS((p) => {
+      if (!userId || p.drivers.some((d) => d.id === userId)) return p;
+      const drv = clsDrivers.find((d) => d.id === userId);
+      if (!drv) return p;
+      return {
+        ...p,
+        drivers: [...p.drivers, { id: drv.id, name: drv.name, laptime: "" }],
+      };
+    });
+  const patchDriverLaptime = (id: string, v: string) =>
     setS((p) => ({
       ...p,
-      drivers: [
-        ...p.drivers,
-        { id: uid(), name: `Driver ${p.drivers.length + 1}`, laptime: "" },
-      ],
-    }));
-  const patchDriver = (id: string, k: "name" | "laptime", v: string) =>
-    setS((p) => ({
-      ...p,
-      drivers: p.drivers.map((d) => (d.id === id ? { ...d, [k]: v } : d)),
+      drivers: p.drivers.map((d) => (d.id === id ? { ...d, laptime: v } : d)),
     }));
   const removeDriver = (id: string) =>
     setS((p) => ({
@@ -282,23 +286,31 @@ export default function StintPlanner({
 
       {/* Drivers */}
       <div className={card}>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
             Drivers
           </h2>
-          <button onClick={addDriver}
-            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 print:hidden">
-            + Add driver
-          </button>
+          <select
+            value=""
+            onChange={(e) => addClsDriver(e.target.value)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 print:hidden"
+          >
+            <option value="">+ Add CLS driver…</option>
+            {clsDrivers
+              .filter((d) => !s.drivers.some((r) => r.id === d.id))
+              .map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+          </select>
         </div>
         <div className="space-y-2">
           {s.drivers.map((d) => (
             <div key={d.id} className="flex items-center gap-2">
-              <input className={`${inp} flex-1`} value={d.name}
-                onChange={(e) => patchDriver(d.id, "name", e.target.value)}
-                placeholder="Driver name" />
+              <span className="flex-1 rounded border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 text-sm text-zinc-100">
+                {d.name}
+              </span>
               <input className={`${inp} w-28`} value={d.laptime}
-                onChange={(e) => patchDriver(d.id, "laptime", e.target.value)}
+                onChange={(e) => patchDriverLaptime(d.id, e.target.value)}
                 placeholder="laptime" title="Optional per-driver laptime (m:ss). Blank = standard pace." />
               <button onClick={() => removeDriver(d.id)}
                 className="rounded border border-red-900/60 px-2 py-1.5 text-sm text-red-300 hover:bg-red-950/40 print:hidden"
@@ -306,12 +318,15 @@ export default function StintPlanner({
             </div>
           ))}
           {s.drivers.length === 0 && (
-            <p className="text-sm text-zinc-500">Add at least one driver.</p>
+            <p className="text-sm text-zinc-500">
+              Add drivers from CLS using the menu above.
+            </p>
           )}
         </div>
         <p className="mt-2 text-xs text-zinc-500">
-          Per-driver laptime is optional — set it to lengthen a slower driver&rsquo;s
-          stints (fuel &amp; laps stay the same, since a stint is fuel-limited).
+          Drivers come from CLS (anyone with a registration). The per-driver
+          laptime is optional — set it to lengthen a slower driver&rsquo;s stints
+          (fuel &amp; laps stay the same, since a stint is fuel-limited).
         </p>
       </div>
 

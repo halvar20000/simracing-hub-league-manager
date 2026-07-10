@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.32.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner now has a master page (/stint-planner) listing every saved plan with its race length, driver count and last-updated time, plus a “New plan” button — the planner itself moved to /stint-planner/new. Drivers are now picked from CLS: the driver menu and per-stint dropdowns list everyone with a CLS registration (no more typing names by hand), so stint plans line up with real drivers.",
+    ],
+  },
+  {
     version: "1.31.0",
     date: "2026-07-10",
     changes: [

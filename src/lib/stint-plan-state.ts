@@ -50,10 +50,7 @@ export function defaultPlannerState(): PlannerState {
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
     saving: { laptime: "1:56", fuelPerLap: "3.20" },
-    drivers: [
-      { id: uid(), name: "Driver 1", laptime: "" },
-      { id: uid(), name: "Driver 2", laptime: "" },
-    ],
+    drivers: [],
     assignments: [],
   };
 }
