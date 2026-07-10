@@ -16,10 +16,13 @@ export type PlannerDriverState = {
 export type PlannerAssignmentState = {
   profile: StintProfileKey;
   driverId: string | null;
+  correctionMin?: number; // live ± minutes for this stint (cascades forward)
 };
 export type PlannerState = {
   title: string;
   event: {
+    track: string; // CLS track name (display string), "" = none
+    car: string; // CLS car name, "" = none
     raceDuration: string; // "6:00:00"
     greenFlagOffset: string; // "0:30"
     pitLoss: string; // seconds, "70"
@@ -41,6 +44,8 @@ export function defaultPlannerState(): PlannerState {
   return {
     title: "6h Road America",
     event: {
+      track: "",
+      car: "",
       raceDuration: "6:00:00",
       greenFlagOffset: "0:00",
       pitLoss: "70",
@@ -90,6 +95,7 @@ export function stateToInput(s: PlannerState): PlannerInput {
     assignments: s.assignments.map((a) => ({
       profile: a.profile,
       driverId: a.driverId,
+      correctionMin: a.correctionMin ?? 0,
     })),
   };
 }

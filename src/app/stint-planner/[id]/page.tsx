@@ -6,6 +6,7 @@ import { pageMetadata } from "@/lib/og";
 import StintPlanner from "@/components/StintPlanner";
 import { defaultPlannerState, type PlannerState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
+import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
 
 export async function generateMetadata({
   params,
@@ -41,8 +42,18 @@ export default async function SavedStintPlanPage({
   // build still opens cleanly if the shape ever gains fields.
   const base = defaultPlannerState();
   const stored = (plan.payload ?? {}) as Partial<PlannerState>;
-  const initial: PlannerState = { ...base, ...stored, title: plan.title };
-  const clsDrivers = await getClsDrivers();
+  const initial: PlannerState = {
+    ...base,
+    ...stored,
+    title: plan.title,
+    // Deep-merge event so plans saved before track/car existed stay controlled.
+    event: { ...base.event, ...(stored.event ?? {}) },
+  };
+  const [clsDrivers, tracks, cars] = await Promise.all([
+    getClsDrivers(),
+    getClsTracks(),
+    getClsCars(),
+  ]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
@@ -56,7 +67,13 @@ export default async function SavedStintPlanPage({
         Shared stint plan. Changes stay local until saved — the team member who
         created it can overwrite it; anyone else can open “Save as new”.
       </p>
-      <StintPlanner initial={initial} planId={plan.id} clsDrivers={clsDrivers} />
+      <StintPlanner
+        initial={initial}
+        planId={plan.id}
+        clsDrivers={clsDrivers}
+        tracks={tracks}
+        cars={cars}
+      />
     </main>
   );
 }

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.33.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner: you can now pick the Track and Car from CLS (the tracks CLS has raced and the cars it knows), stored on the plan and shown in the plan list. Each stint row also has a live correction field in minutes (± ) — enter how far a stint ran long or short during the race and every following stint's times shift automatically, with a “Projected finish” readout so you can see the drift from the race length. (Pulling driver lap data from Garage 61 for the chosen track+car is planned as a follow-up.)",
+    ],
+  },
+  {
     version: "1.32.0",
     date: "2026-07-10",
     changes: [

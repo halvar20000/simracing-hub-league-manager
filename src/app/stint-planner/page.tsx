@@ -13,7 +13,7 @@ export const metadata: Metadata = pageMetadata({
 
 // Shape we read out of the saved JSON payload for the list summary.
 type PayloadPeek = {
-  event?: { raceDuration?: string };
+  event?: { raceDuration?: string; track?: string; car?: string };
   drivers?: unknown[];
 };
 
@@ -53,6 +53,7 @@ export default async function StintPlannerIndexPage() {
           {plans.map((p) => {
             const peek = (p.payload ?? {}) as PayloadPeek;
             const duration = peek.event?.raceDuration ?? null;
+            const track = peek.event?.track || null;
             const driverCount = Array.isArray(peek.drivers)
               ? peek.drivers.length
               : null;
@@ -62,7 +63,12 @@ export default async function StintPlannerIndexPage() {
                   href={`/stint-planner/${p.id}`}
                   className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
                 >
-                  <span className="font-medium text-zinc-100">{p.title}</span>
+                  <span className="min-w-0">
+                    <span className="font-medium text-zinc-100">{p.title}</span>
+                    {track && (
+                      <span className="ml-2 text-xs text-zinc-500">{track}</span>
+                    )}
+                  </span>
                   <span className="flex items-center gap-3 text-xs text-zinc-500">
                     {duration && <span>{duration}</span>}
                     {driverCount != null && <span>{driverCount} drivers</span>}

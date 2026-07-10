@@ -30,6 +30,9 @@ export type StintProfileKey = "standard" | "saving";
 export type StintAssignment = {
   profile: StintProfileKey;
   driverId: string | null;
+  /** Live correction for this stint, in MINUTES (may be negative). Adjusts the
+   *  stint's clock length and cascades to every following stint. */
+  correctionMin?: number;
 };
 
 export type PlannerInput = {
@@ -94,6 +97,8 @@ export type ScheduleStint = {
   isFinal: boolean;
   /** True when the stint was cut short by the chequered flag. */
   partial: boolean;
+  /** The live correction applied to this stint, in minutes. */
+  correctionMin: number;
 };
 
 export type DriverTotals = {
@@ -163,11 +168,17 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
         ? driver.laptimeSec / prof.laptimeSec
         : 1;
 
+    // Live correction (minutes → seconds). Added to this stint's clock length
+    // and, because the next stint starts where this one ends, it cascades to
+    // every following stint. It does not change laps/fuel (still fuel-limited).
+    const correctionMin = assign.correctionMin ?? 0;
+    const corrSec = correctionMin * 60;
+
     const fullGreen = tpl.greenTimeSec * factor;
     let greenSec = fullGreen;
     let laps = tpl.laps;
     let fuel = tpl.fuelPerStint;
-    let endSec = t + fullGreen + pitLossSec;
+    let endSec: number;
     let isFinal = false;
     let partial = false;
 
@@ -176,16 +187,17 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       isFinal = true;
       partial = true;
       greenSec = raceDurationSec - t;
-      endSec = raceDurationSec;
       const effLaptime = prof.laptimeSec * factor;
       laps = effLaptime > 0 ? greenSec / effLaptime : 0;
       fuel = laps * prof.fuelPerLap;
-    } else if (endSec >= raceDurationSec) {
-      // Full green completed, but the race ends before/within the pit — no
-      // more stints follow. Drop the trailing pit; keep full laps + fuel.
-      isFinal = true;
-      endSec = raceDurationSec;
+      endSec = raceDurationSec + corrSec; // projected chequered incl. correction
+    } else {
+      endSec = t + fullGreen + pitLossSec + corrSec;
+      // Full green completed but the race ends within the pit/correction tail →
+      // this is the last stint; keep its full laps + fuel.
+      if (endSec >= raceDurationSec) isFinal = true;
     }
+    if (endSec < t) endSec = t; // guard against large negative corrections
 
     stints.push({
       index: i + 1,
@@ -201,6 +213,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       fuel,
       isFinal,
       partial,
+      correctionMin,
     });
     t = endSec;
     i += 1;

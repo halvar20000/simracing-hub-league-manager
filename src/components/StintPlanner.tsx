@@ -13,6 +13,7 @@ import {
   type PlannerState,
 } from "@/lib/stint-plan-state";
 import type { ClsDriverOption } from "@/lib/cls-drivers";
+import type { ClsCarOption } from "@/lib/cls-tracks-cars";
 
 const fmtClock = (ms: number | null): string =>
   ms == null
@@ -40,10 +41,14 @@ export default function StintPlanner({
   initial,
   planId = null,
   clsDrivers,
+  tracks,
+  cars,
 }: {
   initial: PlannerState;
   planId?: string | null;
   clsDrivers: ClsDriverOption[];
+  tracks: string[];
+  cars: ClsCarOption[];
 }) {
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
@@ -113,6 +118,7 @@ export default function StintPlanner({
         next.push({
           profile: p.assignments[i]?.profile ?? "standard",
           driverId: p.drivers[i % p.drivers.length].id,
+          correctionMin: p.assignments[i]?.correctionMin ?? 0,
         });
       return { ...p, assignments: next };
     });
@@ -156,6 +162,16 @@ export default function StintPlanner({
   const std = result.template.standard;
   const sav = result.template.saving;
   const showClock = s.event.sessionStartLocal.trim() !== "";
+  // Keep a saved track/car selectable even if it isn't in the current CLS list.
+  const trackOptions =
+    s.event.track && !tracks.includes(s.event.track)
+      ? [s.event.track, ...tracks]
+      : tracks;
+  const carOptions =
+    s.event.car && !cars.some((c) => c.name === s.event.car)
+      ? [{ name: s.event.car, iracingCarId: null }, ...cars]
+      : cars;
+  const lastStint = result.stints[result.stints.length - 1] ?? null;
 
   return (
     <div className="space-y-6">
@@ -216,6 +232,26 @@ export default function StintPlanner({
             Event
           </h2>
           <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Track</label>
+              <select className={inp} value={s.event.track}
+                onChange={(e) => patchEvent("track", e.target.value)}>
+                <option value="">— Select track —</option>
+                {trackOptions.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={lbl}>Car</label>
+              <select className={inp} value={s.event.car}
+                onChange={(e) => patchEvent("car", e.target.value)}>
+                <option value="">— Select car —</option>
+                {carOptions.map((c) => (
+                  <option key={c.name} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className={lbl}>Race duration (h:mm:ss)</label>
               <input className={inp} value={s.event.raceDuration}
@@ -338,10 +374,17 @@ export default function StintPlanner({
         <Stat label="Total fuel" value={`${fmtFuel(result.totals.fuel)} L`} />
         <Stat label="Drivers" value={String(result.totals.driverCount)} />
         <Stat
-          label="Fair share"
-          value={result.fairShareStints ? `${result.fairShareStints} ea.` : "—"}
+          label="Projected finish"
+          value={lastStint ? fmtDuration(lastStint.endSec) : "—"}
         />
       </div>
+      {lastStint && (
+        <p className="-mt-2 text-xs text-zinc-500">
+          Fair share ≈ {result.fairShareStints ?? "—"} stints each. “Projected
+          finish” is the race-clock time the plan currently ends at — it moves
+          away from the race length as you enter ± corrections during the race.
+        </p>
+      )}
 
       {/* Schedule / pit timeline */}
       <div className={card}>
@@ -376,6 +419,7 @@ export default function StintPlanner({
                   <th className="py-1 pr-2 text-right">Race start</th>
                   {showClock && <th className="py-1 pr-2 text-right">Clock in</th>}
                   <th className="py-1 pr-2 text-right">Race end</th>
+                  <th className="py-1 pr-2 text-right" title="Live correction in minutes (±). Cascades to later stints.">±min</th>
                   <th className="py-1 pr-2 text-right">Length</th>
                   <th className="py-1 pr-2 text-right">Laps</th>
                   <th className="py-1 pr-2 text-right">Fuel</th>
@@ -385,7 +429,7 @@ export default function StintPlanner({
                 {result.stints.map((st, i) => {
                   const a = assignmentAt(i);
                   return (
-                    <tr key={i} className="border-t border-zinc-800/60 text-zinc-200">
+                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${st.correctionMin ? "bg-amber-950/20" : ""}`}>
                       <td className="py-1 pr-2 text-zinc-500">
                         {st.index}
                         {st.partial && (
@@ -424,6 +468,26 @@ export default function StintPlanner({
                         <td className="py-1 pr-2 text-right text-zinc-400">{fmtClock(st.wallStartMs)}</td>
                       )}
                       <td className="py-1 pr-2 text-right text-zinc-400">{fmtDuration(st.endSec)}</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={a.correctionMin ?? 0}
+                          onChange={(e) =>
+                            setAssignment(i, {
+                              correctionMin: e.target.value === "" ? 0 : Number(e.target.value),
+                            })
+                          }
+                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">
+                        {st.correctionMin
+                          ? st.correctionMin > 0
+                            ? `+${st.correctionMin}`
+                            : st.correctionMin
+                          : "—"}
+                      </td>
                       <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
                       <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
                       <td className="py-1 pr-2 text-right">{fmtFuel(st.fuel)} L</td>

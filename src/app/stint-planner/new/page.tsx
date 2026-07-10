@@ -4,6 +4,7 @@ import { pageMetadata } from "@/lib/og";
 import StintPlanner from "@/components/StintPlanner";
 import { defaultPlannerState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
+import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
 
 export const metadata: Metadata = pageMetadata({
   title: "New Stint Plan",
@@ -13,7 +14,11 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function NewStintPlanPage() {
-  const clsDrivers = await getClsDrivers();
+  const [clsDrivers, tracks, cars] = await Promise.all([
+    getClsDrivers(),
+    getClsTracks(),
+    getClsCars(),
+  ]);
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
       <div className="mb-4 text-sm">
@@ -27,7 +32,12 @@ export default async function NewStintPlanPage() {
         race length, lap time, fuel per lap and tank size — add drivers from CLS
         and assign one to each stint, then save to get a shareable link.
       </p>
-      <StintPlanner initial={defaultPlannerState()} clsDrivers={clsDrivers} />
+      <StintPlanner
+        initial={defaultPlannerState()}
+        clsDrivers={clsDrivers}
+        tracks={tracks}
+        cars={cars}
+      />
     </main>
   );
 }
