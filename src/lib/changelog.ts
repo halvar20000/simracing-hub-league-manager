@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.36.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner: a saved plan can be posted to the CAS Discord with one click. The “Post to Discord” button sends a tidy embed — plan title (linking back to the plan), track, car, race length, stint/stop count and the driver line-up with each driver's stint count — to the team channel.",
+    ],
+  },
+  {
     version: "1.35.0",
     date: "2026-07-10",
     changes: [

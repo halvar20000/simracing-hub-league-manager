@@ -8,6 +8,7 @@ import {
 } from "@/lib/stint-planner";
 import { createStintPlan, updateStintPlan } from "@/lib/actions/stint-plans";
 import { uploadStintPlanEventResult } from "@/lib/actions/stint-plan-eventresult";
+import { postStintPlanToDiscord } from "@/lib/actions/stint-plan-discord";
 import {
   stateToInput,
   type PlannerAssignmentState,
@@ -181,6 +182,19 @@ export default function StintPlanner({
   const removeEventResult = () =>
     setS((p) => ({ ...p, eventResult: null }));
 
+  const [postingDiscord, setPostingDiscord] = useState(false);
+  async function onPostDiscord() {
+    if (!curId) return;
+    setPostingDiscord(true);
+    setStatus(null);
+    try {
+      const res = await postStintPlanToDiscord(curId);
+      setStatus(res.ok ? "Posted to Discord ✓" : res.error);
+    } finally {
+      setPostingDiscord(false);
+    }
+  }
+
   const shareUrl =
     typeof window !== "undefined" && curId
       ? `${window.location.origin}/stint-planner/${curId}`
@@ -279,6 +293,15 @@ export default function StintPlanner({
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
             >
               Copy link
+            </button>
+          )}
+          {curId && (
+            <button
+              onClick={onPostDiscord}
+              disabled={postingDiscord}
+              className="rounded border border-indigo-700/60 bg-indigo-950/40 px-3 py-2 text-sm text-indigo-200 hover:bg-indigo-900/40 disabled:opacity-50"
+            >
+              {postingDiscord ? "Posting…" : "Post to Discord"}
             </button>
           )}
           <button
