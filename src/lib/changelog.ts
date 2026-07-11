@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.39.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner is now live for the whole team during a race. On a saved plan, edits — like the ± minute stint corrections — save automatically (no Save button needed) and everyone with the link sees the updated schedule and pit countdowns within a few seconds. Anyone with the link can make corrections (last change wins, ideal for one person on the pit wall); a green “Live · auto-saving” badge shows the sync status.",
+    ],
+  },
+  {
     version: "1.38.0",
     date: "2026-07-10",
     changes: [

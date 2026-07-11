@@ -98,6 +98,22 @@ export function defaultPlannerState(): PlannerState {
   };
 }
 
+/** Merge a stored payload (+title) over the current defaults into a full
+ *  PlannerState. Used both by the server page and the live auto-refresh so a
+ *  plan saved by an older build always opens cleanly. */
+export function hydratePlanState(payload: unknown, title: string): PlannerState {
+  const base = defaultPlannerState();
+  const stored = (payload ?? {}) as Partial<PlannerState>;
+  return {
+    ...base,
+    ...stored,
+    title,
+    event: { ...base.event, ...(stored.event ?? {}) },
+    notes: { ...base.notes, ...(stored.notes ?? {}) },
+    availability: stored.availability ?? base.availability,
+  };
+}
+
 const num = (s: string, fallback = 0): number => {
   const n = Number(String(s).trim());
   return isFinite(n) ? n : fallback;

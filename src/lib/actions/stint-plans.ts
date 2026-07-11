@@ -61,6 +61,43 @@ export async function updateStintPlan(
   return { ok: true, id, editToken };
 }
 
+/** Live-race save: overwrite a plan by id with NO edit-token check, so anyone
+ *  with the link can push corrections during a race. Returns the new updatedAt
+ *  (ms) so clients can reconcile who has the freshest version. */
+export async function liveUpdateStintPlan(
+  id: string,
+  title: string,
+  payload: unknown
+): Promise<{ ok: true; updatedAt: number } | { ok: false; error: string }> {
+  if (payload == null || typeof payload !== "object") {
+    return { ok: false, error: "Invalid plan data." };
+  }
+  const plan = await prisma.stintPlan
+    .update({
+      where: { id },
+      data: { title: cleanTitle(title), payload: payload as object },
+      select: { updatedAt: true },
+    })
+    .catch(() => null);
+  if (!plan) return { ok: false, error: "Plan not found." };
+  return { ok: true, updatedAt: plan.updatedAt.getTime() };
+}
+
+/** Live-race poll: fetch a plan's current state + version for auto-refresh. */
+export async function getStintPlanLive(
+  id: string
+): Promise<
+  | { ok: true; updatedAt: number; title: string; payload: unknown }
+  | { ok: false }
+> {
+  const p = await prisma.stintPlan.findUnique({
+    where: { id },
+    select: { title: true, payload: true, updatedAt: true },
+  });
+  if (!p) return { ok: false };
+  return { ok: true, updatedAt: p.updatedAt.getTime(), title: p.title, payload: p.payload };
+}
+
 /** Clone an existing plan into a new one ("Copy of …") the caller can edit. */
 export async function duplicateStintPlan(
   id: string

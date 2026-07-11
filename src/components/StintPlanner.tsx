@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   buildSchedule,
   fmtDuration,
@@ -10,10 +16,16 @@ import {
   type FuelSaveOptimization,
   type StintProfileKey,
 } from "@/lib/stint-planner";
-import { createStintPlan, updateStintPlan } from "@/lib/actions/stint-plans";
+import {
+  createStintPlan,
+  updateStintPlan,
+  liveUpdateStintPlan,
+  getStintPlanLive,
+} from "@/lib/actions/stint-plans";
 import { uploadStintPlanEventResult } from "@/lib/actions/stint-plan-eventresult";
 import { postStintPlanToDiscord } from "@/lib/actions/stint-plan-discord";
 import {
+  hydratePlanState,
   stateToInput,
   type PlannerAssignmentState,
   type PlannerState,
@@ -55,12 +67,14 @@ const emptyStoreSubscribe = () => () => {};
 export default function StintPlanner({
   initial,
   planId = null,
+  initialUpdatedAtMs = null,
   clsDrivers,
   tracks,
   cars,
 }: {
   initial: PlannerState;
   planId?: string | null;
+  initialUpdatedAtMs?: number | null;
   clsDrivers: ClsDriverOption[];
   tracks: string[];
   cars: ClsCarOption[];
@@ -69,6 +83,59 @@ export default function StintPlanner({
   const [curId, setCurId] = useState<string | null>(planId);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  // ---- Live race sync (open editing, auto-save + auto-refresh) ----
+  const [syncStatus, setSyncStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >(planId ? "saved" : "idle");
+  const sRef = useRef(s);
+  useEffect(() => {
+    sRef.current = s;
+  }, [s]);
+  const lastSavedSnapshotRef = useRef(JSON.stringify(initial));
+  const baseUpdatedAtRef = useRef<number>(initialUpdatedAtMs ?? 0);
+
+  // Auto-save: debounce after a real edit (skips the initial load and any
+  // change that was just applied from a remote refresh).
+  useEffect(() => {
+    if (!curId) return;
+    const snap = JSON.stringify(s);
+    if (snap === lastSavedSnapshotRef.current) return;
+    const t = setTimeout(() => {
+      void (async () => {
+        setSyncStatus("saving");
+        const res = await liveUpdateStintPlan(curId, s.title, s);
+        if (res.ok) {
+          lastSavedSnapshotRef.current = snap;
+          baseUpdatedAtRef.current = res.updatedAt;
+          setSyncStatus("saved");
+        } else {
+          setSyncStatus("error");
+        }
+      })();
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [s, curId]);
+
+  // Auto-refresh: poll for a newer server version and apply it — but only when
+  // this client has no unsaved local edits (otherwise its own save wins).
+  useEffect(() => {
+    if (!curId) return;
+    const iv = setInterval(() => {
+      void (async () => {
+        if (JSON.stringify(sRef.current) !== lastSavedSnapshotRef.current) return;
+        const res = await getStintPlanLive(curId);
+        if (res.ok && res.updatedAt > baseUpdatedAtRef.current) {
+          const next = hydratePlanState(res.payload, res.title);
+          lastSavedSnapshotRef.current = JSON.stringify(next);
+          baseUpdatedAtRef.current = res.updatedAt;
+          setS(next);
+          setSyncStatus("saved");
+        }
+      })();
+    }, 8000);
+    return () => clearInterval(iv);
+  }, [curId]);
 
   // The edit token (only the plan's creator holds it) is read live from local
   // storage via useSyncExternalStore — SSR-safe (no hydration mismatch) and it
@@ -259,7 +326,6 @@ export default function StintPlanner({
     typeof window !== "undefined" && curId
       ? `${window.location.origin}/stint-planner/${curId}`
       : null;
-  const canEditCurrent = !!curId && !!editToken;
 
   async function savePlan(forceNew = false) {
     setSaving(true);
@@ -277,6 +343,10 @@ export default function StintPlanner({
         window.localStorage.setItem(`stintplan:${res.id}`, res.editToken);
         window.history.replaceState(null, "", `/stint-planner/${res.id}`);
       }
+      // Prime the live-sync refs so auto-save/refresh start cleanly.
+      lastSavedSnapshotRef.current = JSON.stringify(s);
+      baseUpdatedAtRef.current = Date.now();
+      setSyncStatus("saved");
       setCurId(res.id);
       const url = `${window.location.origin}/stint-planner/${res.id}`;
       try {
@@ -331,21 +401,27 @@ export default function StintPlanner({
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <button
-            onClick={() => savePlan(false)}
-            disabled={saving}
-            className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : canEditCurrent ? "Save" : "Save & share"}
-          </button>
-          {canEditCurrent && (
+          {!curId && (
             <button
-              onClick={() => savePlan(true)}
+              onClick={() => savePlan(false)}
               disabled={saving}
-              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+              className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
             >
-              Save as new
+              {saving ? "Saving…" : "Save & share"}
             </button>
+          )}
+          {curId && (
+            <span
+              className="flex items-center gap-1.5 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-300"
+              title="This plan is live: your edits save automatically and everyone with the link sees them within a few seconds."
+            >
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+              {syncStatus === "saving"
+                ? "Saving…"
+                : syncStatus === "error"
+                  ? "Sync error — retrying"
+                  : "Live · auto-saving"}
+            </span>
           )}
           {shareUrl && (
             <button

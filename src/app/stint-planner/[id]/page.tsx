@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import StintPlanner from "@/components/StintPlanner";
-import { defaultPlannerState, type PlannerState } from "@/lib/stint-plan-state";
+import { hydratePlanState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
 import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
 
@@ -34,21 +34,11 @@ export default async function SavedStintPlanPage({
   const { id } = await params;
   const plan = await prisma.stintPlan.findUnique({
     where: { id },
-    select: { id: true, title: true, payload: true },
+    select: { id: true, title: true, payload: true, updatedAt: true },
   });
   if (!plan) notFound();
 
-  // Merge stored payload over the current defaults so a plan saved by an older
-  // build still opens cleanly if the shape ever gains fields.
-  const base = defaultPlannerState();
-  const stored = (plan.payload ?? {}) as Partial<PlannerState>;
-  const initial: PlannerState = {
-    ...base,
-    ...stored,
-    title: plan.title,
-    // Deep-merge event so plans saved before track/car existed stay controlled.
-    event: { ...base.event, ...(stored.event ?? {}) },
-  };
+  const initial = hydratePlanState(plan.payload, plan.title);
   const [clsDrivers, tracks, cars] = await Promise.all([
     getClsDrivers(),
     getClsTracks(),
@@ -64,12 +54,13 @@ export default async function SavedStintPlanPage({
       </div>
       <h1 className="mb-1 text-2xl font-bold">Endurance Stint Planner</h1>
       <p className="mb-6 max-w-2xl text-sm text-zinc-400">
-        Shared stint plan. Changes stay local until saved — the team member who
-        created it can overwrite it; anyone else can open “Save as new”.
+        Shared stint plan — live for the whole team. Changes save automatically
+        and everyone&rsquo;s view refreshes within a few seconds.
       </p>
       <StintPlanner
         initial={initial}
         planId={plan.id}
+        initialUpdatedAtMs={plan.updatedAt.getTime()}
         clsDrivers={clsDrivers}
         tracks={tracks}
         cars={cars}
