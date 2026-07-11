@@ -302,6 +302,125 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   };
 }
 
+// ---- Fuel-save strategy optimizer -----------------------------------------
+//
+// Race time is fixed, so the measure is total distance (laps). Saving fuel
+// slows the laps but stretches the tank, which can drop a pit stop and hand
+// back its time-loss. This finds, for each achievable pit-stop count, the
+// FASTEST pace that still fits it (i.e. the least saving needed), then reports
+// which stop-count yields the most laps. The pace/fuel trade-off is modelled
+// as a straight line between the Standard and Fuel-save profiles.
+
+export type FuelSaveStrategy = {
+  stops: number;
+  stints: number;
+  laptimeSec: number; // target lap time
+  fuelPerLap: number; // target fuel per lap
+  lapsPerStint: number;
+  totalLaps: number; // distance measure (higher = better)
+};
+
+export type FuelSaveOptimization =
+  | { ok: false; reason: string }
+  | {
+      ok: true;
+      strategies: FuelSaveStrategy[]; // one per stop-count, ascending
+      bestIndex: number; // index of the max-distance strategy
+      fullPushIndex: number; // index of the full-push (fastest lap) strategy
+    };
+
+export function optimizeFuelSave(args: {
+  raceDurationSec: number;
+  tankSize: number;
+  fuelReserve?: number;
+  pitLossSec: number;
+  standard: FuelProfile; // full push (fast lap, high fuel)
+  saving: FuelProfile; // max save (slow lap, low fuel)
+  steps?: number;
+}): FuelSaveOptimization {
+  const usable = Math.max(0, args.tankSize - Math.max(0, args.fuelReserve ?? 0));
+  const T = args.raceDurationSec;
+  const P = args.pitLossSec;
+  const { standard: std, saving: sav } = args;
+  if (T <= 0 || usable <= 0) return { ok: false, reason: "Set a race duration and tank size." };
+  if (std.fuelPerLap <= 0 || sav.fuelPerLap <= 0 || std.laptimeSec <= 0 || sav.laptimeSec <= 0)
+    return { ok: false, reason: "Fill in both fuel profiles first." };
+  if (!(sav.fuelPerLap < std.fuelPerLap) || !(sav.laptimeSec >= std.laptimeSec))
+    return {
+      ok: false,
+      reason:
+        "The Fuel-save profile must be slower per lap AND use less fuel than Standard.",
+    };
+
+  // Linear pace model: lap time as a function of fuel/lap.
+  const slope = (sav.laptimeSec - std.laptimeSec) / (sav.fuelPerLap - std.fuelPerLap);
+  const lapAt = (F: number) => std.laptimeSec + slope * (F - std.fuelPerLap);
+
+  const sim = (F: number): FuelSaveStrategy => {
+    const L = lapAt(F);
+    const lapsPerStint = Math.floor(usable / F);
+    const green = L * lapsPerStint;
+    let t = 0;
+    let laps = 0;
+    let stops = 0;
+    let stints = 0;
+    let guard = 0;
+    while (t < T - 1e-6 && guard++ < 1000) {
+      if (green <= 0) break;
+      if (t + green >= T) {
+        laps += (T - t) / L;
+        t = T;
+        stints++;
+      } else {
+        laps += lapsPerStint;
+        t += green;
+        stints++;
+        if (t < T - 1e-6) {
+          t += P;
+          stops++;
+        }
+      }
+    }
+    return {
+      stops,
+      stints,
+      laptimeSec: L,
+      fuelPerLap: F,
+      lapsPerStint,
+      totalLaps: laps,
+    };
+  };
+
+  // Sweep the fuel band from max-save to full-push; keep the best (fastest,
+  // most laps) result for each distinct stop count.
+  const steps = args.steps ?? 400;
+  const byStop = new Map<number, FuelSaveStrategy>();
+  for (let i = 0; i <= steps; i++) {
+    const F = sav.fuelPerLap + ((std.fuelPerLap - sav.fuelPerLap) * i) / steps;
+    const r = sim(F);
+    const prev = byStop.get(r.stops);
+    if (!prev || r.totalLaps > prev.totalLaps) byStop.set(r.stops, r);
+  }
+  const strategies = [...byStop.values()].sort((a, b) => a.stops - b.stops);
+  if (strategies.length === 0) return { ok: false, reason: "No feasible strategy." };
+
+  let bestIndex = 0;
+  let fullPushIndex = 0;
+  strategies.forEach((s, i) => {
+    if (s.totalLaps > strategies[bestIndex].totalLaps) bestIndex = i;
+    if (s.stops > strategies[fullPushIndex].stops) fullPushIndex = i;
+  });
+  return { ok: true, strategies, bestIndex, fullPushIndex };
+}
+
+/** Seconds → "M:SS.s" — lap-time style (tenths). */
+export function fmtLap(totalSec: number): string {
+  const s = Math.max(0, totalSec);
+  const m = Math.floor(s / 60);
+  const rem = s - m * 60;
+  return `${m}:${rem.toFixed(1).padStart(4, "0")}`;
+}
+
 /** Seconds → "H:MM:SS" (or "M:SS" under an hour). */
 export function fmtDuration(totalSec: number): string {
   const s = Math.max(0, Math.round(totalSec));

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.38.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner: a fuel-save strategy optimizer. A new “Optimize” button works out, for the fixed race time, which pace/fuel trade-off covers the most distance — because saving fuel can drop a pit stop and hand back its ~time loss. It shows a table per pit-stop count with the fastest target lap time and fuel/lap that still fits (only saving the minimum needed to drop a stop), the laps per stint, and the total laps, and highlights the strategy that goes furthest — telling you whether to push flat-out or lift-and-coast to save a stop.",
+    ],
+  },
+  {
     version: "1.37.0",
     date: "2026-07-10",
     changes: [

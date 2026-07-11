@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   buildSchedule,
   fmtDuration,
+  fmtLap,
+  optimizeFuelSave,
   parseDurationToSec,
+  type FuelSaveOptimization,
   type StintProfileKey,
 } from "@/lib/stint-planner";
 import { createStintPlan, updateStintPlan } from "@/lib/actions/stint-plans";
@@ -218,6 +221,26 @@ export default function StintPlanner({
   }
   const removeEventResult = () =>
     setS((p) => ({ ...p, eventResult: null }));
+
+  const [fuelSaveOpt, setFuelSaveOpt] = useState<FuelSaveOptimization | null>(
+    null
+  );
+  const runFuelSaveOptimizer = () => {
+    const inp = stateToInput(s);
+    setFuelSaveOpt(
+      optimizeFuelSave({
+        raceDurationSec: inp.raceDurationSec,
+        tankSize: inp.tankSize,
+        fuelReserve: inp.fuelReserve,
+        pitLossSec: inp.pitLossSec,
+        standard: inp.standard,
+        saving: {
+          laptimeSec: parseDurationToSec(s.saving.laptime) ?? 0,
+          fuelPerLap: Number(s.saving.fuelPerLap) || 0,
+        },
+      })
+    );
+  };
 
   const [postingDiscord, setPostingDiscord] = useState(false);
   async function onPostDiscord() {
@@ -480,6 +503,87 @@ export default function StintPlanner({
             </p>
           )}
         </div>
+      </div>
+
+      {/* Fuel-save strategy optimizer */}
+      <div className={card}>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Fuel-save strategy
+          </h2>
+          <button
+            onClick={runFuelSaveOptimizer}
+            className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
+          >
+            Optimize
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-zinc-500">
+          Race time is fixed, so this finds the pace &amp; fuel that covers the
+          most distance — trading lap time for fewer pit stops. It uses your
+          Standard and Fuel-save profiles as the pace/fuel band and only saves
+          the minimum needed to drop a stop.
+        </p>
+        {fuelSaveOpt && !fuelSaveOpt.ok && (
+          <p className="text-sm text-amber-400">{fuelSaveOpt.reason}</p>
+        )}
+        {fuelSaveOpt &&
+          fuelSaveOpt.ok &&
+          (() => {
+            const best = fuelSaveOpt.strategies[fuelSaveOpt.bestIndex];
+            const push = fuelSaveOpt.strategies[fuelSaveOpt.fullPushIndex];
+            const gain = best.totalLaps - push.totalLaps;
+            return (
+              <div className="space-y-3">
+                <div className="rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+                  Best: <strong>{best.stops} stops</strong> · target lap{" "}
+                  <strong>{fmtLap(best.laptimeSec)}</strong> · ≤{" "}
+                  {best.fuelPerLap.toFixed(2)} L/lap →{" "}
+                  <strong>{best.totalLaps.toFixed(1)} laps</strong>
+                  {fuelSaveOpt.bestIndex !== fuelSaveOpt.fullPushIndex
+                    ? ` — ${gain > 0 ? "+" : ""}${gain.toFixed(1)} laps vs full push (${push.stops} stops).`
+                    : " — full push is optimal here."}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm tabular-nums">
+                    <thead className="text-zinc-500">
+                      <tr className="border-b border-zinc-800">
+                        <th className="py-1 pr-2">Stops</th>
+                        <th className="py-1 pr-2 text-right">Target lap</th>
+                        <th className="py-1 pr-2 text-right">Fuel/lap</th>
+                        <th className="py-1 pr-2 text-right">Laps/stint</th>
+                        <th className="py-1 pr-2 text-right">Total laps</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fuelSaveOpt.strategies.map((r, i) => (
+                        <tr
+                          key={r.stops}
+                          className={`border-t border-zinc-800/60 ${i === fuelSaveOpt.bestIndex ? "bg-emerald-950/30 text-emerald-200" : "text-zinc-200"}`}
+                        >
+                          <td className="py-1 pr-2">
+                            {r.stops}
+                            {i === fuelSaveOpt.bestIndex && (
+                              <span className="ml-1 text-[10px] uppercase text-emerald-400">best</span>
+                            )}
+                          </td>
+                          <td className="py-1 pr-2 text-right">{fmtLap(r.laptimeSec)}</td>
+                          <td className="py-1 pr-2 text-right">{r.fuelPerLap.toFixed(2)} L</td>
+                          <td className="py-1 pr-2 text-right">{r.lapsPerStint}</td>
+                          <td className="py-1 pr-2 text-right">{r.totalLaps.toFixed(1)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  Assumes lap time varies linearly between your two profiles.
+                  &ldquo;Total laps&rdquo; is the distance measure (track length is
+                  constant).
+                </p>
+              </div>
+            );
+          })()}
       </div>
 
       {/* Drivers */}
