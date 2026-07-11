@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
 import StintPlanDuplicateButton from "@/components/StintPlanDuplicateButton";
+import StintPlanDeleteButton from "@/components/StintPlanDeleteButton";
+import { isAdmin } from "@/lib/auth-helpers";
 
 export const metadata: Metadata = pageMetadata({
   title: "Stint Planner",
@@ -19,11 +21,14 @@ type PayloadPeek = {
 };
 
 export default async function StintPlannerIndexPage() {
-  const plans = await prisma.stintPlan.findMany({
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, title: true, updatedAt: true, payload: true },
-    take: 200,
-  });
+  const [plans, admin] = await Promise.all([
+    prisma.stintPlan.findMany({
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, title: true, updatedAt: true, payload: true },
+      take: 200,
+    }),
+    isAdmin(),
+  ]);
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-8">
@@ -77,6 +82,9 @@ export default async function StintPlannerIndexPage() {
                   </span>
                 </Link>
                 <StintPlanDuplicateButton planId={p.id} />
+                {admin && (
+                  <StintPlanDeleteButton planId={p.id} title={p.title} />
+                )}
               </li>
             );
           })}

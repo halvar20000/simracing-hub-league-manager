@@ -1,7 +1,9 @@
 "use server";
 
 import { randomBytes } from "crypto";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { isAdmin } from "@/lib/auth-helpers";
 
 // Save/share actions for the public stint planner. No auth: plans are
 // unguessable by id, and editing requires the secret editToken returned at
@@ -117,4 +119,16 @@ export async function duplicateStintPlan(
     select: { id: true },
   });
   return { ok: true, id: plan.id, editToken };
+}
+
+/** Delete a stint plan — ADMIN only. */
+export async function deleteStintPlan(
+  id: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(await isAdmin())) {
+    return { ok: false, error: "Only admins can delete stint plans." };
+  }
+  await prisma.stintPlan.delete({ where: { id } }).catch(() => null);
+  revalidatePath("/stint-planner");
+  return { ok: true };
 }

@@ -26,6 +26,17 @@ export async function isAdminOrSteward(): Promise<boolean> {
   return user?.role === "ADMIN" || user?.role === "STEWARD";
 }
 
+/** Soft, non-redirecting check: is the current viewer an ADMIN (only)? */
+export async function isAdmin(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user?.id) return false;
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  return user?.role === "ADMIN";
+}
+
 export async function requireAdmin() {
   const session = await auth();
   if (!session?.user?.id) redirect("/api/auth/signin");

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.40.0",
+    date: "2026-07-10",
+    changes: [
+      "Stint Planner: admins can now delete a stint plan. A Delete button appears next to each plan in the list for admins only (with a confirm), handy for clearing out test plans.",
+    ],
+  },
+  {
     version: "1.39.0",
     date: "2026-07-10",
     changes: [
