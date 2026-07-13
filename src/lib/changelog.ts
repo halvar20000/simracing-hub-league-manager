@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.42.0",
+    date: "2026-07-13",
+    changes: [
+      "Stint Planner fuel-save optimizer now applies its result and reflects the real driver line-up. Clicking Optimize automatically writes the best (max-distance) strategy — target lap time and fuel per lap — into the Standard profile, so the whole stint schedule updates in one click. The optimizer also weights the pace by your real per-driver lap times (by stints driven) instead of the Standard profile alone, so a slower or faster line-up shifts the recommended number of pit stops.",
+    ],
+  },
+  {
     version: "1.41.0",
     date: "2026-07-13",
     changes: [

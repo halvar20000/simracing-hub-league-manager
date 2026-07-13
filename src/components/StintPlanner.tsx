@@ -297,21 +297,60 @@ export default function StintPlanner({
   const [fuelSaveOpt, setFuelSaveOpt] = useState<FuelSaveOptimization | null>(
     null
   );
+  const [fuelSaveMsg, setFuelSaveMsg] = useState<string | null>(null);
   const runFuelSaveOptimizer = () => {
     const inp = stateToInput(s);
-    setFuelSaveOpt(
-      optimizeFuelSave({
-        raceDurationSec: inp.raceDurationSec,
-        tankSize: inp.tankSize,
-        fuelReserve: inp.fuelReserve,
-        pitLossSec: inp.pitLossSec,
-        standard: inp.standard,
-        saving: {
-          laptimeSec: parseDurationToSec(s.saving.laptime) ?? 0,
-          fuelPerLap: Number(s.saving.fuelPerLap) || 0,
+    // Stint-weighted average of the real per-driver lap times (drivers without
+    // a custom time fall back to the Standard profile pace). This anchors the
+    // optimizer to who is actually driving instead of the Standard value alone.
+    const stdLap = inp.standard.laptimeSec;
+    let wSum = 0;
+    let lSum = 0;
+    for (const d of inp.drivers) {
+      const stints =
+        result.perDriver.find((p) => p.driverId === d.id)?.stints ?? 0;
+      const w = stints > 0 ? stints : 1;
+      const lap = d.laptimeSec && d.laptimeSec > 0 ? d.laptimeSec : stdLap;
+      wSum += w;
+      lSum += w * lap;
+    }
+    const avgLap = wSum > 0 ? lSum / wSum : stdLap;
+    const paceScale = stdLap > 0 ? avgLap / stdLap : 1;
+
+    const opt = optimizeFuelSave({
+      raceDurationSec: inp.raceDurationSec,
+      tankSize: inp.tankSize,
+      fuelReserve: inp.fuelReserve,
+      pitLossSec: inp.pitLossSec,
+      standard: inp.standard,
+      saving: {
+        laptimeSec: parseDurationToSec(s.saving.laptime) ?? 0,
+        fuelPerLap: Number(s.saving.fuelPerLap) || 0,
+      },
+      paceScale,
+    });
+    setFuelSaveOpt(opt);
+    // Auto-apply the best (max-distance) strategy into the Standard profile so
+    // the stint schedule below immediately runs at the fuel-save-optimal pace.
+    if (opt.ok) {
+      const best = opt.strategies[opt.bestIndex];
+      setS((p) => ({
+        ...p,
+        standard: {
+          laptime: fmtLap(best.laptimeSec),
+          fuelPerLap: best.fuelPerLap.toFixed(2),
         },
-      })
-    );
+      }));
+      const paceNote =
+        Math.abs(paceScale - 1) > 0.002
+          ? ` (weighted for real driver pace, ${fmtLap(avgLap)} avg)`
+          : "";
+      setFuelSaveMsg(
+        `Applied to Standard profile: ${best.stops} stops · target ${fmtLap(best.laptimeSec)} @ ${best.fuelPerLap.toFixed(2)} L/lap → ${best.totalLaps.toFixed(1)} laps${paceNote}.`
+      );
+    } else {
+      setFuelSaveMsg(null);
+    }
   };
 
   // ---- Garage 61 session import (client-side .xlsx parse) ----
@@ -688,9 +727,16 @@ export default function StintPlanner({
         <p className="mb-3 text-xs text-zinc-500">
           Race time is fixed, so this finds the pace &amp; fuel that covers the
           most distance — trading lap time for fewer pit stops. It uses your
-          Standard and Fuel-save profiles as the pace/fuel band and only saves
-          the minimum needed to drop a stop.
+          Standard and Fuel-save profiles as the pace/fuel band, weights the
+          pace by your real per-driver lap times (by stints driven), and only
+          saves the minimum needed to drop a stop. The best strategy is applied
+          straight to the Standard profile, so the schedule below updates.
         </p>
+        {fuelSaveMsg && (
+          <p className="mb-3 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+            ✓ {fuelSaveMsg}
+          </p>
+        )}
         {fuelSaveOpt && !fuelSaveOpt.ok && (
           <p className="text-sm text-amber-400">{fuelSaveOpt.reason}</p>
         )}
@@ -731,7 +777,7 @@ export default function StintPlanner({
                           <td className="py-1 pr-2">
                             {r.stops}
                             {i === fuelSaveOpt.bestIndex && (
-                              <span className="ml-1 text-[10px] uppercase text-emerald-400">best</span>
+                              <span className="ml-1 text-[10px] uppercase text-emerald-400">best · applied</span>
                             )}
                           </td>
                           <td className="py-1 pr-2 text-right">{fmtLap(r.laptimeSec)}</td>

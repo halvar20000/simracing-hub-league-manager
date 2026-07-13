@@ -337,11 +337,19 @@ export function optimizeFuelSave(args: {
   standard: FuelProfile; // full push (fast lap, high fuel)
   saving: FuelProfile; // max save (slow lap, low fuel)
   steps?: number;
+  /** Optional pace multiplier applied to BOTH profile lap times, so the sweep
+   *  reflects the real (stint-weighted) driver-average pace instead of the
+   *  Standard profile alone. 1 (default) = use the profiles unchanged.
+   *  Because the pit-loss is an absolute time, a slower field genuinely shifts
+   *  the optimal stop count — this is why it matters. */
+  paceScale?: number;
 }): FuelSaveOptimization {
   const usable = Math.max(0, args.tankSize - Math.max(0, args.fuelReserve ?? 0));
   const T = args.raceDurationSec;
   const P = args.pitLossSec;
-  const { standard: std, saving: sav } = args;
+  const k = args.paceScale && args.paceScale > 0 ? args.paceScale : 1;
+  const std: FuelProfile = { ...args.standard, laptimeSec: args.standard.laptimeSec * k };
+  const sav: FuelProfile = { ...args.saving, laptimeSec: args.saving.laptimeSec * k };
   if (T <= 0 || usable <= 0) return { ok: false, reason: "Set a race duration and tank size." };
   if (std.fuelPerLap <= 0 || sav.fuelPerLap <= 0 || std.laptimeSec <= 0 || sav.laptimeSec <= 0)
     return { ok: false, reason: "Fill in both fuel profiles first." };
