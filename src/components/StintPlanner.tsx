@@ -32,6 +32,11 @@ import {
 } from "@/lib/stint-plan-state";
 import type { ClsDriverOption } from "@/lib/cls-drivers";
 import type { ClsCarOption } from "@/lib/cls-tracks-cars";
+import {
+  aggregateGarage61Laps,
+  type G61ImportResult,
+  type G61LapRow,
+} from "@/lib/garage61-import";
 
 const fmtClock = (ms: number | null): string =>
   ms == null
@@ -308,6 +313,92 @@ export default function StintPlanner({
       })
     );
   };
+
+  // ---- Garage 61 session import (client-side .xlsx parse) ----
+  const [g61, setG61] = useState<G61ImportResult | null>(null);
+  const [g61Busy, setG61Busy] = useState(false);
+  const [g61Msg, setG61Msg] = useState<string | null>(null);
+  async function onGarage61Files(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setG61Busy(true);
+    setG61Msg(null);
+    try {
+      const XLSX = await import("xlsx");
+      const rows: G61LapRow[] = [];
+      for (const file of Array.from(fileList)) {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const sheetName = wb.SheetNames.find((n) =>
+          n.toLowerCase().startsWith("session")
+        );
+        if (!sheetName) continue;
+        const grid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], {
+          header: 1,
+          raw: true,
+        });
+        if (grid.length < 2) continue;
+        const header = (grid[0] as unknown[]).map((h) => String(h ?? "").trim());
+        const col = (name: string) => header.indexOf(name);
+        const cLap = col("Lap time");
+        const cDrv = col("Driver");
+        const cFuel = col("Fuel used");
+        const cPin = col("Pit in");
+        const cPout = col("Pit out");
+        if (cLap < 0 || cDrv < 0 || cFuel < 0) continue;
+        for (let i = 1; i < grid.length; i++) {
+          const r = grid[i] as unknown[];
+          const drv = String(r[cDrv] ?? "").trim();
+          const rawLap = Number(r[cLap]);
+          const fuel = Number(r[cFuel]);
+          if (!drv || !isFinite(rawLap) || !isFinite(fuel)) continue;
+          rows.push({
+            driver: drv,
+            laptimeSec: rawLap * 86400, // Excel duration = fraction of a day
+            fuelUsed: fuel,
+            pitIn: Number(cPin >= 0 ? r[cPin] : 0) === 1,
+            pitOut: Number(cPout >= 0 ? r[cPout] : 0) === 1,
+          });
+        }
+      }
+      if (rows.length === 0) {
+        setG61Msg(
+          "No lap data found — is this a Garage 61 session export (.xlsx)?"
+        );
+        return;
+      }
+      const result = aggregateGarage61Laps(rows);
+      if (result.drivers.length === 0) {
+        setG61Msg("Couldn't derive clean laps from the file(s).");
+        return;
+      }
+      setG61(result);
+    } catch {
+      setG61Msg("Could not read the file — is it a valid .xlsx export?");
+    } finally {
+      setG61Busy(false);
+    }
+  }
+  function applyGarage61() {
+    if (!g61) return;
+    const norm = (x: string) => x.trim().toLowerCase();
+    const matched = g61.drivers.filter((gd) =>
+      s.drivers.some((d) => norm(d.name) === norm(gd.driver))
+    ).length;
+    setS((p) => ({
+      ...p,
+      standard: {
+        laptime: fmtLap(g61.overall.laptimeSec),
+        fuelPerLap: g61.overall.fuelPerLap.toFixed(2),
+      },
+      drivers: p.drivers.map((d) => {
+        const gd = g61.drivers.find((x) => norm(x.driver) === norm(d.name));
+        return gd ? { ...d, laptime: fmtLap(gd.racePaceSec) } : d;
+      }),
+    }));
+    setG61Msg(
+      `Applied: Standard profile + lap times for ${matched} matched driver${matched === 1 ? "" : "s"}. Save keeps it.`
+    );
+  }
 
   const [postingDiscord, setPostingDiscord] = useState(false);
   async function onPostDiscord() {
@@ -706,6 +797,89 @@ export default function StintPlanner({
           laptime is optional — set it to lengthen a slower driver&rsquo;s stints
           (fuel &amp; laps stay the same, since a stint is fuel-limited).
         </p>
+      </div>
+
+      {/* Garage 61 import */}
+      <div className={card}>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Garage 61 import
+          </h2>
+          <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+            {g61Busy ? "Reading…" : "Upload session export(s)"}
+            <input
+              type="file"
+              accept=".xlsx"
+              multiple
+              className="hidden"
+              disabled={g61Busy}
+              onChange={(e) => onGarage61Files(e.target.files)}
+            />
+          </label>
+        </div>
+        <p className="mb-3 text-xs text-zinc-500">
+          Upload Garage 61 session exports (.xlsx). Real race pace &amp; fuel/lap
+          per driver are read from the practice laps and fill the Standard
+          profile plus each matching driver&rsquo;s lap time. Files are read in
+          your browser — nothing is uploaded.
+        </p>
+        {g61Msg && <p className="mb-2 text-sm text-amber-300">{g61Msg}</p>}
+        {g61 && (
+          <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm tabular-nums">
+                <thead className="text-zinc-500">
+                  <tr className="border-b border-zinc-800">
+                    <th className="py-1 pr-2">Driver</th>
+                    <th className="py-1 pr-2 text-right">Laps</th>
+                    <th className="py-1 pr-2 text-right">Best</th>
+                    <th className="py-1 pr-2 text-right">Race pace</th>
+                    <th className="py-1 pr-2 text-right">Fuel/lap</th>
+                    <th className="py-1 pr-2">In roster</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g61.drivers.map((d) => {
+                    const inRoster = s.drivers.some(
+                      (x) =>
+                        x.name.trim().toLowerCase() ===
+                        d.driver.trim().toLowerCase()
+                    );
+                    return (
+                      <tr key={d.driver} className="border-t border-zinc-800/60 text-zinc-200">
+                        <td className="py-1 pr-2">{d.driver}</td>
+                        <td className="py-1 pr-2 text-right">{d.laps}</td>
+                        <td className="py-1 pr-2 text-right">{fmtLap(d.bestSec)}</td>
+                        <td className="py-1 pr-2 text-right">{fmtLap(d.racePaceSec)}</td>
+                        <td className="py-1 pr-2 text-right">{d.fuelPerLap.toFixed(2)} L</td>
+                        <td className="py-1 pr-2">
+                          {inRoster ? (
+                            <span className="text-emerald-400">✓</span>
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs text-zinc-500">
+                Standard profile → {fmtLap(g61.overall.laptimeSec)} ·{" "}
+                {g61.overall.fuelPerLap.toFixed(2)} L/lap ({g61.overall.cleanLaps}{" "}
+                clean laps)
+              </span>
+              <button
+                onClick={applyGarage61}
+                className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
+              >
+                Apply to plan
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Availability */}

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.41.0",
+    date: "2026-07-13",
+    changes: [
+      "Stint Planner: import real data from Garage 61 session exports (.xlsx) — no API/token needed. Upload one or more session exports and the planner reads each driver's real race pace and fuel-per-lap from the practice laps (isolating clean full green laps by fuel used, so spins/out-laps don't skew it), shows a per-driver preview, and fills the Standard fuel profile plus each matching roster driver's lap time. Files are parsed in your browser — nothing is uploaded.",
+    ],
+  },
+  {
     version: "1.40.0",
     date: "2026-07-10",
     changes: [
