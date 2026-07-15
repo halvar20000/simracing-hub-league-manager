@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.44.1",
+    date: "2026-07-15",
+    changes: [
+      "Drivers can now retire themselves from a season on the My Registrations page — no need to ask an admin. Hit “Retire” on an approved entry and your results and championship points stay exactly as they are (your name shows with a “Retired” badge), your grid seat is freed, and the next driver on the waiting list is promoted. To keep things fair, coming back is admin-controlled: an admin uses the roster “Un-retire” button, so nobody can flip-flop and bump a just-promoted driver off the grid.",
+    ],
+  },
+  {
     version: "1.44.0",
     date: "2026-07-15",
     changes: [

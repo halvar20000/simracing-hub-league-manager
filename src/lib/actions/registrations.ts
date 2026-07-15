@@ -5,7 +5,10 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-helpers";
-import { recomputeWaitlistForSeason } from "@/lib/waitlist";
+import {
+  recomputeWaitlistForSeason,
+  setRegistrationRetired,
+} from "@/lib/waitlist";
 import { postDiscordWebhook } from "@/lib/discord-webhook";
 import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
@@ -496,6 +499,48 @@ export async function withdrawRegistration(registrationId: string) {
     `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
   );
   redirect("/registrations");
+}
+
+/**
+ * Driver self-service: retire from a season. Same effect as the admin Retire
+ * button — the driver's results/points/position are kept, but they free their
+ * grid seat (the next waiting-list driver is promoted) and drop out of RSVP /
+ * fill-in / no-show flows. Retire only; coming back is admin-controlled
+ * (the admin roster page has Un-retire) so a driver can't flip-flop and bump
+ * a just-promoted waiting-list driver back off the grid.
+ */
+export async function retireOwnRegistration(registrationId: string) {
+  const sessionUser = await requireAuth();
+
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    include: { season: { include: { league: true } } },
+  });
+  // Must be the driver's own APPROVED registration on a running season, and not
+  // a non-driving team-manager entry.
+  const seasonRunning =
+    reg?.season.status === "OPEN_REGISTRATION" ||
+    reg?.season.status === "ACTIVE";
+  if (
+    !reg ||
+    reg.userId !== sessionUser.id ||
+    reg.status !== "APPROVED" ||
+    reg.isTeamManager ||
+    !seasonRunning
+  ) {
+    redirect("/registrations");
+  }
+
+  // Sets retiredAt and recomputes the waiting list (promotes + DMs the next
+  // driver on a capped season).
+  await setRegistrationRetired(registrationId, true);
+
+  revalidatePath("/registrations");
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+  revalidatePath(`/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}`);
+  redirect("/registrations?success=retired");
 }
 
 export async function createTeamRegistration(

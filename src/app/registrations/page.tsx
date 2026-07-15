@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { withdrawRegistration } from "@/lib/actions/registrations";
+import {
+  withdrawRegistration,
+  retireOwnRegistration,
+} from "@/lib/actions/registrations";
 import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
 import TeamManageModal from "@/components/TeamManageModal";
@@ -68,6 +71,8 @@ export default async function MyRegistrationsPage({
         <div className="rounded border border-emerald-800 bg-emerald-950 p-3 text-sm text-emerald-200">
           {success === "updated"
             ? "Registration updated — your approval is unchanged."
+            : success === "retired"
+            ? "You've retired from the season. Your results and points stay on record; your grid seat has been freed. Contact an admin if you'd like to return."
             : "Registration submitted. Awaiting admin approval."}
         </div>
       )}
@@ -103,6 +108,11 @@ export default async function MyRegistrationsPage({
                   </h3>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
                     <StatusBadge status={r.status} />
+                    {r.retiredAt && (
+                      <span className="inline-block rounded bg-amber-950 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-amber-300">
+                        Retired
+                      </span>
+                    )}
                     {r.startNumber && (
                       <span className="text-zinc-500">
                         # {r.startNumber}
@@ -155,6 +165,29 @@ export default async function MyRegistrationsPage({
                       </Link>
                     );
                   })()}
+                  {r.status === "APPROVED" &&
+                    !r.isTeamManager &&
+                    !r.retiredAt &&
+                    (r.season.status === "OPEN_REGISTRATION" ||
+                      r.season.status === "ACTIVE") && (
+                      <form action={retireOwnRegistration.bind(null, r.id)}>
+                        <button
+                          type="submit"
+                          className="text-zinc-400 hover:text-amber-400"
+                          title="Retire from this season — keeps your results and points and frees your grid seat. An admin can bring you back."
+                        >
+                          Retire
+                        </button>
+                      </form>
+                    )}
+                  {r.retiredAt && (
+                    <span
+                      className="text-zinc-500"
+                      title="You've retired from this season. Contact an admin to be reinstated."
+                    >
+                      Retired · ask an admin to return
+                    </span>
+                  )}
                   {(r.status === "PENDING" || r.status === "APPROVED") && (
                     <form
                       action={withdrawRegistration.bind(null, r.id)}
