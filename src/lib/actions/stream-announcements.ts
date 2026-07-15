@@ -54,6 +54,21 @@ export async function saveStreamAnnouncement(formData: FormData): Promise<void> 
     );
   }
 
+  // Optional: when the stream actually goes live (shown in the embed).
+  // Falls back to scheduledAt when left blank.
+  const streamAtRaw = String(formData.get("streamAt") ?? "").trim();
+  let streamAt: Date | null = null;
+  if (streamAtRaw) {
+    const parsed = new Date(streamAtRaw);
+    if (Number.isNaN(parsed.getTime())) {
+      redirect(
+        streamPagePath(leagueSlug, seasonId, roundId) +
+          "?error=Invalid+stream-live+time"
+      );
+    }
+    streamAt = parsed;
+  }
+
   const twitchUrl =
     String(formData.get("twitchUrl") ?? "").trim() || null;
   const messageText =
@@ -122,6 +137,7 @@ export async function saveStreamAnnouncement(formData: FormData): Promise<void> 
       where: { id: existing.id },
       data: {
         scheduledAt,
+        streamAt,
         twitchUrl,
         messageText,
         ...(posterBlobUrl !== undefined ? { posterBlobUrl } : {}),
@@ -132,6 +148,7 @@ export async function saveStreamAnnouncement(formData: FormData): Promise<void> 
       data: {
         roundId,
         scheduledAt,
+        streamAt,
         twitchUrl,
         messageText,
         posterBlobUrl: posterBlobUrl ?? null,

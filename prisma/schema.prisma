@@ -682,6 +682,9 @@ model StreamAnnouncement {
   messageText      String?
   /// When the bot should post the announcement.
   scheduledAt      DateTime
+  /// When the stream actually goes live (shown in the embed). Falls back
+  /// to scheduledAt when null (legacy rows / not set).
+  streamAt         DateTime?
   /// Set once the bot has posted. Used for idempotency.
   postedAt         DateTime?
   /// Snapshot of the channel + message so we can edit/delete later.

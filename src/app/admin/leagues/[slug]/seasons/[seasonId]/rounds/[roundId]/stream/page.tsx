@@ -54,6 +54,10 @@ export default async function AdminRoundStreamPage({
     : toLocalInputValue(
         new Date(round.startsAt.getTime() - 30 * 60 * 1000)
       ); // default = 30 min before race start
+  // "Stream live" time shown in the embed. Defaults to the race start.
+  const defaultStreamAt = a?.streamAt
+    ? toLocalInputValue(a.streamAt)
+    : toLocalInputValue(round.startsAt);
 
   return (
     <div className="space-y-6">
@@ -122,7 +126,7 @@ export default async function AdminRoundStreamPage({
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
-            Post at (your local time)
+            Post at — when the announcement is sent to Discord (your local time)
           </span>
           <input
             type="datetime-local"
@@ -135,7 +139,24 @@ export default async function AdminRoundStreamPage({
             Race starts at{" "}
             <span className="font-mono">{round.startsAt.toISOString()}</span>
             . Cron polls every 10 min — post will fire within 10 min of this
-            time.
+            time. This is only the posting moment; it is NOT shown in the embed.
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm text-zinc-300">
+            Stream goes live at — shown as &quot;Stream live&quot; in the embed
+            (your local time)
+          </span>
+          <input
+            type="datetime-local"
+            name="streamAt"
+            defaultValue={defaultStreamAt}
+            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            When the Twitch stream actually starts. Leave blank to fall back to
+            the &quot;Post at&quot; time.
           </span>
         </label>
 
@@ -206,9 +227,14 @@ export default async function AdminRoundStreamPage({
         <section className="rounded border border-zinc-800 bg-zinc-900 p-4 space-y-3">
           <h2 className="text-lg font-semibold">Status</h2>
           <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-            <dt className="text-zinc-500">Scheduled at</dt>
+            <dt className="text-zinc-500">Post at</dt>
             <dd className="font-mono text-zinc-200">
               {a.scheduledAt.toISOString()}
+            </dd>
+            <dt className="text-zinc-500">Stream live at</dt>
+            <dd className="font-mono text-zinc-200">
+              {(a.streamAt ?? a.scheduledAt).toISOString()}
+              {a.streamAt ? "" : " (fallback → Post at)"}
             </dd>
             <dt className="text-zinc-500">Posted at</dt>
             <dd className="font-mono text-zinc-200">

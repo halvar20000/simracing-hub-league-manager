@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.43.0",
+    date: "2026-07-15",
+    changes: [
+      "Stream announcement: the “Stream live” time in the Discord embed is now a separate field from the posting time. Previously the embed reused the “Post at” moment as the advertised stream-live time, so scheduling the post for an earlier day made the embed announce the wrong go-live time. The round’s stream page now has a dedicated “Stream goes live at” field (defaults to the race start); leave it blank to fall back to the post time. Edit it and hit “Refresh embed” to correct an already-posted announcement.",
+    ],
+  },
+  {
     version: "1.42.0",
     date: "2026-07-13",
     changes: [
