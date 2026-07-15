@@ -186,6 +186,7 @@ export async function GET(req: NextRequest) {
         iRating: s.iRating,
         roundsCompleted: s.roundsCompleted,
         excludedAt: s.excludedAt,
+        retiredAt: s.retiredAt,
       };
     }),
   };

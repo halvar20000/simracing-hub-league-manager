@@ -10,6 +10,7 @@ import { parseStartNumberInput } from "@/lib/start-number";
 import {
   recomputeWaitlistForSeason,
   setRegistrationWaitlisted,
+  setRegistrationRetired,
 } from "@/lib/waitlist";
 import type { RegistrationStatus, ProAmClass } from "@prisma/client";
 
@@ -97,6 +98,28 @@ export async function demoteToWaitlist(registrationId: string) {
     `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
   );
   revalidatePath(`/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}`);
+}
+
+/**
+ * Admin: retire (or un-retire) a driver from the season. Retiring keeps their
+ * points and finishing position (results untouched) but frees their grid seat
+ * — the next waiting-list driver is auto-promoted and DM'd. Reversible.
+ */
+export async function retireRegistration(registrationId: string, retired: boolean) {
+  await requireAdmin();
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: { seasonId: true, season: { select: { league: { select: { slug: true } } } } },
+  });
+  if (!reg) return;
+  await setRegistrationRetired(registrationId, retired);
+  revalidatePath(
+    `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`
+  );
+  revalidatePath(`/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}`);
+  revalidatePath(
+    `/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/standings`
+  );
 }
 
 export async function updateRegistration(

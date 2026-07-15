@@ -363,6 +363,16 @@ model Registration {
   createdAt                 DateTime         @default(now())
   updatedAt                 DateTime         @updatedAt
   excludedAt                DateTime?
+  /// Set when an admin RETIRES this driver from the season. A retired driver
+  /// keeps every RaceResult, so their championship points and finishing
+  /// position stay exactly as-is (shown struck-through with a "Retired" badge),
+  /// but they no longer count against the season's maxDrivers grid cap and are
+  /// dropped from all forward-looking flows (RSVP embeds, one-race fill-ins,
+  /// no-show penalties). Reversible: clearing this restores a confirmed seat
+  /// (subject to the cap). Distinct from `excludedAt` (a DQ/removal marker).
+  /// See src/lib/waitlist.ts (setRegistrationRetired) — retiring frees a seat
+  /// and auto-promotes the next waiting-list driver.
+  retiredAt                 DateTime?
   /// Set when this APPROVED registration is over the season's maxDrivers cap
   /// and therefore on the waiting list (not a confirmed grid driver). Waiting
   /// list order is by `createdAt` (registration date) ascending — first to

@@ -104,9 +104,14 @@ export async function upsertRsvp(args: {
   // managers never RSVP — they don't race.
   const registration = await prisma.registration.findUnique({
     where: { seasonId_userId: { seasonId: round.seasonId, userId } },
-    select: { id: true, excludedAt: true, status: true, isTeamManager: true },
+    select: { id: true, excludedAt: true, retiredAt: true, status: true, isTeamManager: true },
   });
-  if (!registration || registration.excludedAt || registration.isTeamManager) {
+  if (
+    !registration ||
+    registration.excludedAt ||
+    registration.retiredAt ||
+    registration.isTeamManager
+  ) {
     return { ok: false, reason: "user-not-registered" };
   }
 
@@ -178,9 +183,14 @@ export async function toggleDecline(args: {
 
   const registration = await prisma.registration.findUnique({
     where: { seasonId_userId: { seasonId: round.seasonId, userId } },
-    select: { id: true, excludedAt: true, isTeamManager: true },
+    select: { id: true, excludedAt: true, retiredAt: true, isTeamManager: true },
   });
-  if (!registration || registration.excludedAt || registration.isTeamManager) {
+  if (
+    !registration ||
+    registration.excludedAt ||
+    registration.retiredAt ||
+    registration.isTeamManager
+  ) {
     return { ok: false, reason: "user-not-registered" };
   }
 
@@ -242,7 +252,7 @@ export async function refreshDiscordRsvpMessage(roundId: string): Promise<void> 
       season: {
         include: {
           league: true,
-          _count: { select: { registrations: { where: { excludedAt: null, isTeamManager: false } } } },
+          _count: { select: { registrations: { where: { excludedAt: null, retiredAt: null, isTeamManager: false } } } },
         },
       },
       rsvps: {
@@ -312,7 +322,7 @@ export async function getRoundRsvpSummary(roundId: string) {
         include: {
           league: true,
           registrations: {
-            where: { excludedAt: null, isTeamManager: false },
+            where: { excludedAt: null, retiredAt: null, isTeamManager: false },
             include: {
               user: {
                 select: { id: true, name: true, firstName: true, lastName: true },

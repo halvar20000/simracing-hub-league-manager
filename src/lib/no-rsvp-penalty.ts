@@ -62,6 +62,7 @@ export async function applyNoRsvpNoShowPenalties(
             // expected to race (and often can't RSVP yet), so they're exempt.
             where: {
               excludedAt: null,
+              retiredAt: null,
               status: "APPROVED",
               isTeamManager: false,
               waitlistedAt: null,

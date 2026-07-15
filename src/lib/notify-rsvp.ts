@@ -42,7 +42,7 @@ export async function postRsvpForRound(
       season: {
         include: {
           league: true,
-          _count: { select: { registrations: { where: { excludedAt: null, isTeamManager: false } } } },
+          _count: { select: { registrations: { where: { excludedAt: null, retiredAt: null, isTeamManager: false } } } },
         },
       },
       rsvps: {

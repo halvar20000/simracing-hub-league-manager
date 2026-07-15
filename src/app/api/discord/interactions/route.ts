@@ -318,9 +318,14 @@ async function handleFillInClick(
 
   const registration = await prisma.registration.findUnique({
     where: { seasonId_userId: { seasonId: round.seasonId, userId } },
-    select: { id: true, excludedAt: true, isTeamManager: true },
+    select: { id: true, excludedAt: true, retiredAt: true, isTeamManager: true },
   });
-  if (!registration || registration.excludedAt || registration.isTeamManager) {
+  if (
+    !registration ||
+    registration.excludedAt ||
+    registration.retiredAt ||
+    registration.isTeamManager
+  ) {
     return ephemeral("You're not on the waiting list for this season.");
   }
 

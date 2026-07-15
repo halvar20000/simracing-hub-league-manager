@@ -45,6 +45,7 @@ export default async function EditRegistrationPage({
         teamId: { not: null },
         status: { in: ["PENDING", "APPROVED"] },
         excludedAt: null,
+        retiredAt: null,
       },
       _count: true,
     }),

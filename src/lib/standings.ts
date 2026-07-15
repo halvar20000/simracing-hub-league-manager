@@ -49,6 +49,9 @@ export interface DriverStanding {
   totalIncidents: number;
   iRating: number | null;
   excludedAt: Date | null;
+  /** Set when the driver was retired from the season. Points/position are kept
+   *  as-is; the UI renders the name struck-through with a "Retired" badge. */
+  retiredAt: Date | null;
   roundsCompleted: number;
   roundPoints: RoundPoints[];
 }
@@ -498,6 +501,7 @@ export async function computeDriverStandings(
       totalIncidents,
       iRating,
       excludedAt: reg.excludedAt ?? null,
+      retiredAt: reg.retiredAt ?? null,
       roundsCompleted: reg.raceResults.length,
       roundPoints,
     };

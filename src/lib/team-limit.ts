@@ -61,6 +61,7 @@ export async function countTeamMembers(
       teamId,
       status: { in: ["PENDING", "APPROVED"] },
       excludedAt: null,
+      retiredAt: null,
       ...(excludeUserId ? { userId: { not: excludeUserId } } : {}),
     },
   });

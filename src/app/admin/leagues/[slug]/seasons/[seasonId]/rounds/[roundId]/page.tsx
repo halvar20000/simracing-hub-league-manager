@@ -466,6 +466,7 @@ function ResultRow({
     carClass: { name: string; shortCode: string } | null;
     proAmClass: "PRO" | "AM" | null;
       excludedAt: Date | null;
+      retiredAt: Date | null;
     raceResults: Array<{
       id: string;
       finishPosition: number;
@@ -503,7 +504,7 @@ function ResultRow({
     >
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <span className={`font-semibold ${reg.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
+          <span className={`font-semibold ${reg.excludedAt || reg.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
             {reg.startNumber != null && (
               <span className="mr-2 text-zinc-500 no-underline">#{reg.startNumber}</span>
             )}
@@ -511,6 +512,11 @@ function ResultRow({
             {reg.excludedAt && (
               <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                 Excluded
+              </span>
+            )}
+            {reg.retiredAt && !reg.excludedAt && (
+              <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                Retired
               </span>
             )}
           </span>

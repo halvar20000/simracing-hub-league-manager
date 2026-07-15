@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.44.0",
+    date: "2026-07-15",
+    changes: [
+      "Admins can now retire a driver from a season. On the roster page (every league and season), each approved driver has a Retire button — retiring keeps all of that driver's results, so their championship points and finishing position stay exactly as they are, but their name shows struck-through with a “Retired” badge everywhere it appears (standings, rosters, round results) and they no longer count against the grid's driver limit. On a capped season this frees a seat, so the next driver on the waiting list is automatically promoted and notified. Retired drivers also drop out of future RSVP posts, one-race fill-in offers and no-show penalties. It's fully reversible: an Un-retire button brings a driver back into a confirmed seat if the cap allows.",
+    ],
+  },
+  {
     version: "1.43.0",
     date: "2026-07-15",
     changes: [

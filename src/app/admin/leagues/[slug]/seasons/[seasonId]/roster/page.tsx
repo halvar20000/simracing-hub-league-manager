@@ -9,6 +9,7 @@ import {
   rejectTeamRegistrations,
   promoteWaitlistRegistration,
   demoteToWaitlist,
+  retireRegistration,
 } from "@/lib/actions/admin-registrations";
 import { getSeasonCapInfo, getWaitlist } from "@/lib/waitlist";
 import RegistrationFlagSelect from "@/components/RegistrationFlagSelect";
@@ -262,7 +263,7 @@ export default async function RosterPage({
                         </div>
                       </td>
                       <td className="px-3 py-3 driver-col whitespace-nowrap">
-                        <div className="font-medium">
+                        <div className={`font-medium ${reg.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                           {reg.user.iracingMemberId ? (
                             <Link
                               href={`/drivers/${reg.user.iracingMemberId}`}
@@ -281,7 +282,37 @@ export default async function RosterPage({
                               ★
                             </span>
                           )}
+                          {reg.retiredAt && (
+                            <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                              Retired
+                            </span>
+                          )}
                         </div>
+                        {reg.status === "APPROVED" && (
+                          <div className="mt-1">
+                            {reg.retiredAt != null ? (
+                              <form action={retireRegistration.bind(null, reg.id, false)}>
+                                <button
+                                  type="submit"
+                                  className="rounded border border-amber-800 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-200 hover:bg-amber-900/60"
+                                  title="Bring this driver back into the season"
+                                >
+                                  ↩ Un-retire
+                                </button>
+                              </form>
+                            ) : (
+                              <form action={retireRegistration.bind(null, reg.id, true)}>
+                                <button
+                                  type="submit"
+                                  className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800"
+                                  title="Retire from the season: keeps points & position, frees the team slot"
+                                >
+                                  Retire
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-3 text-zinc-400 whitespace-nowrap">
                         {reg.carClass?.name ?? "—"}
@@ -611,7 +642,7 @@ export default async function RosterPage({
                 className="border-t border-zinc-800 hover:bg-zinc-900"
               >
                 <td className="px-4 py-3 driver-col">
-                  <div className="font-medium">
+                  <div className={`font-medium ${r.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                     {r.user.iracingMemberId ? (
                       <Link
                         href={`/drivers/${r.user.iracingMemberId}`}
@@ -621,6 +652,11 @@ export default async function RosterPage({
                       </Link>
                     ) : (
                       <>{r.user.firstName} {r.user.lastName}</>
+                    )}
+                    {r.retiredAt && (
+                      <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                        Retired
+                      </span>
                     )}
                   </div>
                   <div className="text-xs text-zinc-500">
@@ -749,6 +785,29 @@ export default async function RosterPage({
                             title="Move this driver onto the waiting list"
                           >
                             ↓ Waitlist
+                          </button>
+                        </form>
+                      )
+                    )}
+                    {r.status === "APPROVED" && (
+                      r.retiredAt != null ? (
+                        <form action={retireRegistration.bind(null, r.id, false)}>
+                          <button
+                            type="submit"
+                            className="rounded border border-amber-800 bg-amber-950/40 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/60"
+                            title="Bring this driver back — reclaims a grid seat if the cap allows"
+                          >
+                            ↩ Un-retire
+                          </button>
+                        </form>
+                      ) : (
+                        <form action={retireRegistration.bind(null, r.id, true)}>
+                          <button
+                            type="submit"
+                            className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                            title="Retire from the season: keeps points & position, frees the grid seat, promotes the next waiting-list driver"
+                          >
+                            Retire
                           </button>
                         </form>
                       )

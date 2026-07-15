@@ -566,7 +566,7 @@ export default async function PublicSeasonDetail({
       {!season.teamRegistration && !isTeamEventSeason && (
       <section>
         <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-          Roster ({confirmedRegs.length} approved
+          Roster ({confirmedRegs.filter((r) => r.retiredAt == null).length} approved
           {season.maxDrivers != null ? ` / ${season.maxDrivers}` : ""})
         </h2>
         {confirmedRegs.length === 0 ? (
@@ -597,9 +597,14 @@ export default async function PublicSeasonDetail({
                     <td className="px-3 py-2 font-display text-zinc-500">
                       {r.startNumber ?? "—"}
                     </td>
-                    <td className="px-3 py-2 font-medium">
+                    <td className={`px-3 py-2 font-medium ${r.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                       <CountryFlag code={r.user.countryCode} />
                       {r.user.firstName} {r.user.lastName}
+                      {r.retiredAt && (
+                        <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                          Retired
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-zinc-400">
                       {r.team?.name ?? "—"}

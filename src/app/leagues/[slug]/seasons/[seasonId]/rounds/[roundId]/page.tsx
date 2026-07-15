@@ -173,9 +173,9 @@ export default async function PublicRoundResults({
   if (sessionUserId && round.status === "UPCOMING") {
     const reg = await prisma.registration.findUnique({
       where: { seasonId_userId: { seasonId, userId: sessionUserId } },
-      select: { id: true, excludedAt: true },
+      select: { id: true, excludedAt: true, retiredAt: true },
     });
-    driverIsRegistered = !!reg && !reg.excludedAt;
+    driverIsRegistered = !!reg && !reg.excludedAt && !reg.retiredAt;
     if (reg) {
       const rsvp = await prisma.roundRsvp.findUnique({
         where: {
@@ -1020,6 +1020,7 @@ type Row = {
     carClass: { name: string } | null;
     proAmClass: "PRO" | "AM" | null;
     excludedAt: Date | null;
+    retiredAt: Date | null;
   };
 };
 
@@ -1115,7 +1116,7 @@ function ResultsTable({
                   {r.registration.startNumber ?? "—"}
                 </td>
                 <td
-                  className={`px-3 py-2 driver-col ${r.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                  className={`px-3 py-2 driver-col ${r.registration.excludedAt || r.registration.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
                   <CountryFlag code={r.registration.user.countryCode} />
                   {r.registration.user.firstName}{" "}
@@ -1123,6 +1124,11 @@ function ResultsTable({
                   {r.registration.excludedAt && (
                     <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                       Excluded
+                    </span>
+                  )}
+                  {r.registration.retiredAt && !r.registration.excludedAt && (
+                    <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                      Retired
                     </span>
                   )}
                 </td>
@@ -1233,7 +1239,7 @@ function CombinedMultiRaceTable({
                   {sample.registration.startNumber ?? "—"}
                 </td>
                 <td
-                  className={`px-3 py-2 driver-col ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                  className={`px-3 py-2 driver-col ${sample.registration.excludedAt || sample.registration.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
                   <CountryFlag code={sample.registration.user.countryCode} />
                   {sample.registration.user.firstName}{" "}
@@ -1241,6 +1247,11 @@ function CombinedMultiRaceTable({
                   {sample.registration.excludedAt && (
                     <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                       Excluded
+                    </span>
+                  )}
+                  {sample.registration.retiredAt && !sample.registration.excludedAt && (
+                    <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                      Retired
                     </span>
                   )}
                 </td>
@@ -1371,7 +1382,7 @@ function TeamView({
                     className="border-t border-zinc-800"
                   >
                     <td
-                      className={`px-3 py-1.5 driver-col ${sample.registration.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                      className={`px-3 py-1.5 driver-col ${sample.registration.excludedAt || sample.registration.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                     >
                       <CountryFlag code={sample.registration.user.countryCode} />
                       {sample.registration.user.firstName}{" "}
@@ -1379,6 +1390,11 @@ function TeamView({
                       {sample.registration.excludedAt && (
                         <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                           Excluded
+                        </span>
+                      )}
+                      {sample.registration.retiredAt && !sample.registration.excludedAt && (
+                        <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                          Retired
                         </span>
                       )}
                     </td>
@@ -1456,6 +1472,7 @@ function QualifyingTable({
         proAmClass: sample.registration.proAmClass,
         qualifyingTimeMs: bestQuali,
         excludedAt: sample.registration.excludedAt,
+        retiredAt: sample.registration.retiredAt,
       };
     })
     .sort((a, b) => {
@@ -1501,13 +1518,18 @@ function QualifyingTable({
                   {d.startNumber ?? "—"}
                 </td>
                 <td
-                  className={`px-3 py-2 driver-col ${d.excludedAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
+                  className={`px-3 py-2 driver-col ${d.excludedAt || d.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}
                 >
                   <CountryFlag code={d.countryCode} />
                   {d.firstName} {d.lastName}
                   {d.excludedAt && (
                     <span className="ml-2 rounded bg-red-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-red-300 no-underline">
                       Excluded
+                    </span>
+                  )}
+                  {d.retiredAt && !d.excludedAt && (
+                    <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                      Retired
                     </span>
                   )}
                 </td>

@@ -45,6 +45,7 @@ function emailHtml(bodyHtml: string): string {
 const CONFIRMED_WHERE = {
   status: "APPROVED" as const,
   excludedAt: null,
+  retiredAt: null,
   isTeamManager: false,
   waitlistedAt: null,
 };
@@ -53,6 +54,7 @@ const CONFIRMED_WHERE = {
 const WAITLIST_WHERE = {
   status: "APPROVED" as const,
   excludedAt: null,
+  retiredAt: null,
   isTeamManager: false,
   waitlistedAt: { not: null },
 };
@@ -355,6 +357,50 @@ export async function setRegistrationWaitlisted(
 }
 
 /**
+ * Retire (or un-retire) a registration from its season.
+ *
+ * Retiring keeps every RaceResult, so the driver's championship points and
+ * finishing position are untouched — they simply stop counting against the
+ * grid cap and drop out of every forward-looking flow (RSVP, fill-ins,
+ * no-show penalties; all keyed off `retiredAt`). Because the retired driver
+ * no longer occupies a confirmed seat, we recompute the waiting list, which
+ * promotes the next waiting-list driver into the freed seat and DMs them.
+ *
+ * Un-retiring clears the flag and recomputes again — the returning driver
+ * reclaims a seat if the cap allows, otherwise the waiting-list ranking (by
+ * registration date) decides who is confirmed vs parked.
+ *
+ * Idempotent. Works for every league/season; the cap side-effects are no-ops
+ * when the season has no `maxDrivers` configured.
+ */
+export async function setRegistrationRetired(
+  registrationId: string,
+  retired: boolean
+): Promise<void> {
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: { seasonId: true, retiredAt: true },
+  });
+  if (!reg) return;
+  const currentlyRetired = reg.retiredAt != null;
+  if (currentlyRetired === retired) return; // no change
+
+  await prisma.registration.update({
+    where: { id: registrationId },
+    data: {
+      retiredAt: retired ? new Date() : null,
+      // Retiring frees the grid seat; a returning driver starts off the
+      // waiting list and is re-ranked by the recompute below.
+      ...(retired ? { waitlistedAt: null } : {}),
+    },
+  });
+
+  // Retire → the freed seat promotes the next waiting-list driver (DM sent by
+  // the recompute). Un-retire → re-rank so the cap is honoured again.
+  await recomputeWaitlistForSeason(reg.seasonId);
+}
+
+/**
  * Order-proof waiting-list reconciliation for a whole season — the single
  * source of truth for who is a confirmed grid driver vs. on the waiting list.
  *
@@ -395,6 +441,7 @@ export async function recomputeWaitlistForSeason(
       seasonId,
       status: { in: ["PENDING", "APPROVED"] },
       excludedAt: null,
+      retiredAt: null,
       isTeamManager: false,
     },
     orderBy: { createdAt: "asc" },
@@ -490,6 +537,7 @@ export async function reconcileFillInsForRound(roundId: string): Promise<void> {
         seasonId: round.seasonId,
         status: "APPROVED",
         excludedAt: null,
+        retiredAt: null,
         isTeamManager: false,
       },
     },

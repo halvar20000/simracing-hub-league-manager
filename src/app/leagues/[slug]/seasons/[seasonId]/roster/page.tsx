@@ -209,7 +209,7 @@ export default async function PublicSeasonRoster({
                         </div>
                       </td>
                       <td className="px-4 py-3 driver-col">
-                        <div className="font-medium">
+                        <div className={`font-medium ${reg.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                           {reg.user.iracingMemberId ? (
                             <Link
                               href={`/drivers/${reg.user.iracingMemberId}`}
@@ -228,6 +228,11 @@ export default async function PublicSeasonRoster({
                               title="Team leader"
                             >
                               ★
+                            </span>
+                          )}
+                          {reg.retiredAt && (
+                            <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                              Retired
                             </span>
                           )}
                         </div>
@@ -521,7 +526,7 @@ export default async function PublicSeasonRoster({
                     className="border-t border-zinc-800 hover:bg-zinc-900"
                   >
                     <td className="px-4 py-3 driver-col">
-                      <div className="font-medium">
+                      <div className={`font-medium ${r.retiredAt ? "text-zinc-500 line-through decoration-red-500/60" : ""}`}>
                         {r.user.iracingMemberId ? (
                           <Link
                             href={`/drivers/${r.user.iracingMemberId}`}
@@ -533,6 +538,11 @@ export default async function PublicSeasonRoster({
                           <>
                             {r.user.firstName} {r.user.lastName}
                           </>
+                        )}
+                        {r.retiredAt && (
+                          <span className="ml-2 rounded bg-amber-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300 no-underline">
+                            Retired
+                          </span>
                         )}
                       </div>
                       {r.status === "PENDING" && (
