@@ -91,7 +91,10 @@ export type PlannerState = {
     stintValue: string; // minutes (time) or laps (laps); ignored for fuel
     fuelReserve: string; // litres kept in reserve, "" = 0
     trackTempC: string; // race-day track temperature (°C), "" = none
-    conditions: "dry" | "wet"; // whole-race weather scenario
+    conditions: "dry" | "wet"; // whole-race weather scenario (legacy, vestigial)
+    driverSwapSec: string; // mandatory driver-swap floor (iRacing = 30s)
+    refuelSec: string; // refuel service time per stop, "" = unknown
+    doubleStint: boolean; // auto-fill drivers in double-stint pairs
   };
   standard: { laptime: string; fuelPerLap: string };
   savingEnabled: boolean;
@@ -133,6 +136,9 @@ export function defaultPlannerState(): PlannerState {
       fuelReserve: "",
       trackTempC: "",
       conditions: "dry",
+      driverSwapSec: "30",
+      refuelSec: "",
+      doubleStint: false,
     },
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
@@ -244,5 +250,9 @@ export function stateToInput(s: PlannerState): PlannerInput {
       wet: a.wet ?? false,
     })),
     wetDeltaSec: s.wetModel?.deltaSec ?? 0,
+    driverChangeSaveSec:
+      s.event.refuelSec.trim() !== ""
+        ? Math.max(0, num(s.event.driverSwapSec, 30) - num(s.event.refuelSec))
+        : 0,
   };
 }

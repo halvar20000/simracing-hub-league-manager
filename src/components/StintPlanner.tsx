@@ -269,19 +269,27 @@ export default function StintPlanner({
       return { ...p, assignments: next };
     });
 
-  const autoFill = () =>
-    setS((p) => {
-      if (p.drivers.length === 0) return p;
-      const n = Math.max(result.stints.length, p.assignments.length);
-      const next: PlannerAssignmentState[] = [];
-      for (let i = 0; i < n; i++)
-        next.push({
-          profile: p.assignments[i]?.profile ?? "standard",
-          driverId: p.drivers[i % p.drivers.length].id,
-          correctionMin: p.assignments[i]?.correctionMin ?? 0,
-        });
-      return { ...p, assignments: next };
-    });
+  // Fill drivers across the stints. `double` = double-stint pairs (each driver
+  // does 2 consecutive stints, so every other stop is refuel-only); otherwise
+  // single-stint round-robin. Preserves each stint's other fields (wet, note…).
+  const fillDrivers = (p: PlannerState, double: boolean): PlannerState => {
+    if (p.drivers.length === 0) return p;
+    const n = Math.max(result.stints.length, p.assignments.length);
+    const next: PlannerAssignmentState[] = [];
+    for (let i = 0; i < n; i++) {
+      const di = double ? Math.floor(i / 2) : i;
+      next.push({
+        ...(p.assignments[i] ?? { profile: "standard", driverId: null }),
+        profile: p.assignments[i]?.profile ?? "standard",
+        driverId: p.drivers[di % p.drivers.length].id,
+        correctionMin: p.assignments[i]?.correctionMin ?? 0,
+      });
+    }
+    return { ...p, assignments: next };
+  };
+  const autoFill = () => setS((p) => fillDrivers(p, p.event.doubleStint));
+  const setDoubleStint = (on: boolean) =>
+    setS((p) => fillDrivers({ ...p, event: { ...p.event, doubleStint: on } }, on));
   const clearAssignments = () => setS((p) => ({ ...p, assignments: [] }));
 
   const patchNote = (k: "pre" | "during" | "post", v: string) =>
@@ -935,7 +943,22 @@ export default function StintPlanner({
             <div>
               <label className={lbl}>Pit time loss (s)</label>
               <input className={inp} value={s.event.pitLoss}
-                onChange={(e) => patchEvent("pitLoss", e.target.value)} />
+                onChange={(e) => patchEvent("pitLoss", e.target.value)}
+                title="Total time lost at a normal (driver-change) pit stop." />
+            </div>
+            <div>
+              <label className={lbl}>Driver swap (s)</label>
+              <input className={inp} value={s.event.driverSwapSec}
+                onChange={(e) => patchEvent("driverSwapSec", e.target.value)}
+                placeholder="30"
+                title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this." />
+            </div>
+            <div>
+              <label className={lbl}>Refuel time (s)</label>
+              <input className={inp} value={s.event.refuelSec}
+                onChange={(e) => patchEvent("refuelSec", e.target.value)}
+                placeholder="e.g. 40"
+                title="How long fuelling takes at a full stop. If ≥ driver swap, a swap is hidden under fuelling (free) and double-stinting saves no time." />
             </div>
             <div>
               <label className={lbl}>Fuel tank (L)</label>
@@ -1064,6 +1087,74 @@ export default function StintPlanner({
             <span className="text-zinc-500">
               — tick the wet stints in the schedule below.
             </span>
+          </div>
+
+          {/* Pit strategy: single vs double stints */}
+          <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
+            <label className="flex items-center gap-2 text-zinc-300 print:hidden">
+              <input
+                type="checkbox"
+                checked={s.event.doubleStint}
+                onChange={(e) => setDoubleStint(e.target.checked)}
+              />
+              Double stints (each driver runs 2 stints between swaps)
+            </label>
+            {(() => {
+              const stops = Math.max(0, result.stints.length - 1);
+              const swap = Number(s.event.driverSwapSec) || 30;
+              const refuelSet = s.event.refuelSec.trim() !== "";
+              const refuel = Number(s.event.refuelSec) || 0;
+              const saveSec = refuelSet ? Math.max(0, swap - refuel) : 0;
+              let sameStops = 0;
+              for (let i = 0; i < result.stints.length - 1; i++) {
+                const a = result.stints[i].driverId;
+                const b = result.stints[i + 1].driverId;
+                if (a && b && a === b) sameStops++;
+              }
+              const doubleSame = Math.ceil(stops / 2);
+              const stdLap = parseDurationToSec(s.standard.laptime) || 0;
+              const laps = (sec: number) => (stdLap > 0 ? sec / stdLap : 0);
+              if (!refuelSet) {
+                return (
+                  <p className="mt-1 text-zinc-500">
+                    Enter a <strong className="text-zinc-400">Refuel time</strong>{" "}
+                    above to compare single vs double-stinting (a driver swap only
+                    costs time when it&rsquo;s longer than fuelling).
+                  </p>
+                );
+              }
+              if (saveSec < 0.05) {
+                return (
+                  <p className="mt-1 text-amber-300">
+                    At {refuel}s refuel the {swap}s swap is hidden under fuelling —
+                    a driver change costs no extra time, so double-stinting saves
+                    nothing here (decide on driver stamina).
+                  </p>
+                );
+              }
+              return (
+                <div className="mt-1 space-y-0.5 text-zinc-400">
+                  <div>
+                    A driver change costs{" "}
+                    <strong className="text-zinc-200">+{saveSec.toFixed(0)}s</strong>{" "}
+                    (swap {swap}s − refuel {refuel}s).
+                  </div>
+                  <div>
+                    This plan: {sameStops}/{stops} stops refuel-only → saves{" "}
+                    <strong className="text-emerald-300">
+                      ~{(sameStops * saveSec).toFixed(0)}s (~{laps(sameStops * saveSec).toFixed(1)} laps)
+                    </strong>{" "}
+                    vs single-stinting.
+                  </div>
+                  <div className="text-zinc-500">
+                    Full double-stint plan: {doubleSame}/{stops} refuel-only → saves
+                    ~{(doubleSame * saveSec).toFixed(0)}s (~
+                    {laps(doubleSame * saveSec).toFixed(1)} laps). Trade-off: a
+                    driver runs two stints back-to-back.
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.52.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: single vs double-stint optimisation. iRacing's driver swap is a mandatory 30s that runs concurrently with fuelling, so a swap only costs time when it's longer than your refuel — which is exactly what decides whether double-stinting is worth it. New Event fields for the driver-swap floor (default 30s) and your refuel time; when a driver stays in for a second stint (a refuel-only stop) the schedule saves max(0, swap − refuel) at that stop. A “Double stints” checkbox fills the drivers in pairs, and a readout compares single vs double — how many stops are refuel-only and the time/laps saved — telling you when double-stinting genuinely helps and when the swap is already hidden under fuelling (so it doesn't).",
+    ],
+  },
+  {
     version: "1.51.0",
     date: "2026-07-17",
     changes: [

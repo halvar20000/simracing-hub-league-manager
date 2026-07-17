@@ -62,6 +62,10 @@ export type PlannerInput = {
   fuelReserve?: number;
   /** Seconds/lap added to any stint flagged `wet` (the wet-weather penalty). */
   wetDeltaSec?: number;
+  /** Seconds saved at a stop when the SAME driver stays in (a double-stint /
+   *  refuel-only stop): the mandatory driver-swap floor no longer applies.
+   *  Effectively `max(0, driverSwapSec − refuelSec)`. 0 = no saving. */
+  driverChangeSaveSec?: number;
 };
 
 export type StintMode = "fuel" | "time" | "laps";
@@ -187,6 +191,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     stintLaps,
     fuelReserve,
     wetDeltaSec,
+    driverChangeSaveSec,
   } = input;
 
   const tplOpts: StintTemplateOpts = {
@@ -234,6 +239,20 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     const wetAdd = assign.wet ? Math.max(0, wetDeltaSec ?? 0) : 0;
     const fullGreen = (tpl.laps > 0 ? prof.laptimeSec * factor + wetAdd : 0) * tpl.laps;
     let greenSec = fullGreen;
+
+    // Pit loss for the stop that ENDS this stint: if the same driver stays in
+    // (next stint has the same assigned driver = a double-stint), the mandatory
+    // driver-swap floor doesn't apply, so we save `driverChangeSaveSec`.
+    const nextAssign = assignments[i + 1] ?? { profile: "standard", driverId: null };
+    const sameDriver = !!(
+      assign.driverId &&
+      nextAssign.driverId &&
+      assign.driverId === nextAssign.driverId
+    );
+    const stopLoss = Math.max(
+      0,
+      pitLossSec - (sameDriver ? Math.max(0, driverChangeSaveSec ?? 0) : 0)
+    );
     let laps = tpl.laps;
     let fuel = tpl.fuelPerStint;
     let endSec: number;
@@ -250,7 +269,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       fuel = laps * prof.fuelPerLap;
       endSec = raceDurationSec + corrSec; // projected chequered incl. correction
     } else {
-      endSec = t + fullGreen + pitLossSec + corrSec;
+      endSec = t + fullGreen + stopLoss + corrSec;
       // Full green completed but the race ends within the pit/correction tail →
       // this is the last stint; keep its full laps + fuel.
       if (endSec >= raceDurationSec) isFinal = true;
