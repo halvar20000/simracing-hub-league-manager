@@ -430,9 +430,15 @@ export default function StintPlanner({
         );
         return;
       }
-      const result = aggregateGarage61Laps(rows);
+      const result = aggregateGarage61Laps(rows, {
+        rosterNames: s.drivers.map((d) => d.name),
+      });
       if (result.drivers.length === 0) {
-        setG61Msg("Couldn't derive clean laps from the file(s).");
+        setG61Msg(
+          s.drivers.length > 0
+            ? "No clean laps matched your roster drivers — check their names match their Garage 61 profiles, or add them to the plan."
+            : "Couldn't derive clean laps from the file(s)."
+        );
         return;
       }
       setG61(result);
@@ -578,6 +584,7 @@ export default function StintPlanner({
         track: s.event.track,
         carName: s.event.car,
         iracingCarId: car?.iracingCarId ?? null,
+        rosterNames: s.drivers.map((d) => d.name),
       });
       if (!res.ok) {
         setG61Msg(res.error);
@@ -1186,7 +1193,9 @@ export default function StintPlanner({
           Garage 61 API — or upload session exports (.xlsx) manually. Either way,
           real race pace &amp; fuel/lap per driver are read from the practice laps
           and fill the Standard profile plus each matching driver&rsquo;s lap
-          time. Uploaded files are read in your browser — nothing is stored.
+          time. Only laps from the drivers on this plan (add them under
+          <strong className="text-zinc-400"> Drivers</strong> first) are
+          included. Uploaded files are read in your browser — nothing is stored.
         </p>
 
         {/* Connection status + connect (per-plan token) */}

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.49.1",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: a Garage 61 pull/import now only includes the drivers on the plan's roster. Pulling a whole Garage 61 team used to bring in everyone who ever ran the track+car; now the laps are scoped to the drivers you've added under Drivers, so the pace/fuel and the performance dashboard show your line-up only. (If the plan has no drivers yet, it still shows everyone.)",
+    ],
+  },
+  {
     version: "1.49.0",
     date: "2026-07-17",
     changes: [

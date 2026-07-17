@@ -93,9 +93,39 @@ function olsSlope(xs: number[], ys: number[]): number | null {
 const MIN_TEMP_SPREAD_C = 3;
 const MIN_TEMP_SAMPLES = 8;
 
-export function aggregateGarage61Laps(rows: G61LapRow[]): G61ImportResult {
+// Loose name key for matching a Garage 61 driver to a roster name: lowercase,
+// keep only letters/digits (drops spaces, dots, accents-as-punctuation).
+const nameKey = (s: string): string =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/** True if a Garage 61 driver name matches a roster name (either direction of
+ *  containment, so "Thomas" ↔ "Thomas Herbrig" still matches). */
+function nameMatches(g61Name: string, rosterName: string): boolean {
+  const a = nameKey(g61Name);
+  const b = nameKey(rosterName);
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+export type AggregateOpts = {
+  /** When set (non-empty), only include laps from drivers whose name matches
+   *  one of these roster names — so a pull of a whole Garage 61 team is scoped
+   *  to the drivers actually on this plan. */
+  rosterNames?: string[];
+};
+
+export function aggregateGarage61Laps(
+  rows: G61LapRow[],
+  opts: AggregateOpts = {}
+): G61ImportResult {
+  const roster = (opts.rosterNames ?? []).filter((n) => n.trim() !== "");
+  const scoped =
+    roster.length > 0
+      ? rows.filter((r) => roster.some((n) => nameMatches(r.driver ?? "", n)))
+      : rows;
+
   const byDriver = new Map<string, G61LapRow[]>();
-  for (const r of rows) {
+  for (const r of scoped) {
     const name = (r.driver ?? "").trim();
     if (!name) continue;
     (byDriver.get(name) ?? byDriver.set(name, []).get(name)!).push(r);

@@ -139,6 +139,8 @@ export async function pullGarage61Laps(input: {
   track: string;
   carName: string;
   iracingCarId: number | null;
+  /** Roster driver names to scope the import to (empty = include everyone). */
+  rosterNames?: string[];
 }): Promise<PullGarage61Result> {
   // Prefer this plan's own token; fall back to the global GARAGE61_TOKEN.
   const conn = await resolvePlanGarage61(input.planId ?? null);
@@ -252,8 +254,17 @@ export async function pullGarage61Laps(input: {
     };
   }
 
-  const result = aggregateGarage61Laps(rows);
+  const result = aggregateGarage61Laps(rows, {
+    rosterNames: input.rosterNames,
+  });
   if (result.drivers.length === 0) {
+    const roster = (input.rosterNames ?? []).filter((n) => n.trim() !== "");
+    if (roster.length > 0) {
+      return {
+        ok: false,
+        error: `Fetched ${laps.length} laps, but none matched your roster drivers (${roster.join(", ")}). Check the names match their Garage 61 profiles, or clear the roster to include everyone.`,
+      };
+    }
     return {
       ok: false,
       error:
