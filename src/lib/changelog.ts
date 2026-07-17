@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.49.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: each stint row now has a Note field at the end — jot down anything that happened that stint (contact, spin, rain, safety car, pit issue). Notes are saved with the plan, sync live to everyone on the shared link, and print with the schedule, so they double as a running race log for the debrief.",
+    ],
+  },
+  {
     version: "1.48.0",
     date: "2026-07-17",
     changes: [

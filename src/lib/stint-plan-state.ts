@@ -44,6 +44,7 @@ export type PlannerAssignmentState = {
   driverId: string | null;
   correctionMin?: number; // live ± minutes for this stint (cascades forward)
   spotterId?: string | null; // driver spotting this stint (never the stint driver)
+  note?: string; // free-text stint comment (incident, weather, SC, …)
 };
 
 /** Track-temperature pace model. The Standard + per-driver lap times stored on

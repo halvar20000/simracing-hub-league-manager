@@ -1493,6 +1493,7 @@ export default function StintPlanner({
                   <th className="py-1 pr-2 text-right">Length</th>
                   <th className="py-1 pr-2 text-right">Laps</th>
                   <th className="py-1 pr-2 text-right">Fuel</th>
+                  <th className="py-1 pr-2">Note</th>
                 </tr>
               </thead>
               <tbody>
@@ -1597,6 +1598,18 @@ export default function StintPlanner({
                       <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
                       <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
                       <td className="py-1 pr-2 text-right">{fmtFuel(st.fuel)} L</td>
+                      <td className="py-1 pr-2 print:hidden">
+                        <input
+                          type="text"
+                          value={a.note ?? ""}
+                          onChange={(e) => setAssignment(i, { note: e.target.value })}
+                          placeholder="incident, weather, SC…"
+                          className="w-44 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-sm text-zinc-100"
+                        />
+                      </td>
+                      <td className="hidden max-w-[16rem] py-1 pr-2 align-top text-zinc-300 print:table-cell">
+                        {a.note?.trim() ? a.note : "—"}
+                      </td>
                     </tr>
                   );
                 })}
