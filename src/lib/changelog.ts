@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.51.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: wet weather is now per-stint instead of a whole-race switch, because rain usually arrives mid-race. Each stint row has a Wet tick box, plus a “Rain from stint N” shortcut that marks that stint and all later ones wet (and an “All dry” reset). Wet stints get the wet penalty (seconds per lap) added, so the schedule re-plans exactly where the rain falls — e.g. dry for three stints then wet drops the total laps and can change the number of stops. The wet penalty is still measured from your Garage 61 rain laps (and editable). Wet stints are tinted blue and print as “WET”.",
+    ],
+  },
+  {
     version: "1.50.0",
     date: "2026-07-17",
     changes: [

@@ -174,6 +174,7 @@ export default function StintPlanner({
   );
 
   const result = useMemo(() => buildSchedule(stateToInput(s)), [s]);
+  const [rainFromStr, setRainFromStr] = useState("");
 
   // Ticking wall clock for the live "now" tracker. Starts at 0 (SSR-safe: no
   // hydration mismatch) and updates every second once mounted. The initial
@@ -590,75 +591,45 @@ export default function StintPlanner({
     });
   }
 
-  const emptyWet = () => ({
+  const emptyWet = (): NonNullable<PlannerState["wetModel"]> => ({
     deltaSec: DEFAULT_WET_DELTA_SEC,
     fromData: false,
     manualDeltaSec: DEFAULT_WET_DELTA_SEC,
-    wetFuelPerLap: null as number | null,
+    wetFuelPerLap: null,
     appliedDeltaSec: 0,
   });
 
-  // Switch the whole plan between Dry and Wet: shift Standard + Fuel-save +
-  // per-driver lap times by the wet penalty so the schedule re-plans at wet pace.
-  function setConditions(next: "dry" | "wet") {
-    setS((p) => {
-      const wm = p.wetModel ?? emptyWet();
-      const targetApplied = next === "wet" ? wm.deltaSec : 0;
-      const shift = targetApplied - wm.appliedDeltaSec;
-      const changed = Math.abs(shift) > 1e-6;
-      return {
-        ...p,
-        event: { ...p.event, conditions: next },
-        standard: changed
-          ? { ...p.standard, laptime: shiftLapStr(p.standard.laptime, shift) }
-          : p.standard,
-        saving: changed
-          ? { ...p.saving, laptime: shiftLapStr(p.saving.laptime, shift) }
-          : p.saving,
-        drivers: changed
-          ? p.drivers.map((d) =>
-              d.laptime.trim() ? { ...d, laptime: shiftLapStr(d.laptime, shift) } : d
-            )
-          : p.drivers,
-        wetModel: { ...wm, appliedDeltaSec: targetApplied },
-      };
-    });
-  }
-
-  // Edit the effective wet penalty (seconds/lap). If wet is active, re-applies
-  // the difference live. Marks the model as a manual override.
+  // Edit the wet penalty (seconds/lap). The engine adds it to whichever stints
+  // are flagged wet, so nothing is shifted here — the schedule just recomputes.
   function setWetDelta(valStr: string) {
     const v = Number(valStr);
     setS((p) => {
       const wm = p.wetModel ?? emptyWet();
-      const newDelta = isFinite(v) ? v : wm.deltaSec;
-      const isWet = p.event.conditions === "wet";
-      const targetApplied = isWet ? newDelta : 0;
-      const shift = targetApplied - wm.appliedDeltaSec;
-      const changed = Math.abs(shift) > 1e-6;
+      const nd = isFinite(v) ? Math.max(0, v) : wm.deltaSec;
       return {
         ...p,
-        standard: changed
-          ? { ...p.standard, laptime: shiftLapStr(p.standard.laptime, shift) }
-          : p.standard,
-        saving: changed
-          ? { ...p.saving, laptime: shiftLapStr(p.saving.laptime, shift) }
-          : p.saving,
-        drivers: changed
-          ? p.drivers.map((d) =>
-              d.laptime.trim() ? { ...d, laptime: shiftLapStr(d.laptime, shift) } : d
-            )
-          : p.drivers,
-        wetModel: {
-          ...wm,
-          deltaSec: newDelta,
-          manualDeltaSec: newDelta,
-          fromData: false,
-          appliedDeltaSec: targetApplied,
-        },
+        wetModel: { ...wm, deltaSec: nd, manualDeltaSec: nd, fromData: false },
       };
     });
   }
+
+  // Mark stint `fromIndex` (0-based) and every following stint as wet; earlier
+  // stints dry. Serves the common "dry, then rain arrives" case.
+  function setRainFromStint(fromIndex: number) {
+    setS((p) => {
+      const n = Math.max(result.stints.length, p.assignments.length);
+      const next = [...p.assignments];
+      while (next.length < n) next.push({ profile: "standard", driverId: null });
+      for (let i = 0; i < next.length; i++)
+        next[i] = { ...next[i], wet: i >= fromIndex };
+      return { ...p, assignments: next };
+    });
+  }
+  const clearWetStints = () =>
+    setS((p) => ({
+      ...p,
+      assignments: p.assignments.map((a) => ({ ...a, wet: false })),
+    }));
   // ---- Garage 61 live pull (server-side API, uses the event Track + Car) ----
   async function onGarage61Pull() {
     if (!s.event.track.trim()) {
@@ -1069,51 +1040,30 @@ export default function StintPlanner({
             </div>
           )}
 
-          {/* Conditions: Dry / Wet whole-race scenario */}
+          {/* Wet-weather penalty (applied per-stint in the schedule below) */}
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
             <span className="uppercase tracking-wider text-zinc-500">
-              Conditions
+              Wet penalty
             </span>
-            <div className="flex overflow-hidden rounded border border-zinc-700 print:hidden">
-              <button
-                onClick={() => setConditions("dry")}
-                className={`px-3 py-1 ${s.event.conditions === "dry" ? "bg-zinc-700 text-zinc-100" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}
-              >
-                Dry
-              </button>
-              <button
-                onClick={() => setConditions("wet")}
-                className={`px-3 py-1 ${s.event.conditions === "wet" ? "bg-sky-700 text-white" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}
-              >
-                Wet
-              </button>
-            </div>
-            <span className="hidden text-zinc-300 print:inline">
-              {s.event.conditions === "wet" ? "WET" : "Dry"}
-            </span>
-            {s.wetModel && (
-              <span className="text-zinc-400">
-                wet ≈ +{round1(s.wetModel.deltaSec).toFixed(1)}s/lap{" "}
-                <span className="text-zinc-500">
-                  ({s.wetModel.fromData ? "measured" : "manual"})
-                </span>
-              </span>
-            )}
-            <label className="flex items-center gap-1 text-zinc-500 print:hidden">
-              +s/lap:
+            <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+              +
               <input
                 key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
                 className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
                 defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
                 onBlur={(e) => setWetDelta(e.target.value)}
-                title="Wet penalty in seconds per lap. Measured from your rain laps when available; edit to override, since real rain varies."
+                title="Seconds per lap added to stints you mark wet. Measured from your rain laps when available; edit to override."
               />
+              s/lap
             </label>
-            {s.event.conditions === "wet" && (
-              <span className="rounded bg-sky-950/50 px-2 py-0.5 text-sky-300 print:hidden">
-                WET scenario — lap times +{round1(s.wetModel?.appliedDeltaSec ?? 0).toFixed(1)}s
+            {s.wetModel && (
+              <span className="text-zinc-500">
+                ({s.wetModel.fromData ? "measured from rain laps" : "manual estimate"})
               </span>
             )}
+            <span className="text-zinc-500">
+              — tick the wet stints in the schedule below.
+            </span>
           </div>
         </div>
 
@@ -1607,7 +1557,34 @@ export default function StintPlanner({
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
             Stint schedule &amp; pit timeline
           </h2>
-          <div className="flex gap-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="flex items-center gap-1 rounded border border-sky-900/50 bg-sky-950/20 px-2 py-1 text-xs text-sky-200">
+              <span title="Mark this stint and all later stints as wet.">☔ Rain from stint</span>
+              <input
+                type="number"
+                min={1}
+                value={rainFromStr}
+                onChange={(e) => setRainFromStr(e.target.value)}
+                placeholder="#"
+                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <button
+                onClick={() => {
+                  const n = Number(rainFromStr);
+                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1);
+                }}
+                className="rounded bg-sky-800 px-1.5 py-0.5 text-white hover:bg-sky-700"
+              >
+                Apply
+              </button>
+              <button
+                onClick={clearWetStints}
+                className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
+                title="Clear all wet flags"
+              >
+                All dry
+              </button>
+            </div>
             <button onClick={autoFill}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
               Auto-fill drivers
@@ -1639,6 +1616,7 @@ export default function StintPlanner({
                   <th className="py-1 pr-2 text-right">Length</th>
                   <th className="py-1 pr-2 text-right">Laps</th>
                   <th className="py-1 pr-2 text-right">Fuel</th>
+                  <th className="py-1 pr-2 text-center" title="Tick stints run in the rain — they get the wet penalty per lap.">Wet</th>
                   <th className="py-1 pr-2">Note</th>
                 </tr>
               </thead>
@@ -1659,7 +1637,7 @@ export default function StintPlanner({
                   const spotterName =
                     s.drivers.find((d) => d.id === a.spotterId)?.name ?? null;
                   return (
-                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
+                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.wet ? "bg-sky-950/20" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
                       <td className="py-1 pr-2 text-zinc-500">
                         {st.index}
                         {st.partial && (
@@ -1744,6 +1722,17 @@ export default function StintPlanner({
                       <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
                       <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
                       <td className="py-1 pr-2 text-right">{fmtFuel(st.fuel)} L</td>
+                      <td className="py-1 pr-2 text-center print:hidden">
+                        <input
+                          type="checkbox"
+                          checked={!!a.wet}
+                          onChange={(e) => setAssignment(i, { wet: e.target.checked })}
+                          title="This stint runs in the wet"
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-center text-sky-300 print:table-cell">
+                        {st.wet ? "WET" : ""}
+                      </td>
                       <td className="py-1 pr-2 print:hidden">
                         <input
                           type="text"

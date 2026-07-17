@@ -33,6 +33,9 @@ export type StintAssignment = {
   /** Live correction for this stint, in MINUTES (may be negative). Adjusts the
    *  stint's clock length and cascades to every following stint. */
   correctionMin?: number;
+  /** When true, this stint runs in the wet: its lap time gets `wetDeltaSec`
+   *  added per lap (so a mixed-weather race can go dry → wet → dry). */
+  wet?: boolean;
 };
 
 export type PlannerInput = {
@@ -57,6 +60,8 @@ export type PlannerInput = {
   stintSec?: number;
   stintLaps?: number;
   fuelReserve?: number;
+  /** Seconds/lap added to any stint flagged `wet` (the wet-weather penalty). */
+  wetDeltaSec?: number;
 };
 
 export type StintMode = "fuel" | "time" | "laps";
@@ -133,6 +138,8 @@ export type ScheduleStint = {
   partial: boolean;
   /** The live correction applied to this stint, in minutes. */
   correctionMin: number;
+  /** True when this stint was run in the wet (lap time includes the penalty). */
+  wet: boolean;
 };
 
 export type DriverTotals = {
@@ -179,6 +186,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     stintSec,
     stintLaps,
     fuelReserve,
+    wetDeltaSec,
   } = input;
 
   const tplOpts: StintTemplateOpts = {
@@ -221,7 +229,10 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     const correctionMin = assign.correctionMin ?? 0;
     const corrSec = correctionMin * 60;
 
-    const fullGreen = tpl.greenTimeSec * factor;
+    // Wet stints run slower by the wet penalty (per lap). Fuel/laps unchanged
+    // (a stint stays fuel-limited); only the on-track time grows.
+    const wetAdd = assign.wet ? Math.max(0, wetDeltaSec ?? 0) : 0;
+    const fullGreen = (tpl.laps > 0 ? prof.laptimeSec * factor + wetAdd : 0) * tpl.laps;
     let greenSec = fullGreen;
     let laps = tpl.laps;
     let fuel = tpl.fuelPerStint;
@@ -234,7 +245,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       isFinal = true;
       partial = true;
       greenSec = raceDurationSec - t;
-      const effLaptime = prof.laptimeSec * factor;
+      const effLaptime = prof.laptimeSec * factor + wetAdd;
       laps = effLaptime > 0 ? greenSec / effLaptime : 0;
       fuel = laps * prof.fuelPerLap;
       endSec = raceDurationSec + corrSec; // projected chequered incl. correction
@@ -261,6 +272,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       isFinal,
       partial,
       correctionMin,
+      wet: !!assign.wet,
     });
     t = endSec;
     i += 1;

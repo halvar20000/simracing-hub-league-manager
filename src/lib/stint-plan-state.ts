@@ -4,6 +4,7 @@
 
 import {
   parseDurationToSec,
+  fmtLap,
   type PlannerInput,
   type StintMode,
   type StintProfileKey,
@@ -45,6 +46,7 @@ export type PlannerAssignmentState = {
   correctionMin?: number; // live ± minutes for this stint (cascades forward)
   spotterId?: string | null; // driver spotting this stint (never the stint driver)
   note?: string; // free-text stint comment (incident, weather, SC, …)
+  wet?: boolean; // this stint runs in the wet (adds the wet penalty per lap)
 };
 
 /** Track-temperature pace model. The Standard + per-driver lap times stored on
@@ -152,13 +154,48 @@ export function defaultPlannerState(): PlannerState {
 export function hydratePlanState(payload: unknown, title: string): PlannerState {
   const base = defaultPlannerState();
   const stored = (payload ?? {}) as Partial<PlannerState>;
+  const migrated = unshiftLegacyGlobalWet(stored);
   return {
     ...base,
-    ...stored,
+    ...migrated,
     title,
-    event: { ...base.event, ...(stored.event ?? {}) },
+    event: { ...base.event, ...(migrated.event ?? {}) },
     notes: { ...base.notes, ...(stored.notes ?? {}) },
     availability: stored.availability ?? base.availability,
+  };
+}
+
+/** One-time migration: v1.50 had a whole-race Dry/Wet toggle that shifted the
+ *  stored lap times by the wet penalty (`wetModel.appliedDeltaSec`). Per-stint
+ *  wet (v1.51) applies the penalty in the engine instead, so bring any globally
+ *  shifted lap times back to the dry baseline and clear the applied delta. */
+function unshiftLegacyGlobalWet(
+  stored: Partial<PlannerState>
+): Partial<PlannerState> {
+  const wm = stored.wetModel;
+  const applied = wm?.appliedDeltaSec ?? 0;
+  if (!applied || applied <= 0) return stored;
+  const shiftStr = (str?: string): string => {
+    if (!str || str.trim() === "") return str ?? "";
+    const sec = parseDurationToSec(str);
+    if (sec == null) return str;
+    return fmtLap(Math.max(0, sec - applied));
+  };
+  return {
+    ...stored,
+    event: stored.event ? { ...stored.event, conditions: "dry" } : stored.event,
+    standard: stored.standard
+      ? { ...stored.standard, laptime: shiftStr(stored.standard.laptime) }
+      : stored.standard,
+    saving: stored.saving
+      ? { ...stored.saving, laptime: shiftStr(stored.saving.laptime) }
+      : stored.saving,
+    drivers: stored.drivers
+      ? stored.drivers.map((d) =>
+          d.laptime?.trim() ? { ...d, laptime: shiftStr(d.laptime) } : d
+        )
+      : stored.drivers,
+    wetModel: wm ? { ...wm, appliedDeltaSec: 0 } : wm,
   };
 }
 
@@ -204,6 +241,8 @@ export function stateToInput(s: PlannerState): PlannerInput {
       profile: a.profile,
       driverId: a.driverId,
       correctionMin: a.correctionMin ?? 0,
+      wet: a.wet ?? false,
     })),
+    wetDeltaSec: s.wetModel?.deltaSec ?? 0,
   };
 }
