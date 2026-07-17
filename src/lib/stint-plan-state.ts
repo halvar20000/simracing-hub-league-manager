@@ -40,6 +40,20 @@ export type PlannerAssignmentState = {
   correctionMin?: number; // live ± minutes for this stint (cascades forward)
   spotterId?: string | null; // driver spotting this stint (never the stint driver)
 };
+
+/** Track-temperature pace model. The Standard + per-driver lap times stored on
+ *  the plan represent pace at `appliedTempC`; changing the race track temp
+ *  shifts them by `slopePerC × Δtemp`. `slopePerC` comes from a Garage 61 data
+ *  fit when available (`fromData`), otherwise from the editable `manualSlopePerC`. */
+export type TempModel = {
+  appliedTempC: number | null;
+  slopePerC: number;
+  fromData: boolean;
+  manualSlopePerC: number;
+};
+
+/** Default lap-time sensitivity when there's no data fit: 1.0 s per 10 °C. */
+export const DEFAULT_TEMP_SLOPE_PER_C = 0.1;
 export type PlannerState = {
   title: string;
   event: {
@@ -53,12 +67,15 @@ export type PlannerState = {
     stintMode: StintMode; // "fuel" (default) | "time" | "laps"
     stintValue: string; // minutes (time) or laps (laps); ignored for fuel
     fuelReserve: string; // litres kept in reserve, "" = 0
+    trackTempC: string; // race-day track temperature (°C), "" = none
   };
   standard: { laptime: string; fuelPerLap: string };
   savingEnabled: boolean;
   saving: { laptime: string; fuelPerLap: string };
   drivers: PlannerDriverState[];
   assignments: PlannerAssignmentState[];
+  /** Track-temperature pace model, or null until data/temp is set. */
+  tempModel: TempModel | null;
   /** Driver availability: driverId → race-hour indices (0-based) the driver is
    *  NOT available. Missing/empty = available all race (the default). */
   availability: Record<string, number[]>;
@@ -86,12 +103,14 @@ export function defaultPlannerState(): PlannerState {
       stintMode: "fuel",
       stintValue: "",
       fuelReserve: "",
+      trackTempC: "",
     },
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
     saving: { laptime: "1:56", fuelPerLap: "3.20" },
     drivers: [],
     assignments: [],
+    tempModel: null,
     availability: {},
     notes: { pre: "", during: "", post: "" },
     eventResult: null,

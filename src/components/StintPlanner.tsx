@@ -27,6 +27,7 @@ import { postStintPlanToDiscord } from "@/lib/actions/stint-plan-discord";
 import {
   hydratePlanState,
   stateToInput,
+  DEFAULT_TEMP_SLOPE_PER_C,
   type PlannerAssignmentState,
   type PlannerState,
 } from "@/lib/stint-plan-state";
@@ -68,6 +69,16 @@ const fmtCountdown = (ms: number): string => {
   const ss = String(sec).padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 };
+
+// Shift a lap-time string ("m:ss.s") by a delta in seconds; blanks/unparseable
+// strings are returned unchanged (a blank per-driver time means "use standard").
+const shiftLapStr = (str: string, deltaSec: number): string => {
+  if (str.trim() === "") return str;
+  const sec = parseDurationToSec(str);
+  if (sec == null) return str;
+  return fmtLap(Math.max(0, sec + deltaSec));
+};
+const round1 = (n: number): number => Math.round(n * 10) / 10;
 
 // Shared input styling.
 const inp =
@@ -393,6 +404,7 @@ export default function StintPlanner({
         const cFuel = col("Fuel used");
         const cPin = col("Pit in");
         const cPout = col("Pit out");
+        const cTemp = col("Track temp");
         if (cLap < 0 || cDrv < 0 || cFuel < 0) continue;
         for (let i = 1; i < grid.length; i++) {
           const r = grid[i] as unknown[];
@@ -400,12 +412,14 @@ export default function StintPlanner({
           const rawLap = Number(r[cLap]);
           const fuel = Number(r[cFuel]);
           if (!drv || !isFinite(rawLap) || !isFinite(fuel)) continue;
+          const rawTemp = cTemp >= 0 ? Number(r[cTemp]) : NaN;
           rows.push({
             driver: drv,
             laptimeSec: rawLap * 86400, // Excel duration = fraction of a day
             fuelUsed: fuel,
             pitIn: Number(cPin >= 0 ? r[cPin] : 0) === 1,
             pitOut: Number(cPout >= 0 ? r[cPout] : 0) === 1,
+            trackTempC: isFinite(rawTemp) ? rawTemp : null,
           });
         }
       }
@@ -433,20 +447,119 @@ export default function StintPlanner({
     const matched = g61.drivers.filter((gd) =>
       s.drivers.some((d) => norm(d.name) === norm(gd.driver))
     ).length;
+
+    // Temperature model: prefer a data-driven slope, else keep the manual one.
+    const srcTemp = g61.temp.sourceTempC;
+    const dataSlope = g61.temp.slopePerC;
+    const manual = s.tempModel?.manualSlopePerC ?? DEFAULT_TEMP_SLOPE_PER_C;
+    const slope = dataSlope != null ? dataSlope : manual;
+    const fromData = dataSlope != null;
+    // Project the (source-temp) pace to the race temp if one is set, else leave
+    // it at the data's source temp.
+    const raceTempNum = Number(s.event.trackTempC);
+    const raceTemp =
+      s.event.trackTempC.trim() !== "" && isFinite(raceTempNum)
+        ? raceTempNum
+        : null;
+    const targetTemp = raceTemp ?? srcTemp;
+    const proj =
+      srcTemp != null && targetTemp != null ? slope * (targetTemp - srcTemp) : 0;
+
     setS((p) => ({
       ...p,
+      event: {
+        ...p.event,
+        trackTempC:
+          targetTemp != null ? String(round1(targetTemp)) : p.event.trackTempC,
+      },
       standard: {
-        laptime: fmtLap(g61.overall.laptimeSec),
+        laptime: fmtLap(g61.overall.laptimeSec + proj),
         fuelPerLap: g61.overall.fuelPerLap.toFixed(2),
       },
       drivers: p.drivers.map((d) => {
         const gd = g61.drivers.find((x) => norm(x.driver) === norm(d.name));
-        return gd ? { ...d, laptime: fmtLap(gd.racePaceSec) } : d;
+        return gd ? { ...d, laptime: fmtLap(gd.racePaceSec + proj) } : d;
       }),
+      tempModel: {
+        appliedTempC: targetTemp,
+        slopePerC: slope,
+        fromData,
+        manualSlopePerC: manual,
+      },
     }));
+
+    const tempNote =
+      srcTemp != null
+        ? fromData
+          ? ` Temperature fit from data: ${slope.toFixed(3)} s/°C over ${g61.temp.minTempC?.toFixed(0)}–${g61.temp.maxTempC?.toFixed(0)}°C; pace set at ${targetTemp != null ? round1(targetTemp) : round1(srcTemp)}°C.`
+          : ` Laps were all near ${round1(srcTemp)}°C (no spread to fit) — using the ${(slope * 10).toFixed(1)} s/10°C manual estimate.`
+        : "";
     setG61Msg(
-      `Applied: Standard profile + lap times for ${matched} matched driver${matched === 1 ? "" : "s"}. Save keeps it.`
+      `Applied: Standard profile + lap times for ${matched} matched driver${matched === 1 ? "" : "s"}.${tempNote} Save keeps it.`
     );
+  }
+
+  // Apply a new race track temperature: shift Standard + Fuel-save + per-driver
+  // lap times by slope × Δtemp (called on blur of the Track temp field).
+  function applyTempFromInput(valStr: string) {
+    const newTemp = Number(valStr);
+    if (valStr.trim() === "" || !isFinite(newTemp)) return;
+    setS((p) => {
+      const tm = p.tempModel;
+      if (!tm) {
+        // First entry establishes the baseline — no shift yet.
+        return {
+          ...p,
+          tempModel: {
+            appliedTempC: newTemp,
+            slopePerC: DEFAULT_TEMP_SLOPE_PER_C,
+            fromData: false,
+            manualSlopePerC: DEFAULT_TEMP_SLOPE_PER_C,
+          },
+        };
+      }
+      if (tm.appliedTempC == null) {
+        return { ...p, tempModel: { ...tm, appliedTempC: newTemp } };
+      }
+      const delta = tm.slopePerC * (newTemp - tm.appliedTempC);
+      if (Math.abs(delta) < 1e-6) {
+        return { ...p, tempModel: { ...tm, appliedTempC: newTemp } };
+      }
+      return {
+        ...p,
+        standard: { ...p.standard, laptime: shiftLapStr(p.standard.laptime, delta) },
+        saving: { ...p.saving, laptime: shiftLapStr(p.saving.laptime, delta) },
+        drivers: p.drivers.map((d) =>
+          d.laptime.trim() ? { ...d, laptime: shiftLapStr(d.laptime, delta) } : d
+        ),
+        tempModel: { ...tm, appliedTempC: newTemp },
+      };
+    });
+  }
+
+  // Edit the manual sensitivity (entered as seconds per 10 °C).
+  function setManualSlopePer10(valStr: string) {
+    const per10 = Number(valStr);
+    setS((p) => {
+      const base = p.tempModel ?? {
+        appliedTempC:
+          p.event.trackTempC.trim() !== "" && isFinite(Number(p.event.trackTempC))
+            ? Number(p.event.trackTempC)
+            : null,
+        slopePerC: DEFAULT_TEMP_SLOPE_PER_C,
+        fromData: false,
+        manualSlopePerC: DEFAULT_TEMP_SLOPE_PER_C,
+      };
+      const per = isFinite(per10) ? per10 / 10 : base.manualSlopePerC;
+      return {
+        ...p,
+        tempModel: {
+          ...base,
+          manualSlopePerC: per,
+          slopePerC: base.fromData ? base.slopePerC : per,
+        },
+      };
+    });
   }
   // ---- Garage 61 live pull (server-side API, uses the event Track + Car) ----
   async function onGarage61Pull() {
@@ -767,6 +880,14 @@ export default function StintPlanner({
                 title="Fuel kept in the tank as a safety margin — reduces laps per stint." />
             </div>
             <div>
+              <label className={lbl}>Track temp (°C)</label>
+              <input className={inp} value={s.event.trackTempC}
+                onChange={(e) => patchEvent("trackTempC", e.target.value)}
+                onBlur={(e) => applyTempFromInput(e.target.value)}
+                placeholder="e.g. 30"
+                title="Expected race-day track temperature. Lap times are adjusted to it using the Garage 61 temperature fit (or the manual coefficient). Applied when you leave the field." />
+            </div>
+            <div>
               <label className={lbl}>Stint length</label>
               <select className={inp} value={s.event.stintMode}
                 onChange={(e) => patchEvent("stintMode", e.target.value)}>
@@ -786,6 +907,68 @@ export default function StintPlanner({
               </div>
             )}
           </div>
+          {(s.tempModel || s.event.trackTempC.trim() !== "") && (
+            <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px] text-zinc-400">
+              {(() => {
+                const tm = s.tempModel;
+                const raceT = Number(s.event.trackTempC);
+                const hasRaceT =
+                  s.event.trackTempC.trim() !== "" && isFinite(raceT);
+                if (!tm) {
+                  return (
+                    <span>
+                      Set the expected track temp, then import or pull Garage 61
+                      laps — with laps across a range of temps it calibrates how
+                      much lap time changes per degree and adjusts the pace.
+                    </span>
+                  );
+                }
+                const per10 = round1(tm.slopePerC * 10);
+                const pending =
+                  hasRaceT && tm.appliedTempC != null
+                    ? tm.slopePerC * (raceT - tm.appliedTempC)
+                    : 0;
+                return (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span>
+                      Pace set at{" "}
+                      <strong className="text-zinc-200">
+                        {tm.appliedTempC != null
+                          ? `${round1(tm.appliedTempC)}°C`
+                          : "—"}
+                      </strong>{" "}
+                      · sensitivity{" "}
+                      <strong className="text-zinc-200">
+                        {per10 >= 0 ? "+" : ""}
+                        {per10.toFixed(1)} s/10°C
+                      </strong>{" "}
+                      <span className="text-zinc-500">
+                        ({tm.fromData ? "from Garage 61 data" : "manual estimate"})
+                      </span>
+                    </span>
+                    {Math.abs(pending) > 0.05 && (
+                      <span className="text-amber-300">
+                        → leaving the field shifts lap times{" "}
+                        {pending > 0 ? "+" : ""}
+                        {pending.toFixed(1)}s for {round1(raceT)}°C
+                      </span>
+                    )}
+                    {!tm.fromData && (
+                      <label className="flex items-center gap-1 text-zinc-500 print:hidden">
+                        s/10°C:
+                        <input
+                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
+                          defaultValue={String(per10)}
+                          onBlur={(e) => setManualSlopePer10(e.target.value)}
+                          title="Manual lap-time sensitivity (seconds per 10°C), used when the data has no temperature spread to fit."
+                        />
+                      </label>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Fuel profiles */}
@@ -1150,6 +1333,14 @@ export default function StintPlanner({
                 Standard profile → {fmtLap(g61.overall.laptimeSec)} ·{" "}
                 {g61.overall.fuelPerLap.toFixed(2)} L/lap ({g61.overall.cleanLaps}{" "}
                 clean laps)
+                {g61.temp.sourceTempC != null && (
+                  <>
+                    {" · "}
+                    {g61.temp.slopePerC != null
+                      ? `temp fit ${(g61.temp.slopePerC * 10).toFixed(1)} s/10°C (${g61.temp.minTempC?.toFixed(0)}–${g61.temp.maxTempC?.toFixed(0)}°C)`
+                      : `all ~${round1(g61.temp.sourceTempC)}°C (no temp spread)`}
+                  </>
+                )}
               </span>
               <button
                 onClick={applyGarage61}

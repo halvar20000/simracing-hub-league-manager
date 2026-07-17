@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.47.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: track temperature now factors into expected lap times. There's a new “Track temp (°C)” field — set your race-day track temperature and the planner adjusts the Standard, Fuel-save and per-driver lap times to it. When you import or pull Garage 61 laps, each lap's track temp is read and, if your laps span a range of temperatures, the planner fits how much lap time changes per degree (measured within each driver, so a fast driver who only ran in the heat can't skew it) and calibrates automatically. If the laps are all at one temperature it falls back to an editable seconds-per-10°C estimate. So laps banked on a cool 20°C test now project sensibly onto a hot 46°C race.",
+    ],
+  },
+  {
     version: "1.46.0",
     date: "2026-07-17",
     changes: [

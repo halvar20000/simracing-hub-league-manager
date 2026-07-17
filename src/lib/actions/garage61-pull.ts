@@ -228,12 +228,20 @@ export async function pullGarage61Laps(input: {
     const laptimeSec = pickNum(o, ["lapTime", "lap_time", "time", "laptime"]);
     if (!driver || laptimeSec == null || laptimeSec <= 0) continue;
     const fuelUsed = pickNum(o, ["fuelUsed", "fuel_used", "fuel", "fuelUse"]) ?? 0;
+    const trackTempC = pickNum(o, [
+      "trackTemp",
+      "track_temp",
+      "trackTemperature",
+      "track_temperature",
+      "trackTempC",
+    ]);
     rows.push({
       driver,
       laptimeSec,
       fuelUsed,
       pitIn: pickBool(o, ["pitIn", "pit_in", "pitin"]),
       pitOut: pickBool(o, ["pitOut", "pit_out", "pitout"]),
+      trackTempC,
     });
   }
 
