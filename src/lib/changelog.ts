@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.52.2",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner fix: the driver-performance dashboard now always shows only the drivers on the plan's roster, even after a page refresh. Previously a plan saved with an older analysis could bring back non-roster drivers on reload until you re-pulled; the dashboard now filters to the roster every time it renders.",
+    ],
+  },
+  {
     version: "1.52.1",
     date: "2026-07-17",
     changes: [

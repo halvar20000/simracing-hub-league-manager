@@ -31,13 +31,32 @@ const fmtGap = (s: number): string => (s <= 0.001 ? "—" : `+${s.toFixed(2)}`);
 const th = "py-1 pr-2 text-right font-normal";
 const td = "py-1 pr-2 text-right";
 
+const nameKey = (s: string): string =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+const matchesRoster = (name: string, roster: string[]): boolean => {
+  if (roster.length === 0) return true;
+  const a = nameKey(name);
+  return roster.some((r) => {
+    const b = nameKey(r);
+    return !!a && !!b && (a === b || a.includes(b) || b.includes(a));
+  });
+};
+
 export default function StintDriverStats({
   analysis,
+  rosterNames = [],
 }: {
   analysis: G61ImportResult;
+  rosterNames?: string[];
 }) {
-  const drivers = [...analysis.drivers].sort(
-    (a, b) => a.racePaceSec - b.racePaceSec
+  // Filter to the plan roster at render time too, so a stale saved analysis
+  // (pulled before the driver was removed) can't show non-roster drivers.
+  const roster = rosterNames.filter((n) => n.trim() !== "");
+  const drivers = [...analysis.drivers]
+    .filter((d) => matchesRoster(d.driver, roster))
+    .sort((a, b) => a.racePaceSec - b.racePaceSec);
+  const wetDrivers = (analysis.wet?.drivers ?? []).filter((d) =>
+    matchesRoster(d.driver, roster)
   );
   if (drivers.length === 0) return null;
   const color = (i: number) => COLORS[i % COLORS.length];
@@ -186,7 +205,7 @@ export default function StintDriverStats({
       </div>
 
       {/* Wet-weather summary (from the rain laps) */}
-      {analysis.wet && (
+      {analysis.wet && wetDrivers.length > 0 && (
         <div className="mb-4 rounded border border-sky-900/50 bg-sky-950/20 p-3">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-[11px] font-medium uppercase tracking-wider text-sky-300">
@@ -212,7 +231,7 @@ export default function StintDriverStats({
                 </tr>
               </thead>
               <tbody>
-                {analysis.wet.drivers.map((d) => (
+                {wetDrivers.map((d) => (
                   <tr key={d.driver} className="border-t border-zinc-800/60 text-zinc-200">
                     <td className="py-1 pr-2">{d.driver}</td>
                     <td className={td}>{d.laps}</td>

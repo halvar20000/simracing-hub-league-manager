@@ -1545,7 +1545,12 @@ export default function StintPlanner({
       {/* Driver performance dashboard (from a Garage 61 pull/import) */}
       {(() => {
         const a = g61 ?? s.g61Analysis;
-        return a ? <StintDriverStats analysis={a} /> : null;
+        return a ? (
+          <StintDriverStats
+            analysis={a}
+            rosterNames={s.drivers.map((d) => d.name)}
+          />
+        ) : null;
       })()}
 
       {/* Availability */}
