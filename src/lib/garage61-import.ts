@@ -27,6 +27,16 @@ export type G61DriverAgg = {
   bestSec: number;
   racePaceSec: number; // median of clean full laps (normalised to sourceTempC)
   fuelPerLap: number; // median fuel used on clean full laps
+  // Extra stats for the performance dashboard (all lap times normalised to
+  // sourceTempC, so consistency isn't inflated by track-temp drift):
+  meanSec: number;
+  stdSec: number; // population standard deviation — consistency
+  minSec: number;
+  q1Sec: number;
+  q3Sec: number;
+  maxSec: number;
+  /** Raw (un-normalised) lap points for the lap-time-vs-temp scatter. */
+  points: { t: number | null; y: number }[];
 };
 
 /** Data-driven temperature model derived from the clean laps. */
@@ -171,12 +181,28 @@ export function aggregateGarage61Laps(rows: G61LapRow[]): G61ImportResult {
   for (const [driver, clean] of cleanByDriver) {
     const lts = clean.map(normLap);
     const fus = clean.map((l) => l.fuelUsed);
+    const mean = lts.reduce((a, b) => a + b, 0) / lts.length;
+    const variance =
+      lts.reduce((a, b) => a + (b - mean) * (b - mean), 0) / lts.length;
     drivers.push({
       driver,
       laps: clean.length,
       bestSec: Math.min(...lts),
       racePaceSec: median(lts),
       fuelPerLap: median(fus),
+      meanSec: mean,
+      stdSec: Math.sqrt(variance),
+      minSec: Math.min(...lts),
+      q1Sec: percentile(lts, 0.25),
+      q3Sec: percentile(lts, 0.75),
+      maxSec: Math.max(...lts),
+      points: clean.map((l) => ({
+        t:
+          typeof l.trackTempC === "number" && isFinite(l.trackTempC)
+            ? l.trackTempC
+            : null,
+        y: l.laptimeSec,
+      })),
     });
     allCleanLaptimes.push(...lts);
     allCleanFuels.push(...fus);

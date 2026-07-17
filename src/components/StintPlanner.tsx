@@ -39,6 +39,7 @@ import {
   type G61LapRow,
 } from "@/lib/garage61-import";
 import { pullGarage61Laps } from "@/lib/actions/garage61-pull";
+import StintDriverStats from "@/components/StintDriverStats";
 import {
   connectGarage61,
   setGarage61Team,
@@ -486,6 +487,7 @@ export default function StintPlanner({
         fromData,
         manualSlopePerC: manual,
       },
+      g61Analysis: { ...g61, generatedAt: new Date().toISOString() },
     }));
 
     const tempNote =
@@ -1352,6 +1354,12 @@ export default function StintPlanner({
           </div>
         )}
       </div>
+
+      {/* Driver performance dashboard (from a Garage 61 pull/import) */}
+      {(() => {
+        const a = g61 ?? s.g61Analysis;
+        return a ? <StintDriverStats analysis={a} /> : null;
+      })()}
 
       {/* Availability */}
       {s.drivers.length > 0 && hourCount > 0 && (

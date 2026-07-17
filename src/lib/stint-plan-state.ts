@@ -8,6 +8,11 @@ import {
   type StintMode,
   type StintProfileKey,
 } from "@/lib/stint-planner";
+import type { G61ImportResult } from "@/lib/garage61-import";
+
+/** Garage 61 performance analysis saved with a plan (per-driver stats + the
+ *  temperature fit) so the dashboard renders on the shared link too. */
+export type PlannerG61Analysis = G61ImportResult & { generatedAt: string };
 
 export type PlannerDriverState = {
   id: string;
@@ -76,6 +81,8 @@ export type PlannerState = {
   assignments: PlannerAssignmentState[];
   /** Track-temperature pace model, or null until data/temp is set. */
   tempModel: TempModel | null;
+  /** Saved Garage 61 performance analysis for the dashboard, or null. */
+  g61Analysis: PlannerG61Analysis | null;
   /** Driver availability: driverId → race-hour indices (0-based) the driver is
    *  NOT available. Missing/empty = available all race (the default). */
   availability: Record<string, number[]>;
@@ -111,6 +118,7 @@ export function defaultPlannerState(): PlannerState {
     drivers: [],
     assignments: [],
     tempModel: null,
+    g61Analysis: null,
     availability: {},
     notes: { pre: "", during: "", post: "" },
     eventResult: null,

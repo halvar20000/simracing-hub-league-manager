@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.48.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: a driver-performance dashboard from your Garage 61 data. After you pull or import laps, a new section shows a per-driver stats table (best, median, gap to fastest, consistency, fuel per lap) plus three charts: a pace-and-consistency box plot (who's quick and who's steady), fuel per lap, and lap time vs track temperature. It's saved with the plan, so teammates and the pit wall see the same picture on the shared link. Consistency is measured on temperature-normalised laps so it isn't inflated by the track warming up.",
+    ],
+  },
+  {
     version: "1.47.0",
     date: "2026-07-17",
     changes: [
