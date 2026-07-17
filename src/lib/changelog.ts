@@ -19,6 +19,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.46.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: connect your own Garage 61 account to a plan. Each saved plan now has a “Connect my token” option — paste a Garage 61 personal access token, pick which of your teams to pull from, and the “Pull from Garage 61” button fetches that team's laps. So it's no longer limited to the site owner's account: any team can use their own Garage 61 data. Tokens are encrypted at rest and never shown again; only the plan's creator can set or change one, while anyone with the plan link can pull. Plans without a token fall back to the site's shared token if one is configured.",
+    ],
+  },
+  {
+    version: "1.45.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: pull practice laps straight from Garage 61 — no more exporting spreadsheets. The Garage 61 card now has a “Pull from Garage 61” button that fetches your team's laps for the selected Track and Car directly from the Garage 61 API, then fills the Standard fuel profile and each matching driver's race pace and fuel-per-lap exactly like the .xlsx upload (which still works as a fallback). The track and car are matched automatically by their iRacing IDs. Requires the league's Garage 61 API token to be configured.",
+    ],
+  },
+  {
     version: "1.44.1",
     date: "2026-07-15",
     changes: [

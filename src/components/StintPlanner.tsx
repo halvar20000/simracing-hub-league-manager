@@ -37,6 +37,15 @@ import {
   type G61ImportResult,
   type G61LapRow,
 } from "@/lib/garage61-import";
+import { pullGarage61Laps } from "@/lib/actions/garage61-pull";
+import {
+  connectGarage61,
+  setGarage61Team,
+  disconnectGarage61,
+  getGarage61Status,
+  type G61TeamOption,
+  type G61Status,
+} from "@/lib/actions/garage61-connect";
 
 const fmtClock = (ms: number | null): string =>
   ms == null
@@ -356,6 +365,7 @@ export default function StintPlanner({
   // ---- Garage 61 session import (client-side .xlsx parse) ----
   const [g61, setG61] = useState<G61ImportResult | null>(null);
   const [g61Busy, setG61Busy] = useState(false);
+  const [g61PullBusy, setG61PullBusy] = useState(false);
   const [g61Msg, setG61Msg] = useState<string | null>(null);
   async function onGarage61Files(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -437,6 +447,118 @@ export default function StintPlanner({
     setG61Msg(
       `Applied: Standard profile + lap times for ${matched} matched driver${matched === 1 ? "" : "s"}. Save keeps it.`
     );
+  }
+  // ---- Garage 61 live pull (server-side API, uses the event Track + Car) ----
+  async function onGarage61Pull() {
+    if (!s.event.track.trim()) {
+      setG61Msg("Select a Track above first — the live pull uses the event Track and Car.");
+      return;
+    }
+    setG61PullBusy(true);
+    setG61Msg(null);
+    try {
+      const car = cars.find((c) => c.name === s.event.car);
+      const res = await pullGarage61Laps({
+        planId: curId,
+        track: s.event.track,
+        carName: s.event.car,
+        iracingCarId: car?.iracingCarId ?? null,
+      });
+      if (!res.ok) {
+        setG61Msg(res.error);
+        return;
+      }
+      setG61(res.result);
+      setG61Msg(
+        `Pulled ${res.meta.lapsFetched} lap${res.meta.lapsFetched === 1 ? "" : "s"} from Garage 61 (${res.meta.trackMatched ?? "track"}${res.meta.carMatched ? " · " + res.meta.carMatched : ""}). Review below, then Apply to plan.`
+      );
+    } catch {
+      setG61Msg("Live pull failed — please try again.");
+    } finally {
+      setG61PullBusy(false);
+    }
+  }
+
+  // ---- Garage 61 connection (per-plan token, creator only) ----
+  const [g61Status, setG61Status] = useState<G61Status | null>(null);
+  const [g61Token, setG61Token] = useState("");
+  const [g61Teams, setG61Teams] = useState<G61TeamOption[]>([]);
+  const [g61ConnBusy, setG61ConnBusy] = useState(false);
+  const [g61ConnMsg, setG61ConnMsg] = useState<string | null>(null);
+  const [g61ShowConnect, setG61ShowConnect] = useState(false);
+
+  // Load connection status whenever the plan id changes.
+  useEffect(() => {
+    if (!curId) {
+      setG61Status(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const st = await getGarage61Status(curId);
+      if (alive) setG61Status(st);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [curId]);
+
+  async function onG61Connect() {
+    if (!curId || !editToken) return;
+    if (g61Token.trim().length < 8) {
+      setG61ConnMsg("Paste your Garage 61 personal access token first.");
+      return;
+    }
+    setG61ConnBusy(true);
+    setG61ConnMsg(null);
+    try {
+      const res = await connectGarage61(curId, editToken, g61Token.trim());
+      if (!res.ok) {
+        setG61ConnMsg(res.error);
+        return;
+      }
+      setG61Token("");
+      setG61Teams(res.teams);
+      const st = await getGarage61Status(curId);
+      setG61Status(st);
+      setG61ConnMsg(
+        res.teams.length > 1
+          ? "Connected. Pick which team to pull from below."
+          : "Connected ✓"
+      );
+    } catch {
+      setG61ConnMsg("Couldn't connect — please try again.");
+    } finally {
+      setG61ConnBusy(false);
+    }
+  }
+
+  async function onG61PickTeam(slug: string) {
+    if (!curId || !editToken) return;
+    const team = g61Teams.find((t) => t.slug === slug);
+    setG61ConnBusy(true);
+    try {
+      await setGarage61Team(curId, editToken, slug, team?.name ?? "");
+      const st = await getGarage61Status(curId);
+      setG61Status(st);
+    } finally {
+      setG61ConnBusy(false);
+    }
+  }
+
+  async function onG61Disconnect() {
+    if (!curId || !editToken) return;
+    setG61ConnBusy(true);
+    setG61ConnMsg(null);
+    try {
+      await disconnectGarage61(curId, editToken);
+      setG61Teams([]);
+      const st = await getGarage61Status(curId);
+      setG61Status(st);
+      setG61ConnMsg("Disconnected.");
+    } finally {
+      setG61ConnBusy(false);
+    }
   }
 
   const [postingDiscord, setPostingDiscord] = useState(false);
@@ -851,24 +973,136 @@ export default function StintPlanner({
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
             Garage 61 import
           </h2>
-          <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-            {g61Busy ? "Reading…" : "Upload session export(s)"}
-            <input
-              type="file"
-              accept=".xlsx"
-              multiple
-              className="hidden"
-              disabled={g61Busy}
-              onChange={(e) => onGarage61Files(e.target.files)}
-            />
-          </label>
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <button
+              onClick={onGarage61Pull}
+              disabled={g61PullBusy || g61Busy}
+              className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
+              title="Fetch your team's laps for the selected Track + Car directly from Garage 61."
+            >
+              {g61PullBusy ? "Pulling…" : "Pull from Garage 61"}
+            </button>
+            <label className="cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+              {g61Busy ? "Reading…" : "Upload session export(s)"}
+              <input
+                type="file"
+                accept=".xlsx"
+                multiple
+                className="hidden"
+                disabled={g61Busy || g61PullBusy}
+                onChange={(e) => onGarage61Files(e.target.files)}
+              />
+            </label>
+          </div>
         </div>
         <p className="mb-3 text-xs text-zinc-500">
-          Upload Garage 61 session exports (.xlsx). Real race pace &amp; fuel/lap
-          per driver are read from the practice laps and fill the Standard
-          profile plus each matching driver&rsquo;s lap time. Files are read in
-          your browser — nothing is uploaded.
+          <strong className="text-zinc-400">Pull from Garage 61</strong> fetches
+          your team&rsquo;s laps for the selected Track + Car straight from the
+          Garage 61 API — or upload session exports (.xlsx) manually. Either way,
+          real race pace &amp; fuel/lap per driver are read from the practice laps
+          and fill the Standard profile plus each matching driver&rsquo;s lap
+          time. Uploaded files are read in your browser — nothing is stored.
         </p>
+
+        {/* Connection status + connect (per-plan token) */}
+        <div className="mb-3 rounded border border-zinc-800 bg-zinc-950/40 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-zinc-400">
+              {g61Status?.connected ? (
+                <span className="text-emerald-300">
+                  ● Connected to Garage 61
+                  {g61Status.teamName
+                    ? ` · team ${g61Status.teamName}`
+                    : " · no team selected"}
+                </span>
+              ) : g61Status?.globalFallback ? (
+                <span className="text-zinc-400">
+                  ● Using the site&rsquo;s shared Garage 61 token
+                </span>
+              ) : (
+                <span className="text-zinc-500">● Not connected to Garage 61</span>
+              )}
+            </span>
+            {curId && editToken && (
+              <div className="flex items-center gap-2 print:hidden">
+                {g61Status?.connected && (
+                  <button
+                    onClick={onG61Disconnect}
+                    disabled={g61ConnBusy}
+                    className="rounded border border-red-900/60 px-2.5 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                  >
+                    Disconnect
+                  </button>
+                )}
+                <button
+                  onClick={() => setG61ShowConnect((v) => !v)}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                >
+                  {g61Status?.connected ? "Change token" : "Connect my token"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!curId && (
+            <p className="mt-2 text-[11px] text-zinc-500">
+              Save &amp; share the plan first to connect your own Garage 61
+              account to it.
+            </p>
+          )}
+
+          {curId && editToken && g61ShowConnect && (
+            <div className="mt-3 space-y-2">
+              <p className="text-[11px] text-zinc-500">
+                Paste a Garage 61 <strong>personal access token</strong> (create
+                one at garage61.net/developer). It&rsquo;s encrypted, stored with
+                this plan only, and never shown again — anyone with the plan link
+                can then pull, but only you (the creator) can change it.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="password"
+                  className={`${inp} max-w-xs`}
+                  value={g61Token}
+                  onChange={(e) => setG61Token(e.target.value)}
+                  placeholder="Garage 61 token"
+                  autoComplete="off"
+                />
+                <button
+                  onClick={onG61Connect}
+                  disabled={g61ConnBusy}
+                  className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
+                >
+                  {g61ConnBusy ? "Connecting…" : "Connect"}
+                </button>
+              </div>
+              {g61Teams.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="text-[11px] uppercase tracking-wider text-zinc-500">
+                    Team
+                  </label>
+                  <select
+                    className={`${inp} max-w-xs`}
+                    value={g61Status?.teamSlug ?? ""}
+                    onChange={(e) => onG61PickTeam(e.target.value)}
+                    disabled={g61ConnBusy}
+                  >
+                    <option value="">— Select team —</option>
+                    {g61Teams.map((t) => (
+                      <option key={t.slug} value={t.slug}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {g61ConnMsg && (
+                <p className="text-xs text-amber-300">{g61ConnMsg}</p>
+              )}
+            </div>
+          )}
+        </div>
+
         {g61Msg && <p className="mb-2 text-sm text-amber-300">{g61Msg}</p>}
         {g61 && (
           <div className="space-y-3">
