@@ -1197,6 +1197,15 @@ model StintPlan {
   /// Secret token required to overwrite this plan; viewers without it can
   /// still open the read-only share link and "Save as new".
   editToken String
+  /// Optional per-plan Garage 61 API token, AES-256-GCM encrypted at rest
+  /// (see src/lib/crypto-secret.ts). Set only by the plan creator; NEVER
+  /// returned to any client. When present, the live "Pull from Garage 61"
+  /// uses it instead of the global GARAGE61_TOKEN fallback.
+  garage61TokenEnc String?
+  /// The Garage 61 team the plan pulls laps from (slug + display name),
+  /// chosen by the creator when connecting the token.
+  garage61TeamSlug String?
+  garage61TeamName String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
