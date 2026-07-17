@@ -19,6 +19,8 @@ export type G61LapRow = {
   pitOut: boolean;
   /** Track temperature (°C) when the lap was set, if known. */
   trackTempC?: number | null;
+  /** Track wetness 0–100 (%) when the lap was set, if known. */
+  trackWetness?: number | null;
 };
 
 export type G61DriverAgg = {
@@ -51,10 +53,25 @@ export type G61TempModel = {
   samples: number;
 };
 
+/** Wet-weather model built from the laps run in the rain (track wetness above
+ *  the threshold). Pace in the wet is far more variable than dry, so this is a
+ *  best-estimate reference, not a precise fit. Null when there aren't enough
+ *  wet laps. */
+export type G61WetModel = {
+  laps: number; // wet clean laps used
+  overallSec: number; // median wet pace across drivers
+  fuelPerLap: number; // median wet fuel/lap
+  deltaSec: number | null; // wet − dry (per lap), null if no dry baseline
+  minWetness: number;
+  maxWetness: number;
+  drivers: { driver: string; laps: number; medianSec: number; fuelPerLap: number }[];
+};
+
 export type G61ImportResult = {
   drivers: G61DriverAgg[];
   overall: { laptimeSec: number; fuelPerLap: number; cleanLaps: number };
   temp: G61TempModel;
+  wet: G61WetModel | null;
 };
 
 function median(xs: number[]): number {
@@ -93,6 +110,11 @@ function olsSlope(xs: number[], ys: number[]): number | null {
 const MIN_TEMP_SPREAD_C = 3;
 const MIN_TEMP_SAMPLES = 8;
 
+// Track wetness (0–100 %) above this counts a lap as "wet".
+const WET_THRESHOLD = 10;
+// Need at least this many clean wet laps to report a wet model.
+const MIN_WET_LAPS = 3;
+
 // Loose name key for matching a Garage 61 driver to a roster name: lowercase,
 // keep only letters/digits (drops spaces, dots, accents-as-punctuation).
 const nameKey = (s: string): string =>
@@ -124,8 +146,14 @@ export function aggregateGarage61Laps(
       ? rows.filter((r) => roster.some((n) => nameMatches(r.driver ?? "", n)))
       : rows;
 
+  // Split rain out of the dry model: a lap counts as wet above the threshold.
+  // Wet laps must not pollute the dry pace / fuel / temperature fit.
+  const isWet = (r: G61LapRow) => (r.trackWetness ?? 0) > WET_THRESHOLD;
+  const dryRows = scoped.filter((r) => !isWet(r));
+  const wetRows = scoped.filter(isWet);
+
   const byDriver = new Map<string, G61LapRow[]>();
-  for (const r of scoped) {
+  for (const r of dryRows) {
     const name = (r.driver ?? "").trim();
     if (!name) continue;
     (byDriver.get(name) ?? byDriver.set(name, []).get(name)!).push(r);
@@ -239,13 +267,75 @@ export function aggregateGarage61Laps(
   }
 
   drivers.sort((a, b) => a.racePaceSec - b.racePaceSec);
+  const dryOverall = median(drivers.map((d) => d.racePaceSec));
+
+  // ---- Wet-weather model (from the laps run in the rain) ----
+  const wet = buildWetModel(wetRows, dryOverall);
+
   return {
     drivers,
     overall: {
-      laptimeSec: median(drivers.map((d) => d.racePaceSec)),
+      laptimeSec: dryOverall,
       fuelPerLap: median(allCleanFuels),
       cleanLaps: allCleanLaptimes.length,
     },
     temp: { sourceTempC, slopePerC, minTempC, maxTempC, samples: temps.length },
+    wet,
+  };
+}
+
+// Aggregate the wet laps into a per-driver wet pace + a wet-vs-dry delta. Wet
+// pace is noisy, so we use a looser full-green isolation (fuel-based, no ±5%
+// pace window) and medians. `dryOverall` is the dry median pace for the delta.
+function buildWetModel(
+  wetRows: G61LapRow[],
+  dryOverall: number
+): G61WetModel | null {
+  if (wetRows.length === 0) return null;
+  const byDriver = new Map<string, G61LapRow[]>();
+  for (const r of wetRows) {
+    const name = (r.driver ?? "").trim();
+    if (!name) continue;
+    (byDriver.get(name) ?? byDriver.set(name, []).get(name)!).push(r);
+  }
+  const out: G61WetModel["drivers"] = [];
+  const allTimes: number[] = [];
+  const allFuels: number[] = [];
+  const wetnessVals: number[] = [];
+  for (const [driver, laps] of byDriver) {
+    const cand = laps.filter(
+      (l) => !l.pitIn && !l.pitOut && l.laptimeSec > 60 && l.fuelUsed >= 0
+    );
+    const fuels = cand.filter((l) => l.fuelUsed > 0.3).map((l) => l.fuelUsed);
+    if (fuels.length === 0) continue;
+    const medFuel = median(fuels);
+    const full = cand.filter((l) => l.fuelUsed >= 0.6 * medFuel);
+    if (full.length === 0) continue;
+    const times = full.map((l) => l.laptimeSec);
+    const fus = full.map((l) => l.fuelUsed);
+    out.push({
+      driver,
+      laps: full.length,
+      medianSec: median(times),
+      fuelPerLap: median(fus),
+    });
+    allTimes.push(...times);
+    allFuels.push(...fus);
+    for (const l of full) {
+      if (typeof l.trackWetness === "number" && isFinite(l.trackWetness))
+        wetnessVals.push(l.trackWetness);
+    }
+  }
+  if (allTimes.length < MIN_WET_LAPS) return null;
+  out.sort((a, b) => a.medianSec - b.medianSec);
+  const overallSec = median(allTimes);
+  return {
+    laps: allTimes.length,
+    overallSec,
+    fuelPerLap: median(allFuels),
+    deltaSec: dryOverall > 0 ? overallSec - dryOverall : null,
+    minWetness: wetnessVals.length ? Math.min(...wetnessVals) : WET_THRESHOLD,
+    maxWetness: wetnessVals.length ? Math.max(...wetnessVals) : WET_THRESHOLD,
+    drivers: out,
   };
 }

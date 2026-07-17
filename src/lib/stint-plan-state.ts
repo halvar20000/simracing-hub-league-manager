@@ -60,6 +60,21 @@ export type TempModel = {
 
 /** Default lap-time sensitivity when there's no data fit: 1.0 s per 10 °C. */
 export const DEFAULT_TEMP_SLOPE_PER_C = 0.1;
+
+/** Wet-weather scenario. The stored lap times carry `appliedDeltaSec` extra
+ *  seconds/lap (0 when dry); toggling Dry/Wet shifts them by the difference.
+ *  `deltaSec` is the effective wet penalty (measured from data when available,
+ *  else the editable `manualDeltaSec`). */
+export type WetModel = {
+  deltaSec: number;
+  fromData: boolean;
+  manualDeltaSec: number;
+  wetFuelPerLap: number | null;
+  appliedDeltaSec: number;
+};
+
+/** Default wet penalty when there's no measured wet data: +12 s/lap. */
+export const DEFAULT_WET_DELTA_SEC = 12;
 export type PlannerState = {
   title: string;
   event: {
@@ -74,6 +89,7 @@ export type PlannerState = {
     stintValue: string; // minutes (time) or laps (laps); ignored for fuel
     fuelReserve: string; // litres kept in reserve, "" = 0
     trackTempC: string; // race-day track temperature (°C), "" = none
+    conditions: "dry" | "wet"; // whole-race weather scenario
   };
   standard: { laptime: string; fuelPerLap: string };
   savingEnabled: boolean;
@@ -82,6 +98,8 @@ export type PlannerState = {
   assignments: PlannerAssignmentState[];
   /** Track-temperature pace model, or null until data/temp is set. */
   tempModel: TempModel | null;
+  /** Wet-weather scenario model, or null until data/rain is set. */
+  wetModel: WetModel | null;
   /** Saved Garage 61 performance analysis for the dashboard, or null. */
   g61Analysis: PlannerG61Analysis | null;
   /** Driver availability: driverId → race-hour indices (0-based) the driver is
@@ -112,6 +130,7 @@ export function defaultPlannerState(): PlannerState {
       stintValue: "",
       fuelReserve: "",
       trackTempC: "",
+      conditions: "dry",
     },
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
@@ -119,6 +138,7 @@ export function defaultPlannerState(): PlannerState {
     drivers: [],
     assignments: [],
     tempModel: null,
+    wetModel: null,
     g61Analysis: null,
     availability: {},
     notes: { pre: "", during: "", post: "" },

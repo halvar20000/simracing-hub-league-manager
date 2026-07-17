@@ -237,6 +237,12 @@ export async function pullGarage61Laps(input: {
       "track_temperature",
       "trackTempC",
     ]);
+    const trackWetness = pickNum(o, [
+      "trackWetness",
+      "track_wetness",
+      "wetness",
+      "trackWetnessPct",
+    ]);
     rows.push({
       driver,
       laptimeSec,
@@ -244,6 +250,7 @@ export async function pullGarage61Laps(input: {
       pitIn: pickBool(o, ["pitIn", "pit_in", "pitin"]),
       pitOut: pickBool(o, ["pitOut", "pit_out", "pitout"]),
       trackTempC,
+      trackWetness,
     });
   }
 

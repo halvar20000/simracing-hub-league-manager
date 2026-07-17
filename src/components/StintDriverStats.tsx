@@ -185,6 +185,52 @@ export default function StintDriverStats({
         </table>
       </div>
 
+      {/* Wet-weather summary (from the rain laps) */}
+      {analysis.wet && (
+        <div className="mb-4 rounded border border-sky-900/50 bg-sky-950/20 p-3">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[11px] font-medium uppercase tracking-wider text-sky-300">
+              Wet weather
+            </h3>
+            <span className="text-[11px] text-zinc-400">
+              {analysis.wet.laps} wet laps ·{" "}
+              {Math.round(analysis.wet.minWetness)}–
+              {Math.round(analysis.wet.maxWetness)}% wet
+              {analysis.wet.deltaSec != null
+                ? ` · +${analysis.wet.deltaSec.toFixed(1)}s/lap vs dry`
+                : ""}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="text-zinc-500">
+                <tr className="border-b border-zinc-800">
+                  <th className="py-1 pr-2 font-normal">Driver</th>
+                  <th className={th}>Wet laps</th>
+                  <th className={th}>Wet pace</th>
+                  <th className={th}>Fuel/lap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.wet.drivers.map((d) => (
+                  <tr key={d.driver} className="border-t border-zinc-800/60 text-zinc-200">
+                    <td className="py-1 pr-2">{d.driver}</td>
+                    <td className={td}>{d.laps}</td>
+                    <td className={td}>{fmtLap(d.medianSec)}</td>
+                    <td className={td}>{d.fuelPerLap.toFixed(2)} L</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            Wet pace is highly variable (line, standing water, tyres) — treat as
+            a rough reference. Use the Dry/Wet toggle in Event to re-plan the
+            race at wet pace.
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Pace & consistency box/whisker */}
         <div>

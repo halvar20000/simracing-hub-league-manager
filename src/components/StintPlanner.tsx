@@ -28,6 +28,7 @@ import {
   hydratePlanState,
   stateToInput,
   DEFAULT_TEMP_SLOPE_PER_C,
+  DEFAULT_WET_DELTA_SEC,
   type PlannerAssignmentState,
   type PlannerState,
 } from "@/lib/stint-plan-state";
@@ -406,6 +407,7 @@ export default function StintPlanner({
         const cPin = col("Pit in");
         const cPout = col("Pit out");
         const cTemp = col("Track temp");
+        const cWet = col("Track Wetness");
         if (cLap < 0 || cDrv < 0 || cFuel < 0) continue;
         for (let i = 1; i < grid.length; i++) {
           const r = grid[i] as unknown[];
@@ -414,6 +416,7 @@ export default function StintPlanner({
           const fuel = Number(r[cFuel]);
           if (!drv || !isFinite(rawLap) || !isFinite(fuel)) continue;
           const rawTemp = cTemp >= 0 ? Number(r[cTemp]) : NaN;
+          const rawWet = cWet >= 0 ? Number(r[cWet]) : NaN;
           rows.push({
             driver: drv,
             laptimeSec: rawLap * 86400, // Excel duration = fraction of a day
@@ -421,6 +424,7 @@ export default function StintPlanner({
             pitIn: Number(cPin >= 0 ? r[cPin] : 0) === 1,
             pitOut: Number(cPout >= 0 ? r[cPout] : 0) === 1,
             trackTempC: isFinite(rawTemp) ? rawTemp : null,
+            trackWetness: isFinite(rawWet) ? rawWet : null,
           });
         }
       }
@@ -472,12 +476,21 @@ export default function StintPlanner({
     const proj =
       srcTemp != null && targetTemp != null ? slope * (targetTemp - srcTemp) : 0;
 
+    // Wet-weather model from the rain laps (measured delta wins; else manual).
+    const measuredWet =
+      g61.wet && g61.wet.deltaSec != null && g61.wet.deltaSec > 0
+        ? g61.wet.deltaSec
+        : null;
+    const manualWet = s.wetModel?.manualDeltaSec ?? DEFAULT_WET_DELTA_SEC;
+    const wetDelta = measuredWet ?? manualWet;
+
     setS((p) => ({
       ...p,
       event: {
         ...p.event,
         trackTempC:
           targetTemp != null ? String(round1(targetTemp)) : p.event.trackTempC,
+        conditions: "dry",
       },
       standard: {
         laptime: fmtLap(g61.overall.laptimeSec + proj),
@@ -492,6 +505,13 @@ export default function StintPlanner({
         slopePerC: slope,
         fromData,
         manualSlopePerC: manual,
+      },
+      wetModel: {
+        deltaSec: wetDelta,
+        fromData: measuredWet != null,
+        manualDeltaSec: manualWet,
+        wetFuelPerLap: g61.wet?.fuelPerLap ?? null,
+        appliedDeltaSec: 0,
       },
       g61Analysis: { ...g61, generatedAt: new Date().toISOString() },
     }));
@@ -565,6 +585,76 @@ export default function StintPlanner({
           ...base,
           manualSlopePerC: per,
           slopePerC: base.fromData ? base.slopePerC : per,
+        },
+      };
+    });
+  }
+
+  const emptyWet = () => ({
+    deltaSec: DEFAULT_WET_DELTA_SEC,
+    fromData: false,
+    manualDeltaSec: DEFAULT_WET_DELTA_SEC,
+    wetFuelPerLap: null as number | null,
+    appliedDeltaSec: 0,
+  });
+
+  // Switch the whole plan between Dry and Wet: shift Standard + Fuel-save +
+  // per-driver lap times by the wet penalty so the schedule re-plans at wet pace.
+  function setConditions(next: "dry" | "wet") {
+    setS((p) => {
+      const wm = p.wetModel ?? emptyWet();
+      const targetApplied = next === "wet" ? wm.deltaSec : 0;
+      const shift = targetApplied - wm.appliedDeltaSec;
+      const changed = Math.abs(shift) > 1e-6;
+      return {
+        ...p,
+        event: { ...p.event, conditions: next },
+        standard: changed
+          ? { ...p.standard, laptime: shiftLapStr(p.standard.laptime, shift) }
+          : p.standard,
+        saving: changed
+          ? { ...p.saving, laptime: shiftLapStr(p.saving.laptime, shift) }
+          : p.saving,
+        drivers: changed
+          ? p.drivers.map((d) =>
+              d.laptime.trim() ? { ...d, laptime: shiftLapStr(d.laptime, shift) } : d
+            )
+          : p.drivers,
+        wetModel: { ...wm, appliedDeltaSec: targetApplied },
+      };
+    });
+  }
+
+  // Edit the effective wet penalty (seconds/lap). If wet is active, re-applies
+  // the difference live. Marks the model as a manual override.
+  function setWetDelta(valStr: string) {
+    const v = Number(valStr);
+    setS((p) => {
+      const wm = p.wetModel ?? emptyWet();
+      const newDelta = isFinite(v) ? v : wm.deltaSec;
+      const isWet = p.event.conditions === "wet";
+      const targetApplied = isWet ? newDelta : 0;
+      const shift = targetApplied - wm.appliedDeltaSec;
+      const changed = Math.abs(shift) > 1e-6;
+      return {
+        ...p,
+        standard: changed
+          ? { ...p.standard, laptime: shiftLapStr(p.standard.laptime, shift) }
+          : p.standard,
+        saving: changed
+          ? { ...p.saving, laptime: shiftLapStr(p.saving.laptime, shift) }
+          : p.saving,
+        drivers: changed
+          ? p.drivers.map((d) =>
+              d.laptime.trim() ? { ...d, laptime: shiftLapStr(d.laptime, shift) } : d
+            )
+          : p.drivers,
+        wetModel: {
+          ...wm,
+          deltaSec: newDelta,
+          manualDeltaSec: newDelta,
+          fromData: false,
+          appliedDeltaSec: targetApplied,
         },
       };
     });
@@ -978,6 +1068,53 @@ export default function StintPlanner({
               })()}
             </div>
           )}
+
+          {/* Conditions: Dry / Wet whole-race scenario */}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="uppercase tracking-wider text-zinc-500">
+              Conditions
+            </span>
+            <div className="flex overflow-hidden rounded border border-zinc-700 print:hidden">
+              <button
+                onClick={() => setConditions("dry")}
+                className={`px-3 py-1 ${s.event.conditions === "dry" ? "bg-zinc-700 text-zinc-100" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}
+              >
+                Dry
+              </button>
+              <button
+                onClick={() => setConditions("wet")}
+                className={`px-3 py-1 ${s.event.conditions === "wet" ? "bg-sky-700 text-white" : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}
+              >
+                Wet
+              </button>
+            </div>
+            <span className="hidden text-zinc-300 print:inline">
+              {s.event.conditions === "wet" ? "WET" : "Dry"}
+            </span>
+            {s.wetModel && (
+              <span className="text-zinc-400">
+                wet ≈ +{round1(s.wetModel.deltaSec).toFixed(1)}s/lap{" "}
+                <span className="text-zinc-500">
+                  ({s.wetModel.fromData ? "measured" : "manual"})
+                </span>
+              </span>
+            )}
+            <label className="flex items-center gap-1 text-zinc-500 print:hidden">
+              +s/lap:
+              <input
+                key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
+                className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
+                defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
+                onBlur={(e) => setWetDelta(e.target.value)}
+                title="Wet penalty in seconds per lap. Measured from your rain laps when available; edit to override, since real rain varies."
+              />
+            </label>
+            {s.event.conditions === "wet" && (
+              <span className="rounded bg-sky-950/50 px-2 py-0.5 text-sky-300 print:hidden">
+                WET scenario — lap times +{round1(s.wetModel?.appliedDeltaSec ?? 0).toFixed(1)}s
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Fuel profiles */}

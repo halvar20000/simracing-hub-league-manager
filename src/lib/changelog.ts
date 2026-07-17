@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.50.0",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner: rain support. Garage 61 records track wetness per lap, so the planner now separates your wet laps from your dry ones — wet laps no longer skew the dry pace and fuel numbers. When you've run in the rain, the performance dashboard shows a Wet weather panel (wet pace and fuel per driver, wetness range, and how much slower wet is than dry), and the Event card gets a Dry/Wet switch: flip to Wet and the whole schedule re-plans at wet pace (fewer laps, fewer stops). The wet penalty is measured from your rain laps when available (e.g. +19 s/lap) and is editable, since real rain varies a lot.",
+    ],
+  },
+  {
     version: "1.49.1",
     date: "2026-07-17",
     changes: [
