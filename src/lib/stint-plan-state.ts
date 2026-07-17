@@ -249,7 +249,9 @@ export function stateToInput(s: PlannerState): PlannerInput {
       correctionMin: a.correctionMin ?? 0,
       wet: a.wet ?? false,
     })),
-    wetDeltaSec: s.wetModel?.deltaSec ?? 0,
+    // Fall back to the default wet penalty when no Garage 61 rain model exists,
+    // so ticking a stint wet still lengthens it (the field shows this default).
+    wetDeltaSec: s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC,
     driverChangeSaveSec:
       s.event.refuelSec.trim() !== ""
         ? Math.max(0, num(s.event.driverSwapSec, 30) - num(s.event.refuelSec))

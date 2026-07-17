@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.52.1",
+    date: "2026-07-17",
+    changes: [
+      "Stint Planner fix: ticking a stint Wet now actually lengthens it. Previously the wet penalty only applied if you'd pulled Garage 61 rain data first; without it the penalty defaulted to zero, so wet stints kept their dry length. Wet stints now use the shown wet-penalty default (editable) even with no rain data.",
+    ],
+  },
+  {
     version: "1.52.0",
     date: "2026-07-17",
     changes: [
