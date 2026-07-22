@@ -398,10 +398,20 @@ export default async function PublicSeasonRoster({
               )}
             </p>
           </div>
-          <FilteredRosterButtons
-            tableId="publicRosterTable"
-            filenameBase={`roster-${slug}-${season.name.replace(/\s+/g, "-")}-${season.year}`}
-          />
+          <div className="flex flex-wrap items-start gap-2">
+            <FilteredRosterButtons
+              tableId="publicRosterTable"
+              filenameBase={`roster-${slug}-${season.name.replace(/\s+/g, "-")}-${season.year}`}
+            />
+            <a
+              href={`/leagues/${slug}/seasons/${seasonId}/roster/export-json`}
+              download
+              className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700 no-print"
+              title="Full roster as a JSON file, including Pro/Am and GDC allocations. Not affected by on-page filters."
+            >
+              Download JSON
+            </a>
+          </div>
         </div>
       </div>
 
@@ -666,6 +676,14 @@ function PublicRosterExportButtons({
         title="Comma-separated values. Opens in Google Sheets, Excel, Numbers."
       >
         Download CSV
+      </a>
+      <a
+        href={`/leagues/${slug}/seasons/${seasonId}/roster/export-json`}
+        download
+        className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+        title="Full roster as a JSON file, including team, car class and driver allocations."
+      >
+        Download JSON
       </a>
       <a
         href={`/leagues/${slug}/seasons/${seasonId}/roster/print`}

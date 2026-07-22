@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.54.0",
+    date: "2026-07-22",
+    changes: [
+      "Roster pages now have a “Download JSON” button (next to Download CSV) on both the solo/driver roster and the team roster. It exports the full roster as a structured JSON file including every driver's allocations — car class, Pro/Am and GDC — plus start number, iRacing ID, iRating, team, car and registration status, with a small league/season header. Handy for feeding rosters into overlays, spreadsheets or your own tools.",
+    ],
+  },
+  {
     version: "1.53.0",
     date: "2026-07-22",
     changes: [
