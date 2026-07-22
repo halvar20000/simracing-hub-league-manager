@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.54.1",
+    date: "2026-07-22",
+    changes: [
+      "Fill-in no-show penalty fix (GT3 WCT): a waiting-list driver who accepts a one-race fill-in offer and then doesn't show up — without declining — now gets the same no-show penalty point as a confirmed grid driver who ghosts a race. Previously the no-show penalty only ever looked at confirmed grid drivers, so an accepted fill-in who no-showed slipped through. Fill-ins who were only offered a slot (never accepted) or who declined the offer are still exempt.",
+    ],
+  },
+  {
     version: "1.54.0",
     date: "2026-07-22",
     changes: [
