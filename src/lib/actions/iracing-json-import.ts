@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { put, del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { recomputeRoundScoring } from "@/lib/scoring";
@@ -20,6 +21,12 @@ import {
 // when the registered car has a known iRacing id that differs from the driven
 // one. See CLAUDE.md "Wrong-car DSQ".
 const CAR_ENFORCED_LEAGUE_SLUGS = new Set(["cas-iec", "cas-gt3-wct"]);
+
+// BLOB ARCHIVE — where the raw imported eventresult JSON is stored on Vercel
+// Blob, keyed by league/season/round so a re-import overwrites cleanly.
+function blobBase(slug: string, seasonId: string, roundNumber: number): string {
+  return `imported-results/${slug}/${seasonId}/${roundNumber}`;
+}
 
 // CAR LOOKUP — resolve a season's Car for an iRacing car_id.
 // Auto-creates a season-wide Car (carClassId NULL) when nothing matches.
@@ -167,6 +174,13 @@ export async function importIracingJson(
   });
   const racePointsMinPct =
     seasonScoring?.scoringSystem?.racePointsMinDistancePct ?? 50;
+
+  // Round meta — needed for the Blob archive path (roundNumber) and to clean
+  // up the previously-archived JSON on re-import.
+  const roundMeta = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: { roundNumber: true, resultJsonBlobUrl: true },
+  });
 
   // Pull season roster + build cust_id → registrationId map
   const registrations = await prisma.registration.findMany({
@@ -355,6 +369,34 @@ export async function importIracingJson(
   }
 
   await recomputeRoundScoring(prisma, roundId);
+
+  // Archive the raw uploaded JSON to Vercel Blob so it can be downloaded again
+  // later — both in admin and, once the round is published, on the public
+  // results page. Best-effort: a Blob failure must never fail the import (the
+  // results are already saved). Overwrites the previous archive on re-import.
+  if (roundMeta) {
+    try {
+      if (roundMeta.resultJsonBlobUrl) {
+        try {
+          await del(roundMeta.resultJsonBlobUrl);
+        } catch {
+          /* ignore — old blob may already be gone */
+        }
+      }
+      const base = blobBase(leagueSlug, seasonId, roundMeta.roundNumber);
+      const archived = await put(`${base}/eventresult.json`, text, {
+        access: "public",
+        contentType: "application/json",
+        addRandomSuffix: true,
+      });
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { resultJsonBlobUrl: archived.url },
+      });
+    } catch {
+      /* archiving is best-effort — leave resultJsonBlobUrl unchanged */
+    }
+  }
 
   revalidatePath(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}`

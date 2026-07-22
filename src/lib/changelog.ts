@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.53.0",
+    date: "2026-07-22",
+    changes: [
+      "Round results now offer the raw iRacing results file for download. When you import an eventresult JSON for a round, it's archived and, once the round is published, a small “Source files” box on the public results page lets anyone download the exact eventresult.json — handy for stats tools, re-checks or your own records. Admins also get a download link for the last-imported file on the Import iRacing JSON page. Re-importing replaces the archived file.",
+    ],
+  },
+  {
     version: "1.52.2",
     date: "2026-07-17",
     changes: [

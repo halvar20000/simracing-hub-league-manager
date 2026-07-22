@@ -831,6 +831,26 @@ export default async function PublicRoundResults({
         </Link>
       </div>
 
+      {round.resultJsonBlobUrl && (
+        <div className="rounded border border-zinc-800 bg-zinc-900/50 p-3 text-xs">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            Source files
+          </div>
+          <a
+            href={round.resultJsonBlobUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            download="eventresult.json"
+            className="text-orange-300 underline hover:text-orange-200"
+          >
+            ⬇ eventresult.json
+          </a>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            The raw iRacing results file imported for this round.
+          </p>
+        </div>
+      )}
+
       {cls === "race-center" && round.raceCenter && round.raceCenter.publishedAt && (
         <RaceCenterView
           raceCenter={round.raceCenter}

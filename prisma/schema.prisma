@@ -322,6 +322,12 @@ model Round {
   /// the cron's idempotency marker.
   youtubeMatchedAt DateTime?
 
+  /// Public Vercel Blob URL of the raw iRacing eventresult JSON last imported
+  /// for this round via the "Import iRacing JSON" admin flow. Surfaced as a
+  /// download on the public results page (and the admin import page). Null
+  /// until a JSON import runs; overwritten (old blob deleted) on re-import.
+  resultJsonBlobUrl String?
+
   @@unique([seasonId, roundNumber])
 }
 

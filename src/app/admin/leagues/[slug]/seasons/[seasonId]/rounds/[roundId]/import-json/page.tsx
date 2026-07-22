@@ -138,6 +138,27 @@ export default async function ImportIracingJsonPage({
         </div>
       )}
 
+      {round.resultJsonBlobUrl && (
+        <div className="rounded border border-zinc-800 bg-zinc-900/40 p-3 text-xs">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+            Last imported file
+          </div>
+          <a
+            href={round.resultJsonBlobUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            download="eventresult.json"
+            className="text-orange-300 underline hover:text-orange-200"
+          >
+            ⬇ eventresult.json
+          </a>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            The archived JSON from the most recent import — also offered on the
+            public results page once the round is published.
+          </p>
+        </div>
+      )}
+
       <form
         action={action}
         encType="multipart/form-data"
