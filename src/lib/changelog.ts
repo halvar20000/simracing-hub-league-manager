@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.55.0",
+    date: "2026-07-22",
+    changes: [
+      "Round schedules now sort by calendar date instead of round number, on both the season page and the admin season overview. Normally these match, so nothing changes — but when a round is postponed to a make-up date (a “Nachholtermin”), it now appears in its real chronological slot at the end of the list instead of stuck in the middle by its round number. Standings, scoring and the R1…Rn round columns are unaffected — they still use round numbers.",
+    ],
+  },
+  {
     version: "1.54.1",
     date: "2026-07-22",
     changes: [

@@ -56,7 +56,11 @@ export default async function PublicSeasonDetail({
       league: true,
       scoringSystem: true,
       rounds: {
-        orderBy: { roundNumber: "asc" },
+        // Schedule display: order by calendar date so a postponed / make-up
+        // round (e.g. a "Nachholtermin") shows in its real chronological slot,
+        // not by its round number. roundNumber is the tiebreak. Scoring and
+        // standings keep round-number order elsewhere.
+        orderBy: [{ startsAt: "asc" }, { roundNumber: "asc" }],
         include: { _count: { select: { raceResults: true } } },
       },
       registrations: {
