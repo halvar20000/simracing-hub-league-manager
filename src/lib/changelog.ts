@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.55.1",
+    date: "2026-07-24",
+    changes: [
+      "Calendar feed (.ics) timezone fix: downloaded or subscribed calendar events were showing up 2 hours late (1 hour in winter) in Apple/Google/Outlook calendars. The feed now correctly labels race times as Europe/Berlin local time, so imported events match the times shown on the website — including across summer/winter time changes.",
+    ],
+  },
+  {
     version: "1.55.0",
     date: "2026-07-22",
     changes: [

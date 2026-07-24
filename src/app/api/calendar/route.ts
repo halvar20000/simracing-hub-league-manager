@@ -43,6 +43,34 @@ function icsUtc(d: Date): string {
   );
 }
 
+/**
+ * TIMEZONE CONVENTION (important): Round.startsAt stores the *Europe/Berlin
+ * wall-clock time* in a UTC-typed column — the admin form's datetime-local
+ * string is parsed with `new Date()` on a UTC server, so "20:00" is saved
+ * as 20:00Z. All server-rendered pages format on that same UTC server, so
+ * the site shows the intended wall time everywhere. The ICS feed must
+ * therefore NOT stamp these values as UTC instants ("...Z") — calendar apps
+ * would shift them +1h/+2h on import. Instead we emit the wall time as
+ * RFC 5545 form #3 (local time with TZID=Europe/Berlin, VTIMEZONE below),
+ * which also keeps CET/CEST transitions correct.
+ */
+const TZID = "Europe/Berlin";
+
+/** YYYYMMDDTHHMMSS — wall time per RFC 5545 §3.3.5 form #3 (with TZID).
+ *  Uses the UTC getters because that's where the wall time lives (see
+ *  convention note above). */
+function icsWall(d: Date): string {
+  return (
+    d.getUTCFullYear().toString() +
+    pad2(d.getUTCMonth() + 1) +
+    pad2(d.getUTCDate()) +
+    "T" +
+    pad2(d.getUTCHours()) +
+    pad2(d.getUTCMinutes()) +
+    pad2(d.getUTCSeconds())
+  );
+}
+
 /** Escape a text value per RFC 5545 §3.3.11. */
 function icsText(s: string): string {
   return s
@@ -109,10 +137,31 @@ export async function GET() {
   lines.push("METHOD:PUBLISH");
   lines.push(`X-WR-CALNAME:${icsText(CALNAME)}`);
   lines.push(`X-WR-CALDESC:${icsText(CALDESC)}`);
-  lines.push("X-WR-TIMEZONE:UTC");
+  lines.push(`X-WR-TIMEZONE:${TZID}`);
   // Tell calendar clients to refresh roughly hourly.
   lines.push("REFRESH-INTERVAL;VALUE=DURATION:PT1H");
   lines.push("X-PUBLISHED-TTL:PT1H");
+
+  // VTIMEZONE for Europe/Berlin (CET/CEST, EU rules since 1996) — required
+  // so the TZID references on DTSTART/DTEND resolve in every client.
+  lines.push("BEGIN:VTIMEZONE");
+  lines.push(`TZID:${TZID}`);
+  lines.push(`X-LIC-LOCATION:${TZID}`);
+  lines.push("BEGIN:DAYLIGHT");
+  lines.push("TZOFFSETFROM:+0100");
+  lines.push("TZOFFSETTO:+0200");
+  lines.push("TZNAME:CEST");
+  lines.push("DTSTART:19700329T020000");
+  lines.push("RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU");
+  lines.push("END:DAYLIGHT");
+  lines.push("BEGIN:STANDARD");
+  lines.push("TZOFFSETFROM:+0200");
+  lines.push("TZOFFSETTO:+0100");
+  lines.push("TZNAME:CET");
+  lines.push("DTSTART:19701025T030000");
+  lines.push("RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU");
+  lines.push("END:STANDARD");
+  lines.push("END:VTIMEZONE");
 
   const dtstamp = icsUtc(now);
   const site = siteUrl();
@@ -136,8 +185,8 @@ export async function GET() {
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:${uid}`);
     lines.push(`DTSTAMP:${dtstamp}`);
-    lines.push(`DTSTART:${icsUtc(start)}`);
-    lines.push(`DTEND:${icsUtc(end)}`);
+    lines.push(`DTSTART;TZID=${TZID}:${icsWall(start)}`);
+    lines.push(`DTEND;TZID=${TZID}:${icsWall(end)}`);
     lines.push(fold(`SUMMARY:${icsText(summary)}`));
     lines.push(fold(`LOCATION:${icsText(trackLine)}`));
     lines.push(fold(`URL:${roundUrl}`));
