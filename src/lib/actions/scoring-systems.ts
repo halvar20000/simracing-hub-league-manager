@@ -120,6 +120,7 @@ export async function createScoringSystem(formData: FormData): Promise<void> {
         pointsTableRace2: j(src.pointsTableRace2),
         protestWindowHours: src.protestWindowHours,
         protestCooldownHours: src.protestCooldownHours,
+        incidentReportingEnabled: src.incidentReportingEnabled,
         deferPenaltyPoints: src.deferPenaltyPoints,
         categoryPointsTable: j(src.categoryPointsTable),
         driverFprEnabled: src.driverFprEnabled,
@@ -175,6 +176,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   }
   const protestWindowHours = readIntOrNull(formData.get("protestWindowHours"));
   const protestCooldownHours = readIntOrNull(formData.get("protestCooldownHours"));
+  const incidentReportingEnabled =
+    formData.get("incidentReportingEnabled") === "on";
   const participationInCombined = formData.get("participationInCombined") === "on";
   const deferPenaltyPoints = formData.get("deferPenaltyPoints") === "on";
   // Penalty pool mode: radio buttons send the value of the selected option.
@@ -226,6 +229,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       dropWorstNRounds,
       protestWindowHours,
       protestCooldownHours,
+      incidentReportingEnabled,
       participationInCombined,
       deferPenaltyPoints,
       penaltyPoolMode,

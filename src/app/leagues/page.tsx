@@ -8,6 +8,7 @@ export default async function PublicLeaguesList() {
       status: "COMPLETED",
       season: {
         scoringSystem: {
+          incidentReportingEnabled: true,
           protestCooldownHours: { not: null },
           protestWindowHours: { not: null },
         },

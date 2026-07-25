@@ -186,6 +186,23 @@ export default async function EditScoringSystem({
         </Section>
 
         <Section title="Reporting window">
+          <label className="mb-3 flex items-start gap-3 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              name="incidentReportingEnabled"
+              defaultChecked={ss.incidentReportingEnabled}
+              className="mt-0.5 h-4 w-4 accent-orange-500"
+            />
+            <span>
+              <span className="font-medium">Incident reporting enabled</span>
+              <span className="ml-1 block text-xs text-zinc-500">
+                When unchecked, this league has no incident reporting at all:
+                the report button and pages are hidden everywhere and
+                submissions are rejected. The window settings below are
+                ignored.
+              </span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <Field
               label="Cool-down after race start (hours, blank = open immediately)"

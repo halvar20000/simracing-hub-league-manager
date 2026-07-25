@@ -32,6 +32,14 @@ export async function createIncidentReport(
     redirect(`/leagues/${leagueSlug}/seasons/${seasonId}`);
   }
 
+  // League has incident reporting switched off entirely — nobody can file,
+  // not even stewards (use manual admin penalties instead).
+  if (!round.season.scoringSystem.incidentReportingEnabled) {
+    redirect(
+      `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=Incident+reporting+is+not+available+in+this+league`
+    );
+  }
+
   // Reporting window check — admins/stewards bypass.
   const me = await prisma.user.findUnique({
     where: { id: sessionUser.id },

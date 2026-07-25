@@ -476,6 +476,10 @@ model ScoringSystem {
   penaltyPoolMode           PenaltyPoolMode @default(OFF)
   // Points deducted for each no-show (when penaltyPoolMode is FULL or NO_SHOW_ONLY).
   noRsvpNoShowPenaltyPoints Int             @default(1)
+  // Master switch: when false, the league(s) using this scoring system have NO
+  // incident reporting at all — report buttons/pages are hidden and
+  // submissions are rejected (e.g. NASCAR CAS Cup).
+  incidentReportingEnabled  Boolean         @default(true)
 }
 
 model FPRAward {

@@ -25,6 +25,7 @@ export default async function PublicReportingPage() {
       status: "COMPLETED",
       season: {
         scoringSystem: {
+          incidentReportingEnabled: true,
           protestCooldownHours: { not: null },
           protestWindowHours: { not: null },
         },

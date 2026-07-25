@@ -30,6 +30,26 @@ export default async function FileReportPage({
   });
   if (!round || round.season.league.slug !== slug) notFound();
 
+  // League has incident reporting switched off entirely (e.g. NASCAR CAS Cup).
+  if (!round.season.scoringSystem.incidentReportingEnabled) {
+    return (
+      <div className="space-y-3">
+        <Link
+          href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`}
+          className="text-sm text-zinc-400 hover:text-zinc-200"
+        >
+          ← Back to results
+        </Link>
+        <h1 className="font-display text-2xl font-bold">
+          Report an incident
+        </h1>
+        <p className="text-sm text-zinc-400">
+          This league does not use incident reporting.
+        </p>
+      </div>
+    );
+  }
+
   const me = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { role: true },

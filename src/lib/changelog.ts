@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.56.0",
+    date: "2026-07-25",
+    changes: [
+      "Incident reporting can now be switched off per league: a new “Incident reporting enabled” toggle on the scoring system hides the ⚑ Report incident button and pages everywhere and rejects submissions for that league. Switched off for the NASCAR CAS Cup, which does not use steward reporting.",
+    ],
+  },
+  {
     version: "1.55.1",
     date: "2026-07-24",
     changes: [

@@ -629,14 +629,16 @@ export default async function PublicRoundResults({
           >
             🏁 Grid &amp; Waiting List
           </Link>
-          <ReportButton
-            href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
-            window={protestWindowState({
-              raceStartsAt: round.startsAt,
-              protestCooldownHours: round.season.scoringSystem.protestCooldownHours,
-              protestWindowHours: round.season.scoringSystem.protestWindowHours,
-            })}
-          />
+          {round.season.scoringSystem.incidentReportingEnabled && (
+            <ReportButton
+              href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
+              window={protestWindowState({
+                raceStartsAt: round.startsAt,
+                protestCooldownHours: round.season.scoringSystem.protestCooldownHours,
+                protestWindowHours: round.season.scoringSystem.protestWindowHours,
+              })}
+            />
+          )}
           <Link
             href={`/leagues/${slug}/seasons/${seasonId}`}
             className="text-sm text-zinc-400 hover:text-zinc-100"
