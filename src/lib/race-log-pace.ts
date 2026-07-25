@@ -72,6 +72,8 @@ interface LapRec {
   lap: number | null;
   sec: number;
   driver: string;
+  /** Session clock at the end of the lap, in seconds (from `t_session`). */
+  t: number | null;
 }
 
 interface CarAcc {
@@ -173,6 +175,10 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
           lap: typeof o.lap === "number" && o.lap > 0 ? o.lap : null,
           sec,
           driver: String(o.driver ?? "").trim(),
+          t:
+            typeof o.t_session === "number" && Number.isFinite(o.t_session)
+              ? o.t_session
+              : null,
         });
         if (sec < car.best) car.best = sec;
         break;
@@ -294,6 +300,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     lap: l.lap as number,
     sec: round3(l.sec) as number,
     d: driverIndex.get(norm(l.driver)) ?? 0,
+    ...(l.t != null ? { t: Math.round(l.t * 10) / 10 } : {}),
     ...(pitLaps.has(l.lap as number) ? { pit: true } : {}),
   }));
 
@@ -333,6 +340,11 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
       index: stints.length + 1,
       startLap: inStint[0].lap,
       endLap: inStint[inStint.length - 1].lap,
+      startSec: inStint[0].t == null ? null : Math.round(inStint[0].t),
+      endSec:
+        inStint[inStint.length - 1].t == null
+          ? null
+          : Math.round(inStint[inStint.length - 1].t as number),
       laps: inStint.length,
       drivers: Array.from(
         new Set(inStint.map((l) => l.driver).filter((n) => n !== ""))

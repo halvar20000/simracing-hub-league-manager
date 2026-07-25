@@ -25,6 +25,79 @@
 
 import type { RaceLogStintRow, TeamDriverStat } from "@/lib/stint-plan-state";
 
+/** One stint of the PLAN: its race-clock window and who was supposed to drive
+ *  it. `startSec`/`endSec` are seconds from the race start, as the planner
+ *  computes them — including the live ± corrections typed during the race. */
+export interface PlanStintWindow {
+  startSec: number;
+  endSec: number;
+  driverName: string | null;
+}
+
+/**
+ * Attribute the log's real stints using the plan's own driver order.
+ *
+ * This beats every inference: the plan says who drove when, and the live ±
+ * corrections keep its windows aligned with what actually happened. Each real
+ * stint (cut by the log's pit events) is given to the plan driver whose window
+ * overlaps it most in time, so a minute of drift at the green flag or a stop
+ * one lap early can't flip the assignment.
+ *
+ * @param stints     real stints from the log (need startSec/endSec)
+ * @param plan       the plan's stint windows, in race order
+ * @param driverName name → row index for the dashboard
+ */
+export function attributeByPlan(
+  stints: RaceLogStintRow[],
+  plan: PlanStintWindow[],
+  rowIndexOf: (name: string) => number
+): StintAttribution | null {
+  const usable = plan.filter(
+    (p) => p.driverName && p.endSec > p.startSec
+  ) as (PlanStintWindow & { driverName: string })[];
+  if (usable.length === 0) return null;
+  if (!stints.some((s) => s.startSec != null && s.endSec != null)) return null;
+
+  // Both clocks start at the race session: the logger's `t_session` and the
+  // planner's race clock. Verified against the 6h Road America pair — matching
+  // them directly reproduces iRacing's per-driver lap counts (41 vs 42, 39 vs
+  // 40), while "helpfully" anchoring on the first completed lap shifted every
+  // window by the formation laps and pushed a whole stint to the wrong driver.
+  const byStint = stints.map((s) => {
+    if (s.startSec == null || s.endSec == null) return -1;
+    let bestRow = -1;
+    let bestOverlap = 0;
+    for (const p of usable) {
+      const overlap = Math.min(s.endSec, p.endSec) - Math.max(s.startSec, p.startSec);
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestRow = rowIndexOf(p.driverName);
+      }
+    }
+    // A one-lap stint has zero duration and never overlaps anything: give it
+    // to whichever planned stint its single timestamp falls in.
+    if (bestRow < 0) {
+      const p = usable.find(
+        (w) => s.startSec! >= w.startSec && s.startSec! <= w.endSec
+      );
+      if (p) bestRow = rowIndexOf(p.driverName);
+    }
+    return bestRow;
+  });
+
+  const rowCount = Math.max(0, ...byStint) + 1;
+  const lapsByDriver = new Array<number>(rowCount).fill(0);
+  stints.forEach((st, i) => {
+    if (byStint[i] >= 0) lapsByDriver[byStint[i]] += st.laps;
+  });
+  return {
+    byStint,
+    lapsByDriver,
+    confident: byStint.every((d) => d >= 0),
+    mergedStints: 0,
+  };
+}
+
 export interface StintAttribution {
   /** driverIndex per stint (index into the drivers array), −1 = unknown. */
   byStint: number[];

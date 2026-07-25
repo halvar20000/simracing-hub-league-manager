@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from "react";
 import type { PlannerRaceLog, TeamDriverStat } from "@/lib/stint-plan-state";
-import { attributeStints } from "@/lib/race-log-attribution";
+import {
+  attributeByPlan,
+  attributeStints,
+  type PlanStintWindow,
+} from "@/lib/race-log-attribution";
 
 /**
  * Team-performance dashboard for an uploaded race-logger JSONL.
@@ -81,13 +85,18 @@ type Row = {
   stints: number;
 };
 
+const normName = (s: string) => s.trim().toLowerCase();
+
 export default function RaceLogDashboard({
   log,
   teamDrivers,
+  planStints,
 }: {
   log: PlannerRaceLog;
-  /** Our drivers from the uploaded event result — the authoritative split. */
+  /** Our drivers from the uploaded event result — the authoritative stats. */
   teamDrivers?: TeamDriverStat[];
+  /** This plan's own stint order — the best source for who drove when. */
+  planStints?: PlanStintWindow[];
 }) {
   const laps = useMemo(() => log.laps ?? [], [log.laps]);
   const logDrivers = useMemo(() => log.drivers ?? [], [log.drivers]);
@@ -95,8 +104,27 @@ export default function RaceLogDashboard({
 
   const model = useMemo(() => {
     const team = teamDrivers ?? [];
-    // --- solo race (or no event result yet): trust the log's own names ----
-    if (team.length === 0) {
+    const plan = planStints ?? [];
+    const planNames: string[] = [];
+    for (const p of plan) {
+      if (p.driverName && !planNames.some((n) => normName(n) === normName(p.driverName!)))
+        planNames.push(p.driverName);
+    }
+
+    // Who the dashboard has a row for: the event result's line-up (it carries
+    // iRacing's own numbers), plus anyone the plan lists who isn't in it.
+    const names: { name: string; stat?: TeamDriverStat }[] = team.map((d) => ({
+      name: d.name,
+      stat: d,
+    }));
+    for (const n of planNames) {
+      if (!names.some((r) => normName(r.name) === normName(n))) names.push({ name: n });
+    }
+    const rowIndexOf = (name: string) =>
+      names.findIndex((r) => normName(r.name) === normName(name));
+
+    // --- solo race with neither a plan line-up nor an event result --------
+    if (names.length === 0) {
       return {
         rows: logDrivers.map<Row>((d) => ({
           name: d.driver,
@@ -111,13 +139,22 @@ export default function RaceLogDashboard({
         })),
         lapRow: laps.map((l) => l.d),
         stintRow: stints.map((s) => s.d),
-        inferred: false,
+        source: "log" as const,
         confident: true,
       };
     }
 
-    // --- team race: reconstruct which stint belonged to whom --------------
-    const att = attributeStints(stints, team);
+    // --- who drove which stint -------------------------------------------
+    // 1. the plan's own driver order, matched to the real stints by time —
+    //    this is a fact the team typed in, not a guess;
+    // 2. otherwise reconstruct from the event result's fastest-lap anchors.
+    const planAtt = attributeByPlan(stints, plan, rowIndexOf);
+    const att = planAtt ?? attributeStints(stints, team);
+    const source: "plan" | "inferred" | "log" = planAtt
+      ? "plan"
+      : att
+        ? "inferred"
+        : "log";
     const stintRow = att ? att.byStint : stints.map(() => -1);
     // lap → row index: the first stint that has not ended yet. A lap inside a
     // stint maps to that stint; a lap in the gap between two stints is the
@@ -128,18 +165,22 @@ export default function RaceLogDashboard({
       return si >= 0 ? stintRow[si] : stintRow[stintRow.length - 1] ?? -1;
     });
 
-    const rows = team.map<Row>((d, i) => {
+    const rows = names.map<Row>(({ name, stat }, i) => {
       const mine = laps.filter((_, li) => lapRow[li] === i).map((l) => l.sec);
       const best = mine.length ? Math.min(...mine) : null;
       const green = best ? mine.filter((s) => s <= best * 1.05) : [];
       const p90 = percentile(green, 0.9);
       return {
-        name: d.name,
+        name,
         slot: i,
-        laps: d.laps,
-        bestSec: d.bestSec,
-        avgSec: d.avgSec,
-        incidents: d.incidents,
+        // iRacing's numbers when we have them; otherwise what the log shows
+        // for the laps attributed to this driver.
+        laps: stat?.laps ?? (mine.length || null),
+        bestSec: stat?.bestSec ?? best,
+        avgSec:
+          stat?.avgSec ??
+          (mine.length ? mine.reduce((a, b) => a + b, 0) / mine.length : null),
+        incidents: stat?.incidents ?? null,
         greenSec: median(green),
         spreadSec: p90 != null && best != null ? p90 - best : null,
         stints: stintRow.filter((r) => r === i).length,
@@ -150,12 +191,14 @@ export default function RaceLogDashboard({
       rows,
       lapRow,
       stintRow,
-      inferred: true,
+      source,
       confident: att?.confident ?? false,
     };
-  }, [teamDrivers, logDrivers, laps, stints]);
+  }, [teamDrivers, planStints, logDrivers, laps, stints]);
 
-  const { rows, lapRow, stintRow, inferred, confident } = model;
+  const { rows, lapRow, stintRow, source, confident } = model;
+  const inferred = source === "inferred";
+  const fromPlan = source === "plan";
 
   if (rows.length === 0) {
     return (
@@ -171,16 +214,29 @@ export default function RaceLogDashboard({
 
   return (
     <div className="space-y-5">
-      {inferred && (
+      {(fromPlan || inferred) && (
         <p className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
           <span className="font-semibold text-zinc-300">Team event.</span> Laps,
           best lap, average lap and incidents come from the{" "}
           <span className="font-mono">eventresult.json</span> — iRacing&apos;s own
-          per-driver scoring. The race logger only records one driver name per
-          car, so the stint split colouring the charts below is{" "}
-          <em>reconstructed</em> from each driver&apos;s fastest-lap number and
-          lap count.
-          {!confident && (
+          per-driver scoring. The race logger records only one driver name per
+          car, so who drove which stint comes from{" "}
+          {fromPlan ? (
+            <>
+              <span className="font-semibold text-zinc-300">
+                your stint schedule above
+              </span>{" "}
+              — each real stint is matched to the planned stint it overlaps in
+              time, live ± corrections included.
+            </>
+          ) : (
+            <>
+              a <em>reconstruction</em> from each driver&apos;s fastest-lap number
+              and lap count. Assign the drivers in the stint schedule above and
+              this becomes exact.
+            </>
+          )}
+          {inferred && !confident && (
             <span className="ml-1 text-amber-300">
               The reconstruction did not match every driver&apos;s lap count
               exactly — treat the stint assignment as a best guess.
@@ -223,26 +279,28 @@ export default function RaceLogDashboard({
                 {d.incidents ?? "—"}
               </dd>
               <dt className="text-zinc-500">
-                Green pace{inferred && <sup className="text-zinc-600">*</sup>}
+                Green pace{source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd className="text-right text-zinc-200">{fmtLapSec(d.greenSec)}</dd>
               <dt className="text-zinc-500">
-                Spread{inferred && <sup className="text-zinc-600">*</sup>}
+                Spread{source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd className="text-right text-zinc-200">
                 {d.spreadSec == null ? "—" : `${d.spreadSec.toFixed(3)} s`}
               </dd>
               <dt className="text-zinc-500">
-                Stints{inferred && <sup className="text-zinc-600">*</sup>}
+                Stints{source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd className="text-right text-zinc-200">{d.stints}</dd>
             </dl>
           </div>
         ))}
       </div>
-      {inferred && (
+      {source !== "log" && (
         <p className="-mt-3 text-[11px] text-zinc-600">
-          * derived from the reconstructed stint split.
+          {fromPlan
+            ? "* measured from the log, split by the driver order in your stint schedule."
+            : "* derived from the reconstructed stint split."}
         </p>
       )}
 
@@ -251,7 +309,7 @@ export default function RaceLogDashboard({
         lapRow={lapRow}
         rows={rows}
         log={log}
-        inferred={inferred}
+        source={source}
       />
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -286,7 +344,7 @@ export default function RaceLogDashboard({
       </div>
 
       {stints.length > 0 && (
-        <StintTable log={log} rows={rows} stintRow={stintRow} inferred={inferred} />
+        <StintTable log={log} rows={rows} stintRow={stintRow} source={source} />
       )}
     </div>
   );
@@ -299,13 +357,13 @@ function LapTrace({
   lapRow,
   rows,
   log,
-  inferred,
+  source,
 }: {
   laps: PlannerRaceLog["laps"];
   lapRow: number[];
   rows: Row[];
   log: PlannerRaceLog;
-  inferred: boolean;
+  source: "plan" | "inferred" | "log";
 }) {
   const [hover, setHover] = useState<{ x: number; i: number } | null>(null);
 
@@ -383,9 +441,11 @@ function LapTrace({
       <figcaption className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-zinc-200">
           Lap times over the race
-          {inferred && (
+          {source !== "log" && (
             <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
-              stint split reconstructed
+              {source === "plan"
+                ? "drivers from the stint plan"
+                : "stint split reconstructed"}
             </span>
           )}
         </span>
@@ -695,12 +755,12 @@ function StintTable({
   log,
   rows,
   stintRow,
-  inferred,
+  source,
 }: {
   log: PlannerRaceLog;
   rows: Row[];
   stintRow: number[];
-  inferred: boolean;
+  source: "plan" | "inferred" | "log";
 }) {
   const stints = log.stints ?? [];
   const paces = stints.map((s) => s.avgSec).filter((n): n is number => n != null);
@@ -713,9 +773,9 @@ function StintTable({
       <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-zinc-200">
           Stint by stint{log.ownCarNumber ? ` — car #${log.ownCarNumber}` : ""}
-          {inferred && (
+          {source !== "log" && (
             <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
-              driver reconstructed
+              {source === "plan" ? "drivers from the plan" : "driver reconstructed"}
             </span>
           )}
         </span>

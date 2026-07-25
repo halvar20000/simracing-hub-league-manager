@@ -71,6 +71,9 @@ export type RaceLogLap = {
   sec: number;
   /** Index into PlannerRaceLog.drivers. */
   d: number;
+  /** Session clock when the lap was completed, in seconds from session start.
+   *  This is what lets a lap be matched to a stint of the plan. */
+  t?: number;
   /** Lap ended with a pit stop. */
   pit?: boolean;
 };
@@ -81,6 +84,9 @@ export type RaceLogStintRow = {
   index: number; // 1-based stint number
   startLap: number | null;
   endLap: number | null;
+  /** Session clock of the first and last lap of the stint, in seconds. */
+  startSec?: number | null;
+  endSec?: number | null;
   laps: number;
   drivers: string[];
   /** Index of the driver who ran most of the stint. */

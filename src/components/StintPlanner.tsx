@@ -2330,6 +2330,11 @@ export default function StintPlanner({
             <RaceLogDashboard
               log={s.raceLog}
               teamDrivers={s.eventResult?.ownDrivers}
+              planStints={result.stints.map((st) => ({
+                startSec: st.startSec,
+                endSec: st.endSec,
+                driverName: st.driverName,
+              }))}
             />
 
           </div>

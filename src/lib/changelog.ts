@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.60.0",
+    date: "2026-07-25",
+    changes: [
+      "Stint Planner: the race-log dashboard now takes the driver order straight from your own stint schedule. Every real stint from the log is matched to the planned stint it overlaps in time — including the live ± corrections you typed during the race — so the per-driver split is what you planned, not a guess. The fastest-lap reconstruction is only used when no drivers are assigned in the schedule, and the dashboard says which of the two it used.",
+    ],
+  },
+  {
     version: "1.59.0",
     date: "2026-07-25",
     changes: [
