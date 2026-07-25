@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.57.0",
+    date: "2026-07-25",
+    changes: [
+      "Stint Planner: uploading an eventresult.json no longer fails silently. After a site update, an open planner tab was still talking to the old build — every upload and auto-save died without a word. The planner now checks which version is live, shows a “new version — reload” banner, and reports upload errors instead of swallowing them.",
+      "Stint Planner: team events (6h and other endurance races) are listed one row per TEAM with its driver line-up, car class and class position, and your own entry is highlighted — instead of one row per driver stint.",
+      "Stint Planner: new “Race log” card — upload the race-logger .jsonl to see the pace each driver actually ran, the real stint lengths and pit-stop times, and how that compares to the plan. One click writes the measured pace and track temperature back into the plan.",
+      "iRacing event-result files are now also accepted unwrapped (raw data payload), not only in the { type: \"event_result\", data: … } download format.",
+    ],
+  },
+  {
     version: "1.56.1",
     date: "2026-07-25",
     changes: [

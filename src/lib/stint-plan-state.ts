@@ -26,11 +26,63 @@ export type PlannerDriverState = {
 export type ResultRow = {
   pos: number | null; // classified finishing position, null for DNF/DNS/DSQ
   status: string; // CLASSIFIED | DNF | DNS | DSQ
+  /** Team name for team events, driver name for solo events. */
   name: string;
   carNumber: string | null;
   car: string | null;
   laps: number;
   incidents: number;
+  /** Multiclass: car class short name (e.g. "GTP"), when known. */
+  carClass?: string | null;
+  /** Multiclass: 1-based position in class, when known. */
+  classPos?: number | null;
+  /** Team events: the drivers who took a stint for this entry. */
+  drivers?: string[];
+  /** Best lap of the entry in ms, when known. */
+  bestLapMs?: number | null;
+  /** True for the plan's own entry (matched by driver name). */
+  own?: boolean;
+};
+
+/** One driver's measured pace from the race-logger JSONL. */
+export type RaceLogDriverRow = {
+  carNumber: string | null;
+  driver: string;
+  car: string | null;
+  laps: number; // laps with a usable lap time
+  bestSec: number | null;
+  medianSec: number | null; // median of all timed laps
+  cleanSec: number | null; // median of laps within +5% of the best (green pace)
+  incidents: number;
+  own: boolean; // driver is on the plan's roster
+};
+
+/** One stint of the plan's own car, derived from the log's pit events. */
+export type RaceLogStintRow = {
+  carNumber: string | null;
+  index: number; // 1-based stint number
+  startLap: number | null;
+  endLap: number | null;
+  laps: number;
+  drivers: string[];
+  avgSec: number | null;
+  pitSec: number | null; // pit-stop duration that ENDED this stint
+};
+
+/** Archived + parsed race-logger JSONL attached to a plan. */
+export type PlannerRaceLog = {
+  url: string; // Vercel Blob URL of the raw .jsonl
+  name: string;
+  parsedAt: string;
+  track: string | null;
+  sessionName: string | null;
+  official: boolean | null;
+  trackTempC: number | null;
+  airTempC: number | null;
+  /** Fastest lap of the whole field, in seconds. */
+  fieldBestSec: number | null;
+  drivers: RaceLogDriverRow[];
+  stints: RaceLogStintRow[];
 };
 
 /** Archived + parsed end-of-session eventresult attached to a plan. */
@@ -114,6 +166,8 @@ export type PlannerState = {
   notes: { pre: string; during: string; post: string };
   /** Archived + parsed end-of-session eventresult, or null. */
   eventResult: PlannerEventResult | null;
+  /** Archived + parsed race-logger JSONL, or null. */
+  raceLog: PlannerRaceLog | null;
 };
 
 let uidCounter = 0;
@@ -151,6 +205,7 @@ export function defaultPlannerState(): PlannerState {
     availability: {},
     notes: { pre: "", during: "", post: "" },
     eventResult: null,
+    raceLog: null,
   };
 }
 

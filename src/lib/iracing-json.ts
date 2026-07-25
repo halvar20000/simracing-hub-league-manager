@@ -51,6 +51,12 @@ export interface ParsedTeam {
   finishStatus: "CLASSIFIED" | "DNF" | "DNS" | "DSQ";
   /** cust_ids of every driver who took a stint for this team. */
   driverCustIds: number[];
+  /** Display names of every driver who took a stint, in file order. */
+  driverNames: string[];
+  /** Car number from the team livery, when present. */
+  carNumber: string | null;
+  /** Full car-class name (e.g. "Prototype"), when present. */
+  carClassName: string | null;
 }
 
 export interface ParsedSession {
@@ -191,10 +197,12 @@ function buildSession(
     // Case 2: team row containing nested driver_results.
     if (Array.isArray(r?.driver_results) && r.driver_results.length > 0) {
       const driverCustIds: number[] = [];
+      const driverNames: string[] = [];
       for (const d of r.driver_results) {
         if (typeof d?.cust_id === "number" && d.cust_id > 0) {
           drivers.push(toParsedDriver(d, r));
           driverCustIds.push(d.cust_id);
+          driverNames.push(String(d.display_name ?? ""));
         }
       }
       // Capture the team-level row itself as a ParsedTeam.
@@ -230,6 +238,15 @@ function buildSession(
           incidents: typeof r.incidents === "number" ? r.incidents : 0,
           finishStatus: mapReasonOut(r.reason_out),
           driverCustIds,
+          driverNames,
+          carNumber:
+            typeof r.livery?.car_number === "string"
+              ? r.livery.car_number
+              : typeof r.livery?.car_number === "number"
+                ? String(r.livery.car_number)
+                : null,
+          carClassName:
+            typeof r.car_class_name === "string" ? r.car_class_name : null,
         });
       }
     }
@@ -248,13 +265,22 @@ function buildSession(
 }
 
 export function parseIracingEventJson(input: unknown): ParsedEvent {
+  // Accept the wrapped download format `{ type: "event_result", data: {...} }`,
+  // a bare `{ data: {...} }`, and the raw `data` payload on its own (what the
+  // members-ng /data/results/get endpoint returns) — people export it all three
+  // ways and the difference is not their problem.
   const wrapper = input as { type?: string; data?: any } | undefined;
-  if (!wrapper || wrapper.type !== "event_result" || !wrapper.data) {
+  const data: any =
+    wrapper && Array.isArray(wrapper.data?.session_results)
+      ? wrapper.data
+      : wrapper && Array.isArray((wrapper as any).session_results)
+        ? wrapper
+        : null;
+  if (!data) {
     throw new IracingJsonParseError(
-      'Expected an iRacing event-result JSON object with { "type": "event_result", "data": {...} }'
+      'Expected an iRacing event-result JSON object with { "type": "event_result", "data": { "session_results": [...] } }'
     );
   }
-  const data = wrapper.data;
   const all: any[] = Array.isArray(data.session_results) ? data.session_results : [];
 
   // Race sessions = simsession_type === 6, ordered by simsession_number ASC

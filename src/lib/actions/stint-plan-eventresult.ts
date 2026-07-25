@@ -1,7 +1,7 @@
 "use server";
 
 import { put } from "@vercel/blob";
-import { parseIracingEventJson } from "@/lib/iracing-json";
+import { parseIracingEventJson, IracingJsonParseError } from "@/lib/iracing-json";
 import type { ResultRow } from "@/lib/stint-plan-state";
 
 // Upload an end-of-session iRacing eventresult.json for a stint plan: archive
@@ -16,8 +16,12 @@ export type UploadEventResultResult =
       name: string;
       summary: ResultRow[];
       track: string | null;
+      /** True when the file is a team event (one row per TEAM, not per driver). */
+      teamEvent: boolean;
     }
   | { ok: false; error: string };
+
+const norm = (s: string) => s.trim().toLowerCase();
 
 export async function uploadStintPlanEventResult(
   formData: FormData
@@ -26,15 +30,33 @@ export async function uploadStintPlanEventResult(
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "No file selected." };
   }
+  // The plan's roster, so the team's own row can be highlighted.
+  const rosterRaw = formData.get("roster");
+  let roster = new Set<string>();
+  if (typeof rosterRaw === "string" && rosterRaw.trim() !== "") {
+    try {
+      roster = new Set(
+        (JSON.parse(rosterRaw) as unknown[])
+          .filter((n): n is string => typeof n === "string" && n.trim() !== "")
+          .map(norm)
+      );
+    } catch {
+      // roster is a nicety — never fail the upload over it
+    }
+  }
+
   const text = await file.text();
 
   let parsed;
   try {
     parsed = parseIracingEventJson(JSON.parse(text));
-  } catch {
+  } catch (e) {
     return {
       ok: false,
-      error: "That doesn't look like an iRacing eventresult.json.",
+      error:
+        e instanceof IracingJsonParseError
+          ? e.message
+          : "That doesn't look like an iRacing eventresult.json.",
     };
   }
 
@@ -43,18 +65,43 @@ export async function uploadStintPlanEventResult(
     parsed.sessions.find((s) => s.kind === "RACE") ??
     parsed.sessions[parsed.sessions.length - 1];
 
-  const summary: ResultRow[] = (race?.drivers ?? [])
-    .slice()
-    .sort((a, b) => a.finishPosition - b.finishPosition)
-    .map((d) => ({
-      pos: d.finishStatus === "CLASSIFIED" ? d.finishPosition : null,
-      status: d.finishStatus,
-      name: d.displayName,
-      carNumber: d.carNumber,
-      car: d.carName,
-      laps: d.lapsComplete,
-      incidents: d.incidents,
-    }));
+  // Team events (endurance): one row per TEAM with its driver line-up, not one
+  // row per driver stint — otherwise a 6h race lists every driver twice.
+  const teamEvent = (race?.teams.length ?? 0) > 0;
+  const summary: ResultRow[] = teamEvent
+    ? (race?.teams ?? [])
+        .slice()
+        .sort((a, b) => a.finishPosition - b.finishPosition)
+        .map((t) => ({
+          pos: t.finishStatus === "CLASSIFIED" ? t.finishPosition : null,
+          status: t.finishStatus,
+          name: t.displayName,
+          carNumber: t.carNumber,
+          car: t.carName,
+          laps: t.lapsComplete,
+          incidents: t.incidents,
+          carClass: t.carClassShortName,
+          classPos: t.finishStatus === "CLASSIFIED" ? t.classPosition : null,
+          drivers: t.driverNames,
+          bestLapMs: t.bestLapMs,
+          own: t.driverNames.some((n) => roster.has(norm(n))),
+        }))
+    : (race?.drivers ?? [])
+        .slice()
+        .sort((a, b) => a.finishPosition - b.finishPosition)
+        .map((d) => ({
+          pos: d.finishStatus === "CLASSIFIED" ? d.finishPosition : null,
+          status: d.finishStatus,
+          name: d.displayName,
+          carNumber: d.carNumber,
+          car: d.carName,
+          laps: d.lapsComplete,
+          incidents: d.incidents,
+          carClass: d.carClassShortName,
+          classPos: null,
+          bestLapMs: d.bestLapMs,
+          own: roster.has(norm(d.displayName)),
+        }));
 
   let url: string;
   try {
@@ -68,5 +115,12 @@ export async function uploadStintPlanEventResult(
     return { ok: false, error: "Upload failed — please try again." };
   }
 
-  return { ok: true, url, name: file.name, summary, track: parsed.trackName };
+  return {
+    ok: true,
+    url,
+    name: file.name,
+    summary,
+    track: parsed.trackName,
+    teamEvent,
+  };
 }

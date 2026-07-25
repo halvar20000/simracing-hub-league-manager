@@ -23,7 +23,9 @@ import {
   getStintPlanLive,
 } from "@/lib/actions/stint-plans";
 import { uploadStintPlanEventResult } from "@/lib/actions/stint-plan-eventresult";
+import { uploadStintPlanRaceLog } from "@/lib/actions/stint-plan-racelog";
 import { postStintPlanToDiscord } from "@/lib/actions/stint-plan-discord";
+import { CURRENT_VERSION } from "@/lib/changelog";
 import {
   hydratePlanState,
   stateToInput,
@@ -31,6 +33,7 @@ import {
   DEFAULT_WET_DELTA_SEC,
   type PlannerAssignmentState,
   type PlannerState,
+  type RaceLogDriverRow,
 } from "@/lib/stint-plan-state";
 import type { ClsDriverOption } from "@/lib/cls-drivers";
 import type { ClsCarOption } from "@/lib/cls-tracks-cars";
@@ -49,6 +52,28 @@ import {
   type G61TeamOption,
   type G61Status,
 } from "@/lib/actions/garage61-connect";
+
+/** True for the error Next.js throws when a Server Action id no longer exists
+ *  on the server — i.e. the app was redeployed while this tab stayed open. */
+const isStaleActionError = (e: unknown): boolean => {
+  const msg =
+    e instanceof Error ? `${e.message} ${e.name}` : String(e ?? "");
+  return (
+    /Failed to find Server Action/i.test(msg) ||
+    /older or newer deployment/i.test(msg) ||
+    /Failed to fetch/i.test(msg) ||
+    /Connection closed/i.test(msg) ||
+    /NetworkError/i.test(msg)
+  );
+};
+
+/** Seconds → "1:23.456" for measured lap times from the race log. */
+const fmtSec = (sec: number | null | undefined): string => {
+  if (sec == null || !isFinite(sec)) return "—";
+  const m = Math.floor(sec / 60);
+  const rest = sec - m * 60;
+  return `${m}:${rest.toFixed(3).padStart(6, "0")}`;
+};
 
 const fmtClock = (ms: number | null): string =>
   ms == null
@@ -111,6 +136,28 @@ export default function StintPlanner({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
+  // ---- Stale-deployment guard -------------------------------------------
+  // Every Server Action carries a build-specific id. After a redeploy the ids
+  // of THIS page are gone, so uploads and auto-save fail with "Failed to find
+  // Server Action …" — during a 6h race the tab has usually been open for
+  // hours and the failure is otherwise completely silent. Detect it and say so.
+  const [staleBuild, setStaleBuild] = useState(false);
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const r = await fetch("/api/build-id", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = (await r.json()) as { version?: string };
+        if (j?.version && j.version !== CURRENT_VERSION) setStaleBuild(true);
+      } catch {
+        // offline / transient — the error path below still covers it
+      }
+    };
+    void check();
+    const iv = setInterval(() => void check(), 60_000);
+    return () => clearInterval(iv);
+  }, []);
+
   // ---- Live race sync (open editing, auto-save + auto-refresh) ----
   const [syncStatus, setSyncStatus] = useState<
     "idle" | "saving" | "saved" | "error"
@@ -131,12 +178,19 @@ export default function StintPlanner({
     const t = setTimeout(() => {
       void (async () => {
         setSyncStatus("saving");
-        const res = await liveUpdateStintPlan(curId, s.title, s);
-        if (res.ok) {
-          lastSavedSnapshotRef.current = snap;
-          baseUpdatedAtRef.current = res.updatedAt;
-          setSyncStatus("saved");
-        } else {
+        try {
+          const res = await liveUpdateStintPlan(curId, s.title, s);
+          if (res.ok) {
+            lastSavedSnapshotRef.current = snap;
+            baseUpdatedAtRef.current = res.updatedAt;
+            setSyncStatus("saved");
+          } else {
+            setSyncStatus("error");
+          }
+        } catch (e) {
+          // A dead Server Action id (redeploy while this tab was open) throws
+          // here instead of returning — surface it rather than losing edits.
+          if (isStaleActionError(e)) setStaleBuild(true);
           setSyncStatus("error");
         }
       })();
@@ -296,15 +350,23 @@ export default function StintPlanner({
     setS((p) => ({ ...p, notes: { ...p.notes, [k]: v } }));
 
   const [uploadingResult, setUploadingResult] = useState(false);
+  const [resultError, setResultError] = useState<string | null>(null);
+  /** Driver names on this plan — lets the server flag our own entry/car. */
+  const rosterNames = () =>
+    JSON.stringify(s.drivers.map((d) => d.name).filter((n) => n.trim() !== ""));
+
   async function onEventResultFile(file: File | null) {
     if (!file) return;
     setUploadingResult(true);
     setStatus(null);
+    setResultError(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("roster", rosterNames());
       const res = await uploadStintPlanEventResult(fd);
       if (!res.ok) {
+        setResultError(res.error);
         setStatus(res.error);
         return;
       }
@@ -317,13 +379,118 @@ export default function StintPlanner({
           parsedAt: new Date().toISOString(),
         },
       }));
-      setStatus("Eventresult parsed. Click Save to keep it with the plan.");
+      setStatus(
+        `Eventresult parsed — ${res.summary.length} ${
+          res.teamEvent ? "teams" : "drivers"
+        }. Saved with the plan.`
+      );
+    } catch (e) {
+      if (isStaleActionError(e)) {
+        setStaleBuild(true);
+        setResultError(
+          "The site was updated while this tab was open — reload the page, then upload again."
+        );
+      } else {
+        setResultError("Upload failed — please try again.");
+      }
     } finally {
       setUploadingResult(false);
     }
   }
-  const removeEventResult = () =>
+  const removeEventResult = () => {
+    setResultError(null);
     setS((p) => ({ ...p, eventResult: null }));
+  };
+
+  // ---- Race-logger JSONL (measured pace + real stints) --------------------
+  const [uploadingLog, setUploadingLog] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
+  async function onRaceLogFile(file: File | null) {
+    if (!file) return;
+    setUploadingLog(true);
+    setStatus(null);
+    setLogError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("roster", rosterNames());
+      const res = await uploadStintPlanRaceLog(fd);
+      if (!res.ok) {
+        setLogError(res.error);
+        return;
+      }
+      setS((p) => ({
+        ...p,
+        raceLog: { ...res.log, parsedAt: new Date().toISOString() },
+      }));
+      setStatus(
+        res.ownCarNumber
+          ? `Race log parsed — stints of car #${res.ownCarNumber}. Saved with the plan.`
+          : "Race log parsed. (No car matched this plan's drivers, so no stint breakdown.)"
+      );
+    } catch (e) {
+      if (isStaleActionError(e)) {
+        setStaleBuild(true);
+        setLogError(
+          "The site was updated while this tab was open — reload the page, then upload again."
+        );
+      } else {
+        setLogError("Upload failed — please try again.");
+      }
+    } finally {
+      setUploadingLog(false);
+    }
+  }
+  const removeRaceLog = () => {
+    setLogError(null);
+    setS((p) => ({ ...p, raceLog: null }));
+  };
+
+  /** Team event = rows carry a driver line-up (endurance). */
+  const resultIsTeamEvent = useMemo(
+    () => (s.eventResult?.summary ?? []).some((r) => (r.drivers?.length ?? 0) > 0),
+    [s.eventResult]
+  );
+  /** Multiclass = more than one car class in the result. */
+  const resultHasClasses = useMemo(() => {
+    const set = new Set(
+      (s.eventResult?.summary ?? [])
+        .map((r) => r.carClass)
+        .filter((c): c is string => !!c)
+    );
+    return set.size > 1;
+  }, [s.eventResult]);
+
+  /** Measured green pace per plan driver, keyed by normalised name. */
+  const logPaceByDriver = useMemo(() => {
+    const m = new Map<string, RaceLogDriverRow>();
+    for (const r of s.raceLog?.drivers ?? []) {
+      const k = r.driver.trim().toLowerCase();
+      const prev = m.get(k);
+      if (!prev || (r.laps ?? 0) > (prev.laps ?? 0)) m.set(k, r);
+    }
+    return m;
+  }, [s.raceLog]);
+
+  /** Write each driver's measured clean pace into their plan lap time. */
+  const applyLogPaceToDrivers = () => {
+    setS((p) => ({
+      ...p,
+      drivers: p.drivers.map((d) => {
+        const row = logPaceByDriver.get(d.name.trim().toLowerCase());
+        const sec = row?.cleanSec ?? row?.medianSec ?? null;
+        return sec ? { ...d, laptime: fmtLap(sec) } : d;
+      }),
+    }));
+    setStatus("Driver lap times set from the race log.");
+  };
+
+  const applyLogTrackTemp = () => {
+    const t = s.raceLog?.trackTempC;
+    if (t == null) return;
+    setS((p) => ({ ...p, event: { ...p.event, trackTempC: String(t) } }));
+    setStatus(`Track temperature set to ${t} °C from the race log.`);
+  };
 
   const [fuelSaveOpt, setFuelSaveOpt] = useState<FuelSaveOptimization | null>(
     null
@@ -798,6 +965,15 @@ export default function StintPlanner({
       } catch {
         setStatus("Saved. Share link is in the address bar.");
       }
+    } catch (e) {
+      if (isStaleActionError(e)) {
+        setStaleBuild(true);
+        setStatus(
+          "The site was updated while this tab was open — reload the page, then save again."
+        );
+      } else {
+        setStatus("Saving failed — please try again.");
+      }
     } finally {
       setSaving(false);
     }
@@ -832,6 +1008,24 @@ export default function StintPlanner({
 
   return (
     <div className="space-y-6">
+      {/* The app was redeployed while this tab was open: every Server Action
+          from this build is gone, so nothing this page sends will land. */}
+      {staleBuild && (
+        <div className="sticky top-2 z-40 flex flex-wrap items-center justify-between gap-3 rounded border border-amber-600 bg-amber-950/80 px-4 py-3 text-sm text-amber-100 shadow-lg backdrop-blur print:hidden">
+          <span>
+            <strong>A new version of the site is live.</strong> This tab is
+            running the old one — uploads and auto-save will fail until you
+            reload.
+          </span>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded bg-amber-500 px-3 py-1.5 font-semibold text-zinc-950 hover:bg-amber-400"
+          >
+            Reload now
+          </button>
+        </div>
+      )}
+
       {/* Header: title + actions */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-[16rem] flex-1">
@@ -1930,11 +2124,17 @@ export default function StintPlanner({
             />
           </label>
         </div>
+        {resultError && (
+          <p className="mb-3 rounded border border-red-800/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+            {resultError}
+          </p>
+        )}
         {!s.eventResult ? (
           <p className="text-sm text-zinc-500">
             After the session, upload the iRacing{" "}
             <span className="font-mono">eventresult.json</span> to archive it with
-            this plan and show the finishing order. Remember to Save afterwards.
+            this plan and show the finishing order. Team events are listed per
+            team; your own entry is highlighted.
           </p>
         ) : (
           <div className="space-y-3">
@@ -1961,24 +2161,256 @@ export default function StintPlanner({
                   <thead className="text-zinc-500">
                     <tr className="border-b border-zinc-800">
                       <th className="py-1 pr-2">Pos</th>
+                      {resultHasClasses && (
+                        <>
+                          <th className="py-1 pr-2">Class</th>
+                          <th className="py-1 pr-2">Cls</th>
+                        </>
+                      )}
                       <th className="py-1 pr-2">#</th>
-                      <th className="py-1 pr-2">Driver</th>
+                      <th className="py-1 pr-2">
+                        {resultIsTeamEvent ? "Team / drivers" : "Driver"}
+                      </th>
                       <th className="py-1 pr-2">Car</th>
                       <th className="py-1 pr-2 text-right">Laps</th>
+                      <th className="py-1 pr-2 text-right">Best</th>
                       <th className="py-1 pr-2 text-right">Inc</th>
                     </tr>
                   </thead>
                   <tbody>
                     {s.eventResult.summary.map((r, i) => (
-                      <tr key={i} className="border-t border-zinc-800/60 text-zinc-200">
+                      <tr
+                        key={i}
+                        className={`border-t border-zinc-800/60 ${
+                          r.own
+                            ? "bg-orange-950/40 font-semibold text-orange-100"
+                            : "text-zinc-200"
+                        }`}
+                      >
                         <td className="py-1 pr-2">{r.pos ?? r.status}</td>
+                        {resultHasClasses && (
+                          <>
+                            <td className="py-1 pr-2 text-zinc-400">
+                              {r.carClass ?? "—"}
+                            </td>
+                            <td className="py-1 pr-2">{r.classPos ?? "—"}</td>
+                          </>
+                        )}
                         <td className="py-1 pr-2 text-zinc-500">{r.carNumber ?? "—"}</td>
-                        <td className="py-1 pr-2">{r.name}</td>
+                        <td className="py-1 pr-2">
+                          {r.name}
+                          {r.drivers && r.drivers.length > 0 && (
+                            <span className="block text-xs font-normal text-zinc-500">
+                              {r.drivers.join(", ")}
+                            </span>
+                          )}
+                        </td>
                         <td className="py-1 pr-2 text-zinc-400">{r.car ?? "—"}</td>
                         <td className="py-1 pr-2 text-right">{r.laps}</td>
+                        <td className="py-1 pr-2 text-right text-zinc-400">
+                          {r.bestLapMs ? fmtSec(r.bestLapMs / 1000) : "—"}
+                        </td>
                         <td className="py-1 pr-2 text-right">{r.incidents}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Race-logger JSONL: what the car actually did */}
+      <div className={card}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Race log (pace & stints)
+          </h2>
+          <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+            {uploadingLog
+              ? "Parsing…"
+              : s.raceLog
+                ? "Replace race-log .jsonl"
+                : "Upload race-log .jsonl"}
+            <input
+              type="file"
+              accept=".jsonl,.log,.ndjson,application/x-ndjson,text/plain"
+              className="hidden"
+              disabled={uploadingLog}
+              onChange={(e) => onRaceLogFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
+        {logError && (
+          <p className="mb-3 rounded border border-red-800/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+            {logError}
+          </p>
+        )}
+        {!s.raceLog ? (
+          <p className="text-sm text-zinc-500">
+            Upload the race-logger{" "}
+            <span className="font-mono">.jsonl</span> from the session to see the
+            pace each driver actually ran, the real stint lengths and pit-stop
+            times — and to feed those numbers straight back into the plan.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <a
+                href={s.raceLog.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="text-orange-300 underline hover:text-orange-200"
+              >
+                ⬇ {s.raceLog.name}
+              </a>
+              <span className="text-zinc-500">
+                {[
+                  s.raceLog.track,
+                  s.raceLog.sessionName,
+                  s.raceLog.trackTempC != null
+                    ? `track ${s.raceLog.trackTempC} °C`
+                    : null,
+                  s.raceLog.fieldBestSec != null
+                    ? `field best ${fmtSec(s.raceLog.fieldBestSec)}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+              <div className="print:hidden ml-auto flex flex-wrap gap-2">
+                <button
+                  onClick={applyLogPaceToDrivers}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                >
+                  Use measured pace for drivers
+                </button>
+                {s.raceLog.trackTempC != null && (
+                  <button
+                    onClick={applyLogTrackTemp}
+                    className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                  >
+                    Use track temp
+                  </button>
+                )}
+                <button
+                  onClick={removeRaceLog}
+                  className="text-xs text-red-300/80 hover:text-red-200"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+
+            {s.raceLog.stints.length > 0 && (
+              <div className="overflow-x-auto">
+                <div className="mb-1 text-xs uppercase tracking-wider text-zinc-500">
+                  Our car {s.raceLog.stints[0].carNumber ? `#${s.raceLog.stints[0].carNumber}` : ""} — stints as raced
+                </div>
+                <table className="w-full text-left text-sm tabular-nums">
+                  <thead className="text-zinc-500">
+                    <tr className="border-b border-zinc-800">
+                      <th className="py-1 pr-2">#</th>
+                      <th className="py-1 pr-2">Laps</th>
+                      <th className="py-1 pr-2">Driver(s)</th>
+                      <th className="py-1 pr-2 text-right">Green avg</th>
+                      <th className="py-1 pr-2 text-right">Pit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.raceLog.stints.map((st) => (
+                      <tr
+                        key={st.index}
+                        className="border-t border-zinc-800/60 text-zinc-200"
+                      >
+                        <td className="py-1 pr-2">{st.index}</td>
+                        <td className="py-1 pr-2">
+                          {st.laps}
+                          <span className="ml-1 text-xs text-zinc-500">
+                            ({st.startLap}–{st.endLap})
+                          </span>
+                        </td>
+                        <td className="py-1 pr-2">{st.drivers.join(", ") || "—"}</td>
+                        <td className="py-1 pr-2 text-right">{fmtSec(st.avgSec)}</td>
+                        <td className="py-1 pr-2 text-right text-zinc-400">
+                          {st.pitSec != null ? `${st.pitSec.toFixed(1)} s` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {s.raceLog.drivers.length > 0 && (
+              <div className="overflow-x-auto">
+                <div className="mb-1 text-xs uppercase tracking-wider text-zinc-500">
+                  Measured pace {s.raceLog.drivers.some((d) => d.own) ? "(our drivers first)" : ""}
+                </div>
+                <table className="w-full text-left text-sm tabular-nums">
+                  <thead className="text-zinc-500">
+                    <tr className="border-b border-zinc-800">
+                      <th className="py-1 pr-2">#</th>
+                      <th className="py-1 pr-2">Driver</th>
+                      <th className="py-1 pr-2 text-right">Laps</th>
+                      <th className="py-1 pr-2 text-right">Best</th>
+                      <th className="py-1 pr-2 text-right">Green</th>
+                      <th className="py-1 pr-2 text-right">Plan</th>
+                      <th className="py-1 pr-2 text-right">Δ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.raceLog.drivers.slice(0, 40).map((d, i) => {
+                      const planned = s.drivers.find(
+                        (pd) =>
+                          pd.name.trim().toLowerCase() ===
+                          d.driver.trim().toLowerCase()
+                      );
+                      const plannedSec = planned?.laptime.trim()
+                        ? parseDurationToSec(planned.laptime)
+                        : parseDurationToSec(s.standard.laptime);
+                      const measured = d.cleanSec ?? d.medianSec;
+                      const delta =
+                        planned && plannedSec != null && measured != null
+                          ? measured - plannedSec
+                          : null;
+                      return (
+                        <tr
+                          key={`${d.carNumber ?? ""}-${d.driver}-${i}`}
+                          className={`border-t border-zinc-800/60 ${
+                            d.own
+                              ? "bg-orange-950/40 font-semibold text-orange-100"
+                              : "text-zinc-200"
+                          }`}
+                        >
+                          <td className="py-1 pr-2 text-zinc-500">
+                            {d.carNumber ?? "—"}
+                          </td>
+                          <td className="py-1 pr-2">{d.driver}</td>
+                          <td className="py-1 pr-2 text-right">{d.laps}</td>
+                          <td className="py-1 pr-2 text-right">{fmtSec(d.bestSec)}</td>
+                          <td className="py-1 pr-2 text-right">{fmtSec(d.cleanSec)}</td>
+                          <td className="py-1 pr-2 text-right text-zinc-400">
+                            {planned ? fmtSec(plannedSec) : "—"}
+                          </td>
+                          <td
+                            className={`py-1 pr-2 text-right ${
+                              delta == null
+                                ? "text-zinc-500"
+                                : delta > 0
+                                  ? "text-red-300"
+                                  : "text-emerald-300"
+                            }`}
+                          >
+                            {delta == null
+                              ? "—"
+                              : `${delta > 0 ? "+" : ""}${delta.toFixed(2)} s`}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
