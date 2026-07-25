@@ -18,6 +18,11 @@ export interface ParsedDriver {
   startingPosition: number | null;
   lapsComplete: number;
   bestLapMs: number | null;
+  /** Lap number on which the best lap was set — the only anchor that says
+   *  WHEN a driver was in the car during a team event. */
+  bestLapNum: number | null;
+  /** iRacing's average lap for this driver, in ms. */
+  avgLapMs: number | null;
   qualLapMs: number | null;
   incidents: number;
   iRating: number | null;
@@ -149,6 +154,13 @@ function buildSession(
           ? (driverOrTeam<number>("laps_complete") as number)
           : 0,
       bestLapMs: tenThousandthsToMs(driverOrTeam("best_lap_time")),
+      // Driver-level only: in a team row the team's best_lap_num belongs to
+      // whichever driver set it, so never fall back to the team value.
+      bestLapNum:
+        typeof r.best_lap_num === "number" && r.best_lap_num > 0
+          ? r.best_lap_num
+          : null,
+      avgLapMs: tenThousandthsToMs(r.average_lap),
       // iRacing returns -1 (not null/undefined) for unset fields, so a
       // raw `??` chain doesn't fall through. Try each candidate through
       // the converter (which rejects <=0) and pick the first real value.

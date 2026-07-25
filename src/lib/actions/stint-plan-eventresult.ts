@@ -2,7 +2,7 @@
 
 import { put } from "@vercel/blob";
 import { parseIracingEventJson, IracingJsonParseError } from "@/lib/iracing-json";
-import type { ResultRow } from "@/lib/stint-plan-state";
+import type { ResultRow, TeamDriverStat } from "@/lib/stint-plan-state";
 
 // Upload an end-of-session iRacing eventresult.json for a stint plan: archive
 // the raw file on Vercel Blob and return a parsed finishing-order summary. The
@@ -18,6 +18,9 @@ export type UploadEventResultResult =
       track: string | null;
       /** True when the file is a team event (one row per TEAM, not per driver). */
       teamEvent: boolean;
+      /** Our own entry's drivers as iRacing scored them, when identified. */
+      ownDrivers: TeamDriverStat[];
+      ownCarNumber: string | null;
     }
   | { ok: false; error: string };
 
@@ -103,6 +106,27 @@ export async function uploadStintPlanEventResult(
           own: roster.has(norm(d.displayName)),
         }));
 
+  // Our own entry: the drivers iRacing scored for the team row we matched.
+  // This is the authoritative per-driver split for a team race — the race
+  // logger only ever reports one driver name per car.
+  const ownTeam = (race?.teams ?? []).find((t) =>
+    t.driverNames.some((n) => roster.has(norm(n)))
+  );
+  const ownDrivers: TeamDriverStat[] = ownTeam
+    ? (race?.drivers ?? [])
+        .filter((d) => ownTeam.driverCustIds.includes(d.custId))
+        .map((d) => ({
+          name: d.displayName,
+          custId: d.custId,
+          laps: d.lapsComplete,
+          bestSec: d.bestLapMs == null ? null : d.bestLapMs / 1000,
+          bestLapNum: d.bestLapNum,
+          avgSec: d.avgLapMs == null ? null : d.avgLapMs / 1000,
+          incidents: d.incidents,
+        }))
+        .sort((a, b) => b.laps - a.laps)
+    : [];
+
   let url: string;
   try {
     const blob = await put(`stint-planner/eventresult/${file.name}`, text, {
@@ -122,5 +146,7 @@ export async function uploadStintPlanEventResult(
     summary,
     track: parsed.trackName,
     teamEvent,
+    ownDrivers,
+    ownCarNumber: ownTeam?.carNumber ?? null,
   };
 }

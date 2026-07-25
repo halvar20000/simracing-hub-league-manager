@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { PlannerRaceLog } from "@/lib/stint-plan-state";
+import type { PlannerRaceLog, TeamDriverStat } from "@/lib/stint-plan-state";
+import { attributeStints } from "@/lib/race-log-attribution";
 
 /**
  * Team-performance dashboard for an uploaded race-logger JSONL.
@@ -9,6 +10,13 @@ import type { PlannerRaceLog } from "@/lib/stint-plan-state";
  * Scope is deliberately OUR car only: how our drivers compared with each other
  * over the race. The single outside number is the fastest lap in our class,
  * drawn as a reference line so the gap is visible without listing the field.
+ *
+ * TEAM EVENTS: the race logger reports one driver name per car for the whole
+ * race — it never sees driver swaps. So laps / best / average / incidents come
+ * from the event result (iRacing's own per-driver scoring), and the stint split
+ * used to colour the trace is RECONSTRUCTED (see race-log-attribution.ts) and
+ * labelled as such. Solo races fall back to the log's own names, which are
+ * correct there.
  *
  * Colours are the validated categorical slots for a dark surface (blue,
  * orange, aqua, yellow, magenta, violet — adjacent-pair CVD ΔE ≥ 8.4 on
@@ -27,8 +35,10 @@ const SERIES = [
 const SURFACE = "#09090b"; // zinc-950 — the card surface behind the charts
 const GRID = "#27272a"; // zinc-800 — recessive gridlines
 const REFERENCE = "#a1a1aa"; // zinc-400 — the class-best reference line
+const UNKNOWN = "#52525b"; // zinc-600 — laps we could not attribute
 
-const colorFor = (slot: number) => SERIES[Math.min(slot, SERIES.length - 1)];
+const colorFor = (slot: number) =>
+  slot < 0 ? UNKNOWN : SERIES[Math.min(slot, SERIES.length - 1)];
 
 /** 92.418 → "1:32.418" */
 export function fmtLapSec(sec: number | null | undefined): string {
@@ -42,6 +52,13 @@ const fmtGap = (sec: number | null | undefined): string =>
     ? "—"
     : `${sec >= 0 ? "+" : "−"}${Math.abs(sec).toFixed(3)}`;
 
+function median(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  const a = xs.slice().sort((x, y) => x - y);
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
 function percentile(xs: number[], p: number): number | null {
   if (xs.length === 0) return null;
   const a = xs.slice().sort((x, y) => x - y);
@@ -49,36 +66,134 @@ function percentile(xs: number[], p: number): number | null {
   return a[i];
 }
 
-export default function RaceLogDashboard({ log }: { log: PlannerRaceLog }) {
-  // Memoised so the chart models below don't recompute on every render just
-  // because `?? []` minted a fresh array.
-  const drivers = useMemo(() => log.drivers ?? [], [log.drivers]);
+/** One driver row on the dashboard: hard numbers + reconstructed ones. */
+type Row = {
+  name: string;
+  slot: number;
+  /** From the event result in team events, from the log in solo races. */
+  laps: number | null;
+  bestSec: number | null;
+  avgSec: number | null;
+  incidents: number | null;
+  /** Derived from the log (reconstructed stints in team events). */
+  greenSec: number | null;
+  spreadSec: number | null;
+  stints: number;
+};
+
+export default function RaceLogDashboard({
+  log,
+  teamDrivers,
+}: {
+  log: PlannerRaceLog;
+  /** Our drivers from the uploaded event result — the authoritative split. */
+  teamDrivers?: TeamDriverStat[];
+}) {
   const laps = useMemo(() => log.laps ?? [], [log.laps]);
-  const stints = log.stints ?? [];
+  const logDrivers = useMemo(() => log.drivers ?? [], [log.drivers]);
+  const stints = useMemo(() => log.stints ?? [], [log.stints]);
 
-  const teamBest = useMemo(() => {
-    const xs = drivers
-      .map((d) => d.bestSec)
-      .filter((n): n is number => n != null);
-    return xs.length ? Math.min(...xs) : null;
-  }, [drivers]);
-  const reference = log.classBestSec ?? teamBest;
+  const model = useMemo(() => {
+    const team = teamDrivers ?? [];
+    // --- solo race (or no event result yet): trust the log's own names ----
+    if (team.length === 0) {
+      return {
+        rows: logDrivers.map<Row>((d) => ({
+          name: d.driver,
+          slot: d.slot,
+          laps: d.laps,
+          bestSec: d.bestSec,
+          avgSec: d.avgSec,
+          incidents: d.incidents,
+          greenSec: d.greenSec,
+          spreadSec: d.spreadSec,
+          stints: d.stints,
+        })),
+        lapRow: laps.map((l) => l.d),
+        stintRow: stints.map((s) => s.d),
+        inferred: false,
+        confident: true,
+      };
+    }
 
-  if (drivers.length === 0) {
+    // --- team race: reconstruct which stint belonged to whom --------------
+    const att = attributeStints(stints, team);
+    const stintRow = att ? att.byStint : stints.map(() => -1);
+    // lap → row index: the first stint that has not ended yet. A lap inside a
+    // stint maps to that stint; a lap in the gap between two stints is the
+    // out-lap of the driver taking over, so it maps to the following stint;
+    // anything past the last stint stays with the last driver.
+    const lapRow = laps.map((l) => {
+      const si = stints.findIndex((s) => s.endLap != null && l.lap <= s.endLap);
+      return si >= 0 ? stintRow[si] : stintRow[stintRow.length - 1] ?? -1;
+    });
+
+    const rows = team.map<Row>((d, i) => {
+      const mine = laps.filter((_, li) => lapRow[li] === i).map((l) => l.sec);
+      const best = mine.length ? Math.min(...mine) : null;
+      const green = best ? mine.filter((s) => s <= best * 1.05) : [];
+      const p90 = percentile(green, 0.9);
+      return {
+        name: d.name,
+        slot: i,
+        laps: d.laps,
+        bestSec: d.bestSec,
+        avgSec: d.avgSec,
+        incidents: d.incidents,
+        greenSec: median(green),
+        spreadSec: p90 != null && best != null ? p90 - best : null,
+        stints: stintRow.filter((r) => r === i).length,
+      };
+    });
+
+    return {
+      rows,
+      lapRow,
+      stintRow,
+      inferred: true,
+      confident: att?.confident ?? false,
+    };
+  }, [teamDrivers, logDrivers, laps, stints]);
+
+  const { rows, lapRow, stintRow, inferred, confident } = model;
+
+  if (rows.length === 0) {
     return (
-      <p className="text-sm text-zinc-500">
-        No lap data for our car in this log.
-      </p>
+      <p className="text-sm text-zinc-500">No lap data for our car in this log.</p>
     );
   }
 
+  const teamBest = (() => {
+    const xs = rows.map((r) => r.bestSec).filter((n): n is number => n != null);
+    return xs.length ? Math.min(...xs) : null;
+  })();
+  const reference = log.classBestSec ?? teamBest;
+
   return (
     <div className="space-y-5">
-      {/* Per-driver summary — this is also the table view for the charts */}
+      {inferred && (
+        <p className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
+          <span className="font-semibold text-zinc-300">Team event.</span> Laps,
+          best lap, average lap and incidents come from the{" "}
+          <span className="font-mono">eventresult.json</span> — iRacing&apos;s own
+          per-driver scoring. The race logger only records one driver name per
+          car, so the stint split colouring the charts below is{" "}
+          <em>reconstructed</em> from each driver&apos;s fastest-lap number and
+          lap count.
+          {!confident && (
+            <span className="ml-1 text-amber-300">
+              The reconstruction did not match every driver&apos;s lap count
+              exactly — treat the stint assignment as a best guess.
+            </span>
+          )}
+        </p>
+      )}
+
+      {/* Per-driver summary — also the table view for the charts */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {drivers.map((d) => (
+        {rows.map((d) => (
           <div
-            key={d.driver}
+            key={d.name}
             className="rounded border border-zinc-800 bg-zinc-950/60 p-3"
           >
             <div className="flex items-center gap-2">
@@ -87,68 +202,92 @@ export default function RaceLogDashboard({ log }: { log: PlannerRaceLog }) {
                 style={{ backgroundColor: colorFor(d.slot) }}
               />
               <span className="truncate text-sm font-semibold text-zinc-100">
-                {d.driver}
+                {d.name}
               </span>
             </div>
             <div className="mt-2 text-2xl font-semibold text-zinc-50">
-              {fmtLapSec(d.greenSec)}
+              {fmtLapSec(d.bestSec)}
             </div>
-            <div className="text-xs text-zinc-500">green-lap pace (median)</div>
+            <div className="text-xs text-zinc-500">best lap</div>
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs tabular-nums">
               <dt className="text-zinc-500">Laps</dt>
-              <dd className="text-right text-zinc-200">{d.laps}</dd>
-              <dt className="text-zinc-500">Best</dt>
-              <dd className="text-right text-zinc-200">{fmtLapSec(d.bestSec)}</dd>
+              <dd className="text-right text-zinc-200">{d.laps ?? "—"}</dd>
               <dt className="text-zinc-500">Average</dt>
               <dd className="text-right text-zinc-200">{fmtLapSec(d.avgSec)}</dd>
-              <dt className="text-zinc-500">Spread</dt>
-              <dd className="text-right text-zinc-200">
-                {d.spreadSec == null ? "—" : `${d.spreadSec.toFixed(3)} s`}
-              </dd>
-              <dt className="text-zinc-500">Stints</dt>
-              <dd className="text-right text-zinc-200">
-                {d.stints} · {d.pits} stop{d.pits === 1 ? "" : "s"}
-              </dd>
               <dt className="text-zinc-500">Incidents</dt>
               <dd
                 className={`text-right ${
-                  d.incidents > 0 ? "text-amber-300" : "text-emerald-300"
+                  (d.incidents ?? 0) > 0 ? "text-amber-300" : "text-emerald-300"
                 }`}
               >
-                {d.incidents}
+                {d.incidents ?? "—"}
               </dd>
+              <dt className="text-zinc-500">
+                Green pace{inferred && <sup className="text-zinc-600">*</sup>}
+              </dt>
+              <dd className="text-right text-zinc-200">{fmtLapSec(d.greenSec)}</dd>
+              <dt className="text-zinc-500">
+                Spread{inferred && <sup className="text-zinc-600">*</sup>}
+              </dt>
+              <dd className="text-right text-zinc-200">
+                {d.spreadSec == null ? "—" : `${d.spreadSec.toFixed(3)} s`}
+              </dd>
+              <dt className="text-zinc-500">
+                Stints{inferred && <sup className="text-zinc-600">*</sup>}
+              </dt>
+              <dd className="text-right text-zinc-200">{d.stints}</dd>
             </dl>
           </div>
         ))}
       </div>
+      {inferred && (
+        <p className="-mt-3 text-[11px] text-zinc-600">
+          * derived from the reconstructed stint split.
+        </p>
+      )}
 
-      <LapTrace laps={laps} drivers={drivers} reference={reference} log={log} />
+      <LapTrace
+        laps={laps}
+        lapRow={lapRow}
+        rows={rows}
+        log={log}
+        inferred={inferred}
+      />
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <PaceBars drivers={drivers} reference={reference} />
-        <SpreadBars drivers={drivers} />
+        <GapBars
+          title="Best lap — gap to class best"
+          rows={rows}
+          values={rows.map((r) =>
+            r.bestSec != null && reference != null ? r.bestSec - reference : null
+          )}
+          absolutes={rows.map((r) => r.bestSec)}
+        />
+        <GapBars
+          title="Average lap — gap to class best"
+          note="iRacing's average over every lap the driver completed, so pit, caution and repair laps are in it."
+          rows={rows}
+          values={rows.map((r) =>
+            r.avgSec != null && reference != null ? r.avgSec - reference : null
+          )}
+          absolutes={rows.map((r) => r.avgSec)}
+        />
         <CountBars
           title="Laps driven"
-          rows={drivers.map((d) => ({
-            label: d.driver,
-            slot: d.slot,
-            value: d.laps,
-            display: String(d.laps),
-          }))}
+          rows={rows}
+          values={rows.map((r) => r.laps ?? 0)}
         />
         <CountBars
           title="Incidents"
-          rows={drivers.map((d) => ({
-            label: d.driver,
-            slot: d.slot,
-            value: d.incidents,
-            display: String(d.incidents),
-          }))}
-          emptyNote="No incidents logged — clean race."
+          rows={rows}
+          values={rows.map((r) => r.incidents ?? 0)}
+          emptyNote="No incidents — clean race."
         />
       </div>
 
-      {stints.length > 0 && <StintBars log={log} />}
+      {stints.length > 0 && (
+        <StintTable log={log} rows={rows} stintRow={stintRow} inferred={inferred} />
+      )}
     </div>
   );
 }
@@ -157,25 +296,27 @@ export default function RaceLogDashboard({ log }: { log: PlannerRaceLog }) {
 
 function LapTrace({
   laps,
-  drivers,
-  reference,
+  lapRow,
+  rows,
   log,
+  inferred,
 }: {
   laps: PlannerRaceLog["laps"];
-  drivers: PlannerRaceLog["drivers"];
-  reference: number | null;
+  lapRow: number[];
+  rows: Row[];
   log: PlannerRaceLog;
+  inferred: boolean;
 }) {
   const [hover, setHover] = useState<{ x: number; i: number } | null>(null);
 
   const W = 820;
   const H = 280;
-  const P = { l: 58, r: 16, t: 14, b: 28 };
+  const P = useMemo(() => ({ l: 58, r: 16, t: 14, b: 28 }), []);
 
   const model = useMemo(() => {
     if (laps.length === 0) return null;
     const secs = laps.map((l) => l.sec);
-    const minSec = Math.min(...secs, reference ?? Infinity);
+    const minSec = Math.min(...secs, log.classBestSec ?? Infinity);
     // Clip the top so pit-in and caution laps don't flatten the racing laps.
     const p90 = percentile(secs, 0.9) ?? Math.max(...secs);
     const yMax = Math.max(minSec * 1.02, Math.min(p90 * 1.03, minSec * 1.15));
@@ -194,38 +335,33 @@ function LapTrace({
     let cur: { d: number; pts: { x: number; y: number }[] } | null = null;
     let prevLap: number | null = null;
     let above = 0;
-    for (const l of laps) {
-      const outOfScale = l.sec > yMax;
-      if (outOfScale) above += 1;
-      const breakHere =
-        cur == null ||
-        cur.d !== l.d ||
-        outOfScale ||
-        (prevLap != null && l.lap - prevLap > 1);
-      if (outOfScale) {
+    laps.forEach((l, i) => {
+      const d = lapRow[i] ?? -1;
+      if (l.sec > yMax) {
+        above += 1;
         cur = null;
         prevLap = l.lap;
-        continue;
+        return;
       }
-      if (breakHere) {
-        cur = { d: l.d, pts: [] };
+      if (cur == null || cur.d !== d || (prevLap != null && l.lap - prevLap > 1)) {
+        cur = { d, pts: [] };
         segments.push(cur);
       }
-      cur!.pts.push({ x: x(l.lap), y: y(l.sec) });
+      cur.pts.push({ x: x(l.lap), y: y(l.sec) });
       prevLap = l.lap;
-    }
+    });
 
     const ticks: number[] = [];
     const step = (yMax - yMin) / 4;
     for (let i = 0; i <= 4; i++) ticks.push(yMin + step * i);
 
     return { x, y, yMin, yMax, xMin, xMax, segments, ticks, above };
-  }, [laps, reference, P.l, P.r, P.t, P.b]);
+  }, [laps, lapRow, log.classBestSec, P]);
 
   if (!model) return null;
 
   const hovered = hover ? laps[hover.i] : null;
-  const hoveredDriver = hovered ? drivers[hovered.d] : null;
+  const hoveredRow = hover ? rows[lapRow[hover.i] ?? -1] : undefined;
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -247,6 +383,11 @@ function LapTrace({
       <figcaption className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-zinc-200">
           Lap times over the race
+          {inferred && (
+            <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
+              stint split reconstructed
+            </span>
+          )}
         </span>
         <span className="text-xs text-zinc-500">
           {model.above > 0
@@ -255,7 +396,23 @@ function LapTrace({
         </span>
       </figcaption>
 
-      <Legend drivers={drivers} reference={log.classBestSec} log={log} />
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
+        {rows.map((d) => (
+          <span key={d.name} className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-0.5 w-4 rounded"
+              style={{ backgroundColor: colorFor(d.slot) }}
+            />
+            {d.name}
+          </span>
+        ))}
+        {log.classBestSec != null && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-0 w-4 border-t border-dashed border-zinc-400" />
+            class best{log.ownCarClass ? ` (${log.ownCarClass})` : ""}
+          </span>
+        )}
+      </div>
 
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -265,7 +422,6 @@ function LapTrace({
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
-        {/* gridlines + y ticks */}
         {model.ticks.map((t, i) => (
           <g key={i}>
             <line
@@ -288,7 +444,6 @@ function LapTrace({
           </g>
         ))}
 
-        {/* x axis: lap numbers */}
         {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
           const lap = Math.round(model.xMin + (model.xMax - model.xMin) * f);
           return (
@@ -305,7 +460,6 @@ function LapTrace({
           );
         })}
 
-        {/* class-best reference */}
         {log.classBestSec != null && log.classBestSec >= model.yMin && (
           <g>
             <line
@@ -329,7 +483,6 @@ function LapTrace({
           </g>
         )}
 
-        {/* the traces */}
         {model.segments.map((seg, i) =>
           seg.pts.length < 2 ? (
             seg.pts.length === 1 ? (
@@ -338,7 +491,7 @@ function LapTrace({
                 cx={seg.pts[0].x}
                 cy={seg.pts[0].y}
                 r={2.5}
-                fill={colorFor(drivers[seg.d]?.slot ?? seg.d)}
+                fill={colorFor(rows[seg.d]?.slot ?? -1)}
               />
             ) : null
           ) : (
@@ -346,7 +499,7 @@ function LapTrace({
               key={i}
               points={seg.pts.map((p) => `${p.x},${p.y}`).join(" ")}
               fill="none"
-              stroke={colorFor(drivers[seg.d]?.slot ?? seg.d)}
+              stroke={colorFor(rows[seg.d]?.slot ?? -1)}
               strokeWidth={2}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -354,7 +507,6 @@ function LapTrace({
           )
         )}
 
-        {/* pit stops */}
         {laps
           .filter((l) => l.pit)
           .map((l, i) => (
@@ -379,7 +531,6 @@ function LapTrace({
             </g>
           ))}
 
-        {/* crosshair */}
         {hover && hovered && (
           <g>
             <line
@@ -394,7 +545,7 @@ function LapTrace({
               cx={hover.x}
               cy={model.y(Math.min(hovered.sec, model.yMax))}
               r={5}
-              fill={colorFor(hoveredDriver?.slot ?? 0)}
+              fill={colorFor(hoveredRow?.slot ?? -1)}
               stroke={SURFACE}
               strokeWidth={2}
             />
@@ -404,15 +555,14 @@ function LapTrace({
 
       {hover && hovered && (
         <div
-          className="pointer-events-none absolute top-[4.75rem] z-10 rounded border border-zinc-700 bg-zinc-900/95 px-2 py-1 text-xs text-zinc-200 shadow-lg"
+          className="pointer-events-none absolute top-[5.5rem] z-10 rounded border border-zinc-700 bg-zinc-900/95 px-2 py-1 text-xs text-zinc-200 shadow-lg"
           style={{
-            // Follow the crosshair but stay inside the card at both edges.
             left: `${Math.min(88, Math.max(12, (hover.x / W) * 100))}%`,
             transform: "translateX(-50%)",
           }}
         >
           <div className="font-semibold">Lap {hovered.lap}</div>
-          <div className="text-zinc-400">{hoveredDriver?.driver ?? "—"}</div>
+          <div className="text-zinc-400">{hoveredRow?.name ?? "unassigned"}</div>
           <div className="tabular-nums">{fmtLapSec(hovered.sec)}</div>
           {log.classBestSec != null && (
             <div className="tabular-nums text-zinc-500">
@@ -425,142 +575,60 @@ function LapTrace({
   );
 }
 
-function Legend({
-  drivers,
-  reference,
-  log,
-}: {
-  drivers: PlannerRaceLog["drivers"];
-  reference: number | null;
-  log: PlannerRaceLog;
-}) {
-  return (
-    <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
-      {drivers.map((d) => (
-        <span key={d.driver} className="flex items-center gap-1.5">
-          <span
-            className="inline-block h-0.5 w-4 rounded"
-            style={{ backgroundColor: colorFor(d.slot) }}
-          />
-          {d.driver}
-        </span>
-      ))}
-      {reference != null && (
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0 w-4 border-t border-dashed border-zinc-400" />
-          class best{log.ownCarClass ? ` (${log.ownCarClass})` : ""}
-        </span>
-      )}
-    </div>
-  );
-}
-
 // ------------------------------------------------------------------- charts
 
-/** Green pace per driver, drawn as the gap to the class-best lap. */
-function PaceBars({
-  drivers,
-  reference,
+/** Lap times drawn as the gap to the class-best lap (0 = class best). */
+function GapBars({
+  title,
+  note,
+  rows,
+  values,
+  absolutes,
 }: {
-  drivers: PlannerRaceLog["drivers"];
-  reference: number | null;
+  title: string;
+  note?: string;
+  rows: Row[];
+  values: (number | null)[];
+  absolutes: (number | null)[];
 }) {
-  const rows = drivers
-    .map((d) => ({
-      label: d.driver,
-      slot: d.slot,
-      value: d.greenSec != null && reference != null ? d.greenSec - reference : null,
-      pace: d.greenSec,
-    }))
-    .filter((r) => r.value != null) as {
-    label: string;
-    slot: number;
-    value: number;
-    pace: number | null;
-  }[];
-  const max = Math.max(0.001, ...rows.map((r) => r.value));
-
+  const usable = values.filter((v): v is number => v != null);
+  const max = Math.max(0.001, ...usable);
   return (
     <figure className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
-      <figcaption className="mb-3 text-sm font-semibold text-zinc-200">
-        Green pace — gap to class best
+      <figcaption className="mb-1 text-sm font-semibold text-zinc-200">
+        {title}
       </figcaption>
-      {rows.length === 0 ? (
-        <p className="text-xs text-zinc-500">No comparable pace in this log.</p>
+      {note && <p className="mb-3 text-xs text-zinc-500">{note}</p>}
+      {usable.length === 0 ? (
+        <p className="text-xs text-zinc-500">No comparable lap times.</p>
       ) : (
-        <ul className="space-y-3">
-          {rows.map((r) => (
-            <li key={r.label}>
+        <ul className={note ? "space-y-3" : "mt-3 space-y-3"}>
+          {rows.map((r, i) => (
+            <li key={r.name}>
               <div className="mb-1 flex items-baseline justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-zinc-300">
                   <span
                     className="inline-block h-2 w-2 rounded-full"
                     style={{ backgroundColor: colorFor(r.slot) }}
                   />
-                  {r.label}
+                  {r.name}
                 </span>
                 <span className="tabular-nums text-zinc-400">
-                  {fmtLapSec(r.pace)}{" "}
-                  <span className="text-zinc-500">({fmtGap(r.value)} s)</span>
+                  {fmtLapSec(absolutes[i])}{" "}
+                  <span className="text-zinc-500">({fmtGap(values[i])} s)</span>
                 </span>
               </div>
               <div className="h-3 w-full rounded-sm bg-zinc-900">
                 <div
                   className="h-3 rounded-r-[4px]"
                   style={{
-                    width: `${Math.max(2, (r.value / max) * 100)}%`,
+                    width:
+                      values[i] == null
+                        ? "0%"
+                        : `${Math.max(2, (values[i]! / max) * 100)}%`,
                     backgroundColor: colorFor(r.slot),
                   }}
-                  title={`${r.label}: ${fmtGap(r.value)} s off class best`}
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </figure>
-  );
-}
-
-/** Consistency: how far the green laps spread above each driver's own best. */
-function SpreadBars({ drivers }: { drivers: PlannerRaceLog["drivers"] }) {
-  const rows = drivers.filter((d) => d.spreadSec != null);
-  const max = Math.max(0.001, ...rows.map((d) => d.spreadSec as number));
-  return (
-    <figure className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
-      <figcaption className="mb-1 text-sm font-semibold text-zinc-200">
-        Consistency
-      </figcaption>
-      <p className="mb-3 text-xs text-zinc-500">
-        Spread of the green laps above each driver&apos;s own best — shorter is
-        steadier.
-      </p>
-      {rows.length === 0 ? (
-        <p className="text-xs text-zinc-500">Not enough laps to measure.</p>
-      ) : (
-        <ul className="space-y-3">
-          {rows.map((d) => (
-            <li key={d.driver}>
-              <div className="mb-1 flex items-baseline justify-between text-xs">
-                <span className="flex items-center gap-1.5 text-zinc-300">
-                  <span
-                    className="inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: colorFor(d.slot) }}
-                  />
-                  {d.driver}
-                </span>
-                <span className="tabular-nums text-zinc-400">
-                  {(d.spreadSec as number).toFixed(3)} s
-                </span>
-              </div>
-              <div className="h-3 w-full rounded-sm bg-zinc-900">
-                <div
-                  className="h-3 rounded-r-[4px]"
-                  style={{
-                    width: `${Math.max(2, ((d.spreadSec as number) / max) * 100)}%`,
-                    backgroundColor: colorFor(d.slot),
-                  }}
-                  title={`${d.driver}: ${(d.spreadSec as number).toFixed(3)} s spread`}
+                  title={`${r.name}: ${fmtGap(values[i])} s off class best`}
                 />
               </div>
             </li>
@@ -574,13 +642,15 @@ function SpreadBars({ drivers }: { drivers: PlannerRaceLog["drivers"] }) {
 function CountBars({
   title,
   rows,
+  values,
   emptyNote,
 }: {
   title: string;
-  rows: { label: string; slot: number; value: number; display: string }[];
+  rows: Row[];
+  values: number[];
   emptyNote?: string;
 }) {
-  const max = Math.max(...rows.map((r) => r.value), 0);
+  const max = Math.max(...values, 0);
   return (
     <figure className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
       <figcaption className="mb-3 text-sm font-semibold text-zinc-200">
@@ -590,26 +660,26 @@ function CountBars({
         <p className="text-xs text-emerald-300">{emptyNote}</p>
       ) : (
         <ul className="space-y-3">
-          {rows.map((r) => (
-            <li key={r.label}>
+          {rows.map((r, i) => (
+            <li key={r.name}>
               <div className="mb-1 flex items-baseline justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-zinc-300">
                   <span
                     className="inline-block h-2 w-2 rounded-full"
                     style={{ backgroundColor: colorFor(r.slot) }}
                   />
-                  {r.label}
+                  {r.name}
                 </span>
-                <span className="tabular-nums text-zinc-400">{r.display}</span>
+                <span className="tabular-nums text-zinc-400">{values[i]}</span>
               </div>
               <div className="h-3 w-full rounded-sm bg-zinc-900">
                 <div
                   className="h-3 rounded-r-[4px]"
                   style={{
-                    width: `${max > 0 ? Math.max(2, (r.value / max) * 100) : 2}%`,
+                    width: `${max > 0 ? Math.max(2, (values[i] / max) * 100) : 2}%`,
                     backgroundColor: colorFor(r.slot),
                   }}
-                  title={`${r.label}: ${r.display}`}
+                  title={`${r.name}: ${values[i]}`}
                 />
               </div>
             </li>
@@ -621,11 +691,19 @@ function CountBars({
 }
 
 /** Stint-by-stint pace of our car, coloured by the driver who ran it. */
-function StintBars({ log }: { log: PlannerRaceLog }) {
+function StintTable({
+  log,
+  rows,
+  stintRow,
+  inferred,
+}: {
+  log: PlannerRaceLog;
+  rows: Row[];
+  stintRow: number[];
+  inferred: boolean;
+}) {
   const stints = log.stints ?? [];
-  const paces = stints
-    .map((s) => s.avgSec)
-    .filter((n): n is number => n != null);
+  const paces = stints.map((s) => s.avgSec).filter((n): n is number => n != null);
   const min = paces.length ? Math.min(...paces) : 0;
   const max = paces.length ? Math.max(...paces) : 1;
   const span = Math.max(0.001, max - min);
@@ -635,6 +713,11 @@ function StintBars({ log }: { log: PlannerRaceLog }) {
       <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-zinc-200">
           Stint by stint{log.ownCarNumber ? ` — car #${log.ownCarNumber}` : ""}
+          {inferred && (
+            <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
+              driver reconstructed
+            </span>
+          )}
         </span>
         <span className="text-xs text-zinc-500">
           bar length = stint pace relative to our best and worst stint
@@ -647,16 +730,20 @@ function StintBars({ log }: { log: PlannerRaceLog }) {
               <th className="py-1 pr-2">#</th>
               <th className="py-1 pr-2">Laps</th>
               <th className="py-1 pr-2">Driver</th>
-              <th className="py-1 pr-2 w-1/3">Stint pace</th>
+              <th className="w-1/3 py-1 pr-2">Stint pace</th>
               <th className="py-1 pr-2 text-right">Pit</th>
             </tr>
           </thead>
           <tbody>
-            {stints.map((st) => {
+            {stints.map((st, i) => {
+              const row = rows[stintRow[i] ?? -1];
               const frac =
                 st.avgSec == null ? 0 : 0.25 + 0.75 * (1 - (st.avgSec - min) / span);
               return (
-                <tr key={st.index} className="border-t border-zinc-800/60 text-zinc-200">
+                <tr
+                  key={st.index}
+                  className="border-t border-zinc-800/60 text-zinc-200"
+                >
                   <td className="py-1.5 pr-2">{st.index}</td>
                   <td className="py-1.5 pr-2">
                     {st.laps}
@@ -668,9 +755,9 @@ function StintBars({ log }: { log: PlannerRaceLog }) {
                     <span className="flex items-center gap-1.5">
                       <span
                         className="inline-block h-2 w-2 rounded-full"
-                        style={{ backgroundColor: colorFor(log.drivers[st.d]?.slot ?? st.d) }}
+                        style={{ backgroundColor: colorFor(row?.slot ?? -1) }}
                       />
-                      {st.drivers.join(", ") || "—"}
+                      {row?.name ?? "—"}
                     </span>
                   </td>
                   <td className="py-1.5 pr-2">
@@ -680,9 +767,7 @@ function StintBars({ log }: { log: PlannerRaceLog }) {
                           className="block h-3 rounded-r-[4px]"
                           style={{
                             width: `${Math.max(2, frac * 100)}%`,
-                            backgroundColor: colorFor(
-                              log.drivers[st.d]?.slot ?? st.d
-                            ),
+                            backgroundColor: colorFor(row?.slot ?? -1),
                           }}
                           title={`Stint ${st.index}: ${fmtLapSec(st.avgSec)}`}
                         />

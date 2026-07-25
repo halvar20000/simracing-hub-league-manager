@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.59.0",
+    date: "2026-07-25",
+    changes: [
+      "Stint Planner: team races now show every team driver in the race-log dashboard, not just one. The iRacing race logger records a single driver name per car and never sees the driver swaps, so laps, best lap, average lap and incidents are now taken from the uploaded eventresult.json — iRacing's own per-driver scoring — while the stint split that colours the lap trace is reconstructed from each driver's fastest-lap number and lap count. Everything derived from that reconstruction is marked as such, and the dashboard says so when the reconstruction doesn't add up exactly.",
+      "Stint Planner: the event result now also stores our own entry's driver line-up, so the planner knows which car and which drivers are ours. Re-upload the eventresult.json on older plans to enable the per-driver breakdown.",
+    ],
+  },
+  {
     version: "1.58.1",
     date: "2026-07-25",
     changes: [

@@ -111,12 +111,30 @@ export type PlannerRaceLog = {
   stints: RaceLogStintRow[];
 };
 
+/** One of OUR drivers as iRacing scored them. In a team event this is the
+ *  only trustworthy per-driver split: the race logger reports a single driver
+ *  name per car for the whole race, so it cannot separate the stints. */
+export type TeamDriverStat = {
+  name: string;
+  custId: number;
+  laps: number;
+  bestSec: number | null;
+  /** Lap number of that best lap — anchors the driver to a point in the race. */
+  bestLapNum: number | null;
+  avgSec: number | null;
+  incidents: number;
+};
+
 /** Archived + parsed end-of-session eventresult attached to a plan. */
 export type PlannerEventResult = {
   url: string; // Vercel Blob URL of the raw eventresult.json
   name: string; // original file name
   summary: ResultRow[];
   parsedAt: string; // ISO timestamp
+  /** Our own entry's drivers (team events only), in iRacing's order. */
+  ownDrivers?: TeamDriverStat[];
+  /** Our own entry's car number, for matching the race log. */
+  ownCarNumber?: string | null;
 };
 export type PlannerAssignmentState = {
   profile: StintProfileKey;

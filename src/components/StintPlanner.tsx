@@ -378,6 +378,8 @@ export default function StintPlanner({
           name: res.name,
           summary: res.summary,
           parsedAt: new Date().toISOString(),
+          ownDrivers: res.ownDrivers,
+          ownCarNumber: res.ownCarNumber,
         },
       }));
       setStatus(
@@ -2307,7 +2309,28 @@ export default function StintPlanner({
               </div>
             </div>
 
-            <RaceLogDashboard log={s.raceLog} />
+            {s.raceLog.stints.length > 0 &&
+              (s.eventResult?.ownDrivers?.length ?? 0) === 0 &&
+              s.eventResult != null && (
+                <p className="rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+                  This event result was uploaded before team-driver splitting
+                  existed. Upload the{" "}
+                  <span className="font-mono">eventresult.json</span> again to
+                  break the log down per driver.
+                </p>
+              )}
+            {s.raceLog.stints.length > 0 && s.eventResult == null && (
+              <p className="rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+                For a team race, also upload the{" "}
+                <span className="font-mono">eventresult.json</span> above — the
+                race logger records only one driver name per car, so the split
+                per team driver comes from there.
+              </p>
+            )}
+            <RaceLogDashboard
+              log={s.raceLog}
+              teamDrivers={s.eventResult?.ownDrivers}
+            />
 
           </div>
         )}
