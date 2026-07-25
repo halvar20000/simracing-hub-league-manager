@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.56.1",
+    date: "2026-07-25",
+    changes: [
+      "Calendar feed (.ics): event durations now cover the whole race evening (practice + qualifying + race) instead of just the race length — GT3 WCT 3h10, PCCD 1h45, SFL Cup 1h45, NASCAR CAS Cup 2h00; other leagues get race length + 45 minutes.",
+    ],
+  },
+  {
     version: "1.56.0",
     date: "2026-07-25",
     changes: [

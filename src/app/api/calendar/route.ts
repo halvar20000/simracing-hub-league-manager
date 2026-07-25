@@ -105,6 +105,19 @@ function shortLeague(name: string): string {
   return name.replace(/^CAS\s+/i, "");
 }
 
+/**
+ * Total calendar-event length per league, in minutes, measured from
+ * startsAt — covers the whole evening (practice + quali + race), not just
+ * the race. Values confirmed by Thomas 2026-07-25. Leagues not listed fall
+ * back to raceLengthMinutes + 45 min pre-race.
+ */
+const EVENT_LENGTH_BY_LEAGUE: Record<string, number> = {
+  "cas-gt3-wct": 190, // 3h10
+  "cas-pccd": 105, // 1h45
+  "cas-sfl-cup": 105, // 1h45
+  "nascar-cas-cup": 120, // 2h00
+};
+
 export async function GET() {
   const now = new Date();
   const windowStart = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
@@ -168,7 +181,9 @@ export async function GET() {
 
   for (const r of rounds) {
     const start = r.startsAt;
-    const durationMin = r.raceLengthMinutes ?? 60;
+    const durationMin =
+      EVENT_LENGTH_BY_LEAGUE[r.season.league.slug] ??
+      (r.raceLengthMinutes ?? 60) + 45;
     const end = new Date(start.getTime() + durationMin * 60 * 1000);
 
     const leagueShort = shortLeague(r.season.league.name);
