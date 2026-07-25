@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.58.0",
+    date: "2026-07-25",
+    changes: [
+      "Stint Planner: the race log is now a team-performance dashboard. It shows only the drivers who sat in your car — laps, best, average, green-lap pace, consistency spread, stints and incidents — as stat cards, a lap-time trace over the whole race (one colour per driver, pit stops marked), and bar charts for pace, consistency, laps and incidents. The fastest lap in your own car class is drawn as a reference line; the rest of the field is no longer listed.",
+    ],
+  },
+  {
     version: "1.57.0",
     date: "2026-07-25",
     changes: [

@@ -73,8 +73,12 @@ export async function uploadStintPlanRaceLog(
       official: parsed.official,
       trackTempC: parsed.trackTempC,
       airTempC: parsed.airTempC,
+      ownCarNumber: parsed.ownCarNumber,
+      ownCarClass: parsed.ownCarClass,
+      classBestSec: parsed.classBestSec,
       fieldBestSec: parsed.fieldBestSec,
       drivers: parsed.drivers,
+      laps: parsed.laps,
       stints: parsed.stints,
     },
   };

@@ -44,17 +44,35 @@ export type ResultRow = {
   own?: boolean;
 };
 
-/** One driver's measured pace from the race-logger JSONL. */
+/** One team driver's measured performance from the race-logger JSONL.
+ *  Only drivers who actually sat in OUR car are kept — the log is a
+ *  team-performance comparison, not a field-wide result sheet. */
 export type RaceLogDriverRow = {
-  carNumber: string | null;
   driver: string;
-  car: string | null;
+  /** Index into the plan's colour slots (stable per driver, 0-based). */
+  slot: number;
   laps: number; // laps with a usable lap time
   bestSec: number | null;
-  medianSec: number | null; // median of all timed laps
-  cleanSec: number | null; // median of laps within +5% of the best (green pace)
+  avgSec: number | null; // mean of all timed laps
+  greenSec: number | null; // median of laps within +5% of the driver's best
+  medianSec: number | null;
+  /** Spread of the green laps (p90 − best), in seconds — consistency. */
+  spreadSec: number | null;
   incidents: number;
-  own: boolean; // driver is on the plan's roster
+  stints: number;
+  pits: number;
+  /** True when the driver is also listed on the plan's roster. */
+  onRoster: boolean;
+};
+
+/** One lap of our car, for the lap-time trace. */
+export type RaceLogLap = {
+  lap: number;
+  sec: number;
+  /** Index into PlannerRaceLog.drivers. */
+  d: number;
+  /** Lap ended with a pit stop. */
+  pit?: boolean;
 };
 
 /** One stint of the plan's own car, derived from the log's pit events. */
@@ -65,6 +83,8 @@ export type RaceLogStintRow = {
   endLap: number | null;
   laps: number;
   drivers: string[];
+  /** Index of the driver who ran most of the stint. */
+  d: number;
   avgSec: number | null;
   pitSec: number | null; // pit-stop duration that ENDED this stint
 };
@@ -79,9 +99,15 @@ export type PlannerRaceLog = {
   official: boolean | null;
   trackTempC: number | null;
   airTempC: number | null;
+  /** Our car's number and class, when identified from the roster. */
+  ownCarNumber: string | null;
+  ownCarClass: string | null;
+  /** Fastest lap in our class — the reference line on every chart. */
+  classBestSec: number | null;
   /** Fastest lap of the whole field, in seconds. */
   fieldBestSec: number | null;
   drivers: RaceLogDriverRow[];
+  laps: RaceLogLap[];
   stints: RaceLogStintRow[];
 };
 

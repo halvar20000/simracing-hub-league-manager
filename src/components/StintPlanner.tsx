@@ -44,6 +44,7 @@ import {
 } from "@/lib/garage61-import";
 import { pullGarage61Laps } from "@/lib/actions/garage61-pull";
 import StintDriverStats from "@/components/StintDriverStats";
+import RaceLogDashboard from "@/components/RaceLogDashboard";
 import {
   connectGarage61,
   setGarage61Team,
@@ -478,7 +479,7 @@ export default function StintPlanner({
       ...p,
       drivers: p.drivers.map((d) => {
         const row = logPaceByDriver.get(d.name.trim().toLowerCase());
-        const sec = row?.cleanSec ?? row?.medianSec ?? null;
+        const sec = row?.greenSec ?? row?.medianSec ?? null;
         return sec ? { ...d, laptime: fmtLap(sec) } : d;
       }),
     }));
@@ -2270,11 +2271,13 @@ export default function StintPlanner({
                 {[
                   s.raceLog.track,
                   s.raceLog.sessionName,
+                  s.raceLog.ownCarNumber ? `car #${s.raceLog.ownCarNumber}` : null,
+                  s.raceLog.ownCarClass,
                   s.raceLog.trackTempC != null
                     ? `track ${s.raceLog.trackTempC} °C`
                     : null,
-                  s.raceLog.fieldBestSec != null
-                    ? `field best ${fmtSec(s.raceLog.fieldBestSec)}`
+                  s.raceLog.classBestSec != null
+                    ? `class best ${fmtSec(s.raceLog.classBestSec)}`
                     : null,
                 ]
                   .filter(Boolean)
@@ -2304,117 +2307,8 @@ export default function StintPlanner({
               </div>
             </div>
 
-            {s.raceLog.stints.length > 0 && (
-              <div className="overflow-x-auto">
-                <div className="mb-1 text-xs uppercase tracking-wider text-zinc-500">
-                  Our car {s.raceLog.stints[0].carNumber ? `#${s.raceLog.stints[0].carNumber}` : ""} — stints as raced
-                </div>
-                <table className="w-full text-left text-sm tabular-nums">
-                  <thead className="text-zinc-500">
-                    <tr className="border-b border-zinc-800">
-                      <th className="py-1 pr-2">#</th>
-                      <th className="py-1 pr-2">Laps</th>
-                      <th className="py-1 pr-2">Driver(s)</th>
-                      <th className="py-1 pr-2 text-right">Green avg</th>
-                      <th className="py-1 pr-2 text-right">Pit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.raceLog.stints.map((st) => (
-                      <tr
-                        key={st.index}
-                        className="border-t border-zinc-800/60 text-zinc-200"
-                      >
-                        <td className="py-1 pr-2">{st.index}</td>
-                        <td className="py-1 pr-2">
-                          {st.laps}
-                          <span className="ml-1 text-xs text-zinc-500">
-                            ({st.startLap}–{st.endLap})
-                          </span>
-                        </td>
-                        <td className="py-1 pr-2">{st.drivers.join(", ") || "—"}</td>
-                        <td className="py-1 pr-2 text-right">{fmtSec(st.avgSec)}</td>
-                        <td className="py-1 pr-2 text-right text-zinc-400">
-                          {st.pitSec != null ? `${st.pitSec.toFixed(1)} s` : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <RaceLogDashboard log={s.raceLog} />
 
-            {s.raceLog.drivers.length > 0 && (
-              <div className="overflow-x-auto">
-                <div className="mb-1 text-xs uppercase tracking-wider text-zinc-500">
-                  Measured pace {s.raceLog.drivers.some((d) => d.own) ? "(our drivers first)" : ""}
-                </div>
-                <table className="w-full text-left text-sm tabular-nums">
-                  <thead className="text-zinc-500">
-                    <tr className="border-b border-zinc-800">
-                      <th className="py-1 pr-2">#</th>
-                      <th className="py-1 pr-2">Driver</th>
-                      <th className="py-1 pr-2 text-right">Laps</th>
-                      <th className="py-1 pr-2 text-right">Best</th>
-                      <th className="py-1 pr-2 text-right">Green</th>
-                      <th className="py-1 pr-2 text-right">Plan</th>
-                      <th className="py-1 pr-2 text-right">Δ</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.raceLog.drivers.slice(0, 40).map((d, i) => {
-                      const planned = s.drivers.find(
-                        (pd) =>
-                          pd.name.trim().toLowerCase() ===
-                          d.driver.trim().toLowerCase()
-                      );
-                      const plannedSec = planned?.laptime.trim()
-                        ? parseDurationToSec(planned.laptime)
-                        : parseDurationToSec(s.standard.laptime);
-                      const measured = d.cleanSec ?? d.medianSec;
-                      const delta =
-                        planned && plannedSec != null && measured != null
-                          ? measured - plannedSec
-                          : null;
-                      return (
-                        <tr
-                          key={`${d.carNumber ?? ""}-${d.driver}-${i}`}
-                          className={`border-t border-zinc-800/60 ${
-                            d.own
-                              ? "bg-orange-950/40 font-semibold text-orange-100"
-                              : "text-zinc-200"
-                          }`}
-                        >
-                          <td className="py-1 pr-2 text-zinc-500">
-                            {d.carNumber ?? "—"}
-                          </td>
-                          <td className="py-1 pr-2">{d.driver}</td>
-                          <td className="py-1 pr-2 text-right">{d.laps}</td>
-                          <td className="py-1 pr-2 text-right">{fmtSec(d.bestSec)}</td>
-                          <td className="py-1 pr-2 text-right">{fmtSec(d.cleanSec)}</td>
-                          <td className="py-1 pr-2 text-right text-zinc-400">
-                            {planned ? fmtSec(plannedSec) : "—"}
-                          </td>
-                          <td
-                            className={`py-1 pr-2 text-right ${
-                              delta == null
-                                ? "text-zinc-500"
-                                : delta > 0
-                                  ? "text-red-300"
-                                  : "text-emerald-300"
-                            }`}
-                          >
-                            {delta == null
-                              ? "—"
-                              : `${delta > 0 ? "+" : ""}${delta.toFixed(2)} s`}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         )}
       </div>
