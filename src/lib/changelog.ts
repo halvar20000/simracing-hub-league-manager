@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.58.1",
+    date: "2026-07-25",
+    changes: [
+      "Stint Planner: the lap-trace tooltip no longer covers the chart legend and stays inside the card at both edges.",
+    ],
+  },
+  {
     version: "1.58.0",
     date: "2026-07-25",
     changes: [

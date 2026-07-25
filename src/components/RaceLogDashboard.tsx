@@ -404,9 +404,11 @@ function LapTrace({
 
       {hover && hovered && (
         <div
-          className="pointer-events-none absolute top-12 rounded border border-zinc-700 bg-zinc-900/95 px-2 py-1 text-xs text-zinc-200 shadow-lg"
+          className="pointer-events-none absolute top-[4.75rem] z-10 rounded border border-zinc-700 bg-zinc-900/95 px-2 py-1 text-xs text-zinc-200 shadow-lg"
           style={{
-            left: `calc(${(hover.x / W) * 100}% - 60px)`,
+            // Follow the crosshair but stay inside the card at both edges.
+            left: `${Math.min(88, Math.max(12, (hover.x / W) * 100))}%`,
+            transform: "translateX(-50%)",
           }}
         >
           <div className="font-semibold">Lap {hovered.lap}</div>
