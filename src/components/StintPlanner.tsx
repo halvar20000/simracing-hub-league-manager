@@ -79,6 +79,14 @@ const fmtSec = (sec: number | null | undefined): string => {
   return `${m}:${rest.toFixed(3).padStart(6, "0")}`;
 };
 
+/** The three lives of a stint plan. */
+type PlanPhase = "pre" | "during" | "post";
+const PHASES: { key: PlanPhase; label: string; hint: string }[] = [
+  { key: "pre", label: "Pre-Race", hint: "setup & drivers" },
+  { key: "during", label: "During Race", hint: "schedule & live" },
+  { key: "post", label: "After Race", hint: "result & analysis" },
+];
+
 const fmtClock = (ms: number | null): string =>
   ms == null
     ? "—"
@@ -1065,6 +1073,23 @@ export default function StintPlanner({
     : -1;
   const currentStint = currentIdx >= 0 ? result.stints[currentIdx] : null;
 
+  // ---- Phase tabs --------------------------------------------------------
+  // Which of the three lives the plan is in right now. Derived from the race
+  // clock so opening the plan mid-race lands on the schedule, not on setup —
+  // until the user picks a tab themselves, then their choice wins.
+  const autoPhase: PlanPhase = useMemo(() => {
+    const start = result.raceStartUtcMs;
+    if (start == null || now === 0) return "pre";
+    if (now < start) return "pre";
+    // 20 min of grace after the chequered flag: the debrief starts once the
+    // team has actually stopped, not the second the clock runs out.
+    const end = (lastStint?.wallEndMs ?? start) + 20 * 60_000;
+    return now <= end ? "during" : "post";
+  }, [now, result.raceStartUtcMs, lastStint?.wallEndMs]);
+  const [manualPhase, setManualPhase] = useState<PlanPhase | null>(null);
+  const phase: PlanPhase = manualPhase ?? autoPhase;
+  const setPhase = (p: PlanPhase) => setManualPhase(p);
+
   return (
     <div className="space-y-6">
       {/* The app was redeployed while this tab was open: every Server Action
@@ -1150,6 +1175,29 @@ export default function StintPlanner({
         </p>
       )}
 
+      {/* Phase tabs — the plan has three lives: building it, running it,
+          and picking it apart afterwards. Only one is ever on screen; all
+          three are in the DOM so a printout stays complete. */}
+      <div className="sticky top-0 z-30 -mx-1 flex gap-1 rounded-lg border border-zinc-800 bg-zinc-950/95 p-1 backdrop-blur print:hidden">
+        {PHASES.map((ph) => (
+          <button
+            key={ph.key}
+            onClick={() => setPhase(ph.key)}
+            className={`flex-1 rounded px-3 py-2 text-sm font-semibold transition ${
+              phase === ph.key
+                ? "bg-[#ff6b35] text-zinc-950"
+                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+            }`}
+          >
+            {ph.label}
+            <span className="ml-1.5 hidden text-xs font-normal opacity-70 sm:inline">
+              {ph.hint}
+            </span>
+          </button>
+        ))}
+      </div>
+      {/* ===== PRE ===== */}
+      <div className={`space-y-6 ${phase === "pre" ? "" : "hidden print:block"}`}>
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Event config */}
         <div className={card}>
@@ -1845,6 +1893,19 @@ export default function StintPlanner({
         </div>
       )}
 
+      {/* Pre-Race notes */}
+      <div className={card}>
+        <label className={lbl}>Pre-Race notes</label>
+        <textarea
+          className={`${inp} mt-1 h-32 resize-y`}
+          value={s.notes["pre"]}
+          onChange={(e) => patchNote("pre", e.target.value)}
+          placeholder={"Pre-Race notes…"}
+        />
+      </div>
+      </div>
+      {/* ===== DURING ===== */}
+      <div className={`space-y-6 ${phase === "during" ? "" : "hidden print:block"}`}>
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Stints" value={String(result.totals.stintCount)} />
@@ -2130,32 +2191,19 @@ export default function StintPlanner({
         </div>
       )}
 
-      {/* Race notes */}
+      {/* During-Race notes */}
       <div className={card}>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
-          Comments
-        </h2>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {(
-            [
-              ["pre", "Pre-Race"],
-              ["during", "During-Race"],
-              ["post", "Post-Race"],
-            ] as const
-          ).map(([k, label]) => (
-            <div key={k}>
-              <label className={lbl}>{label}</label>
-              <textarea
-                className={`${inp} mt-1 h-32 resize-y`}
-                value={s.notes[k]}
-                onChange={(e) => patchNote(k, e.target.value)}
-                placeholder={`${label} notes…`}
-              />
-            </div>
-          ))}
-        </div>
+        <label className={lbl}>During-Race notes</label>
+        <textarea
+          className={`${inp} mt-1 h-32 resize-y`}
+          value={s.notes["during"]}
+          onChange={(e) => patchNote("during", e.target.value)}
+          placeholder={"During-Race notes…"}
+        />
       </div>
-
+      </div>
+      {/* ===== POST ===== */}
+      <div className={`space-y-6 ${phase === "post" ? "" : "hidden print:block"}`}>
       {/* Race-logger JSONL: what the car actually did */}
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -2424,6 +2472,17 @@ export default function StintPlanner({
         )}
       </div>
 
+      {/* Post-Race notes */}
+      <div className={card}>
+        <label className={lbl}>Post-Race notes</label>
+        <textarea
+          className={`${inp} mt-1 h-32 resize-y`}
+          value={s.notes["post"]}
+          onChange={(e) => patchNote("post", e.target.value)}
+          placeholder={"Post-Race notes…"}
+        />
+      </div>
+      </div>
     </div>
   );
 }

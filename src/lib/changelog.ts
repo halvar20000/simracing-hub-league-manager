@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.63.0",
+    date: "2026-07-26",
+    changes: [
+      "Stint Planner: the plan is now split into three tabs — Pre-Race (event setup, pace, drivers, Garage 61, availability), During Race (summary, live tracker, stint schedule, per-driver totals) and After Race (race log, event result). The plan opens on the tab that matches the race clock: before the start Pre-Race, from the green flag During Race, and from 20 minutes after the chequered flag After Race — pick a tab yourself and your choice wins.",
+      "Stint Planner: the three note fields now sit in their own section — the pre-race note in Pre-Race, the during-race note in During Race, the post-race note in After Race.",
+      "Stint Planner: printing always contains all three sections, whatever is on screen — the pit-wall printout stays complete.",
+    ],
+  },
+  {
     version: "1.62.1",
     date: "2026-07-26",
     changes: [
