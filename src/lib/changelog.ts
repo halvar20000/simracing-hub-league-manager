@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.65.0",
+    date: "2026-07-26",
+    changes: [
+      "Stint Planner: the temperature ramp now takes three points — start, peak and end, plus the stint the peak falls in (default: the middle stint). The track warms up to the peak and cools off after it, which is what a daytime race actually does. Leave the peak empty and it stays a single straight line from start to end.",
+    ],
+  },
+  {
     version: "1.64.0",
     date: "2026-07-26",
     changes: [

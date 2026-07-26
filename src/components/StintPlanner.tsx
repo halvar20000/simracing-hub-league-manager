@@ -878,26 +878,58 @@ export default function StintPlanner({
   // temperature. Enter the two ends and every stint gets its share; single
   // stints can then be corrected by hand (a cloud burst, a caution period).
   const [tempRampFrom, setTempRampFrom] = useState("");
+  const [tempRampPeak, setTempRampPeak] = useState("");
   const [tempRampTo, setTempRampTo] = useState("");
+  const [tempRampPeakAt, setTempRampPeakAt] = useState("");
   const applyTempRamp = () => {
     const a = Number(tempRampFrom);
     const b = Number(tempRampTo);
     if (!isFinite(a) || !isFinite(b) || tempRampFrom === "" || tempRampTo === "") {
-      setStatus("Enter a start and an end temperature for the ramp.");
+      setStatus("Enter at least a start and an end temperature for the ramp.");
       return;
     }
     const n = result.stints.length;
     if (n === 0) return;
+    // The peak is optional: without it the ramp is one straight line from
+    // start to end. With it, two straight lines meeting at the peak stint —
+    // a day race warms up until early afternoon and cools off after.
+    const hasPeak = tempRampPeak !== "" && isFinite(Number(tempRampPeak));
+    const peak = Number(tempRampPeak);
+    const peakAtRaw = Number(tempRampPeakAt);
+    // 1-based in the UI, and clamped so the peak always has a slope on both
+    // sides. Default: the middle stint.
+    const peakIdx = hasPeak
+      ? Math.min(
+          n - 1,
+          Math.max(
+            0,
+            tempRampPeakAt !== "" && isFinite(peakAtRaw)
+              ? Math.round(peakAtRaw) - 1
+              : Math.round((n - 1) / 2)
+          )
+        )
+      : -1;
+
+    const tempAt = (i: number): number => {
+      if (!hasPeak) return n === 1 ? a : a + (b - a) * (i / (n - 1));
+      if (i === peakIdx) return peak;
+      if (i < peakIdx) return a + (peak - a) * (i / peakIdx);
+      return peak + (b - peak) * ((i - peakIdx) / (n - 1 - peakIdx));
+    };
+
     setS((p) => {
       const next = [...p.assignments];
       for (let i = 0; i < n; i++) {
-        const f = n === 1 ? 0 : i / (n - 1);
-        const t = Math.round((a + (b - a) * f) * 10) / 10;
+        const t = Math.round(tempAt(i) * 10) / 10;
         next[i] = { ...(next[i] ?? { profile: "standard", driverId: null }), trackTempC: t };
       }
       return { ...p, assignments: next };
     });
-    setStatus(`Track temperature ramped ${a} °C → ${b} °C across ${n} stints.`);
+    setStatus(
+      hasPeak
+        ? `Track temperature ramped ${a} → ${peak} °C at stint ${peakIdx + 1} → ${b} °C across ${n} stints.`
+        : `Track temperature ramped ${a} °C → ${b} °C across ${n} stints.`
+    );
   };
   const clearStintTemps = () =>
     setS((p) => ({
@@ -2022,7 +2054,7 @@ export default function StintPlanner({
               </button>
             </div>
             <div className="flex items-center gap-1 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1 text-xs text-amber-200">
-              <span title="Fill every stint with a linear track-temperature ramp from the first stint to the last. Correct single stints afterwards.">
+              <span title="Fill every stint with a track-temperature ramp: start → peak → end. Leave the peak empty for one straight line. Correct single stints afterwards.">
                 🌡 Temp ramp
               </span>
               <input
@@ -2031,15 +2063,36 @@ export default function StintPlanner({
                 value={tempRampFrom}
                 onChange={(e) => setTempRampFrom(e.target.value)}
                 placeholder="start"
+                title="Track temperature at the green flag"
                 className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
               />
-              <span className="text-amber-300/70">→</span>
+              <span className="text-amber-300/70">↗</span>
+              <input
+                type="number"
+                step="0.5"
+                value={tempRampPeak}
+                onChange={(e) => setTempRampPeak(e.target.value)}
+                placeholder="peak"
+                title="Hottest track temperature of the race — leave empty for a straight start-to-end ramp"
+                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <input
+                type="number"
+                min={1}
+                value={tempRampPeakAt}
+                onChange={(e) => setTempRampPeakAt(e.target.value)}
+                placeholder="@#"
+                title="Stint the peak falls in (default: the middle stint)"
+                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <span className="text-amber-300/70">↘</span>
               <input
                 type="number"
                 step="0.5"
                 value={tempRampTo}
                 onChange={(e) => setTempRampTo(e.target.value)}
                 placeholder="end"
+                title="Track temperature at the chequered flag"
                 className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
               />
               <button
