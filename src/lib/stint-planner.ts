@@ -36,6 +36,11 @@ export type StintAssignment = {
   /** When true, this stint runs in the wet: its lap time gets `wetDeltaSec`
    *  added per lap (so a mixed-weather race can go dry → wet → dry). */
   wet?: boolean;
+  /** Track temperature for THIS stint, in °C. Null/undefined = run at the
+   *  plan's base temperature, i.e. exactly the entered pace. Anything else
+   *  shifts the lap time by `tempSlopePerC × (this − baseTempC)`, so a six-hour
+   *  race can cool off through the evening without touching the pace fields. */
+  trackTempC?: number | null;
 };
 
 export type PlannerInput = {
@@ -62,6 +67,11 @@ export type PlannerInput = {
   fuelReserve?: number;
   /** Seconds/lap added to any stint flagged `wet` (the wet-weather penalty). */
   wetDeltaSec?: number;
+  /** The temperature the entered lap times represent (the plan's Track temp).
+   *  Per-stint temperatures are measured against this. */
+  baseTempC?: number | null;
+  /** Seconds/lap per °C above the base temperature (Garage 61 fit or manual). */
+  tempSlopePerC?: number;
   /** Seconds saved at a stop when the SAME driver stays in (a double-stint /
    *  refuel-only stop): the mandatory driver-swap floor no longer applies.
    *  Effectively `max(0, driverSwapSec − refuelSec)`. 0 = no saving. */
@@ -144,6 +154,10 @@ export type ScheduleStint = {
   correctionMin: number;
   /** True when this stint was run in the wet (lap time includes the penalty). */
   wet: boolean;
+  /** Track temperature used for this stint, or null when it ran at the base. */
+  trackTempC: number | null;
+  /** Seconds/lap the temperature added (negative = cooler and quicker). */
+  tempDeltaSec: number;
 };
 
 export type DriverTotals = {
@@ -191,6 +205,8 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     stintLaps,
     fuelReserve,
     wetDeltaSec,
+    baseTempC,
+    tempSlopePerC,
     driverChangeSaveSec,
   } = input;
 
@@ -237,7 +253,21 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     // Wet stints run slower by the wet penalty (per lap). Fuel/laps unchanged
     // (a stint stays fuel-limited); only the on-track time grows.
     const wetAdd = assign.wet ? Math.max(0, wetDeltaSec ?? 0) : 0;
-    const fullGreen = (tpl.laps > 0 ? prof.laptimeSec * factor + wetAdd : 0) * tpl.laps;
+
+    // Per-stint track temperature. A stint without one runs at the plan's base
+    // temperature, i.e. exactly the entered pace — an empty field is always
+    // neutral. Otherwise the lap time shifts by the temperature slope, so an
+    // evening race can cool down stint by stint without touching the profiles.
+    const stintTemp = assign.trackTempC;
+    const tempAdd =
+      stintTemp != null &&
+      baseTempC != null &&
+      Number.isFinite(stintTemp) &&
+      Number.isFinite(baseTempC)
+        ? (tempSlopePerC ?? 0) * (stintTemp - baseTempC)
+        : 0;
+    const paceAdd = wetAdd + tempAdd;
+    const fullGreen = (tpl.laps > 0 ? prof.laptimeSec * factor + paceAdd : 0) * tpl.laps;
     let greenSec = fullGreen;
 
     // Pit loss for the stop that ENDS this stint: if the same driver stays in
@@ -264,7 +294,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       isFinal = true;
       partial = true;
       greenSec = raceDurationSec - t;
-      const effLaptime = prof.laptimeSec * factor + wetAdd;
+      const effLaptime = prof.laptimeSec * factor + paceAdd;
       laps = effLaptime > 0 ? greenSec / effLaptime : 0;
       fuel = laps * prof.fuelPerLap;
       endSec = raceDurationSec + corrSec; // projected chequered incl. correction
@@ -292,6 +322,8 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       partial,
       correctionMin,
       wet: !!assign.wet,
+      trackTempC: stintTemp ?? null,
+      tempDeltaSec: Math.round(tempAdd * 1000) / 1000,
     });
     t = endSec;
     i += 1;

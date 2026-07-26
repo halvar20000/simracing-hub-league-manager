@@ -872,6 +872,38 @@ export default function StintPlanner({
       ...p,
       assignments: p.assignments.map((a) => ({ ...a, wet: false })),
     }));
+
+  // ---- Per-stint track temperature ---------------------------------------
+  // A six-hour race that starts at 43 °C and finishes at 28 °C is not one
+  // temperature. Enter the two ends and every stint gets its share; single
+  // stints can then be corrected by hand (a cloud burst, a caution period).
+  const [tempRampFrom, setTempRampFrom] = useState("");
+  const [tempRampTo, setTempRampTo] = useState("");
+  const applyTempRamp = () => {
+    const a = Number(tempRampFrom);
+    const b = Number(tempRampTo);
+    if (!isFinite(a) || !isFinite(b) || tempRampFrom === "" || tempRampTo === "") {
+      setStatus("Enter a start and an end temperature for the ramp.");
+      return;
+    }
+    const n = result.stints.length;
+    if (n === 0) return;
+    setS((p) => {
+      const next = [...p.assignments];
+      for (let i = 0; i < n; i++) {
+        const f = n === 1 ? 0 : i / (n - 1);
+        const t = Math.round((a + (b - a) * f) * 10) / 10;
+        next[i] = { ...(next[i] ?? { profile: "standard", driverId: null }), trackTempC: t };
+      }
+      return { ...p, assignments: next };
+    });
+    setStatus(`Track temperature ramped ${a} °C → ${b} °C across ${n} stints.`);
+  };
+  const clearStintTemps = () =>
+    setS((p) => ({
+      ...p,
+      assignments: p.assignments.map((a) => ({ ...a, trackTempC: null })),
+    }));
   // ---- Garage 61 live pull (server-side API, uses the event Track + Car) ----
   async function onGarage61Pull() {
     if (!s.event.track.trim()) {
@@ -1989,6 +2021,41 @@ export default function StintPlanner({
                 All dry
               </button>
             </div>
+            <div className="flex items-center gap-1 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1 text-xs text-amber-200">
+              <span title="Fill every stint with a linear track-temperature ramp from the first stint to the last. Correct single stints afterwards.">
+                🌡 Temp ramp
+              </span>
+              <input
+                type="number"
+                step="0.5"
+                value={tempRampFrom}
+                onChange={(e) => setTempRampFrom(e.target.value)}
+                placeholder="start"
+                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <span className="text-amber-300/70">→</span>
+              <input
+                type="number"
+                step="0.5"
+                value={tempRampTo}
+                onChange={(e) => setTempRampTo(e.target.value)}
+                placeholder="end"
+                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <button
+                onClick={applyTempRamp}
+                className="rounded bg-amber-700 px-1.5 py-0.5 text-white hover:bg-amber-600"
+              >
+                Apply
+              </button>
+              <button
+                onClick={clearStintTemps}
+                className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
+                title="Clear every per-stint temperature (back to the plan's Track temp)"
+              >
+                Clear
+              </button>
+            </div>
             <button onClick={autoFill}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
               Auto-fill drivers
@@ -2020,6 +2087,7 @@ export default function StintPlanner({
                   <th className="py-1 pr-2 text-right">Length</th>
                   <th className="py-1 pr-2 text-right">Laps</th>
                   <th className="py-1 pr-2 text-right">Fuel</th>
+                  <th className="py-1 pr-2 text-right" title="Track temperature for this stint. Empty = the plan's Track temp, i.e. exactly the entered pace.">°C</th>
                   <th className="py-1 pr-2 text-center" title="Tick stints run in the rain — they get the wet penalty per lap.">Wet</th>
                   <th className="py-1 pr-2">Note</th>
                 </tr>
@@ -2126,6 +2194,39 @@ export default function StintPlanner({
                       <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
                       <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
                       <td className="py-1 pr-2 text-right">{fmtFuel(st.fuel)} L</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={a.trackTempC ?? ""}
+                          placeholder={
+                            s.event.trackTempC.trim() !== ""
+                              ? s.event.trackTempC
+                              : "—"
+                          }
+                          onChange={(e) =>
+                            setAssignment(i, {
+                              trackTempC:
+                                e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          title={
+                            st.tempDeltaSec
+                              ? `${st.tempDeltaSec > 0 ? "+" : ""}${st.tempDeltaSec.toFixed(2)} s/lap vs the plan's base temperature`
+                              : "Track temperature for this stint (blank = base temp)"
+                          }
+                          className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                            st.tempDeltaSec > 0
+                              ? "border-red-800/70 text-red-200"
+                              : st.tempDeltaSec < 0
+                                ? "border-emerald-800/70 text-emerald-200"
+                                : "border-zinc-700 text-zinc-100"
+                          }`}
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">
+                        {st.trackTempC != null ? `${st.trackTempC}°` : "—"}
+                      </td>
                       <td className="py-1 pr-2 text-center print:hidden">
                         <input
                           type="checkbox"

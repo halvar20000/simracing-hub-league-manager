@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.64.0",
+    date: "2026-07-26",
+    changes: [
+      "Stint Planner: track temperature is now per stint, like the wet flag. Every stint row has a °C field; a stint left blank runs at the plan's Track temp, i.e. exactly the pace you entered. Anything else shifts that stint's lap time by the temperature slope (the Garage 61 fit when there is one, otherwise 1.0 s per 10 °C) — the field turns red when the stint costs time and green when it gains.",
+      "Stint Planner: new “🌡 Temp ramp” helper above the schedule — enter the temperature at the start and at the end of the race and every stint is filled with its share of a linear ramp, which you can then correct stint by stint.",
+    ],
+  },
+  {
     version: "1.63.0",
     date: "2026-07-26",
     changes: [

@@ -149,6 +149,9 @@ export type PlannerAssignmentState = {
   spotterId?: string | null; // driver spotting this stint (never the stint driver)
   note?: string; // free-text stint comment (incident, weather, SC, …)
   wet?: boolean; // this stint runs in the wet (adds the wet penalty per lap)
+  /** Track temperature for this stint in °C; empty = run at the plan's base
+   *  temperature (the Track temp field), i.e. no correction at all. */
+  trackTempC?: number | null;
 };
 
 /** Track-temperature pace model. The Standard + per-driver lap times stored on
@@ -353,10 +356,18 @@ export function stateToInput(s: PlannerState): PlannerInput {
       driverId: a.driverId,
       correctionMin: a.correctionMin ?? 0,
       wet: a.wet ?? false,
+      trackTempC: a.trackTempC ?? null,
     })),
     // Fall back to the default wet penalty when no Garage 61 rain model exists,
     // so ticking a stint wet still lengthens it (the field shows this default).
     wetDeltaSec: s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC,
+    // Per-stint temperatures are measured against the plan's Track temp, using
+    // the Garage 61 fit when there is one and the manual slope otherwise.
+    baseTempC:
+      s.event.trackTempC.trim() !== "" && isFinite(Number(s.event.trackTempC))
+        ? Number(s.event.trackTempC)
+        : null,
+    tempSlopePerC: s.tempModel?.slopePerC ?? DEFAULT_TEMP_SLOPE_PER_C,
     driverChangeSaveSec:
       s.event.refuelSec.trim() !== ""
         ? Math.max(0, num(s.event.driverSwapSec, 30) - num(s.event.refuelSec))
