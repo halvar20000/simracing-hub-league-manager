@@ -1573,7 +1573,7 @@ export default function StintPlanner({
           ))}
           {s.drivers.length === 0 && (
             <p className="text-sm text-zinc-500">
-              Add drivers from CLS using the menu above.
+              Search for a CLS driver in the field above to add them.
             </p>
           )}
         </div>
