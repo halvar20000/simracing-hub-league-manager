@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.61.0",
+    date: "2026-07-25",
+    changes: [
+      "Stint Planner: the race-log dashboard now sits above the event result instead of below it — a 57-entry endurance result made it impossible to find.",
+      "Stint Planner: long event results open on your own car class (or the top 10) with a “Show all N entries” link, so the finishing order of a big field no longer buries the rest of the page.",
+    ],
+  },
+  {
     version: "1.60.1",
     date: "2026-07-25",
     changes: [

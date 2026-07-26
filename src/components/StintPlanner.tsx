@@ -496,6 +496,20 @@ export default function StintPlanner({
     () => (s.eventResult?.summary ?? []).some((r) => (r.drivers?.length ?? 0) > 0),
     [s.eventResult]
   );
+  /** A 57-entry endurance result buries everything below it, so the table
+   *  opens on our own class (or the top 10) with a toggle for the full field. */
+  const [showAllResults, setShowAllResults] = useState(false);
+  const visibleResultRows = useMemo(() => {
+    const all = s.eventResult?.summary ?? [];
+    if (showAllResults || all.length <= 12) return all;
+    const ownClass = all.find((r) => r.own)?.carClass ?? null;
+    const shortlist = ownClass
+      ? all.filter((r) => r.carClass === ownClass || r.own)
+      : all.slice(0, 10);
+    // If the shortlist is still the whole field, there's nothing to collapse.
+    return shortlist.length && shortlist.length < all.length ? shortlist : all.slice(0, 10);
+  }, [s.eventResult, showAllResults]);
+
   /** Multiclass = more than one car class in the result. */
   const resultHasClasses = useMemo(() => {
     const set = new Set(
@@ -2148,124 +2162,6 @@ export default function StintPlanner({
         </div>
       </div>
 
-      {/* End-of-session eventresult */}
-      <div className={card}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Event result
-          </h2>
-          <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-            {uploadingResult
-              ? "Parsing…"
-              : s.eventResult
-                ? "Replace eventresult.json"
-                : "Upload eventresult.json"}
-            <input
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              disabled={uploadingResult}
-              onChange={(e) => onEventResultFile(e.target.files?.[0] ?? null)}
-            />
-          </label>
-        </div>
-        {resultError && (
-          <p className="mb-3 rounded border border-red-800/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
-            {resultError}
-          </p>
-        )}
-        {!s.eventResult ? (
-          <p className="text-sm text-zinc-500">
-            After the session, upload the iRacing{" "}
-            <span className="font-mono">eventresult.json</span> to archive it with
-            this plan and show the finishing order. Team events are listed per
-            team; your own entry is highlighted.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <a
-                href={s.eventResult.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="text-orange-300 underline hover:text-orange-200"
-              >
-                ⬇ {s.eventResult.name}
-              </a>
-              <button
-                onClick={removeEventResult}
-                className="print:hidden text-xs text-red-300/80 hover:text-red-200"
-              >
-                Remove
-              </button>
-            </div>
-            {s.eventResult.summary.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm tabular-nums">
-                  <thead className="text-zinc-500">
-                    <tr className="border-b border-zinc-800">
-                      <th className="py-1 pr-2">Pos</th>
-                      {resultHasClasses && (
-                        <>
-                          <th className="py-1 pr-2">Class</th>
-                          <th className="py-1 pr-2">Cls</th>
-                        </>
-                      )}
-                      <th className="py-1 pr-2">#</th>
-                      <th className="py-1 pr-2">
-                        {resultIsTeamEvent ? "Team / drivers" : "Driver"}
-                      </th>
-                      <th className="py-1 pr-2">Car</th>
-                      <th className="py-1 pr-2 text-right">Laps</th>
-                      <th className="py-1 pr-2 text-right">Best</th>
-                      <th className="py-1 pr-2 text-right">Inc</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.eventResult.summary.map((r, i) => (
-                      <tr
-                        key={i}
-                        className={`border-t border-zinc-800/60 ${
-                          r.own
-                            ? "bg-orange-950/40 font-semibold text-orange-100"
-                            : "text-zinc-200"
-                        }`}
-                      >
-                        <td className="py-1 pr-2">{r.pos ?? r.status}</td>
-                        {resultHasClasses && (
-                          <>
-                            <td className="py-1 pr-2 text-zinc-400">
-                              {r.carClass ?? "—"}
-                            </td>
-                            <td className="py-1 pr-2">{r.classPos ?? "—"}</td>
-                          </>
-                        )}
-                        <td className="py-1 pr-2 text-zinc-500">{r.carNumber ?? "—"}</td>
-                        <td className="py-1 pr-2">
-                          {r.name}
-                          {r.drivers && r.drivers.length > 0 && (
-                            <span className="block text-xs font-normal text-zinc-500">
-                              {r.drivers.join(", ")}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-1 pr-2 text-zinc-400">{r.car ?? "—"}</td>
-                        <td className="py-1 pr-2 text-right">{r.laps}</td>
-                        <td className="py-1 pr-2 text-right text-zinc-400">
-                          {r.bestLapMs ? fmtSec(r.bestLapMs / 1000) : "—"}
-                        </td>
-                        <td className="py-1 pr-2 text-right">{r.incidents}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Race-logger JSONL: what the car actually did */}
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -2399,6 +2295,141 @@ export default function StintPlanner({
           </div>
         )}
       </div>
+      {/* End-of-session eventresult */}
+      <div className={card}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Event result
+          </h2>
+          <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+            {uploadingResult
+              ? "Parsing…"
+              : s.eventResult
+                ? "Replace eventresult.json"
+                : "Upload eventresult.json"}
+            <input
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              disabled={uploadingResult}
+              onChange={(e) => onEventResultFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
+        {resultError && (
+          <p className="mb-3 rounded border border-red-800/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+            {resultError}
+          </p>
+        )}
+        {!s.eventResult ? (
+          <p className="text-sm text-zinc-500">
+            After the session, upload the iRacing{" "}
+            <span className="font-mono">eventresult.json</span> to archive it with
+            this plan and show the finishing order. Team events are listed per
+            team; your own entry is highlighted.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <a
+                href={s.eventResult.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="text-orange-300 underline hover:text-orange-200"
+              >
+                ⬇ {s.eventResult.name}
+              </a>
+              <button
+                onClick={removeEventResult}
+                className="print:hidden text-xs text-red-300/80 hover:text-red-200"
+              >
+                Remove
+              </button>
+            </div>
+            {s.eventResult.summary.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm tabular-nums">
+                  <thead className="text-zinc-500">
+                    <tr className="border-b border-zinc-800">
+                      <th className="py-1 pr-2">Pos</th>
+                      {resultHasClasses && (
+                        <>
+                          <th className="py-1 pr-2">Class</th>
+                          <th className="py-1 pr-2">Cls</th>
+                        </>
+                      )}
+                      <th className="py-1 pr-2">#</th>
+                      <th className="py-1 pr-2">
+                        {resultIsTeamEvent ? "Team / drivers" : "Driver"}
+                      </th>
+                      <th className="py-1 pr-2">Car</th>
+                      <th className="py-1 pr-2 text-right">Laps</th>
+                      <th className="py-1 pr-2 text-right">Best</th>
+                      <th className="py-1 pr-2 text-right">Inc</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleResultRows.map((r, i) => (
+                      <tr
+                        key={i}
+                        className={`border-t border-zinc-800/60 ${
+                          r.own
+                            ? "bg-orange-950/40 font-semibold text-orange-100"
+                            : "text-zinc-200"
+                        }`}
+                      >
+                        <td className="py-1 pr-2">{r.pos ?? r.status}</td>
+                        {resultHasClasses && (
+                          <>
+                            <td className="py-1 pr-2 text-zinc-400">
+                              {r.carClass ?? "—"}
+                            </td>
+                            <td className="py-1 pr-2">{r.classPos ?? "—"}</td>
+                          </>
+                        )}
+                        <td className="py-1 pr-2 text-zinc-500">{r.carNumber ?? "—"}</td>
+                        <td className="py-1 pr-2">
+                          {r.name}
+                          {r.drivers && r.drivers.length > 0 && (
+                            <span className="block text-xs font-normal text-zinc-500">
+                              {r.drivers.join(", ")}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1 pr-2 text-zinc-400">{r.car ?? "—"}</td>
+                        <td className="py-1 pr-2 text-right">{r.laps}</td>
+                        <td className="py-1 pr-2 text-right text-zinc-400">
+                          {r.bestLapMs ? fmtSec(r.bestLapMs / 1000) : "—"}
+                        </td>
+                        <td className="py-1 pr-2 text-right">{r.incidents}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {visibleResultRows.length < s.eventResult.summary.length ? (
+                  <button
+                    onClick={() => setShowAllResults(true)}
+                    className="print:hidden mt-2 text-xs text-orange-300 underline hover:text-orange-200"
+                  >
+                    Show all {s.eventResult.summary.length} entries
+                  </button>
+                ) : (
+                  s.eventResult.summary.length > 12 && (
+                    <button
+                      onClick={() => setShowAllResults(false)}
+                      className="print:hidden mt-2 text-xs text-zinc-400 underline hover:text-zinc-300"
+                    >
+                      Show our class only
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
