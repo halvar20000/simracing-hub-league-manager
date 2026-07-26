@@ -15,6 +15,69 @@ export type UploadRaceLogResult =
   | { ok: true; log: Omit<PlannerRaceLog, "parsedAt">; ownCarNumber: string | null }
   | { ok: false; error: string };
 
+/**
+ * Re-run the parser over a log that is already archived on Blob.
+ *
+ * A log parsed by an older build can be missing fields the dashboard needs
+ * (lap timestamps, added in v1.60.0, are what lets a stint be matched to the
+ * plan's driver order). The raw file is still on Blob, so re-analysing it beats
+ * asking the team to dig the .jsonl out again.
+ */
+export async function reparseStintPlanRaceLog(
+  url: string,
+  name: string,
+  rosterJson: string
+): Promise<UploadRaceLogResult> {
+  if (!/^https:\/\/[a-z0-9.-]+\.public\.blob\.vercel-storage\.com\//i.test(url)) {
+    return { ok: false, error: "That log is not in this site's archive." };
+  }
+  let text: string;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return { ok: false, error: "Could not read the archived log." };
+    text = await res.text();
+  } catch {
+    return { ok: false, error: "Could not read the archived log." };
+  }
+
+  let roster: string[] = [];
+  try {
+    roster = (JSON.parse(rosterJson || "[]") as unknown[]).filter(
+      (n): n is string => typeof n === "string"
+    );
+  } catch {
+    // roster is a nicety — never fail over it
+  }
+
+  const parsed = parseRaceLog(text, roster);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: `Could not read the race log: ${parsed.error ?? "unknown format"}.`,
+    };
+  }
+  return {
+    ok: true,
+    ownCarNumber: parsed.ownCarNumber,
+    log: {
+      url,
+      name,
+      track: parsed.track,
+      sessionName: parsed.sessionName,
+      official: parsed.official,
+      trackTempC: parsed.trackTempC,
+      airTempC: parsed.airTempC,
+      ownCarNumber: parsed.ownCarNumber,
+      ownCarClass: parsed.ownCarClass,
+      classBestSec: parsed.classBestSec,
+      fieldBestSec: parsed.fieldBestSec,
+      drivers: parsed.drivers,
+      laps: parsed.laps,
+      stints: parsed.stints,
+    },
+  };
+}
+
 export async function uploadStintPlanRaceLog(
   formData: FormData
 ): Promise<UploadRaceLogResult> {

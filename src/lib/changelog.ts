@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.60.1",
+    date: "2026-07-25",
+    changes: [
+      "Stint Planner: a race log analysed by an older build has no lap timestamps, so the dashboard silently fell back to the reconstructed driver split even when the stint schedule had drivers assigned. The planner now says so and offers a “Re-analyse log” button that re-reads the file from the archive — no need to find the .jsonl again.",
+    ],
+  },
+  {
     version: "1.60.0",
     date: "2026-07-25",
     changes: [

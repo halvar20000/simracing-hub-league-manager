@@ -23,7 +23,10 @@ import {
   getStintPlanLive,
 } from "@/lib/actions/stint-plans";
 import { uploadStintPlanEventResult } from "@/lib/actions/stint-plan-eventresult";
-import { uploadStintPlanRaceLog } from "@/lib/actions/stint-plan-racelog";
+import {
+  uploadStintPlanRaceLog,
+  reparseStintPlanRaceLog,
+} from "@/lib/actions/stint-plan-racelog";
 import { postStintPlanToDiscord } from "@/lib/actions/stint-plan-discord";
 import { CURRENT_VERSION } from "@/lib/changelog";
 import {
@@ -448,6 +451,45 @@ export default function StintPlanner({
     setLogError(null);
     setS((p) => ({ ...p, raceLog: null }));
   };
+
+  /** Re-analyse the archived log with the current parser (older uploads are
+   *  missing the lap timestamps needed to follow the plan's driver order). */
+  async function reanalyseRaceLog() {
+    const cur = s.raceLog;
+    if (!cur) return;
+    setUploadingLog(true);
+    setLogError(null);
+    try {
+      const res = await reparseStintPlanRaceLog(cur.url, cur.name, rosterNames());
+      if (!res.ok) {
+        setLogError(res.error);
+        return;
+      }
+      setS((p) => ({
+        ...p,
+        raceLog: { ...res.log, parsedAt: new Date().toISOString() },
+      }));
+      setStatus("Race log re-analysed with the current parser.");
+    } catch (e) {
+      if (isStaleActionError(e)) {
+        setStaleBuild(true);
+        setLogError(
+          "The site was updated while this tab was open — reload the page, then try again."
+        );
+      } else {
+        setLogError("Re-analysing failed — please try again.");
+      }
+    } finally {
+      setUploadingLog(false);
+    }
+  }
+
+  /** An older parse that predates lap timestamps: the plan's driver order
+   *  cannot be applied to it until the archived file is read again. */
+  const raceLogNeedsReparse =
+    s.raceLog != null &&
+    s.raceLog.stints.length > 0 &&
+    !s.raceLog.stints.some((st) => st.startSec != null);
 
   /** Team event = rows carry a driver line-up (endurance). */
   const resultIsTeamEvent = useMemo(
@@ -2319,6 +2361,23 @@ export default function StintPlanner({
                   break the log down per driver.
                 </p>
               )}
+            {raceLogNeedsReparse && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+                <span>
+                  This log was analysed before lap timestamps were stored, so it
+                  can&apos;t be matched to the driver order in your stint
+                  schedule — the dashboard is falling back to a reconstruction.
+                  The raw file is still archived; one click fixes it.
+                </span>
+                <button
+                  onClick={reanalyseRaceLog}
+                  disabled={uploadingLog}
+                  className="print:hidden shrink-0 rounded bg-amber-500 px-3 py-1 font-semibold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
+                >
+                  {uploadingLog ? "Re-analysing…" : "Re-analyse log"}
+                </button>
+              </div>
+            )}
             {s.raceLog.stints.length > 0 && s.eventResult == null && (
               <p className="rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
                 For a team race, also upload the{" "}
