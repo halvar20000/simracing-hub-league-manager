@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.62.0",
+    date: "2026-07-26",
+    changes: [
+      "Stint Planner: adding drivers is now a search field instead of a dropdown with every CLS driver in it. Type two letters, pick with ↑↓ and Enter — the field keeps focus so a whole line-up goes in without touching the mouse. Accents are ignored, so “Muller” finds “Müller”.",
+    ],
+  },
+  {
     version: "1.61.0",
     date: "2026-07-25",
     changes: [
