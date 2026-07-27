@@ -34,14 +34,25 @@ export type PlannerDriver = {
 
 export type StintProfileKey = "standard" | "saving";
 
+/** How wet the track is for a stint. */
+export type StintCondition = "dry" | "half" | "wet";
+
+/** The condition of an assignment, honouring the legacy boolean. */
+export function conditionOf(a: { condition?: StintCondition; wet?: boolean }): StintCondition {
+  return a.condition ?? (a.wet ? "wet" : "dry");
+}
+
 export type StintAssignment = {
   profile: StintProfileKey;
   driverId: string | null;
   /** Live correction for this stint, in MINUTES (may be negative). Adjusts the
    *  stint's clock length and cascades to every following stint. */
   correctionMin?: number;
-  /** When true, this stint runs in the wet: its lap time gets `wetDeltaSec`
-   *  added per lap (so a mixed-weather race can go dry → wet → dry). */
+  /** Track condition for this stint. "half" = damp/drying, "wet" = full wet;
+   *  each adds its own penalty per lap, so a race can go dry → damp → wet →
+   *  damp → dry. Undefined falls back to the legacy `wet` flag. */
+  condition?: StintCondition;
+  /** Legacy full-wet flag (plans saved before half-wet existed). */
   wet?: boolean;
   /** Track temperature for THIS stint, in °C. Null/undefined = run at the
    *  plan's base temperature, i.e. exactly the entered pace. Anything else
@@ -141,8 +152,15 @@ export type PlannerInput = {
   stintSec?: number;
   stintLaps?: number;
   fuelReserve?: number;
-  /** Seconds/lap added to any stint flagged `wet` (the wet-weather penalty). */
+  /** Seconds/lap added to a FULL WET stint. */
   wetDeltaSec?: number;
+  /** Seconds/lap added to a HALF WET (damp / drying) stint. */
+  halfWetDeltaSec?: number;
+  /** Seconds/lap added to EVERY stint: the difference between the pace the team
+   *  sets alone in practice and what they really run in a race, in traffic,
+   *  with cars to pass and be passed by. Practice data is always optimistic;
+   *  this is the honesty tax on it. */
+  trafficPenaltySec?: number;
   /** The temperature the entered lap times represent (the plan's Track temp).
    *  Per-stint temperatures are measured against this. */
   baseTempC?: number | null;
@@ -247,8 +265,14 @@ export type ScheduleStint = {
   partial: boolean;
   /** The live correction applied to this stint, in minutes. */
   correctionMin: number;
-  /** True when this stint was run in the wet (lap time includes the penalty). */
+  /** True when this stint was run in the full wet (kept for existing callers). */
   wet: boolean;
+  /** Track condition of this stint. */
+  condition: StintCondition;
+  /** Seconds/lap the weather added (0 when dry). */
+  weatherDeltaSec: number;
+  /** Seconds/lap the race-traffic penalty added. */
+  trafficDeltaSec: number;
   /** Track temperature used for this stint, or null when it ran at the base. */
   trackTempC: number | null;
   /** Seconds/lap the temperature added (negative = cooler and quicker). */
@@ -406,9 +430,17 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     const correctionMin = assign.correctionMin ?? 0;
     const corrSec = correctionMin * 60;
 
-    // Wet stints run slower by the wet penalty (per lap). Fuel/laps unchanged
-    // (a stint stays fuel-limited); only the on-track time grows.
-    const wetAdd = assign.wet ? Math.max(0, wetDeltaSec ?? 0) : 0;
+    // Weather: a damp track costs less than a soaked one, and both leave
+    // fuel/laps alone (a stint stays fuel-limited) — only the clock grows.
+    const cond = conditionOf(assign);
+    const wetAdd =
+      cond === "wet"
+        ? Math.max(0, wetDeltaSec ?? 0)
+        : cond === "half"
+          ? Math.max(0, input.halfWetDeltaSec ?? 0)
+          : 0;
+    // Race traffic applies to every stint, wet or dry.
+    const trafficAdd = Math.max(0, input.trafficPenaltySec ?? 0);
 
     // Per-stint track temperature. A stint without one runs at the plan's base
     // temperature, i.e. exactly the entered pace — an empty field is always
@@ -422,7 +454,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       Number.isFinite(baseTempC)
         ? (tempSlopePerC ?? 0) * (stintTemp - baseTempC)
         : 0;
-    const paceAdd = wetAdd + tempAdd;
+    const paceAdd = wetAdd + tempAdd + trafficAdd;
     const effLaptime = prof.laptimeSec * factor + paceAdd;
 
     // How many laps this stint runs. In fuel mode that is what is actually in
@@ -531,7 +563,10 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       isFinal,
       partial,
       correctionMin,
-      wet: !!assign.wet,
+      wet: cond === "wet",
+      condition: cond,
+      weatherDeltaSec: Math.round(wetAdd * 1000) / 1000,
+      trafficDeltaSec: Math.round(trafficAdd * 1000) / 1000,
       trackTempC: stintTemp ?? null,
       tempDeltaSec: Math.round(tempAdd * 1000) / 1000,
       stopSec: isFinal ? 0 : stopLoss,
@@ -662,13 +697,23 @@ export function optimizeFuelSave(args: {
   /** Lap target of a distance race. Given, the sweep looks for the FASTEST way
    *  to cover those laps instead of the greatest distance in a fixed time. */
   raceLaps?: number | null;
+  /** Seconds/lap of race-traffic penalty, added to both profiles so the sweep
+   *  runs at race pace rather than at practice pace. */
+  trafficPenaltySec?: number;
 }): FuelSaveOptimization {
   const usable = Math.max(0, args.tankSize - Math.max(0, args.fuelReserve ?? 0));
   const T = args.raceDurationSec;
   const lapTarget = args.raceLaps && args.raceLaps > 0 ? Math.floor(args.raceLaps) : null;
   const k = args.paceScale && args.paceScale > 0 ? args.paceScale : 1;
-  const std: FuelProfile = { ...args.standard, laptimeSec: args.standard.laptimeSec * k };
-  const sav: FuelProfile = { ...args.saving, laptimeSec: args.saving.laptimeSec * k };
+  const traffic = Math.max(0, args.trafficPenaltySec ?? 0);
+  const std: FuelProfile = {
+    ...args.standard,
+    laptimeSec: args.standard.laptimeSec * k + traffic,
+  };
+  const sav: FuelProfile = {
+    ...args.saving,
+    laptimeSec: args.saving.laptimeSec * k + traffic,
+  };
   if ((lapTarget == null && T <= 0) || usable <= 0)
     return { ok: false, reason: "Set a race length and tank size." };
   if (std.fuelPerLap <= 0 || sav.fuelPerLap <= 0 || std.laptimeSec <= 0 || sav.laptimeSec <= 0)

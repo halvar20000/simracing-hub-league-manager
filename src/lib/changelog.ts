@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.74.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: the track condition per stint is now dry, ½ wet or wet instead of a wet tick-box. A damp or drying track costs its own penalty per lap — by default 45 % of the full-wet figure, or enter your own. The “rain from stint” tool got a ½ wet button, so a drying race can be planned as it really unfolds: wet, then damp, then dry.",
+      "Stint Planner: new “Race traffic” penalty in seconds per lap, added to every stint. Practice pace is set alone on an empty track; in the race there is traffic, dirty air and cars to pass, and nobody runs their practice pace for six hours. The fuel-save optimiser uses it too, so its strategies are compared at race pace instead of practice pace.",
+      "Plans saved before this keep working: a stint that was ticked wet is now simply “wet”.",
+    ],
+  },
+  {
     version: "1.73.2",
     date: "2026-07-27",
     changes: [

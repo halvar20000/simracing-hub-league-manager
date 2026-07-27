@@ -6,6 +6,8 @@ import {
   parseDurationToSec,
   fmtLap,
   pitStopSeconds,
+  conditionOf,
+  type StintCondition,
   type PitModel,
   type PlannerInput,
   type StintMode,
@@ -174,7 +176,9 @@ export type PlannerAssignmentState = {
   correctionMin?: number; // live ± minutes for this stint (cascades forward)
   spotterId?: string | null; // driver spotting this stint (never the stint driver)
   note?: string; // free-text stint comment (incident, weather, SC, …)
-  wet?: boolean; // this stint runs in the wet (adds the wet penalty per lap)
+  /** Track condition: "half" = damp/drying, "wet" = full wet. */
+  condition?: StintCondition;
+  wet?: boolean; // legacy full-wet flag (plans saved before half-wet existed)
   /** Track temperature for this stint in °C; empty = run at the plan's base
    *  temperature (the Track temp field), i.e. no correction at all. */
   trackTempC?: number | null;
@@ -204,15 +208,31 @@ export const DEFAULT_TEMP_SLOPE_PER_C = 0.1;
  *  `deltaSec` is the effective wet penalty (measured from data when available,
  *  else the editable `manualDeltaSec`). */
 export type WetModel = {
+  /** Full-wet penalty in s/lap (measured from data when available). */
   deltaSec: number;
   fromData: boolean;
   manualDeltaSec: number;
+  /** Half-wet (damp / drying) penalty in s/lap. Null = derive it from the full
+   *  wet penalty with DEFAULT_HALF_WET_FRACTION — a damp track costs a good
+   *  part of full wet, but nowhere near all of it. */
+  manualHalfDeltaSec?: number | null;
   wetFuelPerLap: number | null;
   appliedDeltaSec: number;
 };
 
 /** Default wet penalty when there's no measured wet data: +12 s/lap. */
 export const DEFAULT_WET_DELTA_SEC = 12;
+
+/** A damp / drying track costs this share of the full-wet penalty by default. */
+export const DEFAULT_HALF_WET_FRACTION = 0.45;
+
+/** The half-wet penalty of a plan: the entered value, else a share of full wet. */
+export function halfWetDeltaSec(s: PlannerState): number {
+  const manual = s.wetModel?.manualHalfDeltaSec;
+  if (manual != null && isFinite(manual) && manual >= 0) return manual;
+  const full = s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC;
+  return full * DEFAULT_HALF_WET_FRACTION;
+}
 export type PlannerState = {
   title: string;
   event: {
@@ -235,6 +255,10 @@ export type PlannerState = {
     stintMode: StintMode; // "fuel" (default) | "time" | "laps"
     stintValue: string; // minutes (time) or laps (laps); ignored for fuel
     fuelReserve: string; // litres kept in reserve, "" = 0
+    /** Seconds per lap the team is slower in a race than in practice: traffic,
+     *  cars to pass, dirty air, being careful. Practice data is optimistic, so
+     *  this is added to every stint. "" = 0. */
+    trafficPenaltySec: string;
     /** Litres burned from leaving the box to the green flag (lap to the grid +
      *  laps behind the pace car). Off the FIRST stint only — that fuel is gone
      *  before the race starts. "" = 0. */
@@ -322,6 +346,7 @@ export function defaultPlannerState(): PlannerState {
       stintValue: "",
       fuelReserve: "",
       gridFuelL: "",
+      trafficPenaltySec: "",
       trackTempC: "",
       conditions: "dry",
       driverSwapSec: "30",
@@ -488,6 +513,7 @@ export function stateToInput(s: PlannerState): PlannerInput {
       profile: a.profile,
       driverId: a.driverId,
       correctionMin: a.correctionMin ?? 0,
+      condition: conditionOf(a),
       wet: a.wet ?? false,
       trackTempC: a.trackTempC ?? null,
       tyreChange: a.tyreChange ?? true,
@@ -496,6 +522,8 @@ export function stateToInput(s: PlannerState): PlannerInput {
     // Fall back to the default wet penalty when no Garage 61 rain model exists,
     // so ticking a stint wet still lengthens it (the field shows this default).
     wetDeltaSec: s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC,
+    halfWetDeltaSec: halfWetDeltaSec(s),
+    trafficPenaltySec: num(s.event.trafficPenaltySec),
     // Per-stint temperatures are measured against the plan's Track temp, using
     // the Garage 61 fit when there is one and the manual slope otherwise.
     baseTempC:

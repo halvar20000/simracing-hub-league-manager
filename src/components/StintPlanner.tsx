@@ -14,6 +14,8 @@ import {
   optimizeFuelSave,
   parseDurationToSec,
   pitStopSeconds,
+  conditionOf,
+  type StintCondition,
   type FuelSaveOptimization,
   type StintProfileKey,
 } from "@/lib/stint-planner";
@@ -37,6 +39,8 @@ import {
   planPitModel,
   planLapTarget,
   parseTypedNumber,
+  halfWetDeltaSec,
+  DEFAULT_HALF_WET_FRACTION,
   DEFAULT_TEMP_SLOPE_PER_C,
   DEFAULT_WET_DELTA_SEC,
   type PlannerAssignmentState,
@@ -717,6 +721,8 @@ export default function StintPlanner({
       pitModel: inp.pitModel ?? null,
       // A distance race flips the objective: cover the laps in the least time.
       raceLaps: inp.raceLaps ?? null,
+      // Race pace, not practice pace.
+      trafficPenaltySec: inp.trafficPenaltySec ?? 0,
     });
     setFuelSaveOpt(opt);
     // Auto-apply the best (max-distance) strategy into the Standard profile so
@@ -994,6 +1000,22 @@ export default function StintPlanner({
     appliedDeltaSec: 0,
   });
 
+  /** Edit the half-wet (damp) penalty; empty hands it back to the default share. */
+  function setHalfWetDelta(valStr: string) {
+    const raw = valStr.trim();
+    const v = parseTypedNumber(raw, NaN);
+    setS((p) => {
+      const wm = p.wetModel ?? emptyWet();
+      return {
+        ...p,
+        wetModel: {
+          ...wm,
+          manualHalfDeltaSec: raw === "" || !isFinite(v) ? null : Math.max(0, v),
+        },
+      };
+    });
+  }
+
   // Edit the wet penalty (seconds/lap). The engine adds it to whichever stints
   // are flagged wet, so nothing is shifted here — the schedule just recomputes.
   function setWetDelta(valStr: string) {
@@ -1010,20 +1032,24 @@ export default function StintPlanner({
 
   // Mark stint `fromIndex` (0-based) and every following stint as wet; earlier
   // stints dry. Serves the common "dry, then rain arrives" case.
-  function setRainFromStint(fromIndex: number) {
+  function setRainFromStint(fromIndex: number, cond: StintCondition = "wet") {
     setS((p) => {
       const n = Math.max(result.stints.length, p.assignments.length);
       const next = [...p.assignments];
       while (next.length < n) next.push({ profile: "standard", driverId: null });
       for (let i = 0; i < next.length; i++)
-        next[i] = { ...next[i], wet: i >= fromIndex };
+        next[i] = {
+          ...next[i],
+          condition: i >= fromIndex ? cond : "dry",
+          wet: i >= fromIndex && cond === "wet",
+        };
       return { ...p, assignments: next };
     });
   }
   const clearWetStints = () =>
     setS((p) => ({
       ...p,
-      assignments: p.assignments.map((a) => ({ ...a, wet: false })),
+      assignments: p.assignments.map((a) => ({ ...a, condition: "dry" as const, wet: false })),
     }));
 
   // ---- Per-stint track temperature ---------------------------------------
@@ -1869,30 +1895,71 @@ export default function StintPlanner({
             </div>
           )}
 
-          {/* Wet-weather penalty (applied per-stint in the schedule below) */}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-            <span className="uppercase tracking-wider text-zinc-500">
-              Wet penalty
-            </span>
-            <label className="flex items-center gap-1 text-zinc-400 print:hidden">
-              +
-              <input
-                key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
-                className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
-                defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
-                onBlur={(e) => setWetDelta(e.target.value)}
-                title="Seconds per lap added to stints you mark wet. Measured from your rain laps when available; edit to override."
-              />
-              s/lap
-            </label>
-            {s.wetModel && (
+          {/* Pace penalties: weather per stint, traffic on every stint. */}
+          <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">Full wet</span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
+                  className="w-16 rounded border border-sky-900/60 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
+                  defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
+                  onBlur={(e) => setWetDelta(e.target.value)}
+                  title="Seconds per lap on a soaked track. Measured from your rain laps when available; edit to override."
+                />
+                s/lap
+              </label>
+              {s.wetModel && (
+                <span className="text-zinc-500">
+                  ({s.wetModel.fromData ? "measured from rain laps" : "manual estimate"})
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">Half wet</span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  key={`half-${round1(halfWetDeltaSec(s))}`}
+                  className="w-16 rounded border border-sky-900/40 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
+                  defaultValue={
+                    s.wetModel?.manualHalfDeltaSec != null
+                      ? String(round1(s.wetModel.manualHalfDeltaSec))
+                      : ""
+                  }
+                  placeholder={String(round1(halfWetDeltaSec(s)))}
+                  onBlur={(e) => setHalfWetDelta(e.target.value)}
+                  title="Seconds per lap on a damp or drying track — slippery, but nothing like full wet. Leave empty to use a share of the full-wet penalty."
+                />
+                s/lap
+              </label>
               <span className="text-zinc-500">
-                ({s.wetModel.fromData ? "measured from rain laps" : "manual estimate"})
+                {s.wetModel?.manualHalfDeltaSec != null
+                  ? "your figure"
+                  : `default: ${Math.round(DEFAULT_HALF_WET_FRACTION * 100)}% of full wet`}
               </span>
-            )}
-            <span className="text-zinc-500">
-              — tick the wet stints in the schedule below.
-            </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">Race traffic</span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  className="w-16 rounded border border-amber-900/60 bg-zinc-950 px-1.5 py-0.5 text-amber-100"
+                  value={s.event.trafficPenaltySec}
+                  onChange={(e) => patchEvent("trafficPenaltySec", e.target.value)}
+                  placeholder="0"
+                  title="Seconds per lap the team is slower in the race than in practice: traffic, dirty air, cars to pass and to be passed by. Added to EVERY stint — practice pace is always optimistic."
+                />
+                s/lap
+              </label>
+              <span className="text-zinc-500">
+                on every stint — practice pace is set alone, a race is not
+              </span>
+            </div>
+            <p className="text-zinc-600">
+              Weather is picked per stint in the schedule below; traffic applies to all of them.
+            </p>
           </div>
 
           {/* Pit strategy: single vs double stints */}
@@ -2749,7 +2816,7 @@ export default function StintPlanner({
           </h2>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
             <div className="flex items-center gap-1 rounded border border-sky-900/50 bg-sky-950/20 px-2 py-1 text-xs text-sky-200">
-              <span title="Mark this stint and all later stints as wet.">☔ Rain from stint</span>
+              <span title="Mark this stint and every later stint with the chosen condition.">☔ Rain from stint</span>
               <input
                 type="number"
                 min={1}
@@ -2761,11 +2828,22 @@ export default function StintPlanner({
               <button
                 onClick={() => {
                   const n = Number(rainFromStr);
-                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1);
+                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "half");
+                }}
+                className="rounded border border-sky-800 px-1.5 py-0.5 text-sky-200 hover:bg-sky-900/40"
+                title="Damp / drying from this stint on"
+              >
+                ½ wet
+              </button>
+              <button
+                onClick={() => {
+                  const n = Number(rainFromStr);
+                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "wet");
                 }}
                 className="rounded bg-sky-800 px-1.5 py-0.5 text-white hover:bg-sky-700"
+                title="Full wet from this stint on"
               >
-                Apply
+                Wet
               </button>
               <button
                 onClick={clearWetStints}
@@ -2920,7 +2998,7 @@ export default function StintPlanner({
                     </>
                   )}
                   <th className="py-1 pr-2 text-right" title="Track temperature for this stint. Empty = the plan's Track temp, i.e. exactly the entered pace.">°C</th>
-                  <th className="py-1 pr-2 text-center" title="Tick stints run in the rain — they get the wet penalty per lap.">Wet</th>
+                  <th className="py-1 pr-2 text-center" title="Track condition for this stint: dry, half wet (damp/drying) or full wet. Each adds its own penalty per lap.">Track</th>
                   <th className="py-1 pr-2">Note</th>
                 </tr>
               </thead>
@@ -2941,7 +3019,7 @@ export default function StintPlanner({
                   const spotterName =
                     s.drivers.find((d) => d.id === a.spotterId)?.name ?? null;
                   return (
-                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.wet ? "bg-sky-950/20" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
+                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.condition === "wet" ? "bg-sky-950/20" : st.condition === "half" ? "bg-sky-950/10" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
                       <td className="py-1 pr-2 text-zinc-500">
                         {st.index}
                         {st.partial && (
@@ -3136,15 +3214,32 @@ export default function StintPlanner({
                         {st.trackTempC != null ? `${st.trackTempC}°` : "—"}
                       </td>
                       <td className="py-1 pr-2 text-center print:hidden">
-                        <input
-                          type="checkbox"
-                          checked={!!a.wet}
-                          onChange={(e) => setAssignment(i, { wet: e.target.checked })}
-                          title="This stint runs in the wet"
-                        />
+                        <select
+                          value={conditionOf(a)}
+                          onChange={(e) => {
+                            const c = e.target.value as StintCondition;
+                            setAssignment(i, { condition: c, wet: c === "wet" });
+                          }}
+                          title={
+                            st.weatherDeltaSec
+                              ? `+${st.weatherDeltaSec.toFixed(1)} s/lap for this stint`
+                              : "Track condition for this stint"
+                          }
+                          className={`rounded border bg-zinc-950 px-1 py-1 text-sm ${
+                            st.condition === "wet"
+                              ? "border-sky-700 text-sky-200"
+                              : st.condition === "half"
+                                ? "border-sky-900/60 text-sky-300/80"
+                                : "border-zinc-700 text-zinc-400"
+                          }`}
+                        >
+                          <option value="dry">dry</option>
+                          <option value="half">½ wet</option>
+                          <option value="wet">wet</option>
+                        </select>
                       </td>
                       <td className="hidden py-1 pr-2 text-center text-sky-300 print:table-cell">
-                        {st.wet ? "WET" : ""}
+                        {st.condition === "wet" ? "WET" : st.condition === "half" ? "½ WET" : ""}
                       </td>
                       <td className="py-1 pr-2 print:hidden">
                         <input
