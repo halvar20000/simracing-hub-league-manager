@@ -823,6 +823,22 @@ export default function StintPlanner({
       setG61Busy(false);
     }
   }
+  /** Seconds/lap the imported pace shifts by when projected to the plan's own
+   *  track temperature. Used by both the preview and Apply, so the number the
+   *  team reviews is the number that lands in the plan. */
+  function g61Projection(a: NonNullable<typeof g61>): number {
+    const srcTemp = a.temp.sourceTempC;
+    const slope =
+      a.temp.slopePerC != null
+        ? a.temp.slopePerC
+        : (s.tempModel?.manualSlopePerC ?? DEFAULT_TEMP_SLOPE_PER_C);
+    const raceTempNum = parseTypedNumber(s.event.trackTempC, NaN);
+    const raceTemp =
+      s.event.trackTempC.trim() !== "" && isFinite(raceTempNum) ? raceTempNum : null;
+    const targetTemp = raceTemp ?? srcTemp;
+    return srcTemp != null && targetTemp != null ? slope * (targetTemp - srcTemp) : 0;
+  }
+
   function applyGarage61() {
     if (!g61) return;
     const norm = (x: string) => x.trim().toLowerCase();
@@ -900,8 +916,10 @@ export default function StintPlanner({
           ? ` Temperature fit from data: ${slope.toFixed(3)} s/°C over ${g61.temp.minTempC?.toFixed(0)}–${g61.temp.maxTempC?.toFixed(0)}°C; pace set at ${targetTemp != null ? round1(targetTemp) : round1(srcTemp)}°C.`
           : ` Laps were all near ${round1(srcTemp)}°C (no spread to fit) — using the ${(slope * 10).toFixed(1)} s/10°C manual estimate.`
         : "";
+    // The pull has landed in the driver table, so drop the pending change list.
+    setG61(null);
     setG61Msg(
-      `Applied: Standard profile + lap times for ${matched} matched driver${matched === 1 ? "" : "s"}.${tempNote} Save keeps it.`
+      `Applied to the driver table: pace + fuel/lap for ${matched} driver${matched === 1 ? "" : "s"}.${tempNote} Save keeps it.`
     );
   }
 
@@ -2525,44 +2543,58 @@ export default function StintPlanner({
         {g61Msg && <p className="mb-2 text-sm text-amber-300">{g61Msg}</p>}
         {g61 && (
           <div className="space-y-3">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm tabular-nums">
-                <thead className="text-zinc-500">
-                  <tr className="border-b border-zinc-800">
-                    <th className="py-1 pr-2">Driver</th>
-                    <th className="py-1 pr-2 text-right">Laps</th>
-                    <th className="py-1 pr-2 text-right">Best</th>
-                    <th className="py-1 pr-2 text-right">Race pace</th>
-                    <th className="py-1 pr-2 text-right">Fuel/lap</th>
-                    <th className="py-1 pr-2">In roster</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g61.drivers.map((d) => {
-                    const inRoster = s.drivers.some(
-                      (x) =>
-                        x.name.trim().toLowerCase() ===
-                        d.driver.trim().toLowerCase()
-                    );
+            {/* Not a second driver table — just what Apply would change in the
+                one above, so the team can see the delta before committing. */}
+            <div className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
+              <div className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+                What “Apply to plan” changes
+              </div>
+              <ul className="space-y-1.5 text-sm">
+                {g61.drivers.map((d) => {
+                  const row = s.drivers.find(
+                    (x) => x.name.trim().toLowerCase() === d.driver.trim().toLowerCase()
+                  );
+                  if (!row) {
                     return (
-                      <tr key={d.driver} className="border-t border-zinc-800/60 text-zinc-200">
-                        <td className="py-1 pr-2">{d.driver}</td>
-                        <td className="py-1 pr-2 text-right">{d.laps}</td>
-                        <td className="py-1 pr-2 text-right">{fmtLap(d.bestSec)}</td>
-                        <td className="py-1 pr-2 text-right">{fmtLap(d.racePaceSec)}</td>
-                        <td className="py-1 pr-2 text-right">{d.fuelPerLap.toFixed(2)} L</td>
-                        <td className="py-1 pr-2">
-                          {inRoster ? (
-                            <span className="text-emerald-400">✓</span>
-                          ) : (
-                            <span className="text-zinc-600">—</span>
-                          )}
-                        </td>
-                      </tr>
+                      <li key={d.driver} className="text-zinc-500">
+                        {d.driver} — {d.laps} laps, not on this plan&rsquo;s roster (ignored)
+                      </li>
                     );
-                  })}
-                </tbody>
-              </table>
+                  }
+                  const proj = g61Projection(g61);
+                  const newPace = fmtLap(d.racePaceSec + proj);
+                  const newFuel = d.fuelPerLap.toFixed(2);
+                  const paceKept = !!row.manual?.laptime;
+                  const fuelKept = !!row.manual?.fuelPerLap;
+                  const arrow = (from: string, to: string, kept: boolean) =>
+                    kept ? (
+                      <span className="text-amber-300">{from} (kept — yours)</span>
+                    ) : from === to || from === "" ? (
+                      <span className="text-emerald-300">{to}</span>
+                    ) : (
+                      <>
+                        <span className="text-zinc-500 line-through">{from}</span>{" "}
+                        <span className="text-emerald-300">→ {to}</span>
+                      </>
+                    );
+                  return (
+                    <li key={d.driver} className="text-zinc-300">
+                      <span className="text-zinc-100">{d.driver}</span>{" "}
+                      <span className="text-zinc-600">({d.laps} clean laps)</span> · pace{" "}
+                      {arrow(row.laptime, newPace, paceKept)} · fuel{" "}
+                      {arrow(row.fuelPerLap ?? "", `${newFuel} L`, fuelKept)}
+                    </li>
+                  );
+                })}
+              </ul>
+              {g61Projection(g61) !== 0 && (
+                <p className="mt-2 text-[11px] text-zinc-500">
+                  Pace is projected to the plan&rsquo;s track temperature (
+                  {g61Projection(g61) > 0 ? "+" : ""}
+                  {g61Projection(g61).toFixed(1)} s/lap vs the temperature these laps were
+                  set at), which is why it differs from the raw race pace of the laps.
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs text-zinc-500">

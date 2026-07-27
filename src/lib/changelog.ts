@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.73.2",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: a Garage 61 pull no longer shows a second driver table. It now lists only what “Apply to plan” would change — per driver, the pace and fuel figure the plan holds today crossed out and the new one next to it, with anything you typed yourself marked as kept. Once applied, the list disappears: the driver table is the single place those numbers live.",
+      "Stint Planner: the pace in that list is projected to the plan's track temperature, the same way Apply does it, so the number you review is the number that lands in the table (the raw race pace of the laps can differ by several seconds a lap when the temperatures differ).",
+    ],
+  },
+  {
     version: "1.73.1",
     date: "2026-07-27",
     changes: [
