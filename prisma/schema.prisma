@@ -42,6 +42,7 @@ model User {
   raceCenterComebacks   RaceCenter[]             @relation("RaceCenterComeback")
   driverOfTheDayWins    RoundDriverOfTheDay[]    @relation("DotdWinner")
   raceLogUploads        RaceLogUpload[]          @relation("RaceLogUploader")
+  pitReferences         PitReference[]           @relation("PitReferenceUpdatedBy")
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -1295,4 +1296,46 @@ model RaceLogUpload {
   @@unique([uploadedById, sha256])
   @@index([roundId])
   @@index([createdAt])
+}
+
+/// Measured pit-stop constants for one car (optionally per track), shared
+/// across every stint plan. Filled by whoever runs the test session — drive
+/// the pit lane with and without service and time the section that contains
+/// entry and exit against a clean lap (see /admin/pit-references). A plan
+/// loads these with one click and may still override them locally.
+model PitReference {
+  id String @id @default(cuid())
+
+  /// Car name as CLS writes it (e.g. "McLaren 720S GT3 EVO").
+  car   String
+  /// Track name, or "" for a car-wide default (refuel rate, tyre time).
+  track String @default("")
+
+  /// Fuel tank capacity in litres (before any BoP reduction).
+  tankSizeL         Float?
+  /// Time lost entering, stopping and leaving WITHOUT service, in seconds.
+  laneLossSec       Float
+  /// Refuel rate in litres per second (GT3 ≈ 2.5, LMP ≈ 1.81).
+  refuelLps         Float
+  /// Tyre change duration in seconds.
+  tyreChangeSec     Float
+  /// Mandatory driver-change floor in seconds (iRacing: 30).
+  driverChangeSec   Float   @default(30)
+  /// True when the tyre change adds to the refuel time instead of overlapping.
+  tyreSequential    Boolean @default(true)
+  /// Typical tyre wear in % per lap, when known.
+  tyreWearPctPerLap Float?
+
+  /// Who measured it and how (session, date, method) — keeps the numbers honest.
+  source String?
+  notes  String?
+
+  updatedById String?
+  updatedBy   User?   @relation("PitReferenceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([car, track])
+  @@index([car])
 }

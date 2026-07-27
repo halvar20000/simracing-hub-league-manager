@@ -102,6 +102,13 @@ async function FullAdminDashboard() {
           iRacing cars
         </Link>
         <Link
+          href="/admin/pit-references"
+          className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800"
+          title="Measured pit-stop constants per car and track — the stint planner loads them with one click."
+        >
+          Pit references
+        </Link>
+        <Link
           href="/admin/stewards"
           className="rounded border border-amber-700 bg-amber-950/30 px-3 py-1.5 font-medium text-amber-200 hover:bg-amber-900/40"
         >

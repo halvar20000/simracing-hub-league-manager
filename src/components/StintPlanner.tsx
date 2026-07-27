@@ -13,6 +13,7 @@ import {
   fmtLap,
   optimizeFuelSave,
   parseDurationToSec,
+  pitStopSeconds,
   type FuelSaveOptimization,
   type StintProfileKey,
 } from "@/lib/stint-planner";
@@ -33,6 +34,7 @@ import { CURRENT_VERSION } from "@/lib/changelog";
 import {
   hydratePlanState,
   stateToInput,
+  planPitModel,
   DEFAULT_TEMP_SLOPE_PER_C,
   DEFAULT_WET_DELTA_SEC,
   type PlannerAssignmentState,
@@ -52,6 +54,7 @@ import StintDriverStats from "@/components/StintDriverStats";
 import RaceLogDashboard from "@/components/RaceLogDashboard";
 import RaceGallery from "@/components/RaceGallery";
 import { uploadStintPlanImages } from "@/lib/actions/stint-plan-images";
+import { matchPitReference, type PitReferenceRow } from "@/lib/pit-references";
 import { checkStintPlanAlerts } from "@/lib/actions/stint-plan-alerts";
 import {
   connectGarage61,
@@ -142,6 +145,7 @@ export default function StintPlanner({
   clsDrivers,
   tracks,
   cars,
+  pitReferences = [],
 }: {
   initial: PlannerState;
   planId?: string | null;
@@ -152,6 +156,8 @@ export default function StintPlanner({
   clsDrivers: ClsDriverOption[];
   tracks: string[];
   cars: ClsCarOption[];
+  /** Measured pit constants per car/track (admin-curated shared library). */
+  pitReferences?: PitReferenceRow[];
 }) {
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
@@ -262,6 +268,32 @@ export default function StintPlanner({
   );
 
   const result = useMemo(() => buildSchedule(stateToInput(s)), [s]);
+  /** True when this plan prices its stops from measured constants. */
+  const pitOn = planPitModel(s) !== null;
+
+  // The shared library entry that fits this plan's car (+ track, when measured
+  // there). Loading it fills the pit model in one click — nobody re-measures
+  // what someone else already drove.
+  const pitRef = useMemo(
+    () => matchPitReference(pitReferences, s.event.car, s.event.track),
+    [pitReferences, s.event.car, s.event.track]
+  );
+  const applyPitReference = (r: PitReferenceRow) =>
+    setS((p) => ({
+      ...p,
+      event: {
+        ...p.event,
+        pitModelOn: true,
+        pitLaneLossSec: String(r.laneLossSec),
+        refuelLps: String(r.refuelLps),
+        tyreChangeSec: String(r.tyreChangeSec),
+        driverSwapSec: String(r.driverChangeSec),
+        tyreSequential: r.tyreSequential,
+        tyreWearPctPerLap:
+          r.tyreWearPctPerLap != null ? String(r.tyreWearPctPerLap) : p.event.tyreWearPctPerLap,
+        tankSize: r.tankSizeL != null ? String(r.tankSizeL) : p.event.tankSize,
+      },
+    }));
   const [rainFromStr, setRainFromStr] = useState("");
 
   // Ticking wall clock for the live "now" tracker. Starts at 0 (SSR-safe: no
@@ -279,7 +311,9 @@ export default function StintPlanner({
   }, []);
 
   // ---- state helpers ----
-  const patchEvent = (k: keyof PlannerState["event"], v: string) =>
+  // The event block holds strings and a few switches (doubleStint, pitModelOn,
+  // tyreSequential), so the patcher takes either.
+  const patchEvent = (k: keyof PlannerState["event"], v: string | boolean) =>
     setS((p) => ({ ...p, event: { ...p.event, [k]: v } }));
   const patchStd = (k: "laptime" | "fuelPerLap", v: string) =>
     setS((p) => ({ ...p, standard: { ...p.standard, [k]: v } }));
@@ -300,6 +334,16 @@ export default function StintPlanner({
     setS((p) => ({
       ...p,
       drivers: p.drivers.map((d) => (d.id === id ? { ...d, laptime: v } : d)),
+    }));
+  /** Per-driver fuel consumption / tyre wear (only shown with the pit model). */
+  const patchDriverField = (
+    id: string,
+    key: "fuelPerLap" | "tyreWear",
+    v: string
+  ) =>
+    setS((p) => ({
+      ...p,
+      drivers: p.drivers.map((d) => (d.id === id ? { ...d, [key]: v } : d)),
     }));
   const removeDriver = (id: string) =>
     setS((p) => {
@@ -615,6 +659,9 @@ export default function StintPlanner({
         fuelPerLap: Number(s.saving.fuelPerLap) || 0,
       },
       paceScale,
+      // With the model, each strategy's stop is priced from the litres that
+      // strategy actually takes — saving fuel shortens the stops too.
+      pitModel: inp.pitModel ?? null,
     });
     setFuelSaveOpt(opt);
     // Auto-apply the best (max-distance) strategy into the Standard profile so
@@ -1734,6 +1781,161 @@ export default function StintPlanner({
           </div>
         </div>
 
+        {/* Pit-stop model — measured constants instead of one flat number.
+            Off by default: an existing plan keeps its flat pit loss until
+            somebody switches this on. */}
+        <div className={card}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              Pit-stop model
+            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              {(pitRef.exact || pitRef.carDefault) && (
+                <button
+                  onClick={() => applyPitReference((pitRef.exact ?? pitRef.carDefault)!)}
+                  className="rounded border border-emerald-800/60 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200 hover:bg-emerald-900/40 print:hidden"
+                  title={
+                    pitRef.exact
+                      ? `Measured for ${pitRef.exact.car} at ${pitRef.exact.track}` +
+                        (pitRef.exact.source ? ` — ${pitRef.exact.source}` : "")
+                      : `Measured for ${pitRef.carDefault!.car} (car default)` +
+                        (pitRef.carDefault!.source ? ` — ${pitRef.carDefault!.source}` : "")
+                  }
+                >
+                  📥 Load measured values{pitRef.exact ? "" : " (car default)"}
+                </button>
+              )}
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={s.event.pitModelOn}
+                  onChange={(e) => patchEvent("pitModelOn", e.target.checked)}
+                />
+                compute every stop
+              </label>
+            </div>
+          </div>
+          {!s.event.pitModelOn ? (
+            <p className="text-xs text-zinc-500">
+              Every stop currently costs the same flat{" "}
+              <strong className="text-zinc-300">{s.event.pitLoss || "—"} s</strong>. Switch
+              this on to compute each stop from the litres actually taken, whether tyres are
+              changed and whether the driver changes — that is what makes a splash cheaper
+              than a full service, and it is measured once per car and track.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Pit lane loss (s)</label>
+                  <input
+                    className={inp}
+                    value={s.event.pitLaneLossSec}
+                    onChange={(e) => patchEvent("pitLaneLossSec", e.target.value)}
+                    placeholder="41"
+                    title="Time lost entering, stopping and leaving the pits WITHOUT any service, measured against a green lap."
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Refuel rate (L/s)</label>
+                  <input
+                    className={inp}
+                    value={s.event.refuelLps}
+                    onChange={(e) => patchEvent("refuelLps", e.target.value)}
+                    placeholder="2.5"
+                    title="GT3 ≈ 2.5 L/s, LMP ≈ 1.81 L/s."
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Tyre change (s)</label>
+                  <input
+                    className={inp}
+                    value={s.event.tyreChangeSec}
+                    onChange={(e) => patchEvent("tyreChangeSec", e.target.value)}
+                    placeholder="20"
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Tyre wear (%/lap)</label>
+                  <input
+                    className={inp}
+                    value={s.event.tyreWearPctPerLap}
+                    onChange={(e) => patchEvent("tyreWearPctPerLap", e.target.value)}
+                    placeholder="0 = off"
+                    title="Default wear for drivers without their own figure. Leave empty to skip tyre modelling."
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Tyres still raceable at (%)</label>
+                  <input
+                    className={inp}
+                    value={s.event.tyreMinPct}
+                    onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
+                    placeholder="50"
+                    title="Stints that end below this are flagged — the floor for double-stinting a set."
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={s.event.tyreSequential !== false}
+                      onChange={(e) => patchEvent("tyreSequential", e.target.checked)}
+                    />
+                    tyres AFTER fuelling
+                  </label>
+                </div>
+              </div>
+              {(() => {
+                const model = planPitModel(s);
+                if (!model) {
+                  return (
+                    <p className="mt-3 text-xs text-amber-300">
+                      Enter the pit lane loss — without it there is nothing to compute a stop
+                      from, so the flat pit loss stays in use.
+                    </p>
+                  );
+                }
+                const usable = Math.max(
+                  0,
+                  (Number(s.event.tankSize) || 0) - (Number(s.event.fuelReserve) || 0)
+                );
+                const full = pitStopSeconds(model, {
+                  litres: usable,
+                  tyres: true,
+                  driverChange: true,
+                });
+                const splash = pitStopSeconds(model, {
+                  litres: usable / 2,
+                  tyres: false,
+                  driverChange: false,
+                });
+                return (
+                  <div className="mt-3 space-y-1 text-xs text-zinc-400">
+                    <div>
+                      Full service ({fmtFuel(usable)} L + tyres + driver change):{" "}
+                      <strong className="text-zinc-200">{full.totalSec.toFixed(1)} s</strong>{" "}
+                      <span className="text-zinc-500">
+                        ({full.laneSec.toFixed(0)} lane + {full.refuelSec.toFixed(1)} fuel
+                        {full.tyreSec ? ` + ${full.tyreSec.toFixed(0)} tyres` : ""}
+                        {full.swapExtraSec ? ` + ${full.swapExtraSec.toFixed(0)} swap` : ""})
+                      </span>
+                    </div>
+                    <div>
+                      Half fill, no tyres, same driver:{" "}
+                      <strong className="text-emerald-300">{splash.totalSec.toFixed(1)} s</strong>{" "}
+                      <span className="text-zinc-500">
+                        — {(full.totalSec - splash.totalSec).toFixed(0)} s cheaper than a full
+                        stop
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
+
         {/* Fuel profiles */}
         <div className={card}>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
@@ -1889,6 +2091,18 @@ export default function StintPlanner({
               <input className={`${inp} w-28`} value={d.laptime}
                 onChange={(e) => patchDriverLaptime(d.id, e.target.value)}
                 placeholder="laptime" title="Optional per-driver laptime (m:ss). Blank = standard pace." />
+              {s.event.pitModelOn && (
+                <>
+                  <input className={`${inp} w-20`} value={d.fuelPerLap ?? ""}
+                    onChange={(e) => patchDriverField(d.id, "fuelPerLap", e.target.value)}
+                    placeholder="L/lap"
+                    title="Optional per-driver fuel consumption. Blank = the Standard profile. A smoother driver genuinely gets a lap more out of the tank." />
+                  <input className={`${inp} w-20`} value={d.tyreWear ?? ""}
+                    onChange={(e) => patchDriverField(d.id, "tyreWear", e.target.value)}
+                    placeholder="%/lap"
+                    title="Optional per-driver tyre wear in % per lap. Blank = the plan's default." />
+                </>
+              )}
               <button onClick={() => removeDriver(d.id)}
                 className="rounded border border-red-900/60 px-2 py-1.5 text-sm text-red-300 hover:bg-red-950/40 print:hidden"
                 aria-label="Remove driver">✕</button>
@@ -1902,8 +2116,10 @@ export default function StintPlanner({
         </div>
         <p className="mt-2 text-xs text-zinc-500">
           Drivers come from CLS (anyone with a registration). The per-driver
-          laptime is optional — set it to lengthen a slower driver&rsquo;s stints
-          (fuel &amp; laps stay the same, since a stint is fuel-limited).
+          laptime is optional — set it to lengthen a slower driver&rsquo;s stints.
+          With the pit-stop model on, the two extra fields are that driver&rsquo;s own
+          fuel consumption and tyre wear: they change how many laps that driver gets
+          out of a tank and how much rubber is left at the end of the stint.
         </p>
       </div>
 
@@ -2402,6 +2618,14 @@ export default function StintPlanner({
                   <th className="py-1 pr-2 text-right">Length</th>
                   <th className="py-1 pr-2 text-right">Laps</th>
                   <th className="py-1 pr-2 text-right">Fuel</th>
+                  {pitOn && (
+                    <>
+                      <th className="py-1 pr-2 text-right" title="Litres taken at the stop that ends this stint. Empty = fill the tank; a smaller number is a splash.">Fill L</th>
+                      <th className="py-1 pr-2 text-center" title="Change tyres at that stop? Unticked keeps the set for the next stint.">🛞</th>
+                      <th className="py-1 pr-2 text-right" title="Tyre condition at the end of this stint.">Tyre %</th>
+                      <th className="py-1 pr-2 text-right" title="What that stop costs: lane loss + fuel + tyres + any uncovered driver change.">Stop</th>
+                    </>
+                  )}
                   <th className="py-1 pr-2 text-right" title="Track temperature for this stint. Empty = the plan's Track temp, i.e. exactly the entered pace.">°C</th>
                   <th className="py-1 pr-2 text-center" title="Tick stints run in the rain — they get the wet penalty per lap.">Wet</th>
                   <th className="py-1 pr-2">Note</th>
@@ -2508,7 +2732,83 @@ export default function StintPlanner({
                       </td>
                       <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
                       <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
-                      <td className="py-1 pr-2 text-right">{fmtFuel(st.fuel)} L</td>
+                      <td className="py-1 pr-2 text-right">
+                        {fmtFuel(st.fuel)} L
+                        {st.shortFill && (
+                          <span className="ml-1 text-[10px] uppercase text-amber-400" title="Short stint — the previous stop was only a splash">
+                            short
+                          </span>
+                        )}
+                      </td>
+                      {pitOn && (
+                        <>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            {st.isFinal ? (
+                              <span className="text-zinc-600">—</span>
+                            ) : (
+                              <input
+                                type="number"
+                                step="1"
+                                min={0}
+                                value={a.fillLitres ?? ""}
+                                placeholder={fmtFuel(st.fillLitres)}
+                                onChange={(e) =>
+                                  setAssignment(i, {
+                                    fillLitres:
+                                      e.target.value === "" ? null : Number(e.target.value),
+                                  })
+                                }
+                                title="Litres at this stop. Empty = fill the tank."
+                                className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+                              />
+                            )}
+                          </td>
+                          <td className="hidden py-1 pr-2 text-right print:table-cell">
+                            {st.isFinal ? "—" : `${fmtFuel(st.fillLitres)} L`}
+                          </td>
+                          <td className="py-1 pr-2 text-center print:hidden">
+                            {st.isFinal ? (
+                              <span className="text-zinc-600">—</span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={a.tyreChange ?? true}
+                                onChange={(e) => setAssignment(i, { tyreChange: e.target.checked })}
+                                title="Change tyres at this stop"
+                              />
+                            )}
+                          </td>
+                          <td className="hidden py-1 pr-2 text-center print:table-cell">
+                            {st.isFinal ? "" : st.tyreChange ? "NEW" : "keep"}
+                          </td>
+                          <td
+                            className={`py-1 pr-2 text-right ${
+                              st.tyreWarn ? "font-semibold text-red-300" : "text-zinc-400"
+                            }`}
+                            title={
+                              st.tyreWarn
+                                ? `Ends below the ${s.event.tyreMinPct}% floor — change tyres earlier or shorten the stint.`
+                                : `Tyres: ${st.tyreStartPct.toFixed(0)}% → ${st.tyreEndPct.toFixed(0)}%`
+                            }
+                          >
+                            {st.tyreEndPct >= 99.999 && st.tyreStartPct >= 99.999
+                              ? "—"
+                              : `${st.tyreEndPct.toFixed(0)}%`}
+                          </td>
+                          <td
+                            className="py-1 pr-2 text-right text-zinc-400"
+                            title={
+                              st.stop
+                                ? `${st.stop.laneSec.toFixed(0)}s lane + ${st.stop.refuelSec.toFixed(1)}s fuel` +
+                                  (st.stop.tyreSec ? ` + ${st.stop.tyreSec.toFixed(0)}s tyres` : "") +
+                                  (st.stop.swapExtraSec ? ` + ${st.stop.swapExtraSec.toFixed(0)}s driver change` : "")
+                                : undefined
+                            }
+                          >
+                            {st.isFinal ? "—" : `${st.stopSec.toFixed(0)}s`}
+                          </td>
+                        </>
+                      )}
                       <td className="py-1 pr-2 text-right print:hidden">
                         <input
                           type="number"

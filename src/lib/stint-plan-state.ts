@@ -5,6 +5,8 @@
 import {
   parseDurationToSec,
   fmtLap,
+  pitStopSeconds,
+  type PitModel,
   type PlannerInput,
   type StintMode,
   type StintProfileKey,
@@ -19,6 +21,11 @@ export type PlannerDriverState = {
   id: string;
   name: string;
   laptime: string; // "" = use standard profile pace
+  /** Per-driver fuel consumption in l/lap; "" = use the profile's figure.
+   *  A smooth driver really does get a lap more out of the same tank. */
+  fuelPerLap?: string;
+  /** Per-driver tyre wear in % per lap; "" = use the plan's default. */
+  tyreWear?: string;
 };
 
 /** One row of the parsed eventresult finishing order (stored in the payload so
@@ -167,6 +174,11 @@ export type PlannerAssignmentState = {
   /** Track temperature for this stint in °C; empty = run at the plan's base
    *  temperature (the Track temp field), i.e. no correction at all. */
   trackTempC?: number | null;
+  /** Tyres changed at the stop that ENDS this stint. Undefined = yes. */
+  tyreChange?: boolean;
+  /** Litres taken at that stop; null/undefined = fill the tank. A smaller
+   *  number is a splash — shorter stop, shorter following stint. */
+  fillLitres?: number | null;
 };
 
 /** Track-temperature pace model. The Standard + per-driver lap times stored on
@@ -216,6 +228,26 @@ export type PlannerState = {
     alertLeadMin: string; // minutes before a stint the driver gets a Discord DM
     refuelSec: string; // refuel service time per stop, "" = unknown
     doubleStint: boolean; // auto-fill drivers in double-stint pairs
+
+    // --- measured pit model (Tier 1) ---------------------------------------
+    // With `pitModelOn` every stop is computed from the litres actually taken,
+    // whether tyres are changed and whether the driver changes, instead of the
+    // single flat `pitLoss`. The constants come from a test session (see the
+    // pit-reference library) — measure once per car + track, reuse forever.
+    pitModelOn: boolean;
+    /** Time lost entering, stopping and leaving WITHOUT service, in seconds. */
+    pitLaneLossSec: string;
+    /** Refuel rate in litres per second (GT3 ≈ 2.5, LMP ≈ 1.81). */
+    refuelLps: string;
+    /** Tyre change duration in seconds (≈ 20). */
+    tyreChangeSec: string;
+    /** True when the tyre change adds to the refuel time instead of overlapping. */
+    tyreSequential: boolean;
+    /** Default tyre wear in % per lap for drivers without their own figure. */
+    tyreWearPctPerLap: string;
+    /** Lowest tyre condition (%) still considered raceable; stints ending
+     *  below it are flagged. "" = don't check. */
+    tyreMinPct: string;
   };
   standard: { laptime: string; fuelPerLap: string };
   savingEnabled: boolean;
@@ -273,6 +305,13 @@ export function defaultPlannerState(): PlannerState {
       alertLeadMin: String(DEFAULT_ALERT_LEAD_MIN),
       refuelSec: "",
       doubleStint: false,
+      pitModelOn: false,
+      pitLaneLossSec: "",
+      refuelLps: "",
+      tyreChangeSec: "",
+      tyreSequential: true,
+      tyreWearPctPerLap: "",
+      tyreMinPct: "",
     },
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
@@ -383,6 +422,8 @@ export function stateToInput(s: PlannerState): PlannerInput {
       id: d.id,
       name: d.name || "Driver",
       laptimeSec: d.laptime.trim() ? parseDurationToSec(d.laptime) : null,
+      fuelPerLap: d.fuelPerLap?.trim() ? num(d.fuelPerLap) : null,
+      tyreWearPctPerLap: d.tyreWear?.trim() ? num(d.tyreWear) : null,
     })),
     assignments: s.assignments.map((a) => ({
       profile: a.profile,
@@ -390,6 +431,8 @@ export function stateToInput(s: PlannerState): PlannerInput {
       correctionMin: a.correctionMin ?? 0,
       wet: a.wet ?? false,
       trackTempC: a.trackTempC ?? null,
+      tyreChange: a.tyreChange ?? true,
+      fillLitres: a.fillLitres ?? null,
     })),
     // Fall back to the default wet penalty when no Garage 61 rain model exists,
     // so ticking a stint wet still lengthens it (the field shows this default).
@@ -405,5 +448,38 @@ export function stateToInput(s: PlannerState): PlannerInput {
       s.event.refuelSec.trim() !== ""
         ? Math.max(0, num(s.event.driverSwapSec, 30) - num(s.event.refuelSec))
         : 0,
+    pitModel: planPitModel(s),
+    tyreWearPctPerLap: num(s.event.tyreWearPctPerLap),
+    tyreMinPct: num(s.event.tyreMinPct),
   };
+}
+
+/**
+ * The measured pit model of a plan, or null when the plan still uses the flat
+ * pit loss. Requires the switch AND a lane loss — without that number there is
+ * nothing to compute a stop from.
+ */
+export function planPitModel(s: PlannerState): PitModel | null {
+  if (!s.event.pitModelOn) return null;
+  const laneLossSec = num(s.event.pitLaneLossSec);
+  if (laneLossSec <= 0) return null;
+  return {
+    laneLossSec,
+    refuelLps: num(s.event.refuelLps),
+    tyreChangeSec: num(s.event.tyreChangeSec),
+    driverChangeSec: num(s.event.driverSwapSec, 30),
+    tyreSequential: s.event.tyreSequential !== false,
+  };
+}
+
+/**
+ * What one full-service stop costs on this plan — the number to show next to
+ * "pit loss" and to feed the fuel-save optimizer when it is not given the model
+ * itself. Falls back to the flat field when there is no model.
+ */
+export function fullServiceStopSec(s: PlannerState): number {
+  const model = planPitModel(s);
+  if (!model) return num(s.event.pitLoss);
+  const usable = Math.max(0, num(s.event.tankSize) - num(s.event.fuelReserve));
+  return pitStopSeconds(model, { litres: usable, tyres: true, driverChange: true }).totalSec;
 }

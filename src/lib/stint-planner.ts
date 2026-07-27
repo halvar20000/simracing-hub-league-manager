@@ -23,6 +23,13 @@ export type PlannerDriver = {
   /** Optional per-driver lap time (s). When set, scales that driver's stint
    *  duration relative to the standard profile lap time. */
   laptimeSec?: number | null;
+  /** Optional per-driver fuel consumption (l/lap). When set it replaces the
+   *  profile's fuel for that driver's stints — a smooth driver genuinely gets
+   *  a lap more out of the same tank. */
+  fuelPerLap?: number | null;
+  /** Optional per-driver tyre wear in % per lap. Drives the tyre condition
+   *  carried across stints when tyres are not changed. */
+  tyreWearPctPerLap?: number | null;
 };
 
 export type StintProfileKey = "standard" | "saving";
@@ -41,7 +48,76 @@ export type StintAssignment = {
    *  shifts the lap time by `tempSlopePerC × (this − baseTempC)`, so a six-hour
    *  race can cool off through the evening without touching the pace fields. */
   trackTempC?: number | null;
+  /** Whether tyres are changed at the stop that ENDS this stint. Undefined =
+   *  yes (the normal case). Only meaningful with a pit model. */
+  tyreChange?: boolean;
+  /** Litres to put in at the stop that ENDS this stint. Undefined/null = fill
+   *  the tank. A smaller number is a splash: shorter stop, shorter next stint. */
+  fillLitres?: number | null;
 };
+
+/**
+ * Measured pit-stop constants for one car + track.
+ *
+ * Modelled after the method Johann Solowej uses: drive the pit lane in a test
+ * session and time the section that contains entry and exit against a clean
+ * reference lap, then decompose the variants (drive-through, stop without
+ * service, tyres only, tyres + fuel) into constants. The result is that a stop
+ * is *computed* per stop instead of being one flat number — a 40 L splash and a
+ * full fill with tyres are not the same stop, and on a 24 h race that gap is
+ * worth minutes.
+ *
+ *   stop = laneLossSec + max(service, driverChange ? driverChangeSec : 0)
+ *   service = tyreSequential ? refuel + tyres : max(refuel, tyres)
+ *
+ * The driver change runs in parallel with service and only costs time when the
+ * service itself is shorter than the swap; the tyre change on a GT3 in iRacing
+ * does NOT overlap the refuelling, hence `tyreSequential`.
+ */
+export type PitModel = {
+  /** Time lost entering, stopping and leaving the pits WITHOUT any service,
+   *  measured against a green lap (Johann's Spa number: 41 s). */
+  laneLossSec: number;
+  /** Refuel rate in litres per second (GT3 ≈ 2.5, LMP ≈ 1.81). */
+  refuelLps: number;
+  /** Tyre change duration in seconds (≈ 20). */
+  tyreChangeSec: number;
+  /** Mandatory driver-change floor in seconds (iRacing: 30), runs in parallel. */
+  driverChangeSec: number;
+  /** True when the tyre change adds to the refuel time instead of overlapping. */
+  tyreSequential: boolean;
+};
+
+export type PitStopBreakdown = {
+  totalSec: number;
+  laneSec: number;
+  refuelSec: number;
+  tyreSec: number;
+  /** Extra seconds the driver change costs beyond the service time (often 0). */
+  swapExtraSec: number;
+  litres: number;
+};
+
+/** One stop, decomposed. Pure — the unit tests drive this directly. */
+export function pitStopSeconds(
+  m: PitModel,
+  opts: { litres: number; tyres: boolean; driverChange: boolean }
+): PitStopBreakdown {
+  const litres = Math.max(0, opts.litres);
+  const refuelSec = m.refuelLps > 0 ? litres / m.refuelLps : 0;
+  const tyreSec = opts.tyres ? Math.max(0, m.tyreChangeSec) : 0;
+  const service = m.tyreSequential ? refuelSec + tyreSec : Math.max(refuelSec, tyreSec);
+  const swapFloor = opts.driverChange ? Math.max(0, m.driverChangeSec) : 0;
+  const swapExtraSec = Math.max(0, swapFloor - service);
+  return {
+    totalSec: Math.max(0, m.laneLossSec) + service + swapExtraSec,
+    laneSec: Math.max(0, m.laneLossSec),
+    refuelSec,
+    tyreSec,
+    swapExtraSec,
+    litres,
+  };
+}
 
 export type PlannerInput = {
   /** Total race length from green flag, in seconds. */
@@ -74,8 +150,19 @@ export type PlannerInput = {
   tempSlopePerC?: number;
   /** Seconds saved at a stop when the SAME driver stays in (a double-stint /
    *  refuel-only stop): the mandatory driver-swap floor no longer applies.
-   *  Effectively `max(0, driverSwapSec − refuelSec)`. 0 = no saving. */
+   *  Effectively `max(0, driverSwapSec − refuelSec)`. 0 = no saving. Ignored
+   *  when `pitModel` is set — the model computes the swap cost properly. */
   driverChangeSaveSec?: number;
+  /** Measured pit constants. When present, every stop is computed from the
+   *  litres actually taken, whether tyres are changed and whether the driver
+   *  changes, instead of using the flat `pitLossSec`. */
+  pitModel?: PitModel | null;
+  /** Tyre wear in % per lap used for drivers without their own figure.
+   *  0/undefined = no tyre modelling. */
+  tyreWearPctPerLap?: number;
+  /** Lowest tyre condition (%) considered raceable — stints ending below this
+   *  are flagged. Default 0 (never flag). */
+  tyreMinPct?: number;
 };
 
 export type StintMode = "fuel" | "time" | "laps";
@@ -158,6 +245,29 @@ export type ScheduleStint = {
   trackTempC: number | null;
   /** Seconds/lap the temperature added (negative = cooler and quicker). */
   tempDeltaSec: number;
+
+  // --- the stop that ENDS this stint (null on the last stint) ---
+  /** Total time lost at that stop, in seconds — flat or modelled. */
+  stopSec: number;
+  /** Decomposition of the stop; null unless a pit model is in use. */
+  stop: PitStopBreakdown | null;
+  /** Whether tyres are changed at that stop. */
+  tyreChange: boolean;
+
+  // --- fuel state (litres, usable = above the reserve) ---
+  fuelAtStart: number;
+  fuelAtEnd: number;
+  /** Litres taken at the stop that ends this stint. */
+  fillLitres: number;
+  /** True when the stint could not run the full tank because the previous stop
+   *  was only a splash — the UI should show it as a deliberate short stint. */
+  shortFill: boolean;
+
+  // --- tyre state (%) ---
+  tyreStartPct: number;
+  tyreEndPct: number;
+  /** True when this stint ends below the plan's minimum tyre condition. */
+  tyreWarn: boolean;
 };
 
 export type DriverTotals = {
@@ -180,6 +290,8 @@ export type PlannerResult = {
     laps: number;
     fuel: number;
     driverCount: number;
+    stopTimeSec: number;
+    tyreChanges: number;
   };
   perDriver: DriverTotals[];
   /** Suggested even split (stints per driver) for balancing. */
@@ -229,9 +341,19 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   const raceEndUtcMs =
     raceStartUtcMs != null ? raceStartUtcMs + raceDurationSec * 1000 : null;
 
+  // Usable fuel = the tank minus whatever the team refuses to burn. The whole
+  // fuel state below is expressed in usable litres, so "full" always means
+  // `usableTank` and a splash is simply a smaller number.
+  const usableTank = Math.max(0, tankSize - Math.max(0, fuelReserve ?? 0));
+  const model = input.pitModel ?? null;
+  const baseWear = Math.max(0, input.tyreWearPctPerLap ?? 0);
+  const tyreMin = Math.max(0, input.tyreMinPct ?? 0);
+
   const stints: ScheduleStint[] = [];
   let t = 0;
   let i = 0;
+  let fuelAtStart = usableTank; // the car starts the race with a full tank
+  let tyreStartPct = 100;
   while (t < raceDurationSec - 0.001 && i < MAX_STINTS) {
     const assign = assignments[i] ?? { profile: "standard", driverId: null };
     const useSaving = assign.profile === "saving" && saving != null;
@@ -243,6 +365,13 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       driver?.laptimeSec && prof.laptimeSec > 0
         ? driver.laptimeSec / prof.laptimeSec
         : 1;
+    // Per-driver fuel + tyre figures fall back to the profile / plan defaults.
+    const fuelPerLapEff =
+      driver?.fuelPerLap && driver.fuelPerLap > 0 ? driver.fuelPerLap : prof.fuelPerLap;
+    const wearPerLap =
+      driver?.tyreWearPctPerLap != null && driver.tyreWearPctPerLap >= 0
+        ? driver.tyreWearPctPerLap
+        : baseWear;
 
     // Live correction (minutes → seconds). Added to this stint's clock length
     // and, because the next stint starts where this one ends, it cascades to
@@ -267,24 +396,33 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
         ? (tempSlopePerC ?? 0) * (stintTemp - baseTempC)
         : 0;
     const paceAdd = wetAdd + tempAdd;
-    const fullGreen = (tpl.laps > 0 ? prof.laptimeSec * factor + paceAdd : 0) * tpl.laps;
+    const effLaptime = prof.laptimeSec * factor + paceAdd;
+
+    // How many laps this stint runs. In fuel mode that is what is actually in
+    // the tank — which after a splash is less than a full stint. time/laps mode
+    // keep the template.
+    const plannedLaps =
+      (stintMode ?? "fuel") === "fuel"
+        ? fuelPerLapEff > 0
+          ? Math.floor(fuelAtStart / fuelPerLapEff)
+          : 0
+        : tpl.laps;
+    if (plannedLaps <= 0) break; // no fuel / bad inputs — stop cleanly
+    const fullGreen = effLaptime * plannedLaps;
     let greenSec = fullGreen;
 
-    // Pit loss for the stop that ENDS this stint: if the same driver stays in
-    // (next stint has the same assigned driver = a double-stint), the mandatory
-    // driver-swap floor doesn't apply, so we save `driverChangeSaveSec`.
+    // Who is in the car next decides whether the stop carries a driver change.
+    // An unassigned next stint counts as a change: planning for the swap and
+    // not needing it is the harmless direction of the error.
     const nextAssign = assignments[i + 1] ?? { profile: "standard", driverId: null };
     const sameDriver = !!(
       assign.driverId &&
       nextAssign.driverId &&
       assign.driverId === nextAssign.driverId
     );
-    const stopLoss = Math.max(
-      0,
-      pitLossSec - (sameDriver ? Math.max(0, driverChangeSaveSec ?? 0) : 0)
-    );
-    let laps = tpl.laps;
-    let fuel = tpl.fuelPerStint;
+
+    let laps = plannedLaps;
+    let fuel = laps * fuelPerLapEff;
     let endSec: number;
     let isFinal = false;
     let partial = false;
@@ -294,9 +432,40 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       isFinal = true;
       partial = true;
       greenSec = raceDurationSec - t;
-      const effLaptime = prof.laptimeSec * factor + paceAdd;
       laps = effLaptime > 0 ? greenSec / effLaptime : 0;
-      fuel = laps * prof.fuelPerLap;
+      fuel = laps * fuelPerLapEff;
+    }
+
+    // --- the stop that ends this stint ------------------------------------
+    const fuelAtEnd = Math.max(0, fuelAtStart - fuel);
+    const tyreEndPct = wearPerLap > 0 ? tyreStartPct - laps * wearPerLap : tyreStartPct;
+    const wantsTyres = assign.tyreChange ?? true;
+    const requestedFill = assign.fillLitres;
+    const litres = Math.max(
+      0,
+      Math.min(
+        usableTank - fuelAtEnd,
+        requestedFill != null && requestedFill >= 0 ? requestedFill : usableTank - fuelAtEnd
+      )
+    );
+    let stop: PitStopBreakdown | null = null;
+    let stopLoss: number;
+    if (model) {
+      stop = pitStopSeconds(model, {
+        litres,
+        tyres: wantsTyres,
+        driverChange: !sameDriver,
+      });
+      stopLoss = stop.totalSec;
+    } else {
+      // Legacy flat pit loss, minus the swap floor when the same driver stays in.
+      stopLoss = Math.max(
+        0,
+        pitLossSec - (sameDriver ? Math.max(0, driverChangeSaveSec ?? 0) : 0)
+      );
+    }
+
+    if (isFinal && partial) {
       endSec = raceDurationSec + corrSec; // projected chequered incl. correction
     } else {
       endSec = t + fullGreen + stopLoss + corrSec;
@@ -324,7 +493,21 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       wet: !!assign.wet,
       trackTempC: stintTemp ?? null,
       tempDeltaSec: Math.round(tempAdd * 1000) / 1000,
+      stopSec: isFinal ? 0 : stopLoss,
+      stop: isFinal ? null : stop,
+      tyreChange: isFinal ? false : wantsTyres,
+      fuelAtStart,
+      fuelAtEnd,
+      fillLitres: isFinal ? 0 : litres,
+      shortFill: fuelAtStart < usableTank - 1e-6,
+      tyreStartPct,
+      tyreEndPct,
+      tyreWarn: wearPerLap > 0 && tyreMin > 0 && tyreEndPct < tyreMin - 1e-9,
     });
+
+    // Carry fuel + tyres into the next stint.
+    fuelAtStart = Math.min(usableTank, fuelAtEnd + litres);
+    tyreStartPct = wantsTyres ? 100 : tyreEndPct;
     t = endSec;
     i += 1;
   }
@@ -344,6 +527,8 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
 
   const laps = stints.reduce((a, s) => a + s.laps, 0);
   const fuel = stints.reduce((a, s) => a + s.fuel, 0);
+  const stopTimeSec = stints.reduce((a, s) => a + s.stopSec, 0);
+  const tyreChanges = stints.filter((s) => s.tyreChange).length;
   const driverCount = drivers.length;
   const fairShareStints =
     driverCount > 0 ? Math.ceil(stints.length / driverCount) : null;
@@ -359,6 +544,10 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       laps,
       fuel,
       driverCount,
+      /** Total time standing in / passing through the pits. */
+      stopTimeSec,
+      /** Number of stops where tyres are changed (= sets used). */
+      tyreChanges,
     },
     perDriver,
     fairShareStints,
@@ -406,10 +595,15 @@ export function optimizeFuelSave(args: {
    *  Because the pit-loss is an absolute time, a slower field genuinely shifts
    *  the optimal stop count — this is why it matters. */
   paceScale?: number;
+  /** Measured pit constants. With them the stop is priced from the litres each
+   *  strategy actually takes, so saving fuel shortens the stops as well as
+   *  stretching the stint — which is exactly when dropping a stop pays off. */
+  pitModel?: PitModel | null;
+  /** Tyres changed at every stop when pricing with the model (default true). */
+  pitTyres?: boolean;
 }): FuelSaveOptimization {
   const usable = Math.max(0, args.tankSize - Math.max(0, args.fuelReserve ?? 0));
   const T = args.raceDurationSec;
-  const P = args.pitLossSec;
   const k = args.paceScale && args.paceScale > 0 ? args.paceScale : 1;
   const std: FuelProfile = { ...args.standard, laptimeSec: args.standard.laptimeSec * k };
   const sav: FuelProfile = { ...args.saving, laptimeSec: args.saving.laptimeSec * k };
@@ -430,6 +624,14 @@ export function optimizeFuelSave(args: {
   const sim = (F: number): FuelSaveStrategy => {
     const L = lapAt(F);
     const lapsPerStint = Math.floor(usable / F);
+    // With a pit model the stop costs what refilling THIS stint's fuel costs.
+    const P = args.pitModel
+      ? pitStopSeconds(args.pitModel, {
+          litres: lapsPerStint * F,
+          tyres: args.pitTyres ?? true,
+          driverChange: true,
+        }).totalSec
+      : args.pitLossSec;
     const green = L * lapsPerStint;
     let t = 0;
     let laps = 0;

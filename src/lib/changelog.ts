@@ -19,6 +19,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.71.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: pit stops are no longer one flat number. Switch on “Pit-stop model” and every stop is computed from the litres that actually go in, whether tyres are changed and whether the driver changes — so a splash costs what a splash costs instead of being priced like a full service. The lane loss, refuel rate (l/s), tyre time and the 30-second driver-change floor are entered once; the driver change runs in parallel with fuelling, the tyre change on top of it, exactly as in the car.",
+      "Stint Planner: per-stint controls for litres and tyre change. A shorter fill shortens the following stint automatically, and the schedule shows what each stop costs, broken down on hover.",
+      "Stint Planner: tyres are modelled. Wear in % per lap (per driver where you know it), condition carried across stints when the set stays on, and a warning when a stint would end below the level you consider raceable — that is what makes double-stinting a set a decision instead of a guess.",
+      "Stint Planner: fuel consumption can now be set per driver, not just one number for the team. A smoother driver really does get a lap more out of the tank, and the schedule reflects it.",
+      "Stint Planner: the fuel-save optimiser prices its own stops with the model, so saving fuel now correctly shortens the stops as well as stretching the stint.",
+      "Admin → Pit references: a shared library of measured pit constants per car and track, with the measuring method written down. One click in a plan loads them. Thanks to Johann Solowej, whose test-session method and Spa-24h workbook this is built from.",
+    ],
+  },
+  {
     version: "1.70.0",
     date: "2026-07-27",
     changes: [

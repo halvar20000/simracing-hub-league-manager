@@ -7,6 +7,7 @@ import StintPlanner from "@/components/StintPlanner";
 import { hydratePlanState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
 import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
+import { getPitReferences } from "@/lib/pit-references";
 import { isAdmin } from "@/lib/auth-helpers";
 
 export async function generateMetadata({
@@ -46,10 +47,11 @@ export default async function SavedStintPlanPage({
   if (!plan) notFound();
 
   const initial = hydratePlanState(plan.payload, plan.title);
-  const [clsDrivers, tracks, cars, viewerIsAdmin] = await Promise.all([
+  const [clsDrivers, tracks, cars, pitReferences, viewerIsAdmin] = await Promise.all([
     getClsDrivers(),
     getClsTracks(),
     getClsCars(),
+    getPitReferences(),
     isAdmin(),
   ]);
 
@@ -75,6 +77,7 @@ export default async function SavedStintPlanPage({
         clsDrivers={clsDrivers}
         tracks={tracks}
         cars={cars}
+        pitReferences={pitReferences}
       />
     </main>
   );
