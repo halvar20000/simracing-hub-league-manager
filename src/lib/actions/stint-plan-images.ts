@@ -1,7 +1,7 @@
 "use server";
 
 import { put } from "@vercel/blob";
-import type { PlannerImage } from "@/lib/stint-plan-state";
+import { MAX_IMPRESSIONS, type PlannerImage } from "@/lib/stint-plan-state";
 
 // Pictures kept with a stint plan: the finisher's certificate/poster and the
 // impressions from the race. Archived on Vercel Blob; the plan payload only
@@ -11,8 +11,8 @@ import type { PlannerImage } from "@/lib/stint-plan-state";
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 /** Server Actions cap the whole request at 25 MB (next.config.ts). */
 const MAX_BATCH_BYTES = 22 * 1024 * 1024;
-/** Keeps the plan payload and the page sane. */
-export const MAX_IMPRESSIONS = 20;
+
+void MAX_IMPRESSIONS; // re-exported from the state module for the client
 
 const ALLOWED = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"];
 

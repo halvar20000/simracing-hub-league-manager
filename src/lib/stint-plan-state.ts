@@ -131,6 +131,9 @@ export type TeamDriverStat = {
   incidents: number;
 };
 
+/** Most pictures a plan will hold — keeps the payload and the page sane. */
+export const MAX_IMPRESSIONS = 20;
+
 /** A picture kept with the plan: the finisher's certificate/poster, or one of
  *  the shots the team took during the race. */
 export type PlannerImage = {

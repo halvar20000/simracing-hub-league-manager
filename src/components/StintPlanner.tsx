@@ -37,6 +37,7 @@ import {
   type PlannerAssignmentState,
   type PlannerState,
   type RaceLogDriverRow,
+  MAX_IMPRESSIONS,
 } from "@/lib/stint-plan-state";
 import type { ClsDriverOption } from "@/lib/cls-drivers";
 import type { ClsCarOption } from "@/lib/cls-tracks-cars";
@@ -49,10 +50,7 @@ import { pullGarage61Laps } from "@/lib/actions/garage61-pull";
 import StintDriverStats from "@/components/StintDriverStats";
 import RaceLogDashboard from "@/components/RaceLogDashboard";
 import RaceGallery from "@/components/RaceGallery";
-import {
-  uploadStintPlanImages,
-  MAX_IMPRESSIONS,
-} from "@/lib/actions/stint-plan-images";
+import { uploadStintPlanImages } from "@/lib/actions/stint-plan-images";
 import {
   connectGarage61,
   setGarage61Team,
