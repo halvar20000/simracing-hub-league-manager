@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.68.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: German guide at /stint-planner/anleitung, linked from the overview page as “📖 Anleitung (DE)”. Part one is a two-minute read for drivers (open the link, find your stints, read Clock in, Discord reminder); part two covers the whole tool for whoever builds the plan — event setup, pace and fuel-save, per-stint temperature and the ramp, the ±min column during the race, and the post-race analysis from eventresult.json plus race log. With screenshots and an FAQ.",
+    ],
+  },
+  {
     version: "1.67.0",
     date: "2026-07-27",
     changes: [

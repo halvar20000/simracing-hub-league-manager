@@ -39,12 +39,20 @@ export default async function StintPlannerIndexPage() {
             Fuel, stint and driver-rotation plans for iRacing Special Events.
           </p>
         </div>
-        <Link
-          href="/stint-planner/new"
-          className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-500"
-        >
-          + New plan
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/stint-planner/anleitung"
+            className="rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            📖 Anleitung (DE)
+          </Link>
+          <Link
+            href="/stint-planner/new"
+            className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-500"
+          >
+            + New plan
+          </Link>
+        </div>
       </div>
 
       {plans.length === 0 ? (
