@@ -36,6 +36,7 @@ import {
   stateToInput,
   planPitModel,
   planLapTarget,
+  parseTypedNumber,
   DEFAULT_TEMP_SLOPE_PER_C,
   DEFAULT_WET_DELTA_SEC,
   type PlannerAssignmentState,
@@ -708,7 +709,7 @@ export default function StintPlanner({
       standard: inp.standard,
       saving: {
         laptimeSec: parseDurationToSec(s.saving.laptime) ?? 0,
-        fuelPerLap: Number(s.saving.fuelPerLap) || 0,
+        fuelPerLap: parseTypedNumber(s.saving.fuelPerLap),
       },
       paceScale,
       // With the model, each strategy's stop is priced from the litres that
@@ -837,7 +838,7 @@ export default function StintPlanner({
     const fromData = dataSlope != null;
     // Project the (source-temp) pace to the race temp if one is set, else leave
     // it at the data's source temp.
-    const raceTempNum = Number(s.event.trackTempC);
+    const raceTempNum = parseTypedNumber(s.event.trackTempC, NaN);
     const raceTemp =
       s.event.trackTempC.trim() !== "" && isFinite(raceTempNum)
         ? raceTempNum
@@ -1791,7 +1792,7 @@ export default function StintPlanner({
             <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px] text-zinc-400">
               {(() => {
                 const tm = s.tempModel;
-                const raceT = Number(s.event.trackTempC);
+                const raceT = parseTypedNumber(s.event.trackTempC, NaN);
                 const hasRaceT =
                   s.event.trackTempC.trim() !== "" && isFinite(raceT);
                 if (!tm) {
@@ -1888,9 +1889,9 @@ export default function StintPlanner({
             </label>
             {(() => {
               const stops = Math.max(0, result.stints.length - 1);
-              const swap = Number(s.event.driverSwapSec) || 30;
+              const swap = parseTypedNumber(s.event.driverSwapSec) || 30;
               const refuelSet = s.event.refuelSec.trim() !== "";
-              const refuel = Number(s.event.refuelSec) || 0;
+              const refuel = parseTypedNumber(s.event.refuelSec);
               const saveSec = refuelSet ? Math.max(0, swap - refuel) : 0;
               let sameStops = 0;
               for (let i = 0; i < result.stints.length - 1; i++) {
@@ -2062,7 +2063,7 @@ export default function StintPlanner({
                 }
                 const usable = Math.max(
                   0,
-                  (Number(s.event.tankSize) || 0) - (Number(s.event.fuelReserve) || 0)
+                  parseTypedNumber(s.event.tankSize) - parseTypedNumber(s.event.fuelReserve)
                 );
                 const full = pitStopSeconds(model, {
                   litres: usable,

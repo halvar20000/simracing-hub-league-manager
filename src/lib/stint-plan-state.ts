@@ -408,10 +408,21 @@ function unshiftLegacyGlobalWet(
   };
 }
 
-const num = (s: string, fallback = 0): number => {
-  const n = Number(String(s).trim());
+/**
+ * Read a number the team typed. Accepts a decimal comma — half the paddock is
+ * German and types "12,5"; `Number("12,5")` is NaN, which used to turn a filled
+ * field into a silent zero (the fuel-save optimiser then refused to run with
+ * "fill in both fuel profiles first" while both were plainly filled).
+ */
+export const parseTypedNumber = (s: string | null | undefined, fallback = 0): number => {
+  const raw = String(s ?? "").trim().replace(",", ".");
+  // An empty field means "use the default", not "zero" — clearing the driver
+  // swap must not silently remove the 30 s floor.
+  if (raw === "") return fallback;
+  const n = Number(raw);
   return isFinite(n) ? n : fallback;
 };
+const num = parseTypedNumber;
 
 /** Parse the string-based UI state into the numeric engine input. */
 /** Miles → km, for the distance limit. */

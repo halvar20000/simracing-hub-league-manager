@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.73.1",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: a decimal comma is now accepted everywhere. Typing “12,5” instead of “12.5” used to be read as nothing at all, so the field looked filled while the planner saw a zero — the fuel-save optimiser then refused to start with “fill in both fuel profiles first”, and stints, fuel and tyre wear could quietly collapse to zero. Lap times take a comma too (“8:00,5”).",
+      "Stint Planner: an empty field now falls back to its default rather than to zero — clearing the driver-swap time no longer removes the 30-second floor.",
+    ],
+  },
+  {
     version: "1.73.0",
     date: "2026-07-27",
     changes: [

@@ -797,9 +797,11 @@ export function fmtDuration(totalSec: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
-/** "H:MM:SS" / "MM:SS" / "SS" → seconds. Returns null on empty/invalid. */
+/** "H:MM:SS" / "MM:SS" / "SS" → seconds. Returns null on empty/invalid.
+ *  A decimal comma is accepted: on a German keyboard "8:00,5" is what the
+ *  numpad produces, and silently reading that as invalid is worse than useless. */
 export function parseDurationToSec(v: string): number | null {
-  const t = v.trim();
+  const t = v.trim().replace(",", ".");
   if (!t) return null;
   const parts = t.split(":").map((x) => x.trim());
   if (parts.some((x) => x === "" || isNaN(Number(x)))) return null;
