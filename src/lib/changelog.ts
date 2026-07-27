@@ -22,6 +22,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.71.1",
     date: "2026-07-27",
     changes: [
+      "Stint Planner: “Session start” is now called “Race start” — the moment the race really begins — and takes seconds. Next to it sits a “Now” button: press it as the green flag falls and the whole plan snaps to the real clock. If the plan carries a green-flag offset, the button subtracts it, so the flag still lands exactly on the moment you pressed.",
       "Stint Planner: new “Fuel to the grid” field — the litres burned on the lap out to the grid and behind the pace car. That fuel is gone before the flag drops, so it comes off the first stint only, and the first stop puts it back in. On a tight tank it can cost the first stint a lap, which is exactly when you want to know.",
     ],
   },

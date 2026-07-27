@@ -271,6 +271,26 @@ export default function StintPlanner({
   /** True when this plan prices its stops from measured constants. */
   const pitOn = planPitModel(s) !== null;
 
+  // ---- Race start ---------------------------------------------------------
+  // The stored value is what the schedule counts from; the green-flag offset
+  // (if any) is added on top of it. So when the flag actually drops and someone
+  // hits "Now", the moment to store is now MINUS that offset — then the green
+  // flag lands exactly on the click and every stint shifts with it.
+  const greenOffsetSec = parseDurationToSec(s.event.greenFlagOffset) ?? 0;
+  const setRaceStartNow = () => {
+    const t = new Date(Date.now() - greenOffsetSec * 1000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local =
+      `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}` +
+      `T${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+    patchEvent("sessionStartLocal", local);
+    setStatus(
+      greenOffsetSec > 0
+        ? `Race start stamped — green flag now, ${s.event.greenFlagOffset} offset accounted for.`
+        : "Race start stamped to the second."
+    );
+  };
+
   // The shared library entry that fits this plan's car (+ track, when measured
   // there). Loading it fills the pit model in one click — nobody re-measures
   // what someone else already drove.
@@ -1553,10 +1573,30 @@ export default function StintPlanner({
                 onChange={(e) => patchEvent("raceDuration", e.target.value)} />
             </div>
             <div>
-              <label className={lbl}>Session start (optional)</label>
-              <input type="datetime-local" className={inp}
-                value={s.event.sessionStartLocal}
-                onChange={(e) => patchEvent("sessionStartLocal", e.target.value)} />
+              <label className={lbl}>Race start</label>
+              <div className="flex gap-1">
+                <input type="datetime-local" step="1" className={inp}
+                  value={s.event.sessionStartLocal}
+                  onChange={(e) => patchEvent("sessionStartLocal", e.target.value)}
+                  title="When the race really starts — the moment the green flag falls. Everything on the plan is counted from here. If you set a green-flag offset below, this is the session start and the flag falls that much later." />
+                <button
+                  type="button"
+                  onClick={setRaceStartNow}
+                  title={
+                    greenOffsetSec > 0
+                      ? `Stamp the exact moment the race starts. The ${s.event.greenFlagOffset} green-flag offset is taken off automatically, so the flag lands on now.`
+                      : "Stamp the exact moment the race starts — to the second."
+                  }
+                  className="shrink-0 rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/40 print:hidden"
+                >
+                  Now
+                </button>
+              </div>
+              {greenOffsetSec > 0 && (
+                <p className="mt-1 text-[10px] leading-tight text-zinc-500">
+                  Green flag {s.event.greenFlagOffset} later — “Now” accounts for it.
+                </p>
+              )}
             </div>
             <div>
               <label className={lbl}>Green-flag offset (m:ss)</label>

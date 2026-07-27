@@ -219,9 +219,13 @@ export default function StintPlannerGuidePage() {
               <K>6:00:00</K>.
             </li>
             <li>
-              <K>Session start</K> — Startzeit der Session als echte Uhrzeit.
-              Ohne diese Angabe gibt es keine <K>Clock in</K>-Spalte, keinen
-              Live-Tracker und keine Discord-Erinnerungen.
+              <K>Race start</K> — wann das Rennen wirklich losgeht, als echte
+              Uhrzeit. Ohne diese Angabe gibt es keine <K>Clock in</K>-Spalte,
+              keinen Live-Tracker und keine Discord-Erinnerungen. Der Knopf{" "}
+              <K>Now</K> stempelt den Moment sekundengenau — im Zweifel im
+              Augenblick der grünen Flagge drücken, dann verschiebt sich der
+              ganze Plan mit. Ein eingetragener <K>Green-flag offset</K> wird
+              dabei automatisch herausgerechnet.
             </li>
             <li>
               <K>Green-flag offset</K> — Zeit zwischen Session-Start und grüner
