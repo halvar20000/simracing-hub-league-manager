@@ -48,6 +48,11 @@ import {
 import { pullGarage61Laps } from "@/lib/actions/garage61-pull";
 import StintDriverStats from "@/components/StintDriverStats";
 import RaceLogDashboard from "@/components/RaceLogDashboard";
+import RaceGallery from "@/components/RaceGallery";
+import {
+  uploadStintPlanImages,
+  MAX_IMPRESSIONS,
+} from "@/lib/actions/stint-plan-images";
 import {
   connectGarage61,
   setGarage61Team,
@@ -931,6 +936,73 @@ export default function StintPlanner({
         : `Track temperature ramped ${a} °C → ${b} °C across ${n} stints.`
     );
   };
+  // ---- Race poster & impressions -----------------------------------------
+  const [galleryBusy, setGalleryBusy] = useState(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+  async function uploadImages(files: FileList | null, kind: "poster" | "impression") {
+    if (!files || files.length === 0) return;
+    setGalleryBusy(true);
+    setGalleryError(null);
+    try {
+      const fd = new FormData();
+      fd.append("kind", kind);
+      const room =
+        kind === "poster"
+          ? 1
+          : Math.max(0, MAX_IMPRESSIONS - s.impressions.length);
+      const list = Array.from(files).slice(0, room);
+      if (list.length === 0) {
+        setGalleryError(`Only ${MAX_IMPRESSIONS} pictures per plan.`);
+        return;
+      }
+      for (const f of list) fd.append("files", f);
+      const res = await uploadStintPlanImages(fd);
+      if (!res.ok) {
+        setGalleryError(res.error);
+        return;
+      }
+      setS((p) =>
+        kind === "poster"
+          ? { ...p, poster: res.images[0] ?? p.poster }
+          : { ...p, impressions: [...p.impressions, ...res.images] }
+      );
+      if (res.skipped.length > 0) {
+        setGalleryError(`Skipped: ${res.skipped.join(", ")}.`);
+      } else {
+        setStatus(
+          kind === "poster"
+            ? "Poster saved with the plan."
+            : `${res.images.length} picture${res.images.length === 1 ? "" : "s"} added.`
+        );
+      }
+    } catch (e) {
+      if (isStaleActionError(e)) {
+        setStaleBuild(true);
+        setGalleryError(
+          "The site was updated while this tab was open — reload the page, then try again."
+        );
+      } else {
+        setGalleryError("Upload failed — please try again.");
+      }
+    } finally {
+      setGalleryBusy(false);
+    }
+  }
+  const setImageCaption = (url: string, caption: string) =>
+    setS((p) => ({
+      ...p,
+      poster:
+        p.poster && p.poster.url === url ? { ...p.poster, caption } : p.poster,
+      impressions: p.impressions.map((im) =>
+        im.url === url ? { ...im, caption } : im
+      ),
+    }));
+  const removeImpression = (url: string) =>
+    setS((p) => ({
+      ...p,
+      impressions: p.impressions.filter((im) => im.url !== url),
+    }));
+
   const clearStintTemps = () =>
     setS((p) => ({
       ...p,
@@ -2358,6 +2430,29 @@ export default function StintPlanner({
       </div>
       {/* ===== POST ===== */}
       <div className={`space-y-6 ${phase === "post" ? "" : "hidden print:block"}`}>
+      {/* Poster & impressions — the team's memory of the race */}
+      <div className={card}>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
+          Poster &amp; impressions
+        </h2>
+        {galleryError && (
+          <p className="mb-3 rounded border border-red-800/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+            {galleryError}
+          </p>
+        )}
+        <RaceGallery
+          poster={s.poster}
+          impressions={s.impressions}
+          busy={galleryBusy}
+          max={MAX_IMPRESSIONS}
+          onPickPoster={(files) => uploadImages(files, "poster")}
+          onPickImpressions={(files) => uploadImages(files, "impression")}
+          onRemovePoster={() => setS((p) => ({ ...p, poster: null }))}
+          onRemoveImpression={removeImpression}
+          onCaption={setImageCaption}
+        />
+      </div>
+
       {/* Race-logger JSONL: what the car actually did */}
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

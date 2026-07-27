@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.66.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: new “Poster & impressions” card in After Race. Upload the official finisher certificate or your own result poster, plus up to 20 pictures from the race — livery shots, the start, the moment it went wrong. Thumbnails keep the page short, a click opens the picture full size, and every picture takes an optional caption. Everything is archived with the plan, so the whole team sees it on the share link.",
+    ],
+  },
+  {
     version: "1.65.0",
     date: "2026-07-26",
     changes: [

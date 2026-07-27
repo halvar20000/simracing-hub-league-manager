@@ -131,6 +131,15 @@ export type TeamDriverStat = {
   incidents: number;
 };
 
+/** A picture kept with the plan: the finisher's certificate/poster, or one of
+ *  the shots the team took during the race. */
+export type PlannerImage = {
+  url: string; // Vercel Blob URL
+  name: string; // original file name
+  caption?: string; // optional, free text
+  uploadedAt: string; // ISO timestamp
+};
+
 /** Archived + parsed end-of-session eventresult attached to a plan. */
 export type PlannerEventResult = {
   url: string; // Vercel Blob URL of the raw eventresult.json
@@ -221,6 +230,10 @@ export type PlannerState = {
   eventResult: PlannerEventResult | null;
   /** Archived + parsed race-logger JSONL, or null. */
   raceLog: PlannerRaceLog | null;
+  /** The result poster / certificate for this race, or null. */
+  poster: PlannerImage | null;
+  /** Impressions from the race — livery shots, screenshots, podium pictures. */
+  impressions: PlannerImage[];
 };
 
 let uidCounter = 0;
@@ -259,6 +272,8 @@ export function defaultPlannerState(): PlannerState {
     notes: { pre: "", during: "", post: "" },
     eventResult: null,
     raceLog: null,
+    poster: null,
+    impressions: [],
   };
 }
 
@@ -276,6 +291,7 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
     event: { ...base.event, ...(migrated.event ?? {}) },
     notes: { ...base.notes, ...(stored.notes ?? {}) },
     availability: stored.availability ?? base.availability,
+    impressions: stored.impressions ?? base.impressions,
   };
 }
 
