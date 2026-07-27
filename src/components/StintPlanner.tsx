@@ -1596,6 +1596,13 @@ export default function StintPlanner({
                 title="Fuel kept in the tank as a safety margin — reduces laps per stint." />
             </div>
             <div>
+              <label className={lbl}>Fuel to the grid (L)</label>
+              <input className={inp} value={s.event.gridFuelL}
+                onChange={(e) => patchEvent("gridFuelL", e.target.value)}
+                placeholder="e.g. 1.6"
+                title="Fuel burned between leaving the box and the green flag — the lap to the grid plus the laps behind the pace car. It is gone before the race starts, so it comes off the FIRST stint only." />
+            </div>
+            <div>
               <label className={lbl}>Track temp (°C)</label>
               <input className={inp} value={s.event.trackTempC}
                 onChange={(e) => patchEvent("trackTempC", e.target.value)}

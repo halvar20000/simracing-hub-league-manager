@@ -163,6 +163,10 @@ export type PlannerInput = {
   /** Lowest tyre condition (%) considered raceable — stints ending below this
    *  are flagged. Default 0 (never flag). */
   tyreMinPct?: number;
+  /** Litres burned between leaving the box and the green flag — the lap to the
+   *  grid and the laps behind the pace car. The car starts the race with that
+   *  much less on board, so it comes off the FIRST stint only. */
+  gridFuelL?: number;
 };
 
 export type StintMode = "fuel" | "time" | "laps";
@@ -352,7 +356,9 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   const stints: ScheduleStint[] = [];
   let t = 0;
   let i = 0;
-  let fuelAtStart = usableTank; // the car starts the race with a full tank
+  // The car leaves the box full, but the lap to the grid and the rolling start
+  // are already gone by the time the flag drops — so stint 1 starts short.
+  let fuelAtStart = Math.max(0, usableTank - Math.max(0, input.gridFuelL ?? 0));
   let tyreStartPct = 100;
   while (t < raceDurationSec - 0.001 && i < MAX_STINTS) {
     const assign = assignments[i] ?? { profile: "standard", driverId: null };

@@ -222,6 +222,10 @@ export type PlannerState = {
     stintMode: StintMode; // "fuel" (default) | "time" | "laps"
     stintValue: string; // minutes (time) or laps (laps); ignored for fuel
     fuelReserve: string; // litres kept in reserve, "" = 0
+    /** Litres burned from leaving the box to the green flag (lap to the grid +
+     *  laps behind the pace car). Off the FIRST stint only — that fuel is gone
+     *  before the race starts. "" = 0. */
+    gridFuelL: string;
     trackTempC: string; // race-day track temperature (°C), "" = none
     conditions: "dry" | "wet"; // whole-race weather scenario (legacy, vestigial)
     driverSwapSec: string; // mandatory driver-swap floor (iRacing = 30s)
@@ -299,6 +303,7 @@ export function defaultPlannerState(): PlannerState {
       stintMode: "fuel",
       stintValue: "",
       fuelReserve: "",
+      gridFuelL: "",
       trackTempC: "",
       conditions: "dry",
       driverSwapSec: "30",
@@ -418,6 +423,7 @@ export function stateToInput(s: PlannerState): PlannerInput {
     stintLaps:
       s.event.stintMode === "laps" ? num(s.event.stintValue) : undefined,
     fuelReserve: num(s.event.fuelReserve),
+    gridFuelL: num(s.event.gridFuelL),
     drivers: s.drivers.map((d) => ({
       id: d.id,
       name: d.name || "Driver",

@@ -26,6 +26,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Stint Planner: per-stint controls for litres and tyre change. A shorter fill shortens the following stint automatically, and the schedule shows what each stop costs, broken down on hover.",
       "Stint Planner: tyres are modelled. Wear in % per lap (per driver where you know it), condition carried across stints when the set stays on, and a warning when a stint would end below the level you consider raceable — that is what makes double-stinting a set a decision instead of a guess.",
       "Stint Planner: fuel consumption can now be set per driver, not just one number for the team. A smoother driver really does get a lap more out of the tank, and the schedule reflects it.",
+      "Stint Planner: new “Fuel to the grid” field — the litres burned on the lap out to the grid and behind the pace car. That fuel is gone before the flag drops, so it comes off the first stint only, and the first stop refuels it as well.",
       "Stint Planner: the fuel-save optimiser prices its own stops with the model, so saving fuel now correctly shortens the stops as well as stretching the stint.",
       "Admin → Pit references: a shared library of measured pit constants per car and track, with the measuring method written down. One click in a plan loads them. Thanks to Johann Solowej, whose test-session method and Spa-24h workbook this is built from.",
     ],
