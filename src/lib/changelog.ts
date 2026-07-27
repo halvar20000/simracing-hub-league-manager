@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.75.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: a Garage 61 pull can be limited to recent data — current season (the new default), this + last season, or the last 30/60/90 days. Pace from an older season was set on a different BoP, a different tyre model and often a different track surface, so it quietly biases a plan; now it can be left out.",
+      "Stint Planner: the pull tells you what it used — the window, how many older laps were left out, and the date range of the laps it kept. If the laps carry no date, it says so instead of pretending the filter worked.",
+    ],
+  },
+  {
     version: "1.74.0",
     date: "2026-07-27",
     changes: [

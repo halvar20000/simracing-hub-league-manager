@@ -255,6 +255,11 @@ export type PlannerState = {
     stintMode: StintMode; // "fuel" (default) | "time" | "laps"
     stintValue: string; // minutes (time) or laps (laps); ignored for fuel
     fuelReserve: string; // litres kept in reserve, "" = 0
+    /** How far back a Garage 61 pull looks. Garage 61's own codes: "-1" =
+     *  current season, "-2" = current + previous, a positive number = days,
+     *  "" = everything. Default: the current season — old pace from a car that
+     *  has since been BoP'd is worse than no data. */
+    g61Age: string;
     /** Seconds per lap the team is slower in a race than in practice: traffic,
      *  cars to pass, dirty air, being careful. Practice data is optimistic, so
      *  this is added to every stint. "" = 0. */
@@ -347,6 +352,7 @@ export function defaultPlannerState(): PlannerState {
       fuelReserve: "",
       gridFuelL: "",
       trafficPenaltySec: "",
+      g61Age: "-1",
       trackTempC: "",
       conditions: "dry",
       driverSwapSec: "30",

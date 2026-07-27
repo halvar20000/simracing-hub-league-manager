@@ -281,6 +281,9 @@ export default function StintPlanner({
 
   // Garage 61 figures for the driver table, keyed by normalised name.
   const normName = (n: string) => n.trim().toLowerCase();
+  /** "12 Jun" — enough to see at a glance how fresh the imported laps are. */
+  const fmtDay = (ms: number) =>
+    new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(ms));
   const g61ByDriver = useMemo(() => {
     const m = new Map<string, NonNullable<typeof s.g61Analysis>["drivers"][number]>();
     for (const d of s.g61Analysis?.drivers ?? []) m.set(normName(d.driver), d);
@@ -1198,6 +1201,8 @@ export default function StintPlanner({
         carName: s.event.car,
         iracingCarId: car?.iracingCarId ?? null,
         rosterNames: s.drivers.map((d) => d.name),
+        // Only recent data: old pace was set on a different BoP and tyre model.
+        age: s.event.g61Age.trim() === "" ? null : Number(s.event.g61Age),
       });
       if (!res.ok) {
         setG61Msg(res.error);
@@ -1205,7 +1210,18 @@ export default function StintPlanner({
       }
       setG61(res.result);
       setG61Msg(
-        `Pulled ${res.meta.lapsFetched} lap${res.meta.lapsFetched === 1 ? "" : "s"} from Garage 61 (${res.meta.trackMatched ?? "track"}${res.meta.carMatched ? " · " + res.meta.carMatched : ""}). Review below, then Apply to plan.`
+        // Say which window the data came from and what it cost — a silent
+        // filter is how you end up planning on three laps.
+        `Pulled ${res.meta.lapsFetched} lap${res.meta.lapsFetched === 1 ? "" : "s"} from Garage 61 ` +
+          `(${res.meta.trackMatched ?? "track"}${res.meta.carMatched ? " · " + res.meta.carMatched : ""}` +
+          `, ${res.meta.window})` +
+          (res.meta.lapsTooOld > 0 ? ` · ${res.meta.lapsTooOld} older lap${res.meta.lapsTooOld === 1 ? "" : "s"} left out` : "") +
+          (res.meta.oldestLapMs != null && res.meta.newestLapMs != null
+            ? ` · ${fmtDay(res.meta.oldestLapMs)}–${fmtDay(res.meta.newestLapMs)}`
+            : res.meta.datesMissing
+              ? " · laps carry no date, so only the season filter applied"
+              : "") +
+          ". Review below, then Apply to plan."
       );
     } catch {
       setG61Msg("Live pull failed — please try again.");
@@ -2476,6 +2492,19 @@ export default function StintPlanner({
             Garage 61 import
           </h2>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <select
+              value={s.event.g61Age}
+              onChange={(e) => patchEvent("g61Age", e.target.value)}
+              title="How far back to look. Pace from an old season was set on a different BoP, a different tyre model and often a different track surface — usually worse than no data at all."
+              className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-200 print:hidden"
+            >
+              <option value="-1">Current season</option>
+              <option value="-2">This + last season</option>
+              <option value="30">Last 30 days</option>
+              <option value="60">Last 60 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="">All data</option>
+            </select>
             <button
               onClick={onGarage61Pull}
               disabled={g61PullBusy || g61Busy}

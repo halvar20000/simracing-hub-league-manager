@@ -32,6 +32,16 @@ export type PullGarage61Result =
         carMatched: string | null;
         teams: string[];
         lapsFetched: number;
+        /** Laps dropped because they were older than the chosen window. */
+        lapsTooOld: number;
+        /** Window that was asked for, as a label ("current season", "90 days"). */
+        window: string;
+        /** Oldest / newest lap actually used (ms since epoch), when dated. */
+        oldestLapMs: number | null;
+        newestLapMs: number | null;
+        /** True when the laps carry no usable date, so only the API-side age
+         *  filter applied — worth saying out loud rather than pretending. */
+        datesMissing: boolean;
         // Field names on the first raw lap — lets us confirm the live shape
         // (esp. the fuel-used key) on the very first pull without guessing.
         sampleLapKeys: string[];
@@ -55,6 +65,47 @@ function pickNum(o: Record<string, unknown>, keys: string[]): number | null {
       return Number(v);
   }
   return null;
+}
+
+/** When the lap was driven, in ms. Garage 61 has changed this key before, so
+ *  several spellings are tried and anything unparseable is simply "unknown". */
+function pickDateMs(o: Record<string, unknown>): number | null {
+  const keys = [
+    "startTime",
+    "start_time",
+    "endTime",
+    "end_time",
+    "date",
+    "createdAt",
+    "created_at",
+    "sessionStart",
+    "session_start",
+    "time",
+  ];
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === "string" && v.trim() !== "") {
+      const t = Date.parse(v);
+      if (isFinite(t)) return t;
+    }
+    // A bare number is only a date when it is plausibly one (ms or s epoch).
+    if (typeof v === "number" && isFinite(v)) {
+      if (v > 1e12 && v < 4e12) return v;
+      if (v > 1e9 && v < 4e9) return v * 1000;
+    }
+  }
+  return null;
+}
+
+// Human label for the age code, for the "pulled N laps" message. NOT exported:
+// a "use server" file may only export async functions (tsc allows it, Turbopack
+// rejects the build — see CLAUDE.md).
+function windowLabel(age: number | null): string {
+  if (age == null) return "all data";
+  if (age === -1) return "current season";
+  if (age === -2) return "current + previous season";
+  if (age < 0) return `last ${Math.abs(age)} seasons`;
+  return `last ${age} days`;
 }
 
 function pickBool(o: Record<string, unknown>, keys: string[]): boolean {
@@ -141,6 +192,10 @@ export async function pullGarage61Laps(input: {
   iracingCarId: number | null;
   /** Roster driver names to scope the import to (empty = include everyone). */
   rosterNames?: string[];
+  /** How far back to look. Garage 61's own codes: -1 = current season,
+   *  -2 = current + previous, a positive number = that many days.
+   *  Null/undefined = no limit (everything Garage 61 has). */
+  age?: number | null;
 }): Promise<PullGarage61Result> {
   // Prefer this plan's own token; fall back to the global GARAGE61_TOKEN.
   const conn = await resolvePlanGarage61(input.planId ?? null);
@@ -211,7 +266,8 @@ export async function pullGarage61Laps(input: {
       drivers: ["me"],
       group: "none",
       limit: 1000,
-      age: -2,
+      // Undefined = no age limit; otherwise Garage 61's own season/day codes.
+      age: input.age ?? undefined,
     },
     tk
   );
@@ -222,6 +278,12 @@ export async function pullGarage61Laps(input: {
   const sampleLapKeys = laps.length
     ? Object.keys(laps[0] as unknown as Record<string, unknown>)
     : [];
+
+  // A positive `age` is a day window; season codes are handled by the API only.
+  const cutoffMs =
+    typeof input.age === "number" && input.age > 0
+      ? Date.now() - input.age * 86_400_000
+      : null;
 
   const rows: G61LapRow[] = [];
   for (const lap of laps) {
@@ -251,8 +313,27 @@ export async function pullGarage61Laps(input: {
       pitOut: pickBool(o, ["pitOut", "pit_out", "pitout"]),
       trackTempC,
       trackWetness,
+      dateMs: pickDateMs(o),
     });
   }
+
+  // Second pass on our side: the API's age codes are coarse (whole seasons), so
+  // a day window is enforced here on the laps' own timestamps. Laps without a
+  // date are kept — dropping them would silently empty an import.
+  const dated = rows.filter((r) => r.dateMs != null);
+  const datesMissing = dated.length === 0 && rows.length > 0;
+  let lapsTooOld = 0;
+  if (cutoffMs != null && dated.length > 0) {
+    const before = rows.length;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const d = rows[i].dateMs;
+      if (d != null && d < cutoffMs) rows.splice(i, 1);
+    }
+    lapsTooOld = before - rows.length;
+  }
+  const usedDates = rows
+    .map((r) => r.dateMs)
+    .filter((d): d is number => typeof d === "number");
 
   if (rows.length === 0) {
     return {
@@ -288,6 +369,11 @@ export async function pullGarage61Laps(input: {
       carMatched: g61Car?.name ?? null,
       teams,
       lapsFetched: laps.length,
+      lapsTooOld,
+      window: windowLabel(input.age ?? null),
+      oldestLapMs: usedDates.length ? Math.min(...usedDates) : null,
+      newestLapMs: usedDates.length ? Math.max(...usedDates) : null,
+      datesMissing,
       sampleLapKeys,
     },
   };

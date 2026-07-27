@@ -21,6 +21,9 @@ export type G61LapRow = {
   trackTempC?: number | null;
   /** Track wetness 0–100 (%) when the lap was set, if known. */
   trackWetness?: number | null;
+  /** When the lap was driven (ms since epoch), if known — used to keep an
+   *  import to recent data instead of pace from two seasons ago. */
+  dateMs?: number | null;
 };
 
 export type G61DriverAgg = {
