@@ -26,6 +26,10 @@ export type PlannerDriverState = {
   fuelPerLap?: string;
   /** Per-driver tyre wear in % per lap; "" = use the plan's default. */
   tyreWear?: string;
+  /** Which of the three figures the team typed in by hand. A Garage 61 pull
+   *  fills the others and leaves these alone — a hand-tuned number must not be
+   *  silently overwritten by the next import. */
+  manual?: { laptime?: boolean; fuelPerLap?: boolean; tyreWear?: boolean };
 };
 
 /** One row of the parsed eventresult finishing order (stored in the payload so

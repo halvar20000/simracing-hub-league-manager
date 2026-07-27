@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.73.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: the driver list is now a data table — laps measured, best lap, average lap and the track temperature those laps were set at, plus the three figures the plan actually runs on: race pace, fuel per lap and tyre wear per lap. Pulling from Garage 61 fills them per driver instead of only setting lap times.",
+      "Stint Planner: any of those figures can be overwritten by hand, and the planner then uses your number — a driver who lifts and coasts really does get another lap out of the tank. Values from Garage 61 show green, your own show amber, and the next import refills the green ones while leaving yours untouched (↺ hands a row back to the data).",
+      "Stint Planner: tyre wear stays yours to enter — Garage 61 does not measure it. Blank falls back to the plan's default wear.",
+    ],
+  },
+  {
     version: "1.72.0",
     date: "2026-07-27",
     changes: [

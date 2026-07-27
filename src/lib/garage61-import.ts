@@ -39,6 +39,9 @@ export type G61DriverAgg = {
   maxSec: number;
   /** Raw (un-normalised) lap points for the lap-time-vs-temp scatter. */
   points: { t: number | null; y: number }[];
+  /** Median track temperature of this driver's clean laps, when known — the
+   *  conditions their pace and fuel figure actually come from. */
+  medianTempC: number | null;
 };
 
 /** Data-driven temperature model derived from the clean laps. */
@@ -261,6 +264,12 @@ export function aggregateGarage61Laps(
             : null,
         y: l.laptimeSec,
       })),
+      medianTempC: (() => {
+        const ts = clean
+          .map((l) => l.trackTempC)
+          .filter((t): t is number => typeof t === "number" && isFinite(t));
+        return ts.length ? median(ts) : null;
+      })(),
     });
     allCleanLaptimes.push(...lts);
     allCleanFuels.push(...fus);

@@ -274,6 +274,14 @@ export default function StintPlanner({
   /** Lap target of a distance race (null = the race ends on the clock). */
   const lapTarget = planLapTarget(s);
 
+  // Garage 61 figures for the driver table, keyed by normalised name.
+  const normName = (n: string) => n.trim().toLowerCase();
+  const g61ByDriver = useMemo(() => {
+    const m = new Map<string, NonNullable<typeof s.g61Analysis>["drivers"][number]>();
+    for (const d of s.g61Analysis?.drivers ?? []) m.set(normName(d.driver), d);
+    return m;
+  }, [s.g61Analysis]);
+
   // ---- Race start ---------------------------------------------------------
   // The stored value is what the schedule counts from; the green-flag offset
   // (if any) is added on top of it. So when the flag actually drops and someone
@@ -356,9 +364,13 @@ export default function StintPlanner({
   const patchDriverLaptime = (id: string, v: string) =>
     setS((p) => ({
       ...p,
-      drivers: p.drivers.map((d) => (d.id === id ? { ...d, laptime: v } : d)),
+      drivers: p.drivers.map((d) =>
+        d.id === id
+          ? { ...d, laptime: v, manual: { ...(d.manual ?? {}), laptime: v.trim() !== "" } }
+          : d
+      ),
     }));
-  /** Per-driver fuel consumption / tyre wear (only shown with the pit model). */
+  /** Per-driver fuel consumption / tyre wear, typed by hand. */
   const patchDriverField = (
     id: string,
     key: "fuelPerLap" | "tyreWear",
@@ -366,7 +378,22 @@ export default function StintPlanner({
   ) =>
     setS((p) => ({
       ...p,
-      drivers: p.drivers.map((d) => (d.id === id ? { ...d, [key]: v } : d)),
+      drivers: p.drivers.map((d) =>
+        d.id === id
+          ? { ...d, [key]: v, manual: { ...(d.manual ?? {}), [key]: v.trim() !== "" } }
+          : d
+      ),
+    }));
+  /** Drop a hand-typed figure so the next Garage 61 pull owns it again. */
+  const resetDriverField = (
+    id: string,
+    key: "laptime" | "fuelPerLap" | "tyreWear"
+  ) =>
+    setS((p) => ({
+      ...p,
+      drivers: p.drivers.map((d) =>
+        d.id === id ? { ...d, [key]: "", manual: { ...(d.manual ?? {}), [key]: false } } : d
+      ),
     }));
   const removeDriver = (id: string) =>
     setS((p) => {
@@ -841,7 +868,14 @@ export default function StintPlanner({
       },
       drivers: p.drivers.map((d) => {
         const gd = g61.drivers.find((x) => norm(x.driver) === norm(d.name));
-        return gd ? { ...d, laptime: fmtLap(gd.racePaceSec + proj) } : d;
+        if (!gd) return d;
+        // Fill what Garage 61 measured, but never overwrite a figure the team
+        // typed in themselves — they know something the data doesn't.
+        return {
+          ...d,
+          laptime: d.manual?.laptime ? d.laptime : fmtLap(gd.racePaceSec + proj),
+          fuelPerLap: d.manual?.fuelPerLap ? d.fuelPerLap : gd.fuelPerLap.toFixed(2),
+        };
       }),
       tempModel: {
         appliedTempC: targetTemp,
@@ -2227,44 +2261,125 @@ export default function StintPlanner({
             onPick={addClsDriver}
           />
         </div>
-        <div className="space-y-2">
-          {s.drivers.map((d) => (
-            <div key={d.id} className="flex items-center gap-2">
-              <span className="flex-1 rounded border border-zinc-800 bg-zinc-950/60 px-2 py-1.5 text-sm text-zinc-100">
-                {d.name}
-              </span>
-              <input className={`${inp} w-28`} value={d.laptime}
-                onChange={(e) => patchDriverLaptime(d.id, e.target.value)}
-                placeholder="laptime" title="Optional per-driver laptime (m:ss). Blank = standard pace." />
-              {s.event.pitModelOn && (
-                <>
-                  <input className={`${inp} w-20`} value={d.fuelPerLap ?? ""}
-                    onChange={(e) => patchDriverField(d.id, "fuelPerLap", e.target.value)}
-                    placeholder="L/lap"
-                    title="Optional per-driver fuel consumption. Blank = the Standard profile. A smoother driver genuinely gets a lap more out of the tank." />
-                  <input className={`${inp} w-20`} value={d.tyreWear ?? ""}
-                    onChange={(e) => patchDriverField(d.id, "tyreWear", e.target.value)}
-                    placeholder="%/lap"
-                    title="Optional per-driver tyre wear in % per lap. Blank = the plan's default." />
-                </>
-              )}
-              <button onClick={() => removeDriver(d.id)}
-                className="rounded border border-red-900/60 px-2 py-1.5 text-sm text-red-300 hover:bg-red-950/40 print:hidden"
-                aria-label="Remove driver">✕</button>
-            </div>
-          ))}
-          {s.drivers.length === 0 && (
-            <p className="text-sm text-zinc-500">
-              Search for a CLS driver in the field above to add them.
-            </p>
-          )}
-        </div>
+        {s.drivers.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            Search for a CLS driver in the field above to add them.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="text-xs uppercase tracking-wide text-zinc-500">
+                <tr className="border-b border-zinc-800">
+                  <th className="py-1 pr-2">Driver</th>
+                  <th className="py-1 pr-2 text-right" title="Clean laps Garage 61 measured for this driver on this track + car.">Laps</th>
+                  <th className="py-1 pr-2 text-right" title="Fastest clean lap in the Garage 61 data.">Best</th>
+                  <th className="py-1 pr-2 text-right" title="Mean of the driver's clean laps — how they really run, not their one hot lap.">Ø lap</th>
+                  <th className="py-1 pr-2 text-right" title="Track temperature the Garage 61 laps were set at.">°C</th>
+                  <th className="py-1 pr-2 text-right" title="Race pace used by the planner. Filled from Garage 61 (median clean lap, projected to the plan's track temp) — type to override.">Pace</th>
+                  <th className="py-1 pr-2 text-right" title="Fuel per lap used by the planner. Filled from Garage 61 — type to override.">L/lap</th>
+                  <th className="py-1 pr-2 text-right" title="Tyre wear in % per lap. Garage 61 does not measure this, so it is yours to enter; blank falls back to the plan default.">%/lap</th>
+                  <th className="py-1" />
+                </tr>
+              </thead>
+              <tbody>
+                {s.drivers.map((d) => {
+                  const gd = g61ByDriver.get(normName(d.name)) ?? null;
+                  const cell = (manual: boolean | undefined, hasData: boolean) =>
+                    `w-20 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                      manual
+                        ? "border-amber-700/70 text-amber-100"
+                        : hasData
+                          ? "border-emerald-900/60 text-emerald-100"
+                          : "border-zinc-700 text-zinc-100"
+                    }`;
+                  return (
+                    <tr key={d.id} className="border-t border-zinc-800/60">
+                      <td className="py-1 pr-2 text-zinc-100">{d.name}</td>
+                      <td className="py-1 pr-2 text-right text-zinc-500">{gd?.laps ?? "—"}</td>
+                      <td className="py-1 pr-2 text-right text-zinc-400">
+                        {gd ? fmtLap(gd.bestSec) : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right text-zinc-400">
+                        {gd ? fmtLap(gd.meanSec) : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right text-zinc-500">
+                        {gd?.medianTempC != null ? `${gd.medianTempC.toFixed(0)}°` : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          className={cell(d.manual?.laptime, !!gd)}
+                          value={d.laptime}
+                          onChange={(e) => patchDriverLaptime(d.id, e.target.value)}
+                          placeholder={gd ? fmtLap(gd.racePaceSec) : "m:ss"}
+                          title={
+                            d.manual?.laptime
+                              ? "Your own figure — a Garage 61 pull will not overwrite it."
+                              : "From Garage 61 (or blank = Standard profile pace)."
+                          }
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.laptime || "—"}</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          className={cell(d.manual?.fuelPerLap, !!gd)}
+                          value={d.fuelPerLap ?? ""}
+                          onChange={(e) => patchDriverField(d.id, "fuelPerLap", e.target.value)}
+                          placeholder={gd ? gd.fuelPerLap.toFixed(2) : "L"}
+                          title={
+                            d.manual?.fuelPerLap
+                              ? "Your own figure — a Garage 61 pull will not overwrite it."
+                              : "From Garage 61 (median of the clean laps)."
+                          }
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.fuelPerLap || "—"}</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          className={cell(d.manual?.tyreWear, false)}
+                          value={d.tyreWear ?? ""}
+                          onChange={(e) => patchDriverField(d.id, "tyreWear", e.target.value)}
+                          placeholder={s.event.tyreWearPctPerLap || "%"}
+                          title="Tyre wear in % per lap. Not measured by Garage 61 — read it off the car or leave blank for the plan default."
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.tyreWear || "—"}</td>
+                      <td className="py-1 text-right print:hidden">
+                        {(d.manual?.laptime || d.manual?.fuelPerLap || d.manual?.tyreWear) && (
+                          <button
+                            onClick={() => {
+                              resetDriverField(d.id, "laptime");
+                              resetDriverField(d.id, "fuelPerLap");
+                              resetDriverField(d.id, "tyreWear");
+                            }}
+                            className="mr-1 rounded border border-zinc-700 px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+                            title="Drop your own figures and let the next Garage 61 pull fill them again"
+                          >
+                            ↺
+                          </button>
+                        )}
+                        <button
+                          onClick={() => removeDriver(d.id)}
+                          className="rounded border border-red-900/60 px-2 py-1 text-sm text-red-300 hover:bg-red-950/40"
+                          aria-label="Remove driver"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
         <p className="mt-2 text-xs text-zinc-500">
-          Drivers come from CLS (anyone with a registration). The per-driver
-          laptime is optional — set it to lengthen a slower driver&rsquo;s stints.
-          With the pit-stop model on, the two extra fields are that driver&rsquo;s own
-          fuel consumption and tyre wear: they change how many laps that driver gets
-          out of a tank and how much rubber is left at the end of the stint.
+          Drivers come from CLS (anyone with a registration). <strong className="text-emerald-300">Green</strong>{" "}
+          values came from Garage 61, <strong className="text-amber-200">amber</strong> ones you
+          typed yourself — a new Garage 61 pull refills the green ones and leaves yours
+          alone (↺ hands a row back to the data). Pace and fuel per lap drive the
+          schedule directly: they decide how long a driver&rsquo;s stint runs and how many
+          laps they get out of a tank. Tyre wear is not something Garage 61 measures, so
+          that column is always yours.
         </p>
       </div>
 
