@@ -18,6 +18,49 @@ function cleanTitle(title: unknown): string {
   return (t || "Stint Plan").slice(0, 120);
 }
 
+// ---------------------------------------------------------------------------
+// Completed ("archived") plans
+// ---------------------------------------------------------------------------
+// A completed plan is frozen for planning but still open for the debrief.
+// The freeze MUST live here, not in the UI: liveUpdateStintPlan deliberately
+// takes no edit token, so anyone with the link could otherwise still write to
+// a finished plan. Instead of rejecting the save outright (which would also
+// throw away a race log someone is attaching), we merge only the post-race
+// keys onto the stored payload and drop the rest.
+const ARCHIVED_MERGE_KEYS = ["eventResult", "raceLog", "poster", "impressions"] as const;
+
+function asRecord(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? { ...(v as Record<string, unknown>) }
+    : {};
+}
+
+/** Stored payload + only the analysis fields of the incoming one. */
+function mergeArchivedPayload(stored: unknown, incoming: unknown): object {
+  const base = asRecord(stored);
+  const inc = asRecord(incoming);
+  for (const k of ARCHIVED_MERGE_KEYS) {
+    if (k in inc) base[k] = inc[k];
+  }
+  // Post-race notes are part of the debrief; pre/during notes freeze with the
+  // plan so the record of what was decided beforehand stays honest.
+  if ("notes" in inc) {
+    const incNotes = asRecord(inc.notes);
+    const baseNotes = asRecord(base.notes);
+    if ("post" in incNotes) baseNotes.post = incNotes.post;
+    base.notes = baseNotes;
+  }
+  return base;
+}
+
+async function planArchivedAt(id: string): Promise<Date | null | undefined> {
+  const p = await prisma.stintPlan.findUnique({
+    where: { id },
+    select: { archivedAt: true },
+  });
+  return p ? p.archivedAt : undefined; // undefined = no such plan
+}
+
 /** Create a new saved plan. Returns its id + edit token. */
 export async function createStintPlan(
   title: string,
@@ -50,11 +93,19 @@ export async function updateStintPlan(
   }
   const existing = await prisma.stintPlan.findUnique({
     where: { id },
-    select: { editToken: true },
+    select: { editToken: true, archivedAt: true, payload: true },
   });
   if (!existing) return { ok: false, error: "Plan not found." };
   if (existing.editToken !== editToken) {
     return { ok: false, error: "You do not have edit rights for this plan." };
+  }
+  if (existing.archivedAt) {
+    // Completed: keep the title and the plan itself, take the debrief only.
+    await prisma.stintPlan.update({
+      where: { id },
+      data: { payload: mergeArchivedPayload(existing.payload, payload) },
+    });
+    return { ok: true, id, editToken };
   }
   await prisma.stintPlan.update({
     where: { id },
@@ -74,12 +125,18 @@ export async function liveUpdateStintPlan(
   if (payload == null || typeof payload !== "object") {
     return { ok: false, error: "Invalid plan data." };
   }
+  const existing = await prisma.stintPlan.findUnique({
+    where: { id },
+    select: { archivedAt: true, payload: true },
+  });
+  if (!existing) return { ok: false, error: "Plan not found." };
+
+  const data = existing.archivedAt
+    ? { payload: mergeArchivedPayload(existing.payload, payload) }
+    : { title: cleanTitle(title), payload: payload as object };
+
   const plan = await prisma.stintPlan
-    .update({
-      where: { id },
-      data: { title: cleanTitle(title), payload: payload as object },
-      select: { updatedAt: true },
-    })
+    .update({ where: { id }, data, select: { updatedAt: true } })
     .catch(() => null);
   if (!plan) return { ok: false, error: "Plan not found." };
   return { ok: true, updatedAt: plan.updatedAt.getTime() };
@@ -89,15 +146,60 @@ export async function liveUpdateStintPlan(
 export async function getStintPlanLive(
   id: string
 ): Promise<
-  | { ok: true; updatedAt: number; title: string; payload: unknown }
+  | {
+      ok: true;
+      updatedAt: number;
+      title: string;
+      payload: unknown;
+      archivedAt: number | null;
+    }
   | { ok: false }
 > {
   const p = await prisma.stintPlan.findUnique({
     where: { id },
-    select: { title: true, payload: true, updatedAt: true },
+    select: { title: true, payload: true, updatedAt: true, archivedAt: true },
   });
   if (!p) return { ok: false };
-  return { ok: true, updatedAt: p.updatedAt.getTime(), title: p.title, payload: p.payload };
+  return {
+    ok: true,
+    updatedAt: p.updatedAt.getTime(),
+    title: p.title,
+    payload: p.payload,
+    // So a pit-wall tab that was open when someone else completed the plan
+    // switches itself to read-only instead of fighting the server.
+    archivedAt: p.archivedAt ? p.archivedAt.getTime() : null,
+  };
+}
+
+/**
+ * Mark a plan completed (frozen) or reopen it. Allowed for whoever holds the
+ * plan's edit token — the same right as saving it — and for CLS admins.
+ */
+export async function setStintPlanArchived(
+  id: string,
+  editToken: string | null,
+  archived: boolean
+): Promise<{ ok: true; archivedAt: number | null } | { ok: false; error: string }> {
+  const plan = await prisma.stintPlan.findUnique({
+    where: { id },
+    select: { editToken: true },
+  });
+  if (!plan) return { ok: false, error: "Plan not found." };
+  if (plan.editToken !== editToken && !(await isAdmin())) {
+    return {
+      ok: false,
+      error:
+        "Only the plan's owner can do that — open it in the browser you created it in, or ask an admin.",
+    };
+  }
+  const updated = await prisma.stintPlan.update({
+    where: { id },
+    data: { archivedAt: archived ? new Date() : null },
+    select: { archivedAt: true },
+  });
+  revalidatePath("/stint-planner");
+  revalidatePath(`/stint-planner/${id}`);
+  return { ok: true, archivedAt: updated.archivedAt ? updated.archivedAt.getTime() : null };
 }
 
 /** Clone an existing plan into a new one ("Copy of …") the caller can edit. */

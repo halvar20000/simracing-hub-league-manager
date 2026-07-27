@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.70.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: a plan can be marked as completed once the race is over. “✓ Mark completed” freezes the event, drivers, stints and the live ± corrections, and stops the Discord stint alerts — nobody gets a DM from a plan that ran months ago. The debrief stays open: race result, race log, poster, impressions and the post-race notes can still be added afterwards. Reopen it any time with one click; whoever created the plan (or an admin) may do both.",
+      "Stint Planner: the overview is now split into “Active plans” and “Completed”. Completed plans are dimmed, carry the date they were finished, and open straight on the post-race tab.",
+    ],
+  },
+  {
     version: "1.69.0",
     date: "2026-07-27",
     changes: [

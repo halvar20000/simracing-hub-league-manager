@@ -20,15 +20,90 @@ type PayloadPeek = {
   drivers?: unknown[];
 };
 
+type PlanRow = {
+  id: string;
+  title: string;
+  updatedAt: Date;
+  archivedAt: Date | null;
+  payload: unknown;
+};
+
+function PlanList({
+  plans,
+  admin,
+  dimmed = false,
+}: {
+  plans: PlanRow[];
+  admin: boolean;
+  dimmed?: boolean;
+}) {
+  return (
+    <ul className="divide-y divide-zinc-800 overflow-hidden rounded-lg border border-zinc-800">
+      {plans.map((p) => {
+        const peek = (p.payload ?? {}) as PayloadPeek;
+        const duration = peek.event?.raceDuration ?? null;
+        const track = peek.event?.track || null;
+        const driverCount = Array.isArray(peek.drivers) ? peek.drivers.length : null;
+        return (
+          <li
+            key={p.id}
+            className={`flex items-center gap-2 pr-3 hover:bg-zinc-900/60 ${
+              dimmed ? "bg-zinc-950/40" : ""
+            }`}
+          >
+            <Link
+              href={`/stint-planner/${p.id}`}
+              className="flex flex-1 flex-wrap items-center justify-between gap-2 px-4 py-3"
+            >
+              <span className="min-w-0">
+                <span
+                  className={`font-medium ${dimmed ? "text-zinc-400" : "text-zinc-100"}`}
+                >
+                  {p.title}
+                </span>
+                {track && <span className="ml-2 text-xs text-zinc-500">{track}</span>}
+                {p.archivedAt && (
+                  <span className="ml-2 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                    completed
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-3 text-xs text-zinc-500">
+                {duration && <span>{duration}</span>}
+                {driverCount != null && <span>{driverCount} drivers</span>}
+                <span>{formatDateTime(p.archivedAt ?? p.updatedAt)}</span>
+              </span>
+            </Link>
+            <StintPlanDuplicateButton planId={p.id} />
+            {admin && <StintPlanDeleteButton planId={p.id} title={p.title} />}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export default async function StintPlannerIndexPage() {
   const [plans, admin] = await Promise.all([
     prisma.stintPlan.findMany({
       orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true, updatedAt: true, payload: true },
+      select: {
+        id: true,
+        title: true,
+        updatedAt: true,
+        archivedAt: true,
+        payload: true,
+      },
       take: 200,
     }),
     isAdmin(),
   ]);
+
+  const active = plans.filter((p) => !p.archivedAt);
+  // Completed plans read as a history: newest race first.
+  const completed = plans
+    .filter((p) => p.archivedAt)
+    .sort((a, b) => (b.archivedAt?.getTime() ?? 0) - (a.archivedAt?.getTime() ?? 0));
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-8">
@@ -63,40 +138,41 @@ export default async function StintPlannerIndexPage() {
           </Link>
         </div>
       ) : (
-        <ul className="divide-y divide-zinc-800 overflow-hidden rounded-lg border border-zinc-800">
-          {plans.map((p) => {
-            const peek = (p.payload ?? {}) as PayloadPeek;
-            const duration = peek.event?.raceDuration ?? null;
-            const track = peek.event?.track || null;
-            const driverCount = Array.isArray(peek.drivers)
-              ? peek.drivers.length
-              : null;
-            return (
-              <li key={p.id} className="flex items-center gap-2 pr-3 hover:bg-zinc-900/60">
-                <Link
-                  href={`/stint-planner/${p.id}`}
-                  className="flex flex-1 flex-wrap items-center justify-between gap-2 px-4 py-3"
-                >
-                  <span className="min-w-0">
-                    <span className="font-medium text-zinc-100">{p.title}</span>
-                    {track && (
-                      <span className="ml-2 text-xs text-zinc-500">{track}</span>
-                    )}
-                  </span>
-                  <span className="flex items-center gap-3 text-xs text-zinc-500">
-                    {duration && <span>{duration}</span>}
-                    {driverCount != null && <span>{driverCount} drivers</span>}
-                    <span>{formatDateTime(p.updatedAt)}</span>
-                  </span>
+        <div className="space-y-8">
+          <section>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Active plans
+              {active.length > 0 && (
+                <span className="ml-2 font-normal text-zinc-600">{active.length}</span>
+              )}
+            </h2>
+            {active.length === 0 ? (
+              <p className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 text-sm text-zinc-500">
+                Nothing running right now —{" "}
+                <Link href="/stint-planner/new" className="text-[#ff6b35] hover:underline">
+                  start a new plan
                 </Link>
-                <StintPlanDuplicateButton planId={p.id} />
-                {admin && (
-                  <StintPlanDeleteButton planId={p.id} title={p.title} />
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                .
+              </p>
+            ) : (
+              <PlanList plans={active} admin={admin} />
+            )}
+          </section>
+
+          {completed.length > 0 && (
+            <section>
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Completed
+                <span className="ml-2 font-normal text-zinc-600">{completed.length}</span>
+              </h2>
+              <p className="mb-2 text-xs text-zinc-600">
+                Races that are done. The plan is read-only, the analysis stays open —
+                open one and reopen it if you need to change something.
+              </p>
+              <PlanList plans={completed} admin={admin} dimmed />
+            </section>
+          )}
+        </div>
       )}
     </main>
   );

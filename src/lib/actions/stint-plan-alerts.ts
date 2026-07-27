@@ -56,11 +56,19 @@ export async function checkStintPlanAlerts(
 ): Promise<StintAlertResult> {
   const plan = await prisma.stintPlan.findUnique({
     where: { id: planId },
-    select: { id: true, title: true, payload: true },
+    select: { id: true, title: true, payload: true, archivedAt: true },
   });
   if (!plan) return { ok: false, error: "Plan not found." };
 
   const state: PlannerState = hydratePlanState(plan.payload, plan.title);
+  // A completed plan never DMs anyone — not even with "Send test DM". Months
+  // later someone opens last season's plan to look at the analysis; that must
+  // not ping the drivers who were in it.
+  if (plan.archivedAt) {
+    return force
+      ? { ok: false, error: "This plan is completed — reopen it to send alerts." }
+      : { ok: true, sent: [], messages: [], alertsSent: state.alertsSent ?? {} };
+  }
   if (!force && !state.alertsEnabled) {
     return { ok: true, sent: [], messages: [], alertsSent: state.alertsSent ?? {} };
   }

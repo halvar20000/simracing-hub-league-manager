@@ -21,6 +21,7 @@ import {
   updateStintPlan,
   liveUpdateStintPlan,
   getStintPlanLive,
+  setStintPlanArchived,
 } from "@/lib/actions/stint-plans";
 import { uploadStintPlanEventResult } from "@/lib/actions/stint-plan-eventresult";
 import {
@@ -136,6 +137,8 @@ export default function StintPlanner({
   initial,
   planId = null,
   initialUpdatedAtMs = null,
+  initialArchivedAtMs = null,
+  viewerIsAdmin = false,
   clsDrivers,
   tracks,
   cars,
@@ -143,6 +146,9 @@ export default function StintPlanner({
   initial: PlannerState;
   planId?: string | null;
   initialUpdatedAtMs?: number | null;
+  /** Set when the plan is marked completed — the plan half goes read-only. */
+  initialArchivedAtMs?: number | null;
+  viewerIsAdmin?: boolean;
   clsDrivers: ClsDriverOption[];
   tracks: string[];
   cars: ClsCarOption[];
@@ -151,6 +157,15 @@ export default function StintPlanner({
   const [curId, setCurId] = useState<string | null>(planId);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  // ---- Completed plans ---------------------------------------------------
+  // "Completed" freezes the plan itself (event, drivers, stints, corrections,
+  // Discord alerts) while the debrief — eventresult, race log, poster,
+  // impressions, post-race notes — stays open. The server enforces this
+  // (see stint-plans.ts); everything here is the matching UI.
+  const [archivedAtMs, setArchivedAtMs] = useState<number | null>(initialArchivedAtMs);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const frozen = archivedAtMs !== null;
 
   // ---- Stale-deployment guard -------------------------------------------
   // Every Server Action carries a build-specific id. After a redeploy the ids
@@ -222,6 +237,9 @@ export default function StintPlanner({
       void (async () => {
         if (JSON.stringify(sRef.current) !== lastSavedSnapshotRef.current) return;
         const res = await getStintPlanLive(curId);
+        // Someone else may have completed (or reopened) the plan meanwhile —
+        // follow that here instead of letting this tab keep editing.
+        if (res.ok) setArchivedAtMs(res.archivedAt);
         if (res.ok && res.updatedAt > baseUpdatedAtRef.current) {
           const next = hydratePlanState(res.payload, res.title);
           lastSavedSnapshotRef.current = JSON.stringify(next);
@@ -1222,8 +1240,40 @@ export default function StintPlanner({
     return now <= end ? "during" : "post";
   }, [now, result.raceStartUtcMs, lastStint?.wallEndMs]);
   const [manualPhase, setManualPhase] = useState<PlanPhase | null>(null);
-  const phase: PlanPhase = manualPhase ?? autoPhase;
+  // A completed plan opens on the debrief — that is the only part still live.
+  const phase: PlanPhase = manualPhase ?? (frozen ? "post" : autoPhase);
   const setPhase = (p: PlanPhase) => setManualPhase(p);
+
+  /** Mark completed / reopen. Owner (edit token) or admin — checked server-side. */
+  const onToggleArchived = async () => {
+    if (!curId) return;
+    const next = !frozen;
+    if (
+      next &&
+      !window.confirm(
+        "Mark this plan as completed?\n\nThe event, drivers, stints and live corrections are frozen and the Discord alerts stop. You can still add the eventresult, the race log, pictures and post-race notes — and reopen the plan any time."
+      )
+    ) {
+      return;
+    }
+    setArchiveBusy(true);
+    setStatus(null);
+    try {
+      const res = await setStintPlanArchived(curId, editToken, next);
+      if (res.ok) {
+        setArchivedAtMs(res.archivedAt);
+        setManualPhase(next ? "post" : null);
+        setStatus(next ? "Plan marked as completed." : "Plan reopened.");
+      } else {
+        setStatus(res.error);
+      }
+    } catch (e) {
+      if (isStaleActionError(e)) setStaleBuild(true);
+      else setStatus("Could not reach the server — please try again.");
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
 
   // ---- "You're up next" Discord DMs --------------------------------------
   // The plan already knows when every stint starts, corrections included. This
@@ -1259,14 +1309,14 @@ export default function StintPlanner({
   // Poll while the race is live. 45 s is well inside any sane lead time and
   // costs one tiny request per tab.
   useEffect(() => {
-    if (!curId || !s.alertsEnabled || !raceLive) return;
+    if (!curId || !s.alertsEnabled || !raceLive || frozen) return;
     void runAlertCheck(false);
     const iv = setInterval(() => void runAlertCheck(false), 45_000);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runAlertCheck
     // closes over state that changes every keystroke; re-arming the interval
     // on each of those would reset the timer forever.
-  }, [curId, s.alertsEnabled, raceLive]);
+  }, [curId, s.alertsEnabled, raceLive, frozen]);
 
 
   return (
@@ -1289,13 +1339,35 @@ export default function StintPlanner({
         </div>
       )}
 
+      {/* Completed: the plan is a record now, not a working document. */}
+      {frozen && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 print:hidden">
+          <span>
+            <strong className="text-zinc-100">Completed plan.</strong> Event,
+            drivers, stints and live corrections are locked and no Discord alerts
+            go out. Race result, race log, pictures and post-race notes can still
+            be added.
+          </span>
+          {curId && (editToken || viewerIsAdmin) && (
+            <button
+              onClick={onToggleArchived}
+              disabled={archiveBusy}
+              className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-sm font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-50"
+            >
+              {archiveBusy ? "Reopening…" : "↩ Reopen plan"}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Header: title + actions */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-[16rem] flex-1">
           <label className={lbl}>Plan title</label>
           <input
-            className={`${inp} text-lg font-semibold`}
+            className={`${inp} text-lg font-semibold disabled:opacity-70`}
             value={s.title}
+            disabled={frozen}
             onChange={(e) => setS((p) => ({ ...p, title: e.target.value }))}
             placeholder="e.g. 6h Road America"
           />
@@ -1310,7 +1382,7 @@ export default function StintPlanner({
               {saving ? "Saving…" : "Save & share"}
             </button>
           )}
-          {curId && (
+          {curId && !frozen && (
             <span
               className="flex items-center gap-1.5 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-300"
               title="This plan is live: your edits save automatically and everyone with the link sees them within a few seconds."
@@ -1323,6 +1395,15 @@ export default function StintPlanner({
                   : "Live · auto-saving"}
             </span>
           )}
+          {curId && frozen && (
+            <span
+              className="flex items-center gap-1.5 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-400"
+              title="This plan is completed — the plan itself can no longer be changed."
+            >
+              <span className="inline-block h-2 w-2 rounded-full bg-zinc-500" />
+              Completed · read-only
+            </span>
+          )}
           {shareUrl && (
             <button
               onClick={() => navigator.clipboard?.writeText(shareUrl)}
@@ -1331,13 +1412,23 @@ export default function StintPlanner({
               Copy link
             </button>
           )}
-          {curId && (
+          {curId && !frozen && (
             <button
               onClick={onPostDiscord}
               disabled={postingDiscord}
               className="rounded border border-indigo-700/60 bg-indigo-950/40 px-3 py-2 text-sm text-indigo-200 hover:bg-indigo-900/40 disabled:opacity-50"
             >
               {postingDiscord ? "Posting…" : "Post to Discord"}
+            </button>
+          )}
+          {curId && !frozen && (editToken || viewerIsAdmin) && (
+            <button
+              onClick={onToggleArchived}
+              disabled={archiveBusy}
+              title="Freeze the plan after the race — the debrief stays open, and you can reopen it any time."
+              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {archiveBusy ? "Completing…" : "✓ Mark completed"}
             </button>
           )}
           <button
@@ -1376,7 +1467,12 @@ export default function StintPlanner({
         ))}
       </div>
       {/* ===== PRE ===== */}
+      {/* A completed plan freezes everything in PRE and DURING. One disabled
+          fieldset does that for every input, select, textarea and button
+          inside; `contents` keeps it out of the layout. The server enforces
+          the same rule, so this is convenience, not the guard. */}
       <div className={`space-y-6 ${phase === "pre" ? "" : "hidden print:block"}`}>
+      <fieldset disabled={frozen} className="contents">
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Event config */}
         <div className={card}>
@@ -2082,9 +2178,11 @@ export default function StintPlanner({
           placeholder={"Pre-Race notes…"}
         />
       </div>
+      </fieldset>
       </div>
       {/* ===== DURING ===== */}
       <div className={`space-y-6 ${phase === "during" ? "" : "hidden print:block"}`}>
+      <fieldset disabled={frozen} className="contents">
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Stints" value={String(result.totals.stintCount)} />
@@ -2519,6 +2617,7 @@ export default function StintPlanner({
           placeholder={"During-Race notes…"}
         />
       </div>
+      </fieldset>
       </div>
       {/* ===== POST ===== */}
       <div className={`space-y-6 ${phase === "post" ? "" : "hidden print:block"}`}>

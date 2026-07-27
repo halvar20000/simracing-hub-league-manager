@@ -7,6 +7,7 @@ import StintPlanner from "@/components/StintPlanner";
 import { hydratePlanState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
 import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
+import { isAdmin } from "@/lib/auth-helpers";
 
 export async function generateMetadata({
   params,
@@ -34,15 +35,22 @@ export default async function SavedStintPlanPage({
   const { id } = await params;
   const plan = await prisma.stintPlan.findUnique({
     where: { id },
-    select: { id: true, title: true, payload: true, updatedAt: true },
+    select: {
+      id: true,
+      title: true,
+      payload: true,
+      updatedAt: true,
+      archivedAt: true,
+    },
   });
   if (!plan) notFound();
 
   const initial = hydratePlanState(plan.payload, plan.title);
-  const [clsDrivers, tracks, cars] = await Promise.all([
+  const [clsDrivers, tracks, cars, viewerIsAdmin] = await Promise.all([
     getClsDrivers(),
     getClsTracks(),
     getClsCars(),
+    isAdmin(),
   ]);
 
   return (
@@ -54,13 +62,16 @@ export default async function SavedStintPlanPage({
       </div>
       <h1 className="mb-1 text-2xl font-bold">Endurance Stint Planner</h1>
       <p className="mb-6 max-w-2xl text-sm text-zinc-400">
-        Shared stint plan — live for the whole team. Changes save automatically
-        and everyone&rsquo;s view refreshes within a few seconds.
+        {plan.archivedAt
+          ? "Completed plan — the race is done, so the plan itself is frozen. The debrief below stays open."
+          : "Shared stint plan — live for the whole team. Changes save automatically and everyone’s view refreshes within a few seconds."}
       </p>
       <StintPlanner
         initial={initial}
         planId={plan.id}
         initialUpdatedAtMs={plan.updatedAt.getTime()}
+        initialArchivedAtMs={plan.archivedAt ? plan.archivedAt.getTime() : null}
+        viewerIsAdmin={viewerIsAdmin}
         clsDrivers={clsDrivers}
         tracks={tracks}
         cars={cars}

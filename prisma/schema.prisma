@@ -1209,9 +1209,9 @@ model RoundDriverOfTheDay {
 /// Special Event. `payload` holds the entire planner state as JSON:
 /// { event, standard, saving, drivers[], assignments[] }.
 model StintPlan {
-  id               String   @id @default(cuid())
+  id               String  @id @default(cuid())
   /// Human title shown at the top of the plan (e.g. "6h Road America").
-  title            String   @default("Stint Plan")
+  title            String  @default("Stint Plan")
   /// Full planner state (inputs only — results are recomputed on load).
   payload          Json
   /// Secret token required to overwrite this plan; viewers without it can
@@ -1226,8 +1226,17 @@ model StintPlan {
   /// chosen by the creator when connecting the token.
   garage61TeamSlug String?
   garage61TeamName String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+
+  /// Set when the plan is marked completed on the overview / plan page. A
+  /// completed plan is frozen: the server refuses every change to the event,
+  /// drivers, stints and live corrections, and the Discord stint alerts stop.
+  /// The post-race half stays open — eventresult, race log, poster,
+  /// impressions and the post-race notes can still be added. Null = active;
+  /// anyone with the plan's edit token (or an admin) can flip it back.
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// A race-logger `.jsonl` uploaded straight from a driver's PC by the
