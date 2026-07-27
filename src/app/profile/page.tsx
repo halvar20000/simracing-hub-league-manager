@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -50,6 +51,20 @@ export default async function ProfilePage({
           iracingMemberId: user.iracingMemberId ?? "",
         }}
       />
+
+      <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
+        <h2 className="text-sm font-semibold text-zinc-200">Race Logger</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          Record your races on your own PC and let the log reach CLS by itself — it feeds
+          Driver of the Day and the stint-planner analysis.
+        </p>
+        <Link
+          href="/race-logger"
+          className="mt-3 inline-block rounded border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800"
+        >
+          Set up the race logger →
+        </Link>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.69.0",
+    date: "2026-07-27",
+    changes: [
+      "Race Logger: the race logger from the broadcast overlays is now available on its own — one file, no OBS, no Python. Download it under “Race Logger” in the menu, paste your personal key once, and every race you drive is recorded and sent to CLS by itself. That log is what Driver of the Day and the stint-planner race analysis run on, so nobody has to hunt for log files after the race any more.",
+      "Race Logger: only race sessions are recorded (practice and qualifying are ignored), the file always stays on your own PC as well, and the logger's page has a re-send button if an upload fails.",
+      "Driver of the Day: the admin panel now lists the logs drivers uploaded themselves for that round and uses the ticked ones directly — picking files by hand still works and is unchanged.",
+    ],
+  },
+  {
     version: "1.68.0",
     date: "2026-07-27",
     changes: [

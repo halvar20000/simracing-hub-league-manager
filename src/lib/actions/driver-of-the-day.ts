@@ -118,8 +118,17 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
   const logFiles = [...formData.getAll("logs"), ...formData.getAll("log")].filter(
     (f): f is File => f instanceof File && f.size > 0
   );
+  // Logs that the drivers' race loggers already uploaded by themselves
+  // (RaceLogUpload rows picked with a checkbox on the Race Center page).
+  const logUploadIds = formData
+    .getAll("logUploadIds")
+    .map((v) => String(v))
+    .filter(Boolean);
+
   if (!(eventFile instanceof File) || eventFile.size === 0) fail("Upload the iRacing eventresult JSON");
-  if (logFiles.length === 0) fail("Upload the race-logger log (.jsonl) — one per race");
+  if (logFiles.length === 0 && logUploadIds.length === 0) {
+    fail("Pick an uploaded race log or select a .jsonl file — one per race");
+  }
   const ev = eventFile as File;
   if (ev.size > MAX_JSON_BYTES) fail("eventresult JSON too large (max 10 MB)");
   for (const lg of logFiles) {
@@ -141,8 +150,30 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
   const raceSessions = parsed.sessions.filter((s) => s.kind === "RACE" && s.drivers.length > 0);
   if (raceSessions.length === 0) fail("No RACE session found in eventresult JSON");
 
-  // --- parse every uploaded log ---
-  const logTexts = await Promise.all(logFiles.map((f) => f.text()));
+  // --- collect every log: auto-uploaded ones first, then hand-picked files ---
+  const pickedUploads = logUploadIds.length
+    ? await prisma.raceLogUpload.findMany({
+        where: { id: { in: logUploadIds } },
+        orderBy: [{ sessionNum: "asc" }, { startedAt: "asc" }, { createdAt: "asc" }],
+        select: { id: true, fileName: true, blobUrl: true },
+      })
+    : [];
+  if (pickedUploads.length !== logUploadIds.length) {
+    fail("One of the selected uploaded logs no longer exists — reload the page");
+  }
+  const uploadedTexts: string[] = [];
+  for (const up of pickedUploads) {
+    try {
+      const res = await fetch(up.blobUrl, { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      uploadedTexts.push(await res.text());
+    } catch {
+      fail(`Could not read the stored log "${up.fileName}" — re-upload it manually`);
+    }
+  }
+
+  // --- parse every log ---
+  const logTexts = [...uploadedTexts, ...(await Promise.all(logFiles.map((f) => f.text())))];
   const logs = logTexts.map((t) => parseDotdLog(t));
   const badLog = logs.find((l) => !l.ok);
   if (badLog) fail("Could not read a log: " + (badLog.error ?? "unknown error"));
@@ -151,8 +182,8 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
   if (logs.length !== raceSessions.length) {
     fail(
       `This round has ${raceSessions.length} race${raceSessions.length === 1 ? "" : "s"} in the ` +
-        `eventresult — upload exactly ${raceSessions.length} log file${raceSessions.length === 1 ? "" : "s"} ` +
-        `(you uploaded ${logs.length}).`
+        `eventresult — provide exactly ${raceSessions.length} log${raceSessions.length === 1 ? "" : "s"} ` +
+        `(uploaded logs ticked + files selected; you provided ${logs.length}).`
     );
   }
 

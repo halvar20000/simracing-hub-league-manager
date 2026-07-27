@@ -227,6 +227,17 @@ Per-round recognition badge — **no championship points, never touches standing
 - **Admin**: `src/lib/actions/driver-of-the-day.ts` (`computeAndSaveDotd`, `deleteDotd`) + an "🏆 Driver of the Day" panel on the round Race Center admin page (upload, full ranking table, per-class winners, recompute, danger-zone delete).
 - **Public**: `src/components/DriverOfTheDayHero.tsx` — hero card near the top of the round page, gated by `round.driverOfTheDay && showResults` (so it follows the same publish gate as results; admins preview early).
 
+## Race Logger (standalone, driver-side)
+
+The race-logger `.jsonl` that Driver of the Day and the stint-planner analysis need no longer has to be collected by hand: drivers run the logger themselves and it uploads the finished log.
+
+- **Client**: `iracing_race_logger.py` in the iRacing-overlays project (`~/Nextcloud/iRacing/python/files/`, GitHub `halvar20000/iracing-overlays`) — shipped **without the OBS overlays** as a single `RaceLogger.exe` (PyInstaller, `RaceLogger.spec` + `.github/workflows/build-race-logger.yml` on a windows runner) plus a source zip. CLS links the fixed `releases/latest/download/…` URLs (`RACE_LOGGER_EXE_URL` / `RACE_LOGGER_ZIP_URL` in `src/lib/race-logger.ts`). Driver docs: `RACE_LOGGER.md` in that repo.
+- **Setup page on the driver's PC**: `http://localhost:5009/league` — league URL, personal key, auto-upload switch, per-log upload state + "Send again". Settings in `league_manager.json` next to the exe, state in `logs/upload_state.json`. Auto-upload fires from `_close_log()`, so it triggers on the checkered flag *and* on Ctrl-C.
+- **Token**: `User.raceLoggerToken` (prefix `cls_rl_`, one per driver, regenerated/revoked on `/race-logger`). Not a login — it can only POST race logs.
+- **API**: `GET /api/race-log` = key check ("Test connection"); `POST /api/race-log` = multipart `file` (or raw body + `X-Log-Filename`), `Authorization: Bearer <token>`, 60 MB cap. Validated with the same `parseDotdLog` the award uses, archived to Blob under `race-logs/<userId>/`, indexed as `RaceLogUpload`. Idempotent per `(uploadedById, sha256)` — retries and several drivers uploading the same race never duplicate.
+- **Round matching** (`matchRoundForLog`): a round of a season the uploader is registered in, within ±36 h of the log, track names compared loosely; ambiguous → left unassigned for an admin. The Race Center DotD panel ticks the attached logs by default and lists nearby unassigned ones with an "Attach to this round" button; `computeAndSaveDotd` accepts `logUploadIds` alongside the manual file inputs (manual upload is unchanged and still works alone).
+- **Schema**: `RaceLogUpload` + the two `User` columns — apply `outputs/race_log_upload_table.sql` on the Hetzner Postgres before deploying (see the schema-change note above).
+
 ## Logos
 
 - `public/logos/site-logo.png` — top nav logo (CAS LEAGUE SCORING SYSTEM)

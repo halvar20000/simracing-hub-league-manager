@@ -15,6 +15,7 @@ import {
 import { RACE_CENTER_CHART_TYPES, defaultTitleForChartType } from "@/lib/race-center-charts";
 import { skiesLabel } from "@/lib/iracing-weather";
 import { computeAndSaveDotd, deleteDotd } from "@/lib/actions/driver-of-the-day";
+import { assignRaceLogUploadToRound, deleteRaceLogUpload } from "@/lib/actions/race-logger";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 export default async function AdminRaceCenterPage({
@@ -50,6 +51,31 @@ export default async function AdminRaceCenterPage({
   if (!round || round.season.league.slug !== slug || round.seasonId !== seasonId) {
     notFound();
   }
+
+  // Race logs the drivers' own loggers uploaded: everything already attached
+  // to this round, plus anything unassigned from around race day so an admin
+  // can attach it with one click.
+  const raceLogUploads = await prisma.raceLogUpload.findMany({
+    where: {
+      OR: [
+        { roundId },
+        {
+          roundId: null,
+          createdAt: {
+            gte: new Date(round.startsAt.getTime() - 36 * 60 * 60 * 1000),
+            lte: new Date(round.startsAt.getTime() + 7 * 24 * 60 * 60 * 1000),
+          },
+        },
+      ],
+    },
+    orderBy: [{ startedAt: "asc" }, { createdAt: "asc" }],
+    include: {
+      uploadedBy: { select: { firstName: true, lastName: true, name: true } },
+    },
+  });
+  const attachedLogs = raceLogUploads.filter((u) => u.roundId === roundId);
+  const looseLogs = raceLogUploads.filter((u) => u.roundId !== roundId);
+  const adminRoundPath = `/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/race-center`;
 
   const rc = round.raceCenter;
   const dotd = round.driverOfTheDay;
@@ -332,6 +358,58 @@ export default async function AdminRaceCenterPage({
           <input type="hidden" name="leagueSlug" value={slug} />
           <input type="hidden" name="seasonId" value={seasonId} />
           <input type="hidden" name="roundId" value={roundId} />
+
+          {/* Logs the drivers' own race loggers sent in automatically. */}
+          {attachedLogs.length > 0 ? (
+            <div className="rounded border border-emerald-900 bg-emerald-950/40 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                Auto-uploaded race logs for this round
+              </div>
+              <div className="mt-2 space-y-1">
+                {attachedLogs.map((u) => (
+                  <label key={u.id} className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="logUploadIds"
+                      value={u.id}
+                      defaultChecked
+                      className="mt-1 accent-orange-500"
+                    />
+                    <span>
+                      <span className="text-zinc-200">
+                        {u.sessionName ?? "RACE"} · {u.track ?? "unknown track"}
+                      </span>
+                      <span className="text-zinc-500">
+                        {" "}
+                        — {u.lapEvents} laps, {u.driverCount} drivers, from{" "}
+                        {[u.uploadedBy?.firstName, u.uploadedBy?.lastName]
+                          .filter(Boolean)
+                          .join(" ") ||
+                          u.uploadedBy?.name ||
+                          "unknown driver"}
+                      </span>
+                      {u.matchedAutomatically ? (
+                        <span className="ml-1 text-[10px] uppercase tracking-wide text-emerald-500">
+                          auto-matched
+                        </span>
+                      ) : null}
+                      <a
+                        href={u.blobUrl}
+                        className="ml-2 text-[11px] text-orange-400 hover:text-orange-300"
+                      >
+                        download
+                      </a>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-emerald-200/70">
+                Ticked logs are used as-is — no file picking needed. Untick one if a driver&apos;s
+                log is incomplete and you have a better file below.
+              </p>
+            </div>
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs text-zinc-400">
               eventresult JSON
@@ -345,12 +423,15 @@ export default async function AdminRaceCenterPage({
             </label>
             <label className="block text-xs text-zinc-400">
               race-logger log(s) (.jsonl)
+              {attachedLogs.length > 0 ? (
+                <span className="text-zinc-600"> — optional, logs are ticked above</span>
+              ) : null}
               <input
                 type="file"
                 name="logs"
                 accept=".jsonl,.json,.ndjson,text/plain,application/json"
                 multiple
-                required
+                required={attachedLogs.length === 0}
                 className="mt-1 block w-full text-sm text-zinc-300 file:mr-3 file:rounded file:border-0 file:bg-orange-600 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-950 hover:file:bg-orange-500"
               />
             </label>
@@ -385,6 +466,69 @@ export default async function AdminRaceCenterPage({
                 className="rounded border border-red-800 bg-zinc-900 px-3 py-1.5 text-sm font-semibold text-red-300 hover:bg-zinc-800"
               />
             </form>
+          </details>
+        )}
+
+        {/* Unassigned logs from around race day — one click attaches them. */}
+        {looseLogs.length > 0 && (
+          <details className="rounded border border-zinc-800 bg-zinc-950 p-3">
+            <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">
+              {looseLogs.length} unassigned race log{looseLogs.length === 1 ? "" : "s"} uploaded
+              around this race
+            </summary>
+            <div className="mt-3 space-y-2">
+              {looseLogs.map((u) => (
+                <div
+                  key={u.id}
+                  className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 pt-2 text-sm"
+                >
+                  <span>
+                    <span className="text-zinc-200">
+                      {u.sessionName ?? "RACE"} · {u.track ?? "unknown track"}
+                    </span>
+                    <span className="text-zinc-500">
+                      {" "}
+                      — {u.lapEvents} laps, from{" "}
+                      {[u.uploadedBy?.firstName, u.uploadedBy?.lastName]
+                        .filter(Boolean)
+                        .join(" ") ||
+                        u.uploadedBy?.name ||
+                        "unknown driver"}
+                      {u.startedAt
+                        ? ` · ${u.startedAt.toISOString().slice(0, 16).replace("T", " ")}`
+                        : ""}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <a
+                      href={u.blobUrl}
+                      className="text-[11px] text-orange-400 hover:text-orange-300"
+                    >
+                      download
+                    </a>
+                    <form action={assignRaceLogUploadToRound}>
+                      <input type="hidden" name="uploadId" value={u.id} />
+                      <input type="hidden" name="roundId" value={roundId} />
+                      <input type="hidden" name="back" value={adminRoundPath} />
+                      <SubmitWithSpinner
+                        label="Attach to this round"
+                        pendingLabel="Attaching…"
+                        className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800"
+                      />
+                    </form>
+                    <form action={deleteRaceLogUpload}>
+                      <input type="hidden" name="uploadId" value={u.id} />
+                      <input type="hidden" name="back" value={adminRoundPath} />
+                      <SubmitWithSpinner
+                        label="Delete"
+                        pendingLabel="Deleting…"
+                        className="rounded border border-red-900 px-2 py-1 text-xs text-red-300 hover:bg-red-950"
+                      />
+                    </form>
+                  </span>
+                </div>
+              ))}
+            </div>
           </details>
         )}
       </section>

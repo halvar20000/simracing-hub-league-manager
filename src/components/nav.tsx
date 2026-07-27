@@ -42,6 +42,7 @@ export default async function Nav() {
             <>
               <NavLink href="/registrations">My Registrations</NavLink>
               <NavLink href="/reports">My Reports</NavLink>
+              <NavLink href="/race-logger">Race Logger</NavLink>
               <NavLink href="/profile">Profile</NavLink>
             </>
           )}

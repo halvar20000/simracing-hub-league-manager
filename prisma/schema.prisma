@@ -41,6 +41,7 @@ model User {
   incidentDecisions     IncidentDecision[]
   raceCenterComebacks   RaceCenter[]             @relation("RaceCenterComeback")
   driverOfTheDayWins    RoundDriverOfTheDay[]    @relation("DotdWinner")
+  raceLogUploads        RaceLogUpload[]          @relation("RaceLogUploader")
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -69,6 +70,13 @@ model User {
   licenseClassOval       String?
   /// When the iRating block above was last refreshed. Null = never.
   iracingLastSyncedAt    DateTime?
+
+  /// Personal upload token for the standalone iRacing Race Logger
+  /// (see src/lib/race-logger.ts). Pasted once into the logger's setup page;
+  /// the logger then POSTs finished race logs to /api/race-log. Null until
+  /// the driver generates one on /race-logger; regenerating replaces it.
+  raceLoggerToken          String?   @unique
+  raceLoggerTokenCreatedAt DateTime?
 }
 
 model Account {
@@ -159,7 +167,7 @@ model League {
   /// Used by the YouTube auto-match cron (src/lib/match-youtube.ts) to find
   /// the stream VOD for a completed round and link it on the round page.
   /// Null = auto-matching off for this league. Requires YOUTUBE_API_KEY.
-  youtubeChannelId       String?
+  youtubeChannelId String?
 
   /// Optional public Garage 61 team URL for the league. Rendered as a
   /// small "Garage 61 team →" link on league / season pages so members
@@ -197,8 +205,8 @@ model Season {
   scoringSystemId String
   scoringSystem   ScoringSystem @relation(fields: [scoringSystemId], references: [id])
 
-  teamScoringMode  TeamScoringMode @default(NONE)
-  teamScoringBestN Int?
+  teamScoringMode         TeamScoringMode @default(NONE)
+  teamScoringBestN        Int?
   /// Number of best rounds counted toward the team championship (drop-weeks).
   /// Null = count all rounds. iRLM calls this "Weeks counted".
   /// E.g. set to 9 to count the team's best 9 round contributions only.
@@ -206,10 +214,10 @@ model Season {
   /// When true, team-scoring per-driver round contribution uses raw
   /// position points only — no participation, no manual penalty deduction.
   /// Matches iRLM's "Combined → Bonus: None" + "Raw Results" config.
-  teamScoringRawOnly      Boolean @default(false)
-  irlmLeagueName   String?
-  irlmSeasonId     Int?
-  scheduleImageUrl String?
+  teamScoringRawOnly      Boolean         @default(false)
+  irlmLeagueName          String?
+  irlmSeasonId            Int?
+  scheduleImageUrl        String?
 
   carClasses    CarClass[]
   cars          Car[]
@@ -312,6 +320,9 @@ model Round {
   // Per-round Driver of the Day — recognition badge, no points (1:1).
   driverOfTheDay RoundDriverOfTheDay?
 
+  /// Race logs auto-uploaded by drivers running the standalone race logger.
+  raceLogUploads RaceLogUpload[]
+
   /// YouTube video ID (11 chars) of the race-stream VOD for this round,
   /// embedded on the public round page. Set automatically by the YouTube
   /// auto-match cron (src/lib/match-youtube.ts) from League.youtubeChannelId,
@@ -341,17 +352,17 @@ model Registration {
   status      RegistrationStatus @default(PENDING)
   startNumber String?
 
-  teamId     String?
-  team       Team?       @relation(fields: [teamId], references: [id])
-  carClassId String?
-  carClass   CarClass?   @relation(fields: [carClassId], references: [id])
-  carId      String?
-  car        Car?        @relation(fields: [carId], references: [id])
-  proAmClass ProAmClass?
-  inGdc      Boolean     @default(false)
+  teamId        String?
+  team          Team?       @relation(fields: [teamId], references: [id])
+  carClassId    String?
+  carClass      CarClass?   @relation(fields: [carClassId], references: [id])
+  carId         String?
+  car           Car?        @relation(fields: [carId], references: [id])
+  proAmClass    ProAmClass?
+  inGdc         Boolean     @default(false)
   // True for a non-driving team manager registration (IEC "Teammanager"):
   // auto-approved, no car/iRating, excluded from rosters and driver caps.
-  isTeamManager Boolean @default(false)
+  isTeamManager Boolean     @default(false)
 
   notes        String?
   approvedById String?
@@ -1154,10 +1165,10 @@ model RoundDriverOfTheDay {
   winnerCarNumber String?
 
   /// Final weighted score (0..1).
-  score Float
+  score         Float
   /// Weighted component breakdown for the winner — each value is already
   /// multiplied by its weight: { positionsGained, recovery, overtakes, clean }.
-  breakdown Json
+  breakdown     Json
   /// Raw winner metrics for display:
   /// { startPos, finishPos, worstPos, positionsGained, recovery, overtakes, incidents }.
   winnerMetrics Json
@@ -1193,20 +1204,19 @@ model RoundDriverOfTheDay {
   updatedAt  DateTime @updatedAt
 }
 
-
 /// Saved endurance stint plan produced by the public /stint-planner tool.
 /// Fully self-contained (no league/season FK) so it works for any iRacing
 /// Special Event. `payload` holds the entire planner state as JSON:
 /// { event, standard, saving, drivers[], assignments[] }.
 model StintPlan {
-  id        String   @id @default(cuid())
+  id               String   @id @default(cuid())
   /// Human title shown at the top of the plan (e.g. "6h Road America").
-  title     String   @default("Stint Plan")
+  title            String   @default("Stint Plan")
   /// Full planner state (inputs only — results are recomputed on load).
-  payload   Json
+  payload          Json
   /// Secret token required to overwrite this plan; viewers without it can
   /// still open the read-only share link and "Save as new".
-  editToken String
+  editToken        String
   /// Optional per-plan Garage 61 API token, AES-256-GCM encrypted at rest
   /// (see src/lib/crypto-secret.ts). Set only by the plan creator; NEVER
   /// returned to any client. When present, the live "Pull from Garage 61"
@@ -1216,6 +1226,64 @@ model StintPlan {
   /// chosen by the creator when connecting the token.
   garage61TeamSlug String?
   garage61TeamName String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+/// A race-logger `.jsonl` uploaded straight from a driver's PC by the
+/// standalone iRacing Race Logger (see /race-logger and /api/race-log).
+/// The file itself lives on Vercel Blob; this row is the searchable index an
+/// admin picks from when computing Driver of the Day, so nobody has to mail
+/// log files around any more. Manual upload on the Race Center page still
+/// works unchanged — this is an additional source, never a replacement.
+model RaceLogUpload {
+  id String @id @default(cuid())
+
+  /// The driver whose logger token was used. Kept even if the round is
+  /// deleted; nulled if the user is deleted.
+  uploadedById String?
+  uploadedBy   User?   @relation("RaceLogUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  /// Original file name on the driver's PC (e.g. 20260726-201500_spa_race.jsonl).
+  fileName  String
+  /// Public Vercel Blob URL of the raw .jsonl.
+  blobUrl   String
+  sizeBytes Int
+  /// SHA-256 of the file contents — the same log uploaded twice (retry,
+  /// re-send button) updates the existing row instead of duplicating it.
+  sha256    String
+
+  // --- parsed from the log's session_start / session_end events ---
+  track           String?
+  trackConfig     String?
+  /// e.g. "RACE", "HEAT 1", "FEATURE".
+  sessionName     String?
+  /// iRacing SessionNum — matches eventresult simSessionNumber.
+  sessionNum      Int?
+  /// iRacing SessionUniqueID — same across the heats of one subsession.
+  sessionUniqueId Int?
+  /// Whether iRacing had marked the result official when the log closed.
+  official        Boolean?
+  driverCount     Int       @default(0)
+  lapEvents       Int       @default(0)
+  /// Wall-clock time of the session_start event (driver's PC clock, UTC).
+  startedAt       DateTime?
+
+  /// Round this log belongs to. Filled automatically when track + date
+  /// identify exactly one round the uploader is registered for; otherwise an
+  /// admin assigns it on the Race Center page.
+  roundId              String?
+  round                Round?  @relation(fields: [roundId], references: [id], onDelete: SetNull)
+  /// True when the round above was resolved by the auto-matcher (as opposed
+  /// to an admin picking it) — shown as a hint in the admin UI.
+  matchedAutomatically Boolean @default(false)
+
+  /// Version string reported by the logger client, for support.
+  clientVersion String?
+
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  @@unique([uploadedById, sha256])
+  @@index([roundId])
+  @@index([createdAt])
 }
