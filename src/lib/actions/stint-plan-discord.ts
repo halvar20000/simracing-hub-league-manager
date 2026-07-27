@@ -63,7 +63,16 @@ export async function postStintPlanToDiscord(
     fields: [
       { name: "Track", value: state.event.track || "—", inline: true },
       { name: "Car", value: state.event.car || "—", inline: true },
-      { name: "Race length", value: state.event.raceDuration || "—", inline: true },
+      {
+        name: "Race length",
+        value:
+          state.event.raceLimit === "laps"
+            ? `${state.event.raceLaps || "—"} laps`
+            : state.event.raceLimit === "distance"
+              ? `${state.event.raceDistance || "—"} ${state.event.distanceUnit}`
+              : state.event.raceDuration || "—",
+        inline: true,
+      },
       {
         name: "Stints / stops",
         value: `${result.totals.stintCount} / ${result.totals.pitStops}`,

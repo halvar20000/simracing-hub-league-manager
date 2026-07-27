@@ -167,6 +167,10 @@ export type PlannerInput = {
    *  grid and the laps behind the pace car. The car starts the race with that
    *  much less on board, so it comes off the FIRST stint only. */
   gridFuelL?: number;
+  /** Lap target for a distance race ("500 laps", "1000 km" converted to laps).
+   *  When set (> 0) the race ends on this lap count and `raceDurationSec` is
+   *  ignored — the finish time becomes a projection instead of an input. */
+  raceLaps?: number | null;
 };
 
 export type StintMode = "fuel" | "time" | "laps";
@@ -288,6 +292,13 @@ export type PlannerResult = {
   stints: ScheduleStint[];
   raceStartUtcMs: number | null;
   raceEndUtcMs: number | null;
+  /** How long the race takes: the entered duration in a timed race, the
+   *  PROJECTED total in a lap/distance race. */
+  raceSec: number;
+  /** True when the race ends on a lap count rather than on the clock. */
+  lapLimited: boolean;
+  /** Laps still to run when the schedule ran out of stints (should be 0). */
+  lapsShort: number;
   totals: {
     stintCount: number;
     pitStops: number;
@@ -342,7 +353,8 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     sessionStartUtcMs != null
       ? sessionStartUtcMs + greenFlagOffsetSec * 1000
       : null;
-  const raceEndUtcMs =
+  // Filled after the loop for a lap-limited race (the finish is a projection).
+  let raceEndUtcMs =
     raceStartUtcMs != null ? raceStartUtcMs + raceDurationSec * 1000 : null;
 
   // Usable fuel = the tank minus whatever the team refuses to burn. The whole
@@ -353,14 +365,23 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   const baseWear = Math.max(0, input.tyreWearPctPerLap ?? 0);
   const tyreMin = Math.max(0, input.tyreMinPct ?? 0);
 
+  // A lap-limited race (500 laps, 1000 km → laps) ends on distance, not on the
+  // clock: the loop counts laps down and the finish time falls out of it.
+  const lapTarget = input.raceLaps && input.raceLaps > 0 ? Math.floor(input.raceLaps) : null;
+  const lapLimited = lapTarget != null;
+
   const stints: ScheduleStint[] = [];
   let t = 0;
   let i = 0;
+  let lapsDone = 0;
   // The car leaves the box full, but the lap to the grid and the rolling start
   // are already gone by the time the flag drops — so stint 1 starts short.
   let fuelAtStart = Math.max(0, usableTank - Math.max(0, input.gridFuelL ?? 0));
   let tyreStartPct = 100;
-  while (t < raceDurationSec - 0.001 && i < MAX_STINTS) {
+  while (
+    (lapLimited ? lapsDone < lapTarget! - 1e-9 : t < raceDurationSec - 0.001) &&
+    i < MAX_STINTS
+  ) {
     const assign = assignments[i] ?? { profile: "standard", driverId: null };
     const useSaving = assign.profile === "saving" && saving != null;
     const prof: FuelProfile = useSaving ? saving! : standard;
@@ -433,8 +454,19 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     let isFinal = false;
     let partial = false;
 
-    if (t + fullGreen >= raceDurationSec) {
-      // Chequered flag falls during this stint's on-track running.
+    if (lapLimited) {
+      // Distance race: the flag falls on a lap, so a stint is cut by the laps
+      // that are left — never mid-lap.
+      const lapsLeft = lapTarget! - lapsDone;
+      if (plannedLaps >= lapsLeft) {
+        isFinal = true;
+        partial = plannedLaps > lapsLeft;
+        laps = lapsLeft;
+        fuel = laps * fuelPerLapEff;
+        greenSec = effLaptime * laps;
+      }
+    } else if (t + fullGreen >= raceDurationSec) {
+      // Timed race: the chequered flag falls during this stint's running.
       isFinal = true;
       partial = true;
       greenSec = raceDurationSec - t;
@@ -471,7 +503,10 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       );
     }
 
-    if (isFinal && partial) {
+    if (lapLimited) {
+      // The clock is a consequence here: run the laps, then stop (unless done).
+      endSec = t + greenSec + (isFinal ? 0 : stopLoss) + corrSec;
+    } else if (isFinal && partial) {
       endSec = raceDurationSec + corrSec; // projected chequered incl. correction
     } else {
       endSec = t + fullGreen + stopLoss + corrSec;
@@ -512,10 +547,12 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     });
 
     // Carry fuel + tyres into the next stint.
+    lapsDone += laps;
     fuelAtStart = Math.min(usableTank, fuelAtEnd + litres);
     tyreStartPct = wantsTyres ? 100 : tyreEndPct;
     t = endSec;
     i += 1;
+    if (lapLimited && isFinal) break;
   }
 
   // Per-driver aggregates.
@@ -533,6 +570,12 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
 
   const laps = stints.reduce((a, s) => a + s.laps, 0);
   const fuel = stints.reduce((a, s) => a + s.fuel, 0);
+  const raceSec = lapLimited
+    ? (stints[stints.length - 1]?.endSec ?? 0)
+    : raceDurationSec;
+  if (lapLimited && raceStartUtcMs != null) {
+    raceEndUtcMs = raceStartUtcMs + raceSec * 1000;
+  }
   const stopTimeSec = stints.reduce((a, s) => a + s.stopSec, 0);
   const tyreChanges = stints.filter((s) => s.tyreChange).length;
   const driverCount = drivers.length;
@@ -544,6 +587,9 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     stints,
     raceStartUtcMs,
     raceEndUtcMs,
+    raceSec,
+    lapLimited,
+    lapsShort: lapLimited ? Math.max(0, lapTarget! - lapsDone) : 0,
     totals: {
       stintCount: stints.length,
       pitStops: Math.max(0, stints.length - 1),
@@ -575,7 +621,9 @@ export type FuelSaveStrategy = {
   laptimeSec: number; // target lap time
   fuelPerLap: number; // target fuel per lap
   lapsPerStint: number;
-  totalLaps: number; // distance measure (higher = better)
+  totalLaps: number; // distance measure (higher = better) — timed races
+  /** Total race time for the fixed distance (lower = better) — lap races. */
+  totalTimeSec: number;
 };
 
 export type FuelSaveOptimization =
@@ -583,8 +631,12 @@ export type FuelSaveOptimization =
   | {
       ok: true;
       strategies: FuelSaveStrategy[]; // one per stop-count, ascending
-      bestIndex: number; // index of the max-distance strategy
+      bestIndex: number; // index of the best strategy (most laps / least time)
       fullPushIndex: number; // index of the full-push (fastest lap) strategy
+      /** True when the race is decided by distance, so the objective was to
+       *  cover the set laps in the least time rather than to cover the most
+       *  laps in a set time. */
+      lapLimited: boolean;
     };
 
 export function optimizeFuelSave(args: {
@@ -607,13 +659,18 @@ export function optimizeFuelSave(args: {
   pitModel?: PitModel | null;
   /** Tyres changed at every stop when pricing with the model (default true). */
   pitTyres?: boolean;
+  /** Lap target of a distance race. Given, the sweep looks for the FASTEST way
+   *  to cover those laps instead of the greatest distance in a fixed time. */
+  raceLaps?: number | null;
 }): FuelSaveOptimization {
   const usable = Math.max(0, args.tankSize - Math.max(0, args.fuelReserve ?? 0));
   const T = args.raceDurationSec;
+  const lapTarget = args.raceLaps && args.raceLaps > 0 ? Math.floor(args.raceLaps) : null;
   const k = args.paceScale && args.paceScale > 0 ? args.paceScale : 1;
   const std: FuelProfile = { ...args.standard, laptimeSec: args.standard.laptimeSec * k };
   const sav: FuelProfile = { ...args.saving, laptimeSec: args.saving.laptimeSec * k };
-  if (T <= 0 || usable <= 0) return { ok: false, reason: "Set a race duration and tank size." };
+  if ((lapTarget == null && T <= 0) || usable <= 0)
+    return { ok: false, reason: "Set a race length and tank size." };
   if (std.fuelPerLap <= 0 || sav.fuelPerLap <= 0 || std.laptimeSec <= 0 || sav.laptimeSec <= 0)
     return { ok: false, reason: "Fill in both fuel profiles first." };
   if (!(sav.fuelPerLap < std.fuelPerLap) || !(sav.laptimeSec >= std.laptimeSec))
@@ -639,6 +696,25 @@ export function optimizeFuelSave(args: {
         }).totalSec
       : args.pitLossSec;
     const green = L * lapsPerStint;
+
+    // Distance race: run the set laps, count the stops that fit between them.
+    if (lapTarget != null) {
+      if (lapsPerStint <= 0) {
+        return { stops: 0, stints: 0, laptimeSec: L, fuelPerLap: F, lapsPerStint, totalLaps: 0, totalTimeSec: Infinity };
+      }
+      const stints = Math.ceil(lapTarget / lapsPerStint);
+      const stops = Math.max(0, stints - 1);
+      return {
+        stops,
+        stints,
+        laptimeSec: L,
+        fuelPerLap: F,
+        lapsPerStint,
+        totalLaps: lapTarget,
+        totalTimeSec: lapTarget * L + stops * P,
+      };
+    }
+
     let t = 0;
     let laps = 0;
     let stops = 0;
@@ -667,6 +743,7 @@ export function optimizeFuelSave(args: {
       fuelPerLap: F,
       lapsPerStint,
       totalLaps: laps,
+      totalTimeSec: t,
     };
   };
 
@@ -678,7 +755,12 @@ export function optimizeFuelSave(args: {
     const F = sav.fuelPerLap + ((std.fuelPerLap - sav.fuelPerLap) * i) / steps;
     const r = sim(F);
     const prev = byStop.get(r.stops);
-    if (!prev || r.totalLaps > prev.totalLaps) byStop.set(r.stops, r);
+    const better = prev
+      ? lapTarget != null
+        ? r.totalTimeSec < prev.totalTimeSec
+        : r.totalLaps > prev.totalLaps
+      : true;
+    if (better) byStop.set(r.stops, r);
   }
   const strategies = [...byStop.values()].sort((a, b) => a.stops - b.stops);
   if (strategies.length === 0) return { ok: false, reason: "No feasible strategy." };
@@ -686,10 +768,14 @@ export function optimizeFuelSave(args: {
   let bestIndex = 0;
   let fullPushIndex = 0;
   strategies.forEach((s, i) => {
-    if (s.totalLaps > strategies[bestIndex].totalLaps) bestIndex = i;
+    const wins =
+      lapTarget != null
+        ? s.totalTimeSec < strategies[bestIndex].totalTimeSec
+        : s.totalLaps > strategies[bestIndex].totalLaps;
+    if (wins) bestIndex = i;
     if (s.stops > strategies[fullPushIndex].stops) fullPushIndex = i;
   });
-  return { ok: true, strategies, bestIndex, fullPushIndex };
+  return { ok: true, strategies, bestIndex, fullPushIndex, lapLimited: lapTarget != null };
 }
 
 /** Seconds → "M:SS.s" — lap-time style (tenths). */

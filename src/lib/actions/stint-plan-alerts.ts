@@ -77,7 +77,7 @@ export async function checkStintPlanAlerts(
   if (result.raceStartUtcMs == null) {
     return {
       ok: false,
-      error: "Set a session start in the event card — without it there is no clock to alert against.",
+      error: "Set the race start in the event card — without it there is no clock to alert against.",
     };
   }
 

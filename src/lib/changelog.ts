@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.72.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: races no longer have to end on the clock. “Race ends on” switches between Time, Laps and Distance — so “500 laps of Road America” or “1000 km of Spa” can be planned properly. Enter the distance plus the lap length and the planner works out the lap target (rounded up, because the distance has to be covered) and projects the finishing time instead of asking for it.",
+      "Stint Planner: in a distance race the last stint is cut by the laps that are left, never mid-lap, and it carries no pit stop. The projected finish, the Clock-in column, the live tracker and the Discord alerts all follow that projection.",
+      "Stint Planner: the fuel-save optimiser flips its objective for a distance race — the distance is fixed, so it looks for the quickest way to cover the laps rather than the most laps in a set time, and the table shows race time instead of total laps.",
+    ],
+  },
+  {
     version: "1.71.1",
     date: "2026-07-27",
     changes: [

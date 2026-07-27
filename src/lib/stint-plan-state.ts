@@ -214,7 +214,16 @@ export type PlannerState = {
   event: {
     track: string; // CLS track name (display string), "" = none
     car: string; // CLS car name, "" = none
-    raceDuration: string; // "6:00:00"
+    /** How the race ends: on the clock, on a lap count, or on a distance. */
+    raceLimit: "time" | "laps" | "distance";
+    raceDuration: string; // "6:00:00" — used when raceLimit = "time"
+    /** Lap target when raceLimit = "laps" (e.g. "500"). */
+    raceLaps: string;
+    /** Distance when raceLimit = "distance" (e.g. "1000"), in `distanceUnit`. */
+    raceDistance: string;
+    distanceUnit: "km" | "mi";
+    /** Length of one lap in km — turns a distance into a lap target. */
+    lapDistanceKm: string;
     greenFlagOffset: string; // "0:30"
     pitLoss: string; // seconds, "70"
     tankSize: string; // litres, "75"
@@ -295,7 +304,12 @@ export function defaultPlannerState(): PlannerState {
     event: {
       track: "",
       car: "",
+      raceLimit: "time",
       raceDuration: "6:00:00",
+      raceLaps: "",
+      raceDistance: "",
+      distanceUnit: "km",
+      lapDistanceKm: "",
       greenFlagOffset: "0:00",
       pitLoss: "70",
       tankSize: "75",
@@ -396,6 +410,29 @@ const num = (s: string, fallback = 0): number => {
 };
 
 /** Parse the string-based UI state into the numeric engine input. */
+/** Miles → km, for the distance limit. */
+const MI_TO_KM = 1.609344;
+
+/**
+ * The lap target of a plan, or null for a timed race. A distance race is run
+ * until the distance is COVERED, so the laps round up — 1000 km at 7.004 km a
+ * lap is 143 laps, not 142.
+ */
+export function planLapTarget(s: PlannerState): number | null {
+  if (s.event.raceLimit === "laps") {
+    const n = Math.floor(num(s.event.raceLaps));
+    return n > 0 ? n : null;
+  }
+  if (s.event.raceLimit === "distance") {
+    const lap = num(s.event.lapDistanceKm);
+    const dist =
+      num(s.event.raceDistance) * (s.event.distanceUnit === "mi" ? MI_TO_KM : 1);
+    if (lap <= 0 || dist <= 0) return null;
+    return Math.ceil(dist / lap);
+  }
+  return null;
+}
+
 export function stateToInput(s: PlannerState): PlannerInput {
   const sessionMs =
     s.event.sessionStartLocal.trim() !== ""
@@ -403,6 +440,7 @@ export function stateToInput(s: PlannerState): PlannerInput {
       : null;
   return {
     raceDurationSec: parseDurationToSec(s.event.raceDuration) ?? 0,
+    raceLaps: planLapTarget(s),
     greenFlagOffsetSec: parseDurationToSec(s.event.greenFlagOffset) ?? 0,
     pitLossSec: num(s.event.pitLoss),
     tankSize: num(s.event.tankSize),

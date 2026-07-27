@@ -35,6 +35,7 @@ import {
   hydratePlanState,
   stateToInput,
   planPitModel,
+  planLapTarget,
   DEFAULT_TEMP_SLOPE_PER_C,
   DEFAULT_WET_DELTA_SEC,
   type PlannerAssignmentState,
@@ -270,6 +271,8 @@ export default function StintPlanner({
   const result = useMemo(() => buildSchedule(stateToInput(s)), [s]);
   /** True when this plan prices its stops from measured constants. */
   const pitOn = planPitModel(s) !== null;
+  /** Lap target of a distance race (null = the race ends on the clock). */
+  const lapTarget = planLapTarget(s);
 
   // ---- Race start ---------------------------------------------------------
   // The stored value is what the schedule counts from; the green-flag offset
@@ -382,7 +385,9 @@ export default function StintPlanner({
     });
 
   // ---- availability + spotter helpers ----
-  const raceSecForAvail = parseDurationToSec(s.event.raceDuration) ?? 0;
+  // In a distance race the race length is a projection, so the availability
+  // grid has to follow the schedule instead of the (unused) duration field.
+  const raceSecForAvail = result.raceSec || (parseDurationToSec(s.event.raceDuration) ?? 0);
   const hourCount = Math.max(0, Math.ceil(raceSecForAvail / 3600));
   const isBlocked = (driverId: string, hour: number) =>
     (s.availability[driverId] ?? []).includes(hour);
@@ -682,6 +687,8 @@ export default function StintPlanner({
       // With the model, each strategy's stop is priced from the litres that
       // strategy actually takes — saving fuel shortens the stops too.
       pitModel: inp.pitModel ?? null,
+      // A distance race flips the objective: cover the laps in the least time.
+      raceLaps: inp.raceLaps ?? null,
     });
     setFuelSaveOpt(opt);
     // Auto-apply the best (max-distance) strategy into the Standard profile so
@@ -700,7 +707,11 @@ export default function StintPlanner({
           ? ` (weighted for real driver pace, ${fmtLap(avgLap)} avg)`
           : "";
       setFuelSaveMsg(
-        `Applied to Standard profile: ${best.stops} stops · target ${fmtLap(best.laptimeSec)} @ ${best.fuelPerLap.toFixed(2)} L/lap → ${best.totalLaps.toFixed(1)} laps${paceNote}.`
+        `Applied to Standard profile: ${best.stops} stops · target ${fmtLap(best.laptimeSec)} @ ${best.fuelPerLap.toFixed(2)} L/lap → ${
+          opt.lapLimited
+            ? `${fmtDuration(best.totalTimeSec)} for ${best.totalLaps} laps`
+            : `${best.totalLaps.toFixed(1)} laps`
+        }${paceNote}.`
       );
     } else {
       setFuelSaveMsg(null);
@@ -1568,10 +1579,82 @@ export default function StintPlanner({
               </select>
             </div>
             <div>
-              <label className={lbl}>Race duration (h:mm:ss)</label>
-              <input className={inp} value={s.event.raceDuration}
-                onChange={(e) => patchEvent("raceDuration", e.target.value)} />
+              <label className={lbl}>Race ends on</label>
+              <select
+                className={inp}
+                value={s.event.raceLimit}
+                onChange={(e) => patchEvent("raceLimit", e.target.value)}
+                title="Time: the flag falls on the clock. Laps / Distance: it falls when the distance is covered — the finish time is then a projection."
+              >
+                <option value="time">Time</option>
+                <option value="laps">Laps</option>
+                <option value="distance">Distance</option>
+              </select>
             </div>
+            {s.event.raceLimit === "time" && (
+              <div>
+                <label className={lbl}>Race duration (h:mm:ss)</label>
+                <input className={inp} value={s.event.raceDuration}
+                  onChange={(e) => patchEvent("raceDuration", e.target.value)} />
+              </div>
+            )}
+            {s.event.raceLimit === "laps" && (
+              <div>
+                <label className={lbl}>Race laps</label>
+                <input className={inp} value={s.event.raceLaps}
+                  onChange={(e) => patchEvent("raceLaps", e.target.value)}
+                  placeholder="e.g. 500" />
+              </div>
+            )}
+            {s.event.raceLimit === "distance" && (
+              <>
+                <div>
+                  <label className={lbl}>Race distance</label>
+                  <div className="flex gap-1">
+                    <input className={inp} value={s.event.raceDistance}
+                      onChange={(e) => patchEvent("raceDistance", e.target.value)}
+                      placeholder="e.g. 1000" />
+                    <select
+                      className={`${inp} w-20 shrink-0`}
+                      value={s.event.distanceUnit}
+                      onChange={(e) => patchEvent("distanceUnit", e.target.value)}
+                    >
+                      <option value="km">km</option>
+                      <option value="mi">mi</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className={lbl}>Lap length (km)</label>
+                  <input className={inp} value={s.event.lapDistanceKm}
+                    onChange={(e) => patchEvent("lapDistanceKm", e.target.value)}
+                    placeholder="e.g. 7.004"
+                    title="Length of one lap of this track configuration, in kilometres." />
+                </div>
+              </>
+            )}
+            {lapTarget != null && (
+              <div className="col-span-2 -mt-1 text-[11px] text-zinc-500">
+                {s.event.raceLimit === "distance" ? (
+                  <>
+                    {s.event.raceDistance} {s.event.distanceUnit} ÷{" "}
+                    {s.event.lapDistanceKm} km ={" "}
+                    <strong className="text-zinc-300">{lapTarget} laps</strong> (rounded up
+                    — the distance has to be covered).{" "}
+                  </>
+                ) : (
+                  <>Race ends after <strong className="text-zinc-300">{lapTarget} laps</strong>. </>
+                )}
+                Projected finish:{" "}
+                <strong className="text-zinc-300">{fmtDuration(result.raceSec)}</strong>
+                {result.lapsShort > 0 && (
+                  <span className="text-amber-300">
+                    {" "}
+                    — {fmtLaps(result.lapsShort)} laps unplanned, add stints
+                  </span>
+                )}
+              </div>
+            )}
             <div>
               <label className={lbl}>Race start</label>
               <div className="flex gap-1">
@@ -2062,16 +2145,26 @@ export default function StintPlanner({
           (() => {
             const best = fuelSaveOpt.strategies[fuelSaveOpt.bestIndex];
             const push = fuelSaveOpt.strategies[fuelSaveOpt.fullPushIndex];
-            const gain = best.totalLaps - push.totalLaps;
+            const byTime = fuelSaveOpt.lapLimited;
+            // Timed race: more laps wins. Distance race: less time wins.
+            const gain = byTime
+              ? push.totalTimeSec - best.totalTimeSec
+              : best.totalLaps - push.totalLaps;
             return (
               <div className="space-y-3">
                 <div className="rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
                   Best: <strong>{best.stops} stops</strong> · target lap{" "}
                   <strong>{fmtLap(best.laptimeSec)}</strong> · ≤{" "}
                   {best.fuelPerLap.toFixed(2)} L/lap →{" "}
-                  <strong>{best.totalLaps.toFixed(1)} laps</strong>
+                  <strong>
+                    {byTime
+                      ? fmtDuration(best.totalTimeSec)
+                      : `${best.totalLaps.toFixed(1)} laps`}
+                  </strong>
                   {fuelSaveOpt.bestIndex !== fuelSaveOpt.fullPushIndex
-                    ? ` — ${gain > 0 ? "+" : ""}${gain.toFixed(1)} laps vs full push (${push.stops} stops).`
+                    ? byTime
+                      ? ` — ${fmtDuration(Math.abs(gain))} ${gain > 0 ? "faster" : "slower"} than full push (${push.stops} stops).`
+                      : ` — ${gain > 0 ? "+" : ""}${gain.toFixed(1)} laps vs full push (${push.stops} stops).`
                     : " — full push is optimal here."}
                 </div>
                 <div className="overflow-x-auto">
@@ -2082,7 +2175,9 @@ export default function StintPlanner({
                         <th className="py-1 pr-2 text-right">Target lap</th>
                         <th className="py-1 pr-2 text-right">Fuel/lap</th>
                         <th className="py-1 pr-2 text-right">Laps/stint</th>
-                        <th className="py-1 pr-2 text-right">Total laps</th>
+                        <th className="py-1 pr-2 text-right">
+                          {byTime ? "Race time" : "Total laps"}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2100,16 +2195,19 @@ export default function StintPlanner({
                           <td className="py-1 pr-2 text-right">{fmtLap(r.laptimeSec)}</td>
                           <td className="py-1 pr-2 text-right">{r.fuelPerLap.toFixed(2)} L</td>
                           <td className="py-1 pr-2 text-right">{r.lapsPerStint}</td>
-                          <td className="py-1 pr-2 text-right">{r.totalLaps.toFixed(1)}</td>
+                          <td className="py-1 pr-2 text-right">
+                            {byTime ? fmtDuration(r.totalTimeSec) : r.totalLaps.toFixed(1)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <p className="text-[11px] text-zinc-600">
-                  Assumes lap time varies linearly between your two profiles.
-                  &ldquo;Total laps&rdquo; is the distance measure (track length is
-                  constant).
+                  Assumes lap time varies linearly between your two profiles.{" "}
+                  {byTime
+                    ? "The distance is fixed here, so the measure is the time it takes to cover it — saving fuel pays when it removes a stop."
+                    : "“Total laps” is the distance measure (track length is constant)."}
                 </p>
               </div>
             );
