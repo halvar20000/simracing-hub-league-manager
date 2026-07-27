@@ -51,6 +51,7 @@ import StintDriverStats from "@/components/StintDriverStats";
 import RaceLogDashboard from "@/components/RaceLogDashboard";
 import RaceGallery from "@/components/RaceGallery";
 import { uploadStintPlanImages } from "@/lib/actions/stint-plan-images";
+import { checkStintPlanAlerts } from "@/lib/actions/stint-plan-alerts";
 import {
   connectGarage61,
   setGarage61Team,
@@ -1224,6 +1225,50 @@ export default function StintPlanner({
   const phase: PlanPhase = manualPhase ?? autoPhase;
   const setPhase = (p: PlanPhase) => setManualPhase(p);
 
+  // ---- "You're up next" Discord DMs --------------------------------------
+  // The plan already knows when every stint starts, corrections included. This
+  // turns that into a nudge for the driver who is up next. All the deciding
+  // happens server-side (see stint-plan-alerts.ts); this only asks, regularly,
+  // whether anything is due — and merges the returned ledger back in so the
+  // auto-save can't drop it.
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [alertBusy, setAlertBusy] = useState(false);
+  const runAlertCheck = async (force = false) => {
+    if (!curId) return;
+    if (force) setAlertBusy(true);
+    try {
+      const res = await checkStintPlanAlerts(curId, force);
+      if (!res.ok) {
+        if (force) setAlertMsg(res.error);
+        return;
+      }
+      setS((p) =>
+        JSON.stringify(p.alertsSent) === JSON.stringify(res.alertsSent)
+          ? p
+          : { ...p, alertsSent: res.alertsSent }
+      );
+      if (res.messages.length > 0) setAlertMsg(res.messages.join(" "));
+      else if (force) setAlertMsg("Nothing due — no stint starts within reach.");
+    } catch (e) {
+      if (isStaleActionError(e)) setStaleBuild(true);
+      else if (force) setAlertMsg("Could not reach the server — please try again.");
+    } finally {
+      if (force) setAlertBusy(false);
+    }
+  };
+  // Poll while the race is live. 45 s is well inside any sane lead time and
+  // costs one tiny request per tab.
+  useEffect(() => {
+    if (!curId || !s.alertsEnabled || !raceLive) return;
+    void runAlertCheck(false);
+    const iv = setInterval(() => void runAlertCheck(false), 45_000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runAlertCheck
+    // closes over state that changes every keystroke; re-arming the interval
+    // on each of those would reset the timer forever.
+  }, [curId, s.alertsEnabled, raceLive]);
+
+
   return (
     <div className="space-y-6">
       {/* The app was redeployed while this tab was open: every Server Action
@@ -2179,6 +2224,45 @@ export default function StintPlanner({
                 Clear
               </button>
             </div>
+            <div
+              className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
+                s.alertsEnabled
+                  ? "border-indigo-700/60 bg-indigo-950/30 text-indigo-200"
+                  : "border-zinc-700 bg-zinc-900 text-zinc-400"
+              }`}
+            >
+              <label
+                className="flex cursor-pointer items-center gap-1"
+                title="Send the driver of the next stint a Discord DM before they are due in the car. Needs a session start and a Discord account linked in CLS."
+              >
+                <input
+                  type="checkbox"
+                  checked={s.alertsEnabled}
+                  onChange={(e) =>
+                    setS((p) => ({ ...p, alertsEnabled: e.target.checked }))
+                  }
+                />
+                🔔 Discord alert
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={s.event.alertLeadMin}
+                onChange={(e) => patchEvent("alertLeadMin", e.target.value)}
+                title="Minutes before the stint starts"
+                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <span>min before</span>
+              <button
+                onClick={() => runAlertCheck(true)}
+                disabled={alertBusy || !curId}
+                className="rounded bg-indigo-800 px-1.5 py-0.5 text-white hover:bg-indigo-700 disabled:opacity-40"
+                title="Send the DM for the next upcoming stint right now — a live test of the whole chain"
+              >
+                {alertBusy ? "Sending…" : "Test"}
+              </button>
+            </div>
             <button onClick={autoFill}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
               Auto-fill drivers
@@ -2189,6 +2273,16 @@ export default function StintPlanner({
             </button>
           </div>
         </div>
+        {alertMsg && (
+          <p className="mb-3 rounded border border-indigo-800/60 bg-indigo-950/30 px-3 py-2 text-xs text-indigo-200">
+            {alertMsg}
+          </p>
+        )}
+        {s.alertsEnabled && !curId && (
+          <p className="mb-3 text-xs text-amber-300">
+            Save the plan first — the alerts run against the saved plan.
+          </p>
+        )}
         {result.stints.length === 0 ? (
           <p className="text-sm text-zinc-500">
             Enter a race duration, lap time, fuel per lap and tank size to

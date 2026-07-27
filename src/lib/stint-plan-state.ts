@@ -131,6 +131,9 @@ export type TeamDriverStat = {
   incidents: number;
 };
 
+/** Default lead time for the "you're up next" Discord DM, in minutes. */
+export const DEFAULT_ALERT_LEAD_MIN = 15;
+
 /** Most pictures a plan will hold — keeps the payload and the page sane. */
 export const MAX_IMPRESSIONS = 20;
 
@@ -210,6 +213,7 @@ export type PlannerState = {
     trackTempC: string; // race-day track temperature (°C), "" = none
     conditions: "dry" | "wet"; // whole-race weather scenario (legacy, vestigial)
     driverSwapSec: string; // mandatory driver-swap floor (iRacing = 30s)
+    alertLeadMin: string; // minutes before a stint the driver gets a Discord DM
     refuelSec: string; // refuel service time per stop, "" = unknown
     doubleStint: boolean; // auto-fill drivers in double-stint pairs
   };
@@ -233,6 +237,12 @@ export type PlannerState = {
   eventResult: PlannerEventResult | null;
   /** Archived + parsed race-logger JSONL, or null. */
   raceLog: PlannerRaceLog | null;
+  /** Send the next driver a Discord DM before their stint. Off by default —
+   *  a plan that gets opened months later must not start DMing people. */
+  alertsEnabled: boolean;
+  /** Stint index (as a string key) → ISO time the DM went out. Lives in the
+   *  payload so two pit-wall tabs can't double-alert. */
+  alertsSent: Record<string, string>;
   /** The result poster / certificate for this race, or null. */
   poster: PlannerImage | null;
   /** Impressions from the race — livery shots, screenshots, podium pictures. */
@@ -260,6 +270,7 @@ export function defaultPlannerState(): PlannerState {
       trackTempC: "",
       conditions: "dry",
       driverSwapSec: "30",
+      alertLeadMin: String(DEFAULT_ALERT_LEAD_MIN),
       refuelSec: "",
       doubleStint: false,
     },
@@ -275,6 +286,8 @@ export function defaultPlannerState(): PlannerState {
     notes: { pre: "", during: "", post: "" },
     eventResult: null,
     raceLog: null,
+    alertsEnabled: false,
+    alertsSent: {},
     poster: null,
     impressions: [],
   };
@@ -295,6 +308,7 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
     notes: { ...base.notes, ...(stored.notes ?? {}) },
     availability: stored.availability ?? base.availability,
     impressions: stored.impressions ?? base.impressions,
+    alertsSent: stored.alertsSent ?? base.alertsSent,
   };
 }
 

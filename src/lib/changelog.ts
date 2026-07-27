@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.67.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: the driver of the next stint can now get a Discord DM from the league bot before they are due in the car. Switch “🔔 Discord alert” on above the schedule and set the lead time (default 15 minutes). The alert follows the live ± corrections, so it moves with the race instead of with the original plan, and every alert is recorded on the plan — two open pit-wall tabs cannot double-message anyone.",
+      "Stint Planner: “Test” next to the alert switch sends the DM for the next upcoming stint straight away — the whole chain, so you find out before the race whether a driver's Discord actually reaches them.",
+      "Stint Planner: a driver without a Discord account linked in CLS is named in the planner instead of failing silently. They can link it by signing in to CLS once with Discord.",
+    ],
+  },
+  {
     version: "1.66.0",
     date: "2026-07-27",
     changes: [
