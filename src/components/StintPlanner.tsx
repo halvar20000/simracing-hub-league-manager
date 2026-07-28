@@ -66,6 +66,7 @@ import { matchPitReference, type PitReferenceRow } from "@/lib/pit-references";
 import {
   scanPitStops,
   derivePitConstants,
+  pitRowsFromSheet,
   type PitLapRow,
   type PitStopScan,
   type StopKind,
@@ -896,15 +897,7 @@ export default function StintPlanner({
         const cPout = col("Pit out");
         const cTemp = col("Track temp");
         const cWet = col("Track Wetness");
-        const cLapNo = col("Lap");
-        const cClean = col("Clean");
-        const cAdded = col("Fuel added");
-        // Sector columns, in track order — his export has "Sector 1" … "Sector 4".
-        const sectorCols = header
-          .map((h, i) => ({ h, i }))
-          .filter((x) => /^sector\s*\d+$/i.test(x.h))
-          .sort((a, b) => Number(a.h.replace(/\D+/g, "")) - Number(b.h.replace(/\D+/g, "")))
-          .map((x) => x.i);
+
         if (cLap < 0 || cDrv < 0 || cFuel < 0) continue;
         for (let i = 1; i < grid.length; i++) {
           const r = grid[i] as unknown[];
@@ -924,26 +917,9 @@ export default function StintPlanner({
             trackWetness: isFinite(rawWet) ? rawWet : null,
           });
 
-          // Excel durations are fractions of a day, same as the lap time.
-          const secs = sectorCols
-            .map((ci) => Number(r[ci]))
-            .filter((v) => isFinite(v) && v > 0)
-            .map((v) => v * 86400);
-          const lapNo = cLapNo >= 0 ? Number(r[cLapNo]) : NaN;
-          if (secs.length >= 2 && isFinite(lapNo)) {
-            const added = cAdded >= 0 ? Number(r[cAdded]) : 0;
-            pitRows.push({
-              lap: lapNo,
-              driver: drv,
-              laptimeSec: rawLap * 86400,
-              sectors: secs,
-              fuelAdded: isFinite(added) && added > 0 ? added : 0,
-              pitIn: Number(cPin >= 0 ? r[cPin] : 0) === 1,
-              pitOut: Number(cPout >= 0 ? r[cPout] : 0) === 1,
-              clean: Number(cClean >= 0 ? r[cClean] : 1) === 1,
-            });
-          }
         }
+        // Pit rows come from the same grid, via the shared (tested) mapper.
+        pitRows.push(...pitRowsFromSheet(grid as unknown[][]));
       }
       if (rows.length === 0) {
         setG61Msg(

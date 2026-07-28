@@ -252,3 +252,57 @@ export function derivePitConstants(stops: DetectedStop[]): DerivedPitConstants {
 
   return { laneLossSec, tyreChangeSec, refuelLps, tyreSequential, notes };
 }
+
+
+/**
+ * Map a Garage 61 session-export sheet (as a raw grid: row 0 = headers) into
+ * the rows this module needs. Kept here rather than in the component so it can
+ * be tested against a real export's header row.
+ *
+ * Durations in the export are Excel day-fractions, hence × 86400.
+ */
+export function pitRowsFromSheet(grid: unknown[][]): PitLapRow[] {
+  if (!grid || grid.length < 2) return [];
+  const header = (grid[0] as unknown[]).map((h) => String(h ?? "").trim());
+  const col = (name: string) => header.findIndex((h) => h.toLowerCase() === name.toLowerCase());
+  const cLapNo = col("Lap");
+  const cLapTime = col("Lap time");
+  const cDrv = col("Driver");
+  const cClean = col("Clean");
+  const cIn = col("Pit in");
+  const cOut = col("Pit out");
+  const cAdded = col("Fuel added");
+  // "Sector 1" … "Sector N", in track order. A file that only kept the first
+  // and last sector still works — those are the two the method needs.
+  const sectorCols = header
+    .map((h, i) => ({ h, i }))
+    .filter((x) => /^sector\s*\d+$/i.test(x.h))
+    .sort((a, b) => Number(a.h.replace(/\D+/g, "")) - Number(b.h.replace(/\D+/g, "")))
+    .map((x) => x.i);
+  if (cLapNo < 0 || cLapTime < 0 || sectorCols.length < 2) return [];
+
+  const out: PitLapRow[] = [];
+  for (let i = 1; i < grid.length; i++) {
+    const r = grid[i] as unknown[];
+    const lap = Number(r[cLapNo]);
+    const laptime = Number(r[cLapTime]);
+    if (!isFinite(lap) || !isFinite(laptime)) continue;
+    const sectors = sectorCols
+      .map((ci) => Number(r[ci]))
+      .filter((v) => isFinite(v) && v > 0)
+      .map((v) => v * 86400);
+    if (sectors.length < 2) continue;
+    const added = cAdded >= 0 ? Number(r[cAdded]) : 0;
+    out.push({
+      lap,
+      driver: cDrv >= 0 ? String(r[cDrv] ?? "").trim() : "",
+      laptimeSec: laptime * 86400,
+      sectors,
+      fuelAdded: isFinite(added) && added > 0 ? added : 0,
+      pitIn: Number(cIn >= 0 ? r[cIn] : 0) === 1,
+      pitOut: Number(cOut >= 0 ? r[cOut] : 0) === 1,
+      clean: Number(cClean >= 0 ? r[cClean] : 1) === 1,
+    });
+  }
+  return out;
+}
