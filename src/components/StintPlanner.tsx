@@ -180,6 +180,12 @@ const lbl = "block text-[11px] font-medium uppercase tracking-wider text-zinc-50
 const card = "rounded-lg border border-zinc-800 bg-zinc-900/40 p-4";
 
 // localStorage never notifies us of its own changes; we re-read on re-render.
+// How to drive a session that measures every pit constant. The fuel-ONLY stop
+// is the one that matters most: without it, a fill and a tyre change cannot be
+// told apart, and the refuel rate comes out two or three times too fast.
+const PIT_PROTOCOL =
+  "To measure everything in one session: 3–4 clean laps in a row (the reference), then one lap through the pit lane without stopping, one stop with no service at all, one stop with tyres only, and one stop with fuel only (no tyres) — a big fill is best. Come back out and do a clean lap after each.";
+
 const emptyStoreSubscribe = () => () => {};
 
 export default function StintPlanner({
@@ -931,10 +937,12 @@ export default function StintPlanner({
         rosterNames: s.drivers.map((d) => d.name),
       });
       if (result.drivers.length === 0) {
+        const seen = result.diag?.driverNames ?? [];
+        const matched = result.diag?.lapsAfterRoster ?? 0;
         setG61Msg(
-          s.drivers.length > 0
-            ? "No clean laps matched your roster drivers — check their names match their Garage 61 profiles, or add them to the plan."
-            : "Couldn't derive clean laps from the file(s)."
+          s.drivers.length > 0 && matched === 0
+            ? `None of the ${rows.length} laps in the file were driven by your plan's drivers. The file has: ${seen.length ? seen.join(", ") : "no driver name"}. Match the names, or add the driver to the plan.`
+            : `Found ${rows.length} laps, but no clean full lap among them — in/out laps, partials and laps without fuel data can't be used. Drive a few consecutive green laps.`
         );
         return;
       }
@@ -949,7 +957,9 @@ export default function StintPlanner({
       }));
       // Did this session contain pit stops? Then the constants are in there too.
       const scan = scanPitStops(pitRows);
-      setPitScan(scan.ok ? scan : null);
+      // Keep a failed scan too — its error says which stop is missing, which is
+      // more use than the panel silently not appearing.
+      setPitScan(scan);
       setPitKinds(scan.ok ? scan.stops.map((x) => x.kind) : []);
     } catch {
       setG61Msg("Could not read the file — is it a valid .xlsx export?");
@@ -2953,6 +2963,16 @@ export default function StintPlanner({
         {/* Pit stops found in the uploaded session — Johann's measuring sheet,
             done by the machine. The data knows the time lost and the litres;
             only a human knows whether tyres went on. */}
+        {pitScan && !pitScan.ok && (
+          <div className="mb-3 rounded border border-amber-900/50 bg-amber-950/10 p-3">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+              No pit stops measured
+            </div>
+            <p className="text-[11px] text-zinc-400">{pitScan.error}</p>
+            <p className="mt-2 text-[11px] text-zinc-500">{PIT_PROTOCOL}</p>
+          </div>
+        )}
+
         {pitScan && pitScan.ok && (
           <div className="mb-3 rounded border border-orange-900/50 bg-orange-950/10 p-3">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-orange-300">
@@ -2965,6 +2985,7 @@ export default function StintPlanner({
               the pits plus the first sector after, minus that reference. Say what happened at
               each stop — the export records the fuel, never the tyres.
             </p>
+            <p className="mb-2 text-[11px] text-zinc-500">{PIT_PROTOCOL}</p>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm tabular-nums">
                 <thead className="text-xs uppercase tracking-wide text-zinc-500">

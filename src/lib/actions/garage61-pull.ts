@@ -347,10 +347,19 @@ export async function pullGarage61Laps(input: {
   });
   if (result.drivers.length === 0) {
     const roster = (input.rosterNames ?? []).filter((n) => n.trim() !== "");
-    if (roster.length > 0) {
+    // Only blame the names when the roster filter is what emptied the set —
+    // otherwise the laps were there and simply weren't usable.
+    if (roster.length > 0 && (result.diag?.lapsAfterRoster ?? 0) === 0) {
+      const seen = result.diag?.driverNames ?? [];
       return {
         ok: false,
-        error: `Fetched ${laps.length} laps, but none matched your roster drivers (${roster.join(", ")}). Check the names match their Garage 61 profiles, or clear the roster to include everyone.`,
+        error: `Fetched ${laps.length} laps, but none were driven by your roster drivers (${roster.join(", ")}). Garage 61 has them under: ${seen.length ? seen.join(", ") : "no driver name at all"}. Match the names, or clear the roster to include everyone.`,
+      };
+    }
+    if ((result.diag?.lapsAfterRoster ?? 0) > 0) {
+      return {
+        ok: false,
+        error: `Fetched ${laps.length} laps (${result.diag?.lapsAfterRoster} from your drivers), but none of them was a clean full lap — they were all in/out laps, partials or laps without fuel data. Drive a few consecutive green laps and pull again.`,
       };
     }
     return {

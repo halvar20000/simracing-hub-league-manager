@@ -113,6 +113,11 @@ export function scanPitStops(rows: PitLapRow[]): PitStopScan {
   }
   const referenceSec = median(refs);
 
+  // A session starts in the garage, so the export's first lap is a garage
+  // out-lap and the "stop" before the second lap is really the time the car sat
+  // in the box before the session — minutes, not a pit stop. Never measure it.
+  const garageStart = laps[0].pitOut;
+
   // Every lap the car came out of the pits on carries a stop before it.
   const stops: DetectedStop[] = [];
   for (let i = 1; i < laps.length; i++) {
@@ -120,6 +125,7 @@ export function scanPitStops(rows: PitLapRow[]): PitStopScan {
     const inLap = laps[i - 1];
     if (!out.pitOut && !(out.pitIn && out.pitOut)) continue;
     if (out.lap !== inLap.lap + 1) continue;
+    if (i === 1 && garageStart) continue;
     const lossSec = last(inLap) + first(out) - referenceSec;
     if (!isFinite(lossSec)) continue;
     const litres = out.fuelAdded > 0 ? out.fuelAdded : 0;
@@ -128,8 +134,9 @@ export function scanPitStops(rows: PitLapRow[]): PitStopScan {
       driver: out.driver,
       lossSec,
       litres,
-      // A first guess only: fuel is visible in the data, tyres never are.
-      kind: litres > 0 ? "fuel+tyres" : "stop",
+      // A first guess only: fuel is visible in the data, tyres never are — so
+      // guess the thing we can see and let the user add the tyres.
+      kind: litres > 0 ? "fuel" : "stop",
     });
   }
 
@@ -224,7 +231,7 @@ export function derivePitConstants(stops: DetectedStop[]): DerivedPitConstants {
       refuelLps = litres / fuelSec;
       tyreSequential = true;
       notes.push(
-        "Refuel rate from (fuel + tyres) − (tyres only), which assumes the tyre change does not overlap the fill — the same assumption his spreadsheet makes."
+        "Refuel rate from (fuel + tyres) − (tyres only), which assumes the tyre change does not overlap the fill — the same assumption his spreadsheet makes. Drive one stop with FUEL ONLY (no tyres) to measure the rate directly: if the crew works on both at once, this figure comes out far too fast."
       );
     }
   } else if (fuelTyres.length > 1) {
@@ -248,6 +255,26 @@ export function derivePitConstants(stops: DetectedStop[]): DerivedPitConstants {
   }
   if (refuelLps == null) {
     notes.push("No stop with fuel, so the refuel rate could not be measured.");
+  }
+
+  // 4. A "tyres only" stop usually carries a splash of fuel anyway (the export
+  //    shows the litres). Once the rate is known, take that fill back out of
+  //    the tyre time instead of charging it to the tyres.
+  if (tyreChangeSec != null && refuelLps != null && laneLossSec != null) {
+    const splashed = tyresOnly.filter((s) => s.litres > 0);
+    if (splashed.length > 0) {
+      const corrected = med(
+        tyresOnly.map(
+          (s) => s.lossSec - laneLossSec! - (s.litres > 0 ? s.litres / refuelLps! : 0)
+        )
+      );
+      if (corrected != null && corrected > 0) {
+        tyreChangeSec = corrected;
+        notes.push(
+          "The tyres-only stop also took on fuel; that fill has been taken back out of the tyre-change time."
+        );
+      }
+    }
   }
 
   return { laneLossSec, tyreChangeSec, refuelLps, tyreSequential, notes };

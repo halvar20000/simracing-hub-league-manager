@@ -78,6 +78,15 @@ export type G61ImportResult = {
   overall: { laptimeSec: number; fuelPerLap: number; cleanLaps: number };
   temp: G61TempModel;
   wet: G61WetModel | null;
+  /** Why an import came back empty: did the roster filter eat every lap, or did
+   *  the laps survive it and simply not contain a clean full lap? Optional so
+   *  plans saved before this existed still parse. */
+  diag?: {
+    lapsIn: number;
+    lapsAfterRoster: number;
+    /** Driver names as Garage 61 spells them — shown when nothing matched. */
+    driverNames: string[];
+  };
 };
 
 function median(xs: number[]): number {
@@ -115,6 +124,15 @@ function olsSlope(xs: number[], ys: number[]): number | null {
 // A temp fit is only trustworthy with enough spread + samples.
 const MIN_TEMP_SPREAD_C = 3;
 const MIN_TEMP_SAMPLES = 8;
+
+// Sanity floor only — a "lap" quicker than this is a garage blip, not a lap.
+// The real full-lap test is relative (see MIN_FULL_LAP_FRACTION), because lap
+// length is a property of the track, not a constant.
+const MIN_LAP_SEC = 8;
+// A lap this fraction of the session's own median lap or longer counts as a
+// full lap. Partial laps burn far less fuel and are usually cut first by the
+// fuel test; this catches the rest without assuming any lap length.
+const MIN_FULL_LAP_FRACTION = 0.8;
 
 // Track wetness (0–100 %) above this counts a lap as "wet".
 const WET_THRESHOLD = 10;
@@ -169,14 +187,19 @@ export function aggregateGarage61Laps(
   const cleanByDriver = new Map<string, G61LapRow[]>();
   for (const [driver, laps] of byDriver) {
     const cand = laps.filter(
-      (l) => !l.pitIn && !l.pitOut && l.laptimeSec > 30 && l.fuelUsed >= 0
+      (l) => !l.pitIn && !l.pitOut && l.laptimeSec > MIN_LAP_SEC && l.fuelUsed >= 0
     );
     const fuels = cand.filter((l) => l.fuelUsed > 0.3).map((l) => l.fuelUsed);
     if (fuels.length === 0) continue;
     const medFuel = median(fuels);
-    const full = cand.filter(
-      (l) => l.fuelUsed >= 0.6 * medFuel && l.laptimeSec > 60
-    );
+    // What counts as a "full lap" must be measured against THIS track, not an
+    // absolute clock: Lime Rock runs 49 s laps, the Nordschleife 8 minutes. So
+    // the fuel-qualified laps set their own reference and anything far short of
+    // it (a partial lap at session end, a reset) drops out.
+    const byFuel = cand.filter((l) => l.fuelUsed >= 0.6 * medFuel);
+    if (byFuel.length === 0) continue;
+    const medLap = median(byFuel.map((l) => l.laptimeSec));
+    const full = byFuel.filter((l) => l.laptimeSec >= MIN_FULL_LAP_FRACTION * medLap);
     if (full.length === 0) continue;
     const ref = percentile(
       full.map((l) => l.laptimeSec),
@@ -293,6 +316,13 @@ export function aggregateGarage61Laps(
     },
     temp: { sourceTempC, slopePerC, minTempC, maxTempC, samples: temps.length },
     wet,
+    diag: {
+      lapsIn: rows.length,
+      lapsAfterRoster: scoped.length,
+      driverNames: [...new Set(rows.map((r) => (r.driver ?? "").trim()))].filter(
+        (n) => n !== ""
+      ),
+    },
   };
 }
 

@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.79.0",
+    date: "2026-07-28",
+    changes: [
+      "Stint Planner: Garage 61 data from short tracks works again. Lap times had to be over a minute to count as a full lap, so anything quicker — Lime Rock, Okayama, most ovals — imported as nothing at all, from the live pull and from an uploaded session export alike. A full lap is now measured against the session's own laps, so it works from a 15-second oval to the Nordschleife.",
+      "Stint Planner: that failure used to report itself as “none matched your roster drivers”, which sent you looking at names that were perfectly fine. The two cases are now told apart: if the names really don't match you get the names Garage 61 has, and if the laps simply weren't usable it says so.",
+      "Stint Planner: the pit-stop scan no longer counts leaving the garage at the start of a session as a pit stop (it was worth several minutes and skewed the measurement). A failed scan now says why, and both the scan and the empty state spell out the session to drive — including the fuel-only stop, without which a fill and a tyre change cannot be told apart.",
+      "Stint Planner: a stop labelled “tyres only” that also splashed some fuel no longer charges that fuel to the tyre-change time.",
+    ],
+  },
+  {
     version: "1.78.0",
     date: "2026-07-28",
     changes: [
