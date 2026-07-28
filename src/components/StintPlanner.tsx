@@ -15,6 +15,8 @@ import {
   parseDurationToSec,
   pitStopSeconds,
   conditionOf,
+  type PitModel,
+  type PitStopBreakdown,
   type StintCondition,
   type FuelSaveOptimization,
   type StintProfileKey,
@@ -61,6 +63,14 @@ import RaceLogDashboard from "@/components/RaceLogDashboard";
 import RaceGallery from "@/components/RaceGallery";
 import { uploadStintPlanImages } from "@/lib/actions/stint-plan-images";
 import { matchPitReference, type PitReferenceRow } from "@/lib/pit-references";
+import {
+  scanPitStops,
+  derivePitConstants,
+  type PitLapRow,
+  type PitStopScan,
+  type StopKind,
+} from "@/lib/garage61-pitstops";
+import { upsertPitReference } from "@/lib/actions/pit-references";
 import { checkStintPlanAlerts } from "@/lib/actions/stint-plan-alerts";
 import {
   connectGarage61,
@@ -132,6 +142,35 @@ const shiftLapStr = (str: string, deltaSec: number): string => {
   return fmtLap(Math.max(0, sec + deltaSec));
 };
 const round1 = (n: number): number => Math.round(n * 10) / 10;
+
+/**
+ * Write out what a stop is made of, honouring how the service actually runs.
+ * With parallel service the tyre change hides under the refuelling, so listing
+ * "+ 20 tyres" makes the parts look like they should sum to the total when they
+ * do not — say "overlapped" instead.
+ */
+function stopBreakdownText(b: PitStopBreakdown, m: PitModel): string {
+  const parts = [`${b.laneSec.toFixed(0)}s lane`];
+  if (m.tyreSequential) {
+    if (b.refuelSec > 0) parts.push(`${b.refuelSec.toFixed(1)}s fuel`);
+    if (b.tyreSec > 0) parts.push(`${b.tyreSec.toFixed(0)}s tyres`);
+  } else {
+    // Parallel: only the longer of the two is on the clock.
+    const longer = b.tyreSec > b.refuelSec ? "tyres" : "fuel";
+    const longerSec = Math.max(b.tyreSec, b.refuelSec);
+    const shorterSec = Math.min(b.tyreSec, b.refuelSec);
+    if (longerSec > 0) {
+      parts.push(
+        `${longerSec.toFixed(1)}s ${longer}` +
+          (shorterSec > 0
+            ? ` (${shorterSec.toFixed(0)}s ${longer === "tyres" ? "fuel" : "tyres"} overlapped)`
+            : "")
+      );
+    }
+  }
+  if (b.swapExtraSec > 0) parts.push(`${b.swapExtraSec.toFixed(0)}s driver change`);
+  return parts.join(" + ");
+}
 
 // Shared input styling.
 const inp =
@@ -818,6 +857,11 @@ export default function StintPlanner({
 
   // ---- Garage 61 session import (client-side .xlsx parse) ----
   const [g61, setG61] = useState<G61ImportResult | null>(null);
+  // Pit stops found in an uploaded session export, plus what the user says
+  // happened at each one (the data cannot know whether tyres went on).
+  const [pitScan, setPitScan] = useState<PitStopScan | null>(null);
+  const [pitKinds, setPitKinds] = useState<StopKind[]>([]);
+  const [pitSaveMsg, setPitSaveMsg] = useState<string | null>(null);
   const [g61Busy, setG61Busy] = useState(false);
   const [g61PullBusy, setG61PullBusy] = useState(false);
   const [g61Msg, setG61Msg] = useState<string | null>(null);
@@ -828,6 +872,9 @@ export default function StintPlanner({
     try {
       const XLSX = await import("xlsx");
       const rows: G61LapRow[] = [];
+      // The same export also carries what a pit stop cost: the sector columns
+      // and "Fuel added". The API strips in/out laps, this file keeps them.
+      const pitRows: PitLapRow[] = [];
       for (const file of Array.from(fileList)) {
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf, { type: "array" });
@@ -849,6 +896,15 @@ export default function StintPlanner({
         const cPout = col("Pit out");
         const cTemp = col("Track temp");
         const cWet = col("Track Wetness");
+        const cLapNo = col("Lap");
+        const cClean = col("Clean");
+        const cAdded = col("Fuel added");
+        // Sector columns, in track order — his export has "Sector 1" … "Sector 4".
+        const sectorCols = header
+          .map((h, i) => ({ h, i }))
+          .filter((x) => /^sector\s*\d+$/i.test(x.h))
+          .sort((a, b) => Number(a.h.replace(/\D+/g, "")) - Number(b.h.replace(/\D+/g, "")))
+          .map((x) => x.i);
         if (cLap < 0 || cDrv < 0 || cFuel < 0) continue;
         for (let i = 1; i < grid.length; i++) {
           const r = grid[i] as unknown[];
@@ -867,6 +923,26 @@ export default function StintPlanner({
             trackTempC: isFinite(rawTemp) ? rawTemp : null,
             trackWetness: isFinite(rawWet) ? rawWet : null,
           });
+
+          // Excel durations are fractions of a day, same as the lap time.
+          const secs = sectorCols
+            .map((ci) => Number(r[ci]))
+            .filter((v) => isFinite(v) && v > 0)
+            .map((v) => v * 86400);
+          const lapNo = cLapNo >= 0 ? Number(r[cLapNo]) : NaN;
+          if (secs.length >= 2 && isFinite(lapNo)) {
+            const added = cAdded >= 0 ? Number(r[cAdded]) : 0;
+            pitRows.push({
+              lap: lapNo,
+              driver: drv,
+              laptimeSec: rawLap * 86400,
+              sectors: secs,
+              fuelAdded: isFinite(added) && added > 0 ? added : 0,
+              pitIn: Number(cPin >= 0 ? r[cPin] : 0) === 1,
+              pitOut: Number(cPout >= 0 ? r[cPout] : 0) === 1,
+              clean: Number(cClean >= 0 ? r[cClean] : 1) === 1,
+            });
+          }
         }
       }
       if (rows.length === 0) {
@@ -895,12 +971,65 @@ export default function StintPlanner({
           source: { kind: "upload", window: "session export" },
         },
       }));
+      // Did this session contain pit stops? Then the constants are in there too.
+      const scan = scanPitStops(pitRows);
+      setPitScan(scan.ok ? scan : null);
+      setPitKinds(scan.ok ? scan.stops.map((x) => x.kind) : []);
     } catch {
       setG61Msg("Could not read the file — is it a valid .xlsx export?");
     } finally {
       setG61Busy(false);
     }
   }
+  /** The stops from the upload, with whatever the user has labelled them. */
+  const labelledStops = () =>
+    (pitScan?.stops ?? []).map((st, i) => ({ ...st, kind: pitKinds[i] ?? st.kind }));
+
+  /** Write the derived constants into this plan's pit model. */
+  function applyDerivedPit() {
+    const c = derivePitConstants(labelledStops());
+    setS((p) => ({
+      ...p,
+      event: {
+        ...p.event,
+        pitModelOn: true,
+        pitLaneLossSec: c.laneLossSec != null ? c.laneLossSec.toFixed(1) : p.event.pitLaneLossSec,
+        refuelLps: c.refuelLps != null ? c.refuelLps.toFixed(2) : p.event.refuelLps,
+        tyreChangeSec: c.tyreChangeSec != null ? c.tyreChangeSec.toFixed(1) : p.event.tyreChangeSec,
+        tyreSequential: c.tyreSequential ?? p.event.tyreSequential,
+      },
+    }));
+    setPitSaveMsg("Measured values are in this plan's pit-stop model.");
+  }
+
+  /** Admins can put them in the shared library for this car + track. */
+  async function saveDerivedPitToLibrary() {
+    const c = derivePitConstants(labelledStops());
+    if (c.laneLossSec == null || c.refuelLps == null || c.tyreChangeSec == null) {
+      setPitSaveMsg(
+        "The library needs all three: lane loss, refuel rate and tyre time. Label the missing stop kinds, or drive the missing stop."
+      );
+      return;
+    }
+    const res = await upsertPitReference({
+      car: s.event.car,
+      track: s.event.track,
+      laneLossSec: Number(c.laneLossSec.toFixed(1)),
+      refuelLps: Number(c.refuelLps.toFixed(2)),
+      tyreChangeSec: Number(c.tyreChangeSec.toFixed(1)),
+      driverChangeSec: parseTypedNumber(s.event.driverSwapSec, 30),
+      tyreSequential: c.tyreSequential ?? true,
+      tankSizeL: parseTypedNumber(s.event.tankSize) || null,
+      source: `Measured from a Garage 61 session export, ${new Date().toLocaleDateString("en-GB")}`,
+      notes: c.notes.join(" "),
+    });
+    setPitSaveMsg(
+      res.ok
+        ? `Saved to the library for ${s.event.car}${s.event.track ? ` @ ${s.event.track}` : ""}.`
+        : res.error
+    );
+  }
+
   /** Seconds/lap the imported pace shifts by when projected to the plan's own
    *  track temperature. Used by both the preview and Apply, so the number the
    *  team reviews is the number that lands in the plan. */
@@ -2277,11 +2406,7 @@ export default function StintPlanner({
                     <div>
                       Full service ({fmtFuel(usable)} L + tyres + driver change):{" "}
                       <strong className="text-zinc-200">{full.totalSec.toFixed(1)} s</strong>{" "}
-                      <span className="text-zinc-500">
-                        ({full.laneSec.toFixed(0)} lane + {full.refuelSec.toFixed(1)} fuel
-                        {full.tyreSec ? ` + ${full.tyreSec.toFixed(0)} tyres` : ""}
-                        {full.swapExtraSec ? ` + ${full.swapExtraSec.toFixed(0)} swap` : ""})
-                      </span>
+                      <span className="text-zinc-500">({stopBreakdownText(full, model)})</span>
                     </div>
                     <div>
                       Half fill, no tyres, same driver:{" "}
@@ -2848,6 +2973,136 @@ export default function StintPlanner({
         </div>
 
         {g61Msg && <p className="mb-2 text-sm text-amber-300">{g61Msg}</p>}
+
+        {/* Pit stops found in the uploaded session — Johann's measuring sheet,
+            done by the machine. The data knows the time lost and the litres;
+            only a human knows whether tyres went on. */}
+        {pitScan && pitScan.ok && (
+          <div className="mb-3 rounded border border-orange-900/50 bg-orange-950/10 p-3">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-orange-300">
+              {pitScan.stops.length} pit stop{pitScan.stops.length === 1 ? "" : "s"} measured in
+              this session
+            </div>
+            <p className="mb-2 text-[11px] text-zinc-500">
+              Reference lap section: {pitScan.referenceSec?.toFixed(1)} s (median of{" "}
+              {pitScan.referenceSamples} clean lap pairs). Each stop is the last sector before
+              the pits plus the first sector after, minus that reference. Say what happened at
+              each stop — the export records the fuel, never the tyres.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm tabular-nums">
+                <thead className="text-xs uppercase tracking-wide text-zinc-500">
+                  <tr className="border-b border-zinc-800">
+                    <th className="py-1 pr-2">Lap</th>
+                    <th className="py-1 pr-2">Driver</th>
+                    <th className="py-1 pr-2 text-right">Time lost</th>
+                    <th className="py-1 pr-2 text-right">Fuel</th>
+                    <th className="py-1 pr-2">What happened</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pitScan.stops.map((st, i) => (
+                    <tr key={`${st.lap}-${i}`} className="border-t border-zinc-800/60 text-zinc-200">
+                      <td className="py-1 pr-2 text-zinc-500">{st.lap}</td>
+                      <td className="py-1 pr-2">{st.driver}</td>
+                      <td className="py-1 pr-2 text-right font-medium">{st.lossSec.toFixed(1)} s</td>
+                      <td className="py-1 pr-2 text-right text-zinc-400">
+                        {st.litres > 0 ? `${st.litres.toFixed(1)} L` : "—"}
+                      </td>
+                      <td className="py-1 pr-2">
+                        <select
+                          value={pitKinds[i] ?? st.kind}
+                          onChange={(e) =>
+                            setPitKinds((prev) => {
+                              const next = [...prev];
+                              next[i] = e.target.value as StopKind;
+                              return next;
+                            })
+                          }
+                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+                        >
+                          <option value="drivethrough">drove through</option>
+                          <option value="stop">stopped, no service</option>
+                          <option value="tyres">tyres only</option>
+                          <option value="fuel">fuel only</option>
+                          <option value="fuel+tyres">fuel + tyres</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {(() => {
+              const c = derivePitConstants(labelledStops());
+              const fmtOrDash = (v: number | null, unit: string, digits = 1) =>
+                v != null ? `${v.toFixed(digits)} ${unit}` : "—";
+              return (
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                    <span>
+                      Lane loss:{" "}
+                      <strong className={c.laneLossSec != null ? "text-emerald-300" : "text-zinc-500"}>
+                        {fmtOrDash(c.laneLossSec, "s")}
+                      </strong>
+                    </span>
+                    <span>
+                      Tyre change:{" "}
+                      <strong className={c.tyreChangeSec != null ? "text-emerald-300" : "text-zinc-500"}>
+                        {fmtOrDash(c.tyreChangeSec, "s")}
+                      </strong>
+                    </span>
+                    <span>
+                      Refuel:{" "}
+                      <strong className={c.refuelLps != null ? "text-emerald-300" : "text-zinc-500"}>
+                        {fmtOrDash(c.refuelLps, "L/s", 2)}
+                      </strong>
+                    </span>
+                    {c.tyreSequential != null && (
+                      <span className="text-zinc-400">
+                        tyres {c.tyreSequential ? "after fuelling" : "under fuelling"}
+                      </span>
+                    )}
+                  </div>
+                  {c.notes.length > 0 && (
+                    <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-zinc-500">
+                      {c.notes.map((n, i) => (
+                        <li key={i}>{n}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 print:hidden">
+                    <button
+                      onClick={applyDerivedPit}
+                      className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500"
+                    >
+                      Use in this plan
+                    </button>
+                    {viewerIsAdmin && (
+                      <button
+                        onClick={() => void saveDerivedPitToLibrary()}
+                        className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                        title={`Save as the measured values for ${s.event.car || "this car"}${s.event.track ? ` @ ${s.event.track}` : ""}`}
+                      >
+                        Save to pit-reference library
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setPitScan(null);
+                        setPitSaveMsg(null);
+                      }}
+                      className="rounded px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-300"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  {pitSaveMsg && <p className="text-xs text-emerald-300">{pitSaveMsg}</p>}
+                </div>
+              );
+            })()}
+          </div>
+        )}
         {g61 && (
           <div className="space-y-3">
             {/* Not a second driver table — just what Apply would change in the
@@ -3409,10 +3664,8 @@ export default function StintPlanner({
                           <td
                             className="py-1 pr-2 text-right text-zinc-400"
                             title={
-                              st.stop
-                                ? `${st.stop.laneSec.toFixed(0)}s lane + ${st.stop.refuelSec.toFixed(1)}s fuel` +
-                                  (st.stop.tyreSec ? ` + ${st.stop.tyreSec.toFixed(0)}s tyres` : "") +
-                                  (st.stop.swapExtraSec ? ` + ${st.stop.swapExtraSec.toFixed(0)}s driver change` : "")
+                              st.stop && planPitModel(s)
+                                ? stopBreakdownText(st.stop, planPitModel(s)!)
                                 : undefined
                             }
                           >

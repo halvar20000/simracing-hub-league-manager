@@ -19,9 +19,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.78.0",
+    date: "2026-07-28",
+    changes: [
+      "Stint Planner: pit-stop constants can now be measured instead of typed. Upload a Garage 61 session export in which you drove the pit lane a few times — through without stopping, stopped without service, tyres only, tyres and fuel — and CLS reads the stops out of it: the last sector before the pits plus the first sector after, against a clean-lap reference. That gives the time each stop cost; the export supplies the litres.",
+      "Stint Planner: say what happened at each stop (the file records the fuel, never the tyres) and the lane loss, tyre-change time and refuel rate fall out — plus whether the tyre change adds to the fuelling or hides under it. One click puts them in the plan; admins can save them to the pit-reference library for that car and track, so nobody measures the same car twice.",
+      "Stint Planner: figures the session cannot support come back empty with the reason (“no tyres-only stop, so the tyre-change time could not be measured”) rather than as a plausible guess.",
+      "This is Johann Solowej's measuring method, automated — it reproduces his Spa spreadsheet to a hundredth of a second.",
+    ],
+  },
+  {
     version: "1.77.0",
     date: "2026-07-27",
     changes: [
+      "Stint Planner: the pit-stop breakdown now reads correctly when tyres run parallel to fuelling. The total was always right, but it listed “23 lane + 65.2 fuel + 20 tyres” for an 88.2 s stop — the tyre change hides under the refuelling, so it now says so instead of showing parts that appear not to add up.",
       "Stint Planner: a Garage 61 pull is now saved with the plan straight away. Until now it only lived in the open page — leave the plan and come back and the tables were showing whatever was applied last time, which is why a 30-day pull seemed to fall back to the full history. The pulled data stays until you pull again.",
       "Stint Planner: the driver table says what it is built on — Garage 61 or a session export, the window used, the date range of the laps, how many older laps were left out and when it was pulled. No more guessing whether a table shows last week or last season.",
       "Stint Planner: “Apply to plan” still does the deliberate part — writing pace and fuel per driver into the figures the schedule runs on. Only that step touches your numbers.",

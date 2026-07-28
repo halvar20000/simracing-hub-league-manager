@@ -58,6 +58,50 @@ export async function savePitReference(formData: FormData): Promise<void> {
   redirect(PATH + "?ok=" + encodeURIComponent(`Saved ${car}${track ? ` @ ${track}` : ""}`));
 }
 
+/**
+ * Save measured constants without a form — used by the stint planner when it
+ * derives them from a Garage 61 session export. Returns a result instead of
+ * redirecting, because the caller is a button in the middle of a plan.
+ */
+export async function upsertPitReference(input: {
+  car: string;
+  track: string;
+  laneLossSec: number;
+  refuelLps: number;
+  tyreChangeSec: number;
+  driverChangeSec?: number | null;
+  tyreSequential?: boolean | null;
+  tankSizeL?: number | null;
+  tyreWearPctPerLap?: number | null;
+  source?: string | null;
+  notes?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin();
+  const car = input.car.trim();
+  if (!car) return { ok: false, error: "Pick the car in the event card first." };
+  const data = {
+    car,
+    track: input.track.trim(),
+    laneLossSec: input.laneLossSec,
+    refuelLps: input.refuelLps,
+    tyreChangeSec: input.tyreChangeSec,
+    driverChangeSec: input.driverChangeSec ?? 30,
+    tyreSequential: input.tyreSequential ?? true,
+    tankSizeL: input.tankSizeL ?? null,
+    tyreWearPctPerLap: input.tyreWearPctPerLap ?? null,
+    source: input.source ?? null,
+    notes: input.notes ?? null,
+    updatedById: admin.id,
+  };
+  await prisma.pitReference.upsert({
+    where: { car_track: { car: data.car, track: data.track } },
+    create: data,
+    update: data,
+  });
+  revalidatePath(PATH);
+  return { ok: true };
+}
+
 export async function deletePitReference(formData: FormData): Promise<void> {
   await requireAdmin();
   const id = str(formData.get("id"));
