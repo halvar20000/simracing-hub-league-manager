@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.77.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: a Garage 61 pull is now saved with the plan straight away. Until now it only lived in the open page — leave the plan and come back and the tables were showing whatever was applied last time, which is why a 30-day pull seemed to fall back to the full history. The pulled data stays until you pull again.",
+      "Stint Planner: the driver table says what it is built on — Garage 61 or a session export, the window used, the date range of the laps, how many older laps were left out and when it was pulled. No more guessing whether a table shows last week or last season.",
+      "Stint Planner: “Apply to plan” still does the deliberate part — writing pace and fuel per driver into the figures the schedule runs on. Only that step touches your numbers.",
+    ],
+  },
+  {
     version: "1.76.0",
     date: "2026-07-27",
     changes: [

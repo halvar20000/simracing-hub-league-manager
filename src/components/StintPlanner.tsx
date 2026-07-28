@@ -887,6 +887,14 @@ export default function StintPlanner({
         return;
       }
       setG61(result);
+      setS((p) => ({
+        ...p,
+        g61Analysis: {
+          ...result,
+          generatedAt: new Date().toISOString(),
+          source: { kind: "upload", window: "session export" },
+        },
+      }));
     } catch {
       setG61Msg("Could not read the file — is it a valid .xlsx export?");
     } finally {
@@ -977,7 +985,12 @@ export default function StintPlanner({
         wetFuelPerLap: g61.wet?.fuelPerLap ?? null,
         appliedDeltaSec: 0,
       },
-      g61Analysis: { ...g61, generatedAt: new Date().toISOString() },
+      g61Analysis: {
+        ...g61,
+        generatedAt: new Date().toISOString(),
+        // Keep where the data came from — the pull already recorded it.
+        source: p.g61Analysis?.source,
+      },
     }));
 
     const tempNote =
@@ -1270,6 +1283,28 @@ export default function StintPlanner({
         return;
       }
       setG61(res.result);
+      // Store it on the plan immediately. The tables read the SAVED analysis,
+      // so without this a pull vanished the moment you left the page and the
+      // driver table kept showing whatever was applied weeks ago. "Apply to
+      // plan" stays a separate, deliberate step — it overwrites the pace and
+      // fuel figures the schedule runs on.
+      setS((p) => ({
+        ...p,
+        g61Analysis: {
+          ...res.result,
+          generatedAt: new Date().toISOString(),
+          source: {
+            kind: "pull",
+            window: res.meta.window,
+            lapsFetched: res.meta.lapsFetched,
+            lapsTooOld: res.meta.lapsTooOld,
+            oldestLapMs: res.meta.oldestLapMs,
+            newestLapMs: res.meta.newestLapMs,
+            trackMatched: res.meta.trackMatched,
+            carMatched: res.meta.carMatched,
+          },
+        },
+      }));
       setG61Msg(
         // Say which window the data came from and what it cost — a silent
         // filter is how you end up planning on three laps.
@@ -2609,6 +2644,25 @@ export default function StintPlanner({
               )}
             </table>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+              {s.g61Analysis && (
+                <span className="text-emerald-300/80">
+                  Data:{" "}
+                  {s.g61Analysis.source?.kind === "upload"
+                    ? "session export"
+                    : `Garage 61${s.g61Analysis.source?.window ? ` · ${s.g61Analysis.source.window}` : ""}`}
+                  {s.g61Analysis.source?.oldestLapMs != null &&
+                  s.g61Analysis.source?.newestLapMs != null
+                    ? ` · ${fmtDay(s.g61Analysis.source.oldestLapMs)}–${fmtDay(s.g61Analysis.source.newestLapMs)}`
+                    : ""}
+                  {" · "}
+                  {s.g61Analysis.overall.cleanLaps} clean laps
+                  {s.g61Analysis.source?.lapsTooOld
+                    ? ` · ${s.g61Analysis.source.lapsTooOld} older left out`
+                    : ""}
+                  {" · pulled "}
+                  {fmtDay(Date.parse(s.g61Analysis.generatedAt))}
+                </span>
+              )}
               <span>
                 Even share:{" "}
                 <strong className="text-zinc-300">{driverPerf.evenShare} laps</strong> per driver

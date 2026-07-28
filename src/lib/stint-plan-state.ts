@@ -17,7 +17,27 @@ import type { G61ImportResult } from "@/lib/garage61-import";
 
 /** Garage 61 performance analysis saved with a plan (per-driver stats + the
  *  temperature fit) so the dashboard renders on the shared link too. */
-export type PlannerG61Analysis = G61ImportResult & { generatedAt: string };
+export type PlannerG61Analysis = G61ImportResult & {
+  generatedAt: string;
+  /** Provenance of this analysis, so the tables can say what they are built on
+   *  and a pull survives leaving the page. Absent on analyses saved before
+   *  v1.77.0 — treat every field as optional. */
+  source?: {
+    /** "live pull" or "session export". */
+    kind: "pull" | "upload";
+    /** The window that was asked for ("current season", "last 30 days", …). */
+    window?: string | null;
+    /** Laps Garage 61 returned before the roster/clean filtering. */
+    lapsFetched?: number | null;
+    /** Laps dropped for being older than the window. */
+    lapsTooOld?: number | null;
+    /** Date range of the laps actually used (ms since epoch). */
+    oldestLapMs?: number | null;
+    newestLapMs?: number | null;
+    trackMatched?: string | null;
+    carMatched?: string | null;
+  };
+};
 
 export type PlannerDriverState = {
   id: string;
