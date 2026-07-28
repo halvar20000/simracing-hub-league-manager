@@ -284,6 +284,67 @@ export default function StintPlanner({
   /** "12 Jun" — enough to see at a glance how fresh the imported laps are. */
   const fmtDay = (ms: number) =>
     new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(ms));
+  // ---- Driver performance table -------------------------------------------
+  // Everything here is what the SCHEDULE uses, not raw practice data: the pace
+  // is the plan's per-driver figure (Garage 61, projected to the plan's track
+  // temperature) plus the race-traffic penalty, and the range per stint is that
+  // pace against the driver's own fuel consumption. Weather is per stint, so
+  // this table shows the dry baseline and names the penalties underneath.
+  const driverPerf = useMemo(() => {
+    const inp = stateToInput(s);
+    const usable = Math.max(0, inp.tankSize - (inp.fuelReserve ?? 0));
+    const traffic = inp.trafficPenaltySec ?? 0;
+    const byId = new Map(result.perDriver.map((d) => [d.driverId, d]));
+    const rows = s.drivers.map((d) => {
+      const eng = inp.drivers.find((x) => x.id === d.id);
+      const paceSec = eng?.laptimeSec && eng.laptimeSec > 0 ? eng.laptimeSec : inp.standard.laptimeSec;
+      const fuelPerLap =
+        eng?.fuelPerLap && eng.fuelPerLap > 0 ? eng.fuelPerLap : inp.standard.fuelPerLap;
+      const wear =
+        eng?.tyreWearPctPerLap != null && eng.tyreWearPctPerLap >= 0
+          ? eng.tyreWearPctPerLap
+          : (inp.tyreWearPctPerLap ?? 0);
+      const effPace = paceSec > 0 ? paceSec + traffic : 0;
+      const lapsPerStint = fuelPerLap > 0 ? Math.floor(usable / fuelPerLap) : 0;
+      const totals = byId.get(d.id);
+      return {
+        id: d.id,
+        name: d.name,
+        paceSec,
+        effPace,
+        fuelPerLap,
+        wear,
+        lapsPerStint,
+        rangeSec: lapsPerStint * effPace,
+        laps: totals?.laps ?? 0,
+        stints: totals?.stints ?? 0,
+      };
+    });
+    // Team average, weighted by laps actually driven (an unassigned driver must
+    // not drag the average around) — falls back to a plain mean before the
+    // schedule is filled.
+    const wsum = rows.reduce((a, r) => a + (r.laps || 0), 0);
+    const w = (get: (r: (typeof rows)[number]) => number) => {
+      if (rows.length === 0) return 0;
+      if (wsum > 0) return rows.reduce((a, r) => a + get(r) * r.laps, 0) / wsum;
+      return rows.reduce((a, r) => a + get(r), 0) / rows.length;
+    };
+    const avg = {
+      paceSec: w((r) => r.paceSec),
+      effPace: w((r) => r.effPace),
+      fuelPerLap: w((r) => r.fuelPerLap),
+      wear: w((r) => r.wear),
+      laps: rows.reduce((a, r) => a + r.laps, 0),
+      stints: rows.reduce((a, r) => a + r.stints, 0),
+    };
+    // An even share of the distance — the yardstick for "has everyone had a go".
+    const evenShare = rows.length > 0 ? Math.round(result.totals.laps / rows.length) : 0;
+    return { rows, avg, evenShare, traffic };
+  }, [s, result]);
+
+  // Track temperature of the whole import — the fallback for plans whose stored
+  // analysis predates the per-driver figure, and the source of the temp fit.
+  const analysisTemp = s.g61Analysis?.temp ?? null;
   const g61ByDriver = useMemo(() => {
     const m = new Map<string, NonNullable<typeof s.g61Analysis>["drivers"][number]>();
     for (const d of s.g61Analysis?.drivers ?? []) m.set(normName(d.driver), d);
@@ -2380,12 +2441,16 @@ export default function StintPlanner({
                   <th className="py-1 pr-2 text-right" title="Race pace used by the planner. Filled from Garage 61 (median clean lap, projected to the plan's track temp) — type to override.">Pace</th>
                   <th className="py-1 pr-2 text-right" title="Fuel per lap used by the planner. Filled from Garage 61 — type to override.">L/lap</th>
                   <th className="py-1 pr-2 text-right" title="Tyre wear in % per lap. Garage 61 does not measure this, so it is yours to enter; blank falls back to the plan default.">%/lap</th>
+                  <th className="py-1 pr-2 text-right" title="How far this driver gets on one tank: laps, and how long that takes at their pace including the race-traffic penalty (dry).">Range/stint</th>
+                  <th className="py-1 pr-2 text-right" title="Laps this driver runs in the current schedule.">Laps tot.</th>
+                  <th className="py-1 pr-2 text-right" title="Stints this driver runs in the current schedule.">Stints</th>
                   <th className="py-1" />
                 </tr>
               </thead>
               <tbody>
                 {s.drivers.map((d) => {
                   const gd = g61ByDriver.get(normName(d.name)) ?? null;
+                  const perf = driverPerf.rows.find((r) => r.id === d.id) ?? null;
                   const cell = (manual: boolean | undefined, hasData: boolean) =>
                     `w-20 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
                       manual
@@ -2404,8 +2469,25 @@ export default function StintPlanner({
                       <td className="py-1 pr-2 text-right text-zinc-400">
                         {gd ? fmtLap(gd.meanSec) : "—"}
                       </td>
-                      <td className="py-1 pr-2 text-right text-zinc-500">
-                        {gd?.medianTempC != null ? `${gd.medianTempC.toFixed(0)}°` : "—"}
+                      <td
+                        className="py-1 pr-2 text-right text-zinc-500"
+                        title={
+                          gd
+                            ? `Track temperature of this driver's Garage 61 laps` +
+                              (analysisTemp?.minTempC != null && analysisTemp?.maxTempC != null
+                                ? ` — the import spans ${analysisTemp.minTempC.toFixed(0)}–${analysisTemp.maxTempC.toFixed(0)}°C` +
+                                  (analysisTemp.slopePerC != null
+                                    ? `, fitted at ${(analysisTemp.slopePerC * 10).toFixed(1)} s per 10°C`
+                                    : "")
+                                : "")
+                            : undefined
+                        }
+                      >
+                        {gd?.medianTempC != null
+                          ? `${gd.medianTempC.toFixed(0)}°`
+                          : analysisTemp?.sourceTempC != null
+                            ? `~${round1(analysisTemp.sourceTempC)}°`
+                            : "—"}
                       </td>
                       <td className="py-1 pr-2 text-right print:hidden">
                         <input
@@ -2445,6 +2527,32 @@ export default function StintPlanner({
                         />
                       </td>
                       <td className="hidden py-1 pr-2 text-right print:table-cell">{d.tyreWear || "—"}</td>
+                      <td className="py-1 pr-2 text-right text-zinc-300">
+                        {perf && perf.lapsPerStint > 0 ? (
+                          <>
+                            {perf.lapsPerStint}
+                            <span className="ml-1 text-zinc-500">{fmtDuration(perf.rangeSec)}</span>
+                          </>
+                        ) : (
+                          <span className="text-zinc-600">—</span>
+                        )}
+                      </td>
+                      <td
+                        className={`py-1 pr-2 text-right ${
+                          perf && perf.laps > 0 && driverPerf.evenShare > 0 &&
+                          perf.laps < driverPerf.evenShare * 0.85
+                            ? "text-amber-300"
+                            : "text-zinc-300"
+                        }`}
+                        title={
+                          driverPerf.evenShare > 0
+                            ? `An even share would be ~${driverPerf.evenShare} laps each`
+                            : undefined
+                        }
+                      >
+                        {perf?.laps ? fmtLaps(perf.laps) : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right text-zinc-300">{perf?.stints || "—"}</td>
                       <td className="py-1 text-right print:hidden">
                         {(d.manual?.laptime || d.manual?.fuelPerLap || d.manual?.tyreWear) && (
                           <button
@@ -2471,7 +2579,56 @@ export default function StintPlanner({
                   );
                 })}
               </tbody>
+              {driverPerf.rows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-zinc-700 text-zinc-400">
+                    <td className="py-1 pr-2 font-medium text-zinc-300">Team</td>
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" title="Weighted by the laps each driver runs">
+                      {driverPerf.avg.paceSec > 0 ? fmtLap(driverPerf.avg.paceSec) : "—"}
+                    </td>
+                    <td className="py-1 pr-2 text-right">
+                      {driverPerf.avg.fuelPerLap > 0 ? driverPerf.avg.fuelPerLap.toFixed(2) : "—"}
+                    </td>
+                    <td className="py-1 pr-2 text-right">
+                      {driverPerf.avg.wear > 0 ? driverPerf.avg.wear.toFixed(2) : "—"}
+                    </td>
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right font-medium text-zinc-200">
+                      {fmtLaps(driverPerf.avg.laps)}
+                    </td>
+                    <td className="py-1 pr-2 text-right font-medium text-zinc-200">
+                      {driverPerf.avg.stints}
+                    </td>
+                    <td className="py-1" />
+                  </tr>
+                </tfoot>
+              )}
             </table>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+              <span>
+                Even share:{" "}
+                <strong className="text-zinc-300">{driverPerf.evenShare} laps</strong> per driver
+                {" "}— anyone under 85 % of it is flagged amber.
+              </span>
+              {driverPerf.traffic > 0 && (
+                <span className="text-amber-300/80">
+                  Range includes +{driverPerf.traffic} s/lap race traffic.
+                </span>
+              )}
+              {s.event.trackTempC.trim() !== "" && (
+                <span>
+                  Pace is at {s.event.trackTempC} °C
+                  {s.tempModel?.slopePerC
+                    ? ` (${(s.tempModel.slopePerC * 10).toFixed(1)} s/10 °C fit)`
+                    : ""}
+                  ; per-stint temperatures, ½ wet and wet are applied in the schedule.
+                </span>
+              )}
+            </div>
           </div>
         )}
         <p className="mt-2 text-xs text-zinc-500">

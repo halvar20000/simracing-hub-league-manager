@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.76.0",
+    date: "2026-07-27",
+    changes: [
+      "Stint Planner: the driver table is now a full performance table. Next to each driver's pace, fuel per lap and tyre wear it shows the range per stint — how many laps that driver gets out of a tank and how long that takes at their own pace — plus the laps and stints they run in the current schedule. Underneath sits the team average, weighted by laps driven, and an even share of the distance, with anyone under 85 % of it flagged.",
+      "Stint Planner: the pace in that table is the Garage 61 average projected to the plan's track temperature, and the range includes the race-traffic penalty — so the numbers you look at are the ones the schedule runs on. Per-stint temperatures, ½ wet and full wet are then applied stint by stint on top.",
+    ],
+  },
+  {
     version: "1.75.0",
     date: "2026-07-27",
     changes: [
