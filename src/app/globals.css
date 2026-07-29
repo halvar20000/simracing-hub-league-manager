@@ -19,6 +19,15 @@ body {
   color: var(--text-primary);
 }
 
+/* The stint schedule breaks out of the page column to use the full window
+   (100vw). On systems whose scrollbars take layout space (Windows, most Linux)
+   100vw is a few pixels wider than the usable width, which would put a
+   horizontal scrollbar on every page. `clip` trims that overhang WITHOUT
+   creating a scroll container, so `position: sticky` keeps working. */
+body {
+  overflow-x: clip;
+}
+
 .font-display {
   font-family: var(--font-rajdhani), system-ui, sans-serif;
   letter-spacing: -0.01em;

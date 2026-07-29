@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.83.0",
+    date: "2026-07-29",
+    changes: [
+      "Stint Planner: the stint schedule now uses the full width of the window instead of the page column. It is a landscape table — that is why it reads well in Johann's spreadsheet and badly here — and on a normal monitor it roughly doubles the room. The stint number and the driver stay pinned to the left while you scroll sideways.",
+      "Stint Planner: every driver has a colour, as in his sheet, shown on the driver picker in the schedule and as a dot in the driver table, the per-driver totals and the availability grid. A double stint is the same colour twice and a swap is a change of colour, so the rotation reads without reading names.",
+      "Stint Planner: the spotter column is hidden by default behind a “Show spotter” button — it was the widest column carrying the least information.",
+      "Stint Planner: plans now print in landscape, so the schedule fits the paper the way the spreadsheet does.",
+    ],
+  },
+  {
     version: "1.82.0",
     date: "2026-07-29",
     changes: [

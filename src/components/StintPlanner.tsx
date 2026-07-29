@@ -220,6 +220,26 @@ const lapBreakdownText = (st: {
   return `${parts.join("  ")}  =  ${fmtLap(st.lapSec)} per lap`;
 };
 
+// One stable colour per driver, the way Johann's sheet does it: the rotation is
+// readable at a glance — a double stint is one colour twice, a swap is a change
+// of colour — without reading a single name.
+const DRIVER_COLOURS = [
+  { chip: "bg-fuchsia-500/25 border-fuchsia-400/60 text-fuchsia-100", dot: "bg-fuchsia-400" },
+  { chip: "bg-orange-500/25 border-orange-400/60 text-orange-100", dot: "bg-orange-400" },
+  { chip: "bg-cyan-500/25 border-cyan-400/60 text-cyan-100", dot: "bg-cyan-400" },
+  { chip: "bg-amber-400/25 border-amber-300/60 text-amber-100", dot: "bg-amber-300" },
+  { chip: "bg-emerald-500/25 border-emerald-400/60 text-emerald-100", dot: "bg-emerald-400" },
+  { chip: "bg-violet-500/25 border-violet-400/60 text-violet-100", dot: "bg-violet-400" },
+  { chip: "bg-rose-500/25 border-rose-400/60 text-rose-100", dot: "bg-rose-400" },
+  { chip: "bg-lime-500/25 border-lime-400/60 text-lime-100", dot: "bg-lime-400" },
+  { chip: "bg-sky-500/25 border-sky-400/60 text-sky-100", dot: "bg-sky-400" },
+  { chip: "bg-teal-500/25 border-teal-400/60 text-teal-100", dot: "bg-teal-400" },
+];
+const NO_DRIVER_COLOUR = {
+  chip: "bg-zinc-800/60 border-zinc-700 text-zinc-400",
+  dot: "bg-zinc-600",
+};
+
 const emptyStoreSubscribe = () => () => {};
 
 export default function StintPlanner({
@@ -903,6 +923,9 @@ export default function StintPlanner({
   const [pitScan, setPitScan] = useState<PitStopScan | null>(null);
   const [pitKinds, setPitKinds] = useState<StopKind[]>([]);
   const [pitSaveMsg, setPitSaveMsg] = useState<string | null>(null);
+  // The spotter column is the widest thing in the schedule that nobody reads
+  // twice, so it is off until asked for. Everything else stays visible.
+  const [showSpotter, setShowSpotter] = useState(false);
   const [g61Busy, setG61Busy] = useState(false);
   const [g61PullBusy, setG61PullBusy] = useState(false);
   const [g61Msg, setG61Msg] = useState<string | null>(null);
@@ -1742,13 +1765,31 @@ export default function StintPlanner({
   // when the stops fall) as much as during it, so it is rendered in both
   // phases from one definition — never two copies to keep in step. Pre-race
   // drops the Note column: notes are written while the race runs.
+  /** Colour for a driver, stable for the life of the plan (by roster order). */
+  const driverColour = (id: string | null | undefined) => {
+    if (!id) return NO_DRIVER_COLOUR;
+    const idx = s.drivers.findIndex((d) => d.id === id);
+    return idx < 0 ? NO_DRIVER_COLOUR : DRIVER_COLOURS[idx % DRIVER_COLOURS.length];
+  };
+
   const scheduleCard = ({ showNote }: { showNote: boolean }) => (
+      // Full-bleed: the page column is ~1150px, the schedule is a landscape
+      // table. Breaking out of the column is the difference between reading it
+      // and squinting at it. On paper the page itself is landscape instead.
+      <div className="relative left-1/2 w-screen max-w-[100vw] -translate-x-1/2 px-4 sm:px-6 print:left-0 print:w-auto print:translate-x-0 print:px-0">
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
             Stint schedule &amp; pit timeline
           </h2>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <button
+              onClick={() => setShowSpotter((v) => !v)}
+              className={`rounded border px-2 py-1 text-xs ${showSpotter ? "border-zinc-600 bg-zinc-800 text-zinc-200" : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}
+              title="The spotter column is hidden by default — it is the widest column nobody reads twice."
+            >
+              {showSpotter ? "Hide spotter" : "Show spotter"}
+            </button>
             <div className="flex items-center gap-1 rounded border border-sky-900/50 bg-sky-950/20 px-2 py-1 text-xs text-sky-200">
               <span title="Mark this stint and every later stint with the chosen condition.">☔ Rain from stint</span>
               <input
@@ -1912,9 +1953,9 @@ export default function StintPlanner({
             <table className="w-full text-left text-sm tabular-nums">
               <thead className="text-zinc-500">
                 <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-2">#</th>
-                  <th className="py-1 pr-2">Driver</th>
-                  <th className="py-1 pr-2" title="Spotter for this stint — shown as initials to keep the table narrow.">Sp.</th>
+                  <th className="sticky left-0 z-20 bg-zinc-900 py-1 pr-2 print:static print:bg-transparent">#</th>
+                  <th className="sticky left-8 z-20 bg-zinc-900 py-1 pr-2 print:static print:bg-transparent">Driver</th>
+                  {showSpotter && <th className="py-1 pr-2" title="Spotter for this stint — initials; the full name is on hover.">Sp.</th>}
                   {s.savingEnabled && <th className="py-1 pr-2">Profile</th>}
                   <th className="py-1 pr-2 text-right">Race start</th>
                   {showClock && <th className="py-1 pr-2 text-right">Clock in</th>}
@@ -1960,15 +2001,15 @@ export default function StintPlanner({
                     s.drivers.find((d) => d.id === a.spotterId)?.name ?? null;
                   return (
                     <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.condition === "wet" ? "bg-sky-950/20" : st.condition === "half" ? "bg-sky-950/10" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
-                      <td className="py-1 pr-2 text-zinc-500">
+                      <td className="sticky left-0 z-10 bg-zinc-900 py-1 pr-2 text-zinc-500 print:static print:bg-transparent">
                         {st.index}
                         {st.partial && (
                           <span className="ml-1 text-[10px] uppercase text-amber-400">fin</span>
                         )}
                       </td>
-                      <td className="py-1 pr-2 print:hidden">
+                      <td className="sticky left-8 z-10 bg-zinc-900 py-1 pr-2 print:static print:hidden print:bg-transparent">
                         <select
-                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+                          className={`rounded border px-2 py-1 text-sm font-medium ${driverColour(a.driverId).chip}`}
                           value={a.driverId ?? ""}
                           onChange={(e) => {
                             const v = e.target.value || null;
@@ -1989,24 +2030,28 @@ export default function StintPlanner({
                       <td className="hidden py-1 pr-2 print:table-cell">
                         {st.driverName ?? "—"}
                       </td>
-                      <td className="py-1 pr-2 print:hidden">
-                        <select
-                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
-                          value={a.spotterId ?? ""}
-                          onChange={(e) => setAssignment(i, { spotterId: e.target.value || null })}
-                          title={spotterName ? `Spotter: ${spotterName}` : "No spotter for this stint"}
-                        >
-                          <option value="">—</option>
-                          {spotterOpts.map((d) => (
-                            <option key={d.id} value={d.id} title={d.name}>
-                              {initialsOf(d.name)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="hidden py-1 pr-2 print:table-cell" title={spotterName ?? undefined}>
-                        {spotterName ? initialsOf(spotterName) : "—"}
-                      </td>
+                      {showSpotter && (
+                        <>
+                          <td className="py-1 pr-2 print:hidden">
+                            <select
+                              className={`rounded border px-2 py-1 text-sm ${driverColour(a.spotterId).chip}`}
+                              value={a.spotterId ?? ""}
+                              onChange={(e) => setAssignment(i, { spotterId: e.target.value || null })}
+                              title={spotterName ? `Spotter: ${spotterName}` : "No spotter for this stint"}
+                            >
+                              <option value="">—</option>
+                              {spotterOpts.map((d) => (
+                                <option key={d.id} value={d.id} title={d.name}>
+                                  {initialsOf(d.name)}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="hidden py-1 pr-2 print:table-cell" title={spotterName ?? undefined}>
+                            {spotterName ? initialsOf(spotterName) : "—"}
+                          </td>
+                        </>
+                      )}
                       {s.savingEnabled && (
                         <td className="py-1 pr-2 print:hidden">
                           <select
@@ -2217,9 +2262,15 @@ export default function StintPlanner({
           </div>
         )}
       </div>
+      </div>
   );
 
   return (
+    <>
+    {/* Johann prints his sheet in landscape and so should this: the schedule is
+        wider than it is tall. Scoped to the planner because only this page
+        renders it. */}
+    <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } }`}</style>
     <div className="space-y-6">
       {/* The app was redeployed while this tab was open: every Server Action
           from this build is gone, so nothing this page sends will land. */}
@@ -3304,7 +3355,10 @@ export default function StintPlanner({
                     }`;
                   return (
                     <tr key={d.id} className="border-t border-zinc-800/60">
-                      <td className="py-1 pr-2 text-zinc-100">{d.name}</td>
+                      <td className="py-1 pr-2 text-zinc-100">
+                        <span className={`mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full align-middle ${driverColour(d.id).dot}`} />
+                        {d.name}
+                      </td>
                       <td className="py-1 pr-2 text-right text-zinc-500">{gd?.laps ?? "—"}</td>
                       <td className="py-1 pr-2 text-right text-zinc-400">
                         {gd ? fmtLap(gd.bestSec) : "—"}
@@ -3797,7 +3851,10 @@ export default function StintPlanner({
               <tbody>
                 {s.drivers.map((d) => (
                   <tr key={d.id} className="border-t border-zinc-800/60">
-                    <td className="py-1 pr-3 text-zinc-200 whitespace-nowrap">{d.name}</td>
+                    <td className="py-1 pr-3 whitespace-nowrap text-zinc-200">
+                      <span className={`mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full align-middle ${driverColour(d.id).dot}`} />
+                      {d.name}
+                    </td>
                     {Array.from({ length: hourCount }, (_, h) => (
                       <td key={h} className="px-1.5 py-1 text-center">
                         <input
@@ -3911,7 +3968,10 @@ export default function StintPlanner({
               <tbody>
                 {result.perDriver.map((d) => (
                   <tr key={d.driverId} className="border-t border-zinc-800/60 text-zinc-200">
-                    <td className="py-1 pr-2">{d.name}</td>
+                    <td className="py-1 pr-2">
+                      <span className={`mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full align-middle ${driverColour(d.driverId).dot}`} />
+                      {d.name}
+                    </td>
                     <td className="py-1 pr-2 text-right">{d.stints}</td>
                     <td className="py-1 pr-2 text-right">{fmtDuration(d.driveSec)}</td>
                     <td className="py-1 pr-2 text-right">{fmtLaps(d.laps)}</td>
@@ -4241,6 +4301,7 @@ export default function StintPlanner({
       </div>
       </div>
     </div>
+    </>
   );
 }
 
