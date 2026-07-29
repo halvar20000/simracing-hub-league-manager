@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.80.0",
+    date: "2026-07-29",
+    changes: [
+      "Stint Planner: the session-export upload now sits inside the Pit-stop model card, directly under the four fields it fills, together with the measured stops and the “Use in this plan” button. It used to live in the Garage 61 card, which read as if the pull filled those fields — it cannot.",
+      "Stint Planner: the card says where its numbers come from. A Garage 61 pull gives pace, fuel per lap and temperature; pit constants can only come from a session export, because the API leaves out in- and out-laps and never reports the fuel added — exactly what a stop is measured from.",
+      "Stint Planner: the measuring session to drive is one click away on that card, instead of only appearing once a scan had already found something.",
+    ],
+  },
+  {
     version: "1.79.0",
     date: "2026-07-28",
     changes: [
