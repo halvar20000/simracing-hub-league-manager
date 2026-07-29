@@ -22,9 +22,11 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.80.0",
     date: "2026-07-29",
     changes: [
-      "Stint Planner: the session-export upload now sits inside the Pit-stop model card, directly under the four fields it fills, together with the measured stops and the “Use in this plan” button. It used to live in the Garage 61 card, which read as if the pull filled those fields — it cannot.",
-      "Stint Planner: the card says where its numbers come from. A Garage 61 pull gives pace, fuel per lap and temperature; pit constants can only come from a session export, because the API leaves out in- and out-laps and never reports the fuel added — exactly what a stop is measured from.",
-      "Stint Planner: the measuring session to drive is one click away on that card, instead of only appearing once a scan had already found something.",
+      "Stint Planner: the pit-stop model card now holds only what a session can actually measure — pit lane loss, refuel rate, tyre-change time and whether the crew works in sequence. The session-export upload, the measured stops and “Use in this plan” sit directly underneath, so it is obvious where those three numbers come from.",
+      "Stint Planner: it also says what cannot fill them. A Garage 61 pull gives pace, fuel per lap and temperature; pit constants can only come from a session export, because the API leaves out in- and out-laps and never reports the fuel added — exactly what a stop is measured from.",
+      "Stint Planner: “Tyres still raceable at (%)” moved to Event, next to the other figures you decide yourself. Nothing measures it — it is the floor for double-stinting a set, and that is a team call.",
+      "Stint Planner: tyre wear (%/lap) moved out of the pit-stop model and down to the driver table, where the per-driver column already lived. It is a property of the driver, not of the pit lane, and sitting among measured values made it look like the import filled it in. The plan-wide default now sits under that table.",
+      "Stint Planner: the measuring session to drive is one click away on the pit card, instead of only appearing once a scan had already found something.",
     ],
   },
   {

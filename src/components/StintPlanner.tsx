@@ -2040,6 +2040,13 @@ export default function StintPlanner({
                 title="Expected race-day track temperature. Lap times are adjusted to it using the Garage 61 temperature fit (or the manual coefficient). Applied when you leave the field." />
             </div>
             <div>
+              <label className={lbl}>Tyres still raceable at (%)</label>
+              <input className={inp} value={s.event.tyreMinPct}
+                onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
+                placeholder="50"
+                title="Stints that end below this are flagged — the floor for double-stinting a set. Your call, not something a session can measure." />
+            </div>
+            <div>
               <label className={lbl}>Stint length</label>
               <select className={inp} value={s.event.stintMode}
                 onChange={(e) => patchEvent("stintMode", e.target.value)}>
@@ -2302,6 +2309,16 @@ export default function StintPlanner({
             </p>
           ) : (
             <>
+              {/* Everything left in this card is a MEASURED value — the three
+                  numbers a session export produces, plus how the crew works.
+                  Anything you have to decide yourself lives in Event or, when
+                  it differs per driver, in the driver table. */}
+              <p className="mb-3 text-[11px] text-zinc-500">
+                <strong className="text-emerald-300">Measured values.</strong> These three
+                come out of a session export (or the pit-reference library) — see{" "}
+                <em>Measure these from a session</em> below. Type them by hand only if you
+                have measured them another way.
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={lbl}>Pit lane loss (s)</label>
@@ -2330,26 +2347,6 @@ export default function StintPlanner({
                     value={s.event.tyreChangeSec}
                     onChange={(e) => patchEvent("tyreChangeSec", e.target.value)}
                     placeholder="20"
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Tyre wear (%/lap)</label>
-                  <input
-                    className={inp}
-                    value={s.event.tyreWearPctPerLap}
-                    onChange={(e) => patchEvent("tyreWearPctPerLap", e.target.value)}
-                    placeholder="0 = off"
-                    title="Default wear for drivers without their own figure. Leave empty to skip tyre modelling."
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>Tyres still raceable at (%)</label>
-                  <input
-                    className={inp}
-                    value={s.event.tyreMinPct}
-                    onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
-                    placeholder="50"
-                    title="Stints that end below this are flagged — the floor for double-stinting a set."
                   />
                 </div>
                 <div className="flex items-end">
@@ -2938,6 +2935,26 @@ export default function StintPlanner({
                 </tfoot>
               )}
             </table>
+            {/* Tyre wear is a per-driver figure — it used to sit in the
+                pit-stop model, where it read as if a session export measured
+                it. Nothing measures it; it belongs next to the column it
+                fills. */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 print:hidden">
+              <label className="text-[11px] uppercase tracking-wider text-zinc-500">
+                Default tyre wear (%/lap)
+              </label>
+              <input
+                className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-right text-sm text-zinc-100"
+                value={s.event.tyreWearPctPerLap}
+                onChange={(e) => patchEvent("tyreWearPctPerLap", e.target.value)}
+                placeholder="0 = off"
+              />
+              <span className="text-[11px] text-zinc-500">
+                Used for drivers with no %/lap of their own. Nobody measures this for you —
+                Garage 61 records the compound, never the wear — so it is yours to judge, per
+                driver where they differ.
+              </span>
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
               {s.g61Analysis && (
                 <span className="text-emerald-300/80">
