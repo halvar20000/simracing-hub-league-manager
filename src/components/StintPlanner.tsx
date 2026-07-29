@@ -186,6 +186,40 @@ const card = "rounded-lg border border-zinc-800 bg-zinc-900/40 p-4";
 const PIT_PROTOCOL =
   "To measure everything in one session: 3–4 clean laps in a row (the reference), then one lap through the pit lane without stopping, one stop with no service at all, one stop with tyres only, and one stop with fuel only (no tyres) — a big fill is best. Come back out and do a clean lap after each.";
 
+/** "Thomas Herbrig" → "TH". Keeps the spotter column from doubling the width
+ *  of a table that already has to fit a whole race on one screen. */
+const initialsOf = (name: string): string =>
+  name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase())
+    .join("")
+    .slice(0, 3) || "?";
+
+/** Why this stint's lap time is what it is — the tooltip on the Lap column. */
+const lapBreakdownText = (st: {
+  lapSec: number;
+  baseLapSec: number;
+  tempDeltaSec: number;
+  weatherDeltaSec: number;
+  trafficDeltaSec: number;
+  trackTempC: number | null;
+  condition: string;
+  driverName: string | null;
+}): string => {
+  const parts: string[] = [
+    `${fmtLap(st.baseLapSec)} ${st.driverName ? `(${st.driverName})` : "(profile pace)"}`,
+  ];
+  const add = (v: number, label: string) => {
+    if (Math.abs(v) > 0.0005) parts.push(`${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(2)} s ${label}`);
+  };
+  add(st.tempDeltaSec, st.trackTempC != null ? `at ${st.trackTempC}°C` : "temperature");
+  add(st.weatherDeltaSec, st.condition === "wet" ? "full wet" : "half wet");
+  add(st.trafficDeltaSec, "race traffic");
+  return `${parts.join("  ")}  =  ${fmtLap(st.lapSec)} per lap`;
+};
+
 const emptyStoreSubscribe = () => () => {};
 
 export default function StintPlanner({
@@ -3536,13 +3570,19 @@ export default function StintPlanner({
                 <tr className="border-b border-zinc-800">
                   <th className="py-1 pr-2">#</th>
                   <th className="py-1 pr-2">Driver</th>
-                  <th className="py-1 pr-2">Spotter</th>
+                  <th className="py-1 pr-2" title="Spotter for this stint — shown as initials to keep the table narrow.">Sp.</th>
                   {s.savingEnabled && <th className="py-1 pr-2">Profile</th>}
                   <th className="py-1 pr-2 text-right">Race start</th>
                   {showClock && <th className="py-1 pr-2 text-right">Clock in</th>}
                   <th className="py-1 pr-2 text-right">Race end</th>
                   <th className="py-1 pr-2 text-right" title="Live correction in minutes (±). Cascades to later stints.">±min</th>
                   <th className="py-1 pr-2 text-right">Length</th>
+                  <th
+                    className="py-1 pr-2 text-right"
+                    title="The lap time this stint was computed with: the driver's own pace plus the temperature, weather and traffic penalties. Everything else in the row follows from it."
+                  >
+                    Lap
+                  </th>
                   <th className="py-1 pr-2 text-right">Laps</th>
                   <th className="py-1 pr-2 text-right">Fuel</th>
                   {pitOn && (
@@ -3610,15 +3650,18 @@ export default function StintPlanner({
                           className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
                           value={a.spotterId ?? ""}
                           onChange={(e) => setAssignment(i, { spotterId: e.target.value || null })}
+                          title={spotterName ? `Spotter: ${spotterName}` : "No spotter for this stint"}
                         >
-                          <option value="">— none —</option>
+                          <option value="">—</option>
                           {spotterOpts.map((d) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
+                            <option key={d.id} value={d.id} title={d.name}>
+                              {initialsOf(d.name)}
+                            </option>
                           ))}
                         </select>
                       </td>
-                      <td className="hidden py-1 pr-2 print:table-cell">
-                        {spotterName ?? "—"}
+                      <td className="hidden py-1 pr-2 print:table-cell" title={spotterName ?? undefined}>
+                        {spotterName ? initialsOf(spotterName) : "—"}
                       </td>
                       {s.savingEnabled && (
                         <td className="py-1 pr-2 print:hidden">
@@ -3658,6 +3701,17 @@ export default function StintPlanner({
                           : "—"}
                       </td>
                       <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
+                      <td
+                        className="py-1 pr-2 text-right text-zinc-300"
+                        title={lapBreakdownText(st)}
+                      >
+                        {fmtLap(st.lapSec)}
+                        {st.lapSec - st.baseLapSec > 0.0005 && (
+                          <span className="ml-1 text-[10px] text-amber-400/80">
+                            +{(st.lapSec - st.baseLapSec).toFixed(1)}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
                       <td className="py-1 pr-2 text-right">
                         {fmtFuel(st.fuel)} L

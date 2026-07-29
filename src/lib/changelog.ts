@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.81.0",
+    date: "2026-07-29",
+    changes: [
+      "Stint Planner: the schedule shows the lap time each stint was actually computed with. Everything in the row — laps, length, when the stint ends — falls out of that one number, and until now it was the only thing you could not see. A small amber “+x.x” marks how much slower it is than the driver's own pace; hovering spells out where that came from: pace, temperature, wet or half wet, race traffic.",
+      "Stint Planner: the spotter column is now initials, not full names. It cost about a fifth of the table width to show something everyone in the team already knows; the full name is still there on hover.",
+    ],
+  },
+  {
     version: "1.80.0",
     date: "2026-07-29",
     changes: [

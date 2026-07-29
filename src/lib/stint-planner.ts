@@ -277,6 +277,12 @@ export type ScheduleStint = {
   trackTempC: number | null;
   /** Seconds/lap the temperature added (negative = cooler and quicker). */
   tempDeltaSec: number;
+  /** The lap time this stint was actually computed with, in seconds — the
+   *  driver's own pace plus every penalty below. This is the number the laps,
+   *  the length and the whole schedule come out of, so it is shown. */
+  lapSec: number;
+  /** The driver's pace before any penalty (profile pace × their factor). */
+  baseLapSec: number;
 
   // --- the stop that ENDS this stint (null on the last stint) ---
   /** Total time lost at that stop, in seconds — flat or modelled. */
@@ -569,6 +575,8 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       trafficDeltaSec: Math.round(trafficAdd * 1000) / 1000,
       trackTempC: stintTemp ?? null,
       tempDeltaSec: Math.round(tempAdd * 1000) / 1000,
+      lapSec: effLaptime,
+      baseLapSec: prof.laptimeSec * factor,
       stopSec: isFinal ? 0 : stopLoss,
       stop: isFinal ? null : stop,
       tyreChange: isFinal ? false : wantsTyres,
