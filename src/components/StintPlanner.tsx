@@ -1737,6 +1737,488 @@ export default function StintPlanner({
   }, [curId, s.alertsEnabled, raceLive, frozen]);
 
 
+
+  // The schedule is the plan. It is needed BEFORE the race (who drives what,
+  // when the stops fall) as much as during it, so it is rendered in both
+  // phases from one definition — never two copies to keep in step. Pre-race
+  // drops the Note column: notes are written while the race runs.
+  const scheduleCard = ({ showNote }: { showNote: boolean }) => (
+      <div className={card}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Stint schedule &amp; pit timeline
+          </h2>
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="flex items-center gap-1 rounded border border-sky-900/50 bg-sky-950/20 px-2 py-1 text-xs text-sky-200">
+              <span title="Mark this stint and every later stint with the chosen condition.">☔ Rain from stint</span>
+              <input
+                type="number"
+                min={1}
+                value={rainFromStr}
+                onChange={(e) => setRainFromStr(e.target.value)}
+                placeholder="#"
+                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <button
+                onClick={() => {
+                  const n = Number(rainFromStr);
+                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "half");
+                }}
+                className="rounded border border-sky-800 px-1.5 py-0.5 text-sky-200 hover:bg-sky-900/40"
+                title="Damp / drying from this stint on"
+              >
+                ½ wet
+              </button>
+              <button
+                onClick={() => {
+                  const n = Number(rainFromStr);
+                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "wet");
+                }}
+                className="rounded bg-sky-800 px-1.5 py-0.5 text-white hover:bg-sky-700"
+                title="Full wet from this stint on"
+              >
+                Wet
+              </button>
+              <button
+                onClick={clearWetStints}
+                className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
+                title="Clear all wet flags"
+              >
+                All dry
+              </button>
+            </div>
+            <div className="flex items-center gap-1 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1 text-xs text-amber-200">
+              <span title="Fill every stint with a track-temperature ramp: start → peak → end. Leave the peak empty for one straight line. Correct single stints afterwards.">
+                🌡 Temp ramp
+              </span>
+              <input
+                type="number"
+                step="0.5"
+                value={tempRampFrom}
+                onChange={(e) => setTempRampFrom(e.target.value)}
+                placeholder="start"
+                title="Track temperature at the green flag"
+                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <span className="text-amber-300/70">↗</span>
+              <input
+                type="number"
+                step="0.5"
+                value={tempRampPeak}
+                onChange={(e) => setTempRampPeak(e.target.value)}
+                placeholder="peak"
+                title="Hottest track temperature of the race — leave empty for a straight start-to-end ramp"
+                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <input
+                type="number"
+                min={1}
+                value={tempRampPeakAt}
+                onChange={(e) => setTempRampPeakAt(e.target.value)}
+                placeholder="@#"
+                title="Stint the peak falls in (default: the middle stint)"
+                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <span className="text-amber-300/70">↘</span>
+              <input
+                type="number"
+                step="0.5"
+                value={tempRampTo}
+                onChange={(e) => setTempRampTo(e.target.value)}
+                placeholder="end"
+                title="Track temperature at the chequered flag"
+                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <button
+                onClick={applyTempRamp}
+                className="rounded bg-amber-700 px-1.5 py-0.5 text-white hover:bg-amber-600"
+              >
+                Apply
+              </button>
+              <button
+                onClick={clearStintTemps}
+                className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
+                title="Clear every per-stint temperature (back to the plan's Track temp)"
+              >
+                Clear
+              </button>
+            </div>
+            <div
+              className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
+                s.alertsEnabled
+                  ? "border-indigo-700/60 bg-indigo-950/30 text-indigo-200"
+                  : "border-zinc-700 bg-zinc-900 text-zinc-400"
+              }`}
+            >
+              <label
+                className="flex cursor-pointer items-center gap-1"
+                title="Send the driver of the next stint a Discord DM before they are due in the car. Needs a session start and a Discord account linked in CLS."
+              >
+                <input
+                  type="checkbox"
+                  checked={s.alertsEnabled}
+                  onChange={(e) =>
+                    setS((p) => ({ ...p, alertsEnabled: e.target.checked }))
+                  }
+                />
+                🔔 Discord alert
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={s.event.alertLeadMin}
+                onChange={(e) => patchEvent("alertLeadMin", e.target.value)}
+                title="Minutes before the stint starts"
+                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
+              />
+              <span>min before</span>
+              <button
+                onClick={() => runAlertCheck(true)}
+                disabled={alertBusy || !curId}
+                className="rounded bg-indigo-800 px-1.5 py-0.5 text-white hover:bg-indigo-700 disabled:opacity-40"
+                title="Send the DM for the next upcoming stint right now — a live test of the whole chain"
+              >
+                {alertBusy ? "Sending…" : "Test"}
+              </button>
+            </div>
+            <button onClick={autoFill}
+              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+              Auto-fill drivers
+            </button>
+            <button onClick={clearAssignments}
+              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
+              Clear
+            </button>
+          </div>
+        </div>
+        {alertMsg && (
+          <p className="mb-3 rounded border border-indigo-800/60 bg-indigo-950/30 px-3 py-2 text-xs text-indigo-200">
+            {alertMsg}
+          </p>
+        )}
+        {s.alertsEnabled && !curId && (
+          <p className="mb-3 text-xs text-amber-300">
+            Save the plan first — the alerts run against the saved plan.
+          </p>
+        )}
+        {result.stints.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            Enter a race duration, lap time, fuel per lap and tank size to
+            generate the schedule.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="text-zinc-500">
+                <tr className="border-b border-zinc-800">
+                  <th className="py-1 pr-2">#</th>
+                  <th className="py-1 pr-2">Driver</th>
+                  <th className="py-1 pr-2" title="Spotter for this stint — shown as initials to keep the table narrow.">Sp.</th>
+                  {s.savingEnabled && <th className="py-1 pr-2">Profile</th>}
+                  <th className="py-1 pr-2 text-right">Race start</th>
+                  {showClock && <th className="py-1 pr-2 text-right">Clock in</th>}
+                  <th className="py-1 pr-2 text-right">Race end</th>
+                  <th className="py-1 pr-2 text-right" title="Live correction in minutes (±). Cascades to later stints.">±min</th>
+                  <th className="py-1 pr-2 text-right">Length</th>
+                  <th
+                    className="py-1 pr-2 text-right"
+                    title="The lap time this stint was computed with: the driver's own pace plus the temperature, weather and traffic penalties. Everything else in the row follows from it."
+                  >
+                    Lap
+                  </th>
+                  <th className="py-1 pr-2 text-right">Laps</th>
+                  <th className="py-1 pr-2 text-right">Fuel</th>
+                  {pitOn && (
+                    <>
+                      <th className="py-1 pr-2 text-right" title="Litres taken at the stop that ends this stint. Empty = fill the tank; a smaller number is a splash.">Fill L</th>
+                      <th className="py-1 pr-2 text-center" title="Change tyres at that stop? Unticked keeps the set for the next stint.">🛞</th>
+                      <th className="py-1 pr-2 text-right" title="Tyre condition at the end of this stint.">Tyre %</th>
+                      <th className="py-1 pr-2 text-right" title="What that stop costs: lane loss + fuel + tyres + any uncovered driver change.">Stop</th>
+                    </>
+                  )}
+                  <th className="py-1 pr-2 text-right" title="Track temperature for this stint. Empty = the plan's Track temp, i.e. exactly the entered pace.">°C</th>
+                  <th className="py-1 pr-2 text-center" title="Track condition for this stint: dry, half wet (damp/drying) or full wet. Each adds its own penalty per lap.">Track</th>
+                  {showNote && <th className="py-1 pr-2">Note</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {result.stints.map((st, i) => {
+                  const a = assignmentAt(i);
+                  const driverOpts = s.drivers.filter(
+                    (d) =>
+                      driverFreeForStint(d.id, st.startSec, st.endSec) ||
+                      d.id === a.driverId
+                  );
+                  const spotterOpts = s.drivers.filter(
+                    (d) =>
+                      d.id !== a.driverId &&
+                      (driverFreeForStint(d.id, st.startSec, st.endSec) ||
+                        d.id === a.spotterId)
+                  );
+                  const spotterName =
+                    s.drivers.find((d) => d.id === a.spotterId)?.name ?? null;
+                  return (
+                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.condition === "wet" ? "bg-sky-950/20" : st.condition === "half" ? "bg-sky-950/10" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
+                      <td className="py-1 pr-2 text-zinc-500">
+                        {st.index}
+                        {st.partial && (
+                          <span className="ml-1 text-[10px] uppercase text-amber-400">fin</span>
+                        )}
+                      </td>
+                      <td className="py-1 pr-2 print:hidden">
+                        <select
+                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+                          value={a.driverId ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value || null;
+                            setAssignment(i, {
+                              driverId: v,
+                              ...(a.spotterId && a.spotterId === v
+                                ? { spotterId: null }
+                                : {}),
+                            });
+                          }}
+                        >
+                          <option value="">— Unassigned —</option>
+                          {driverOpts.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="hidden py-1 pr-2 print:table-cell">
+                        {st.driverName ?? "—"}
+                      </td>
+                      <td className="py-1 pr-2 print:hidden">
+                        <select
+                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+                          value={a.spotterId ?? ""}
+                          onChange={(e) => setAssignment(i, { spotterId: e.target.value || null })}
+                          title={spotterName ? `Spotter: ${spotterName}` : "No spotter for this stint"}
+                        >
+                          <option value="">—</option>
+                          {spotterOpts.map((d) => (
+                            <option key={d.id} value={d.id} title={d.name}>
+                              {initialsOf(d.name)}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="hidden py-1 pr-2 print:table-cell" title={spotterName ?? undefined}>
+                        {spotterName ? initialsOf(spotterName) : "—"}
+                      </td>
+                      {s.savingEnabled && (
+                        <td className="py-1 pr-2 print:hidden">
+                          <select
+                            className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
+                            value={a.profile}
+                            onChange={(e) => setAssignment(i, { profile: e.target.value as StintProfileKey })}
+                          >
+                            <option value="standard">Std</option>
+                            <option value="saving">FS</option>
+                          </select>
+                        </td>
+                      )}
+                      <td className="py-1 pr-2 text-right text-zinc-400">{fmtDuration(st.startSec)}</td>
+                      {showClock && (
+                        <td className="py-1 pr-2 text-right text-zinc-400">{fmtClock(st.wallStartMs)}</td>
+                      )}
+                      <td className="py-1 pr-2 text-right text-zinc-400">{fmtDuration(st.endSec)}</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={a.correctionMin ?? 0}
+                          onChange={(e) =>
+                            setAssignment(i, {
+                              correctionMin: e.target.value === "" ? 0 : Number(e.target.value),
+                            })
+                          }
+                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">
+                        {st.correctionMin
+                          ? st.correctionMin > 0
+                            ? `+${st.correctionMin}`
+                            : st.correctionMin
+                          : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
+                      <td
+                        className="py-1 pr-2 text-right text-zinc-300"
+                        title={lapBreakdownText(st)}
+                      >
+                        {fmtLap(st.lapSec)}
+                        {st.lapSec - st.baseLapSec > 0.0005 && (
+                          <span className="ml-1 text-[10px] text-amber-400/80">
+                            +{(st.lapSec - st.baseLapSec).toFixed(1)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
+                      <td className="py-1 pr-2 text-right">
+                        {fmtFuel(st.fuel)} L
+                        {st.shortFill && (
+                          <span className="ml-1 text-[10px] uppercase text-amber-400" title="Short stint — the previous stop was only a splash">
+                            short
+                          </span>
+                        )}
+                      </td>
+                      {pitOn && (
+                        <>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            {st.isFinal ? (
+                              <span className="text-zinc-600">—</span>
+                            ) : (
+                              <input
+                                type="number"
+                                step="1"
+                                min={0}
+                                value={a.fillLitres ?? ""}
+                                placeholder={fmtFuel(st.fillLitres)}
+                                onChange={(e) =>
+                                  setAssignment(i, {
+                                    fillLitres:
+                                      e.target.value === "" ? null : Number(e.target.value),
+                                  })
+                                }
+                                title="Litres at this stop. Empty = fill the tank."
+                                className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+                              />
+                            )}
+                          </td>
+                          <td className="hidden py-1 pr-2 text-right print:table-cell">
+                            {st.isFinal ? "—" : `${fmtFuel(st.fillLitres)} L`}
+                          </td>
+                          <td className="py-1 pr-2 text-center print:hidden">
+                            {st.isFinal ? (
+                              <span className="text-zinc-600">—</span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={a.tyreChange ?? true}
+                                onChange={(e) => setAssignment(i, { tyreChange: e.target.checked })}
+                                title="Change tyres at this stop"
+                              />
+                            )}
+                          </td>
+                          <td className="hidden py-1 pr-2 text-center print:table-cell">
+                            {st.isFinal ? "" : st.tyreChange ? "NEW" : "keep"}
+                          </td>
+                          <td
+                            className={`py-1 pr-2 text-right ${
+                              st.tyreWarn ? "font-semibold text-red-300" : "text-zinc-400"
+                            }`}
+                            title={
+                              st.tyreWarn
+                                ? `Ends below the ${s.event.tyreMinPct}% floor — change tyres earlier or shorten the stint.`
+                                : `Tyres: ${st.tyreStartPct.toFixed(0)}% → ${st.tyreEndPct.toFixed(0)}%`
+                            }
+                          >
+                            {st.tyreEndPct >= 99.999 && st.tyreStartPct >= 99.999
+                              ? "—"
+                              : `${st.tyreEndPct.toFixed(0)}%`}
+                          </td>
+                          <td
+                            className="py-1 pr-2 text-right text-zinc-400"
+                            title={
+                              st.stop && planPitModel(s)
+                                ? stopBreakdownText(st.stop, planPitModel(s)!)
+                                : undefined
+                            }
+                          >
+                            {st.isFinal ? "—" : `${st.stopSec.toFixed(0)}s`}
+                          </td>
+                        </>
+                      )}
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={a.trackTempC ?? ""}
+                          placeholder={
+                            s.event.trackTempC.trim() !== ""
+                              ? s.event.trackTempC
+                              : "—"
+                          }
+                          onChange={(e) =>
+                            setAssignment(i, {
+                              trackTempC:
+                                e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          title={
+                            st.tempDeltaSec
+                              ? `${st.tempDeltaSec > 0 ? "+" : ""}${st.tempDeltaSec.toFixed(2)} s/lap vs the plan's base temperature`
+                              : "Track temperature for this stint (blank = base temp)"
+                          }
+                          className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                            st.tempDeltaSec > 0
+                              ? "border-red-800/70 text-red-200"
+                              : st.tempDeltaSec < 0
+                                ? "border-emerald-800/70 text-emerald-200"
+                                : "border-zinc-700 text-zinc-100"
+                          }`}
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">
+                        {st.trackTempC != null ? `${st.trackTempC}°` : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-center print:hidden">
+                        <select
+                          value={conditionOf(a)}
+                          onChange={(e) => {
+                            const c = e.target.value as StintCondition;
+                            setAssignment(i, { condition: c, wet: c === "wet" });
+                          }}
+                          title={
+                            st.weatherDeltaSec
+                              ? `+${st.weatherDeltaSec.toFixed(1)} s/lap for this stint`
+                              : "Track condition for this stint"
+                          }
+                          className={`rounded border bg-zinc-950 px-1 py-1 text-sm ${
+                            st.condition === "wet"
+                              ? "border-sky-700 text-sky-200"
+                              : st.condition === "half"
+                                ? "border-sky-900/60 text-sky-300/80"
+                                : "border-zinc-700 text-zinc-400"
+                          }`}
+                        >
+                          <option value="dry">dry</option>
+                          <option value="half">½ wet</option>
+                          <option value="wet">wet</option>
+                        </select>
+                      </td>
+                      <td className="hidden py-1 pr-2 text-center text-sky-300 print:table-cell">
+                        {st.condition === "wet" ? "WET" : st.condition === "half" ? "½ WET" : ""}
+                      </td>
+                      {showNote && (
+                        <>
+                          <td className="py-1 pr-2 print:hidden">
+                            <input
+                              type="text"
+                              value={a.note ?? ""}
+                              onChange={(e) => setAssignment(i, { note: e.target.value })}
+                              placeholder="incident, weather, SC…"
+                              className="w-44 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-sm text-zinc-100"
+                            />
+                          </td>
+                          <td className="hidden max-w-[16rem] py-1 pr-2 align-top text-zinc-300 print:table-cell">
+                            {a.note?.trim() ? a.note : "—"}
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* The app was redeployed while this tab was open: every Server Action
@@ -3334,6 +3816,14 @@ export default function StintPlanner({
         </div>
       )}
 
+      {/* The same schedule as during the race — this is what the event is
+          planned around. Hidden on print so the During-Race copy is the only
+          one on paper (every phase prints). Notes are a live-race field, so
+          the column is dropped here. */}
+      {result.stints.length > 0 && (
+        <div className="print:hidden">{scheduleCard({ showNote: false })}</div>
+      )}
+
       {/* Pre-Race notes */}
       <div className={card}>
         <label className={lbl}>Pre-Race notes</label>
@@ -3399,476 +3889,7 @@ export default function StintPlanner({
       )}
 
       {/* Schedule / pit timeline */}
-      <div className={card}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Stint schedule &amp; pit timeline
-          </h2>
-          <div className="flex flex-wrap items-center gap-2 print:hidden">
-            <div className="flex items-center gap-1 rounded border border-sky-900/50 bg-sky-950/20 px-2 py-1 text-xs text-sky-200">
-              <span title="Mark this stint and every later stint with the chosen condition.">☔ Rain from stint</span>
-              <input
-                type="number"
-                min={1}
-                value={rainFromStr}
-                onChange={(e) => setRainFromStr(e.target.value)}
-                placeholder="#"
-                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
-              />
-              <button
-                onClick={() => {
-                  const n = Number(rainFromStr);
-                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "half");
-                }}
-                className="rounded border border-sky-800 px-1.5 py-0.5 text-sky-200 hover:bg-sky-900/40"
-                title="Damp / drying from this stint on"
-              >
-                ½ wet
-              </button>
-              <button
-                onClick={() => {
-                  const n = Number(rainFromStr);
-                  if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "wet");
-                }}
-                className="rounded bg-sky-800 px-1.5 py-0.5 text-white hover:bg-sky-700"
-                title="Full wet from this stint on"
-              >
-                Wet
-              </button>
-              <button
-                onClick={clearWetStints}
-                className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
-                title="Clear all wet flags"
-              >
-                All dry
-              </button>
-            </div>
-            <div className="flex items-center gap-1 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1 text-xs text-amber-200">
-              <span title="Fill every stint with a track-temperature ramp: start → peak → end. Leave the peak empty for one straight line. Correct single stints afterwards.">
-                🌡 Temp ramp
-              </span>
-              <input
-                type="number"
-                step="0.5"
-                value={tempRampFrom}
-                onChange={(e) => setTempRampFrom(e.target.value)}
-                placeholder="start"
-                title="Track temperature at the green flag"
-                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
-              />
-              <span className="text-amber-300/70">↗</span>
-              <input
-                type="number"
-                step="0.5"
-                value={tempRampPeak}
-                onChange={(e) => setTempRampPeak(e.target.value)}
-                placeholder="peak"
-                title="Hottest track temperature of the race — leave empty for a straight start-to-end ramp"
-                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
-              />
-              <input
-                type="number"
-                min={1}
-                value={tempRampPeakAt}
-                onChange={(e) => setTempRampPeakAt(e.target.value)}
-                placeholder="@#"
-                title="Stint the peak falls in (default: the middle stint)"
-                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
-              />
-              <span className="text-amber-300/70">↘</span>
-              <input
-                type="number"
-                step="0.5"
-                value={tempRampTo}
-                onChange={(e) => setTempRampTo(e.target.value)}
-                placeholder="end"
-                title="Track temperature at the chequered flag"
-                className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
-              />
-              <button
-                onClick={applyTempRamp}
-                className="rounded bg-amber-700 px-1.5 py-0.5 text-white hover:bg-amber-600"
-              >
-                Apply
-              </button>
-              <button
-                onClick={clearStintTemps}
-                className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
-                title="Clear every per-stint temperature (back to the plan's Track temp)"
-              >
-                Clear
-              </button>
-            </div>
-            <div
-              className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
-                s.alertsEnabled
-                  ? "border-indigo-700/60 bg-indigo-950/30 text-indigo-200"
-                  : "border-zinc-700 bg-zinc-900 text-zinc-400"
-              }`}
-            >
-              <label
-                className="flex cursor-pointer items-center gap-1"
-                title="Send the driver of the next stint a Discord DM before they are due in the car. Needs a session start and a Discord account linked in CLS."
-              >
-                <input
-                  type="checkbox"
-                  checked={s.alertsEnabled}
-                  onChange={(e) =>
-                    setS((p) => ({ ...p, alertsEnabled: e.target.checked }))
-                  }
-                />
-                🔔 Discord alert
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={s.event.alertLeadMin}
-                onChange={(e) => patchEvent("alertLeadMin", e.target.value)}
-                title="Minutes before the stint starts"
-                className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
-              />
-              <span>min before</span>
-              <button
-                onClick={() => runAlertCheck(true)}
-                disabled={alertBusy || !curId}
-                className="rounded bg-indigo-800 px-1.5 py-0.5 text-white hover:bg-indigo-700 disabled:opacity-40"
-                title="Send the DM for the next upcoming stint right now — a live test of the whole chain"
-              >
-                {alertBusy ? "Sending…" : "Test"}
-              </button>
-            </div>
-            <button onClick={autoFill}
-              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-              Auto-fill drivers
-            </button>
-            <button onClick={clearAssignments}
-              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-              Clear
-            </button>
-          </div>
-        </div>
-        {alertMsg && (
-          <p className="mb-3 rounded border border-indigo-800/60 bg-indigo-950/30 px-3 py-2 text-xs text-indigo-200">
-            {alertMsg}
-          </p>
-        )}
-        {s.alertsEnabled && !curId && (
-          <p className="mb-3 text-xs text-amber-300">
-            Save the plan first — the alerts run against the saved plan.
-          </p>
-        )}
-        {result.stints.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            Enter a race duration, lap time, fuel per lap and tank size to
-            generate the schedule.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm tabular-nums">
-              <thead className="text-zinc-500">
-                <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-2">#</th>
-                  <th className="py-1 pr-2">Driver</th>
-                  <th className="py-1 pr-2" title="Spotter for this stint — shown as initials to keep the table narrow.">Sp.</th>
-                  {s.savingEnabled && <th className="py-1 pr-2">Profile</th>}
-                  <th className="py-1 pr-2 text-right">Race start</th>
-                  {showClock && <th className="py-1 pr-2 text-right">Clock in</th>}
-                  <th className="py-1 pr-2 text-right">Race end</th>
-                  <th className="py-1 pr-2 text-right" title="Live correction in minutes (±). Cascades to later stints.">±min</th>
-                  <th className="py-1 pr-2 text-right">Length</th>
-                  <th
-                    className="py-1 pr-2 text-right"
-                    title="The lap time this stint was computed with: the driver's own pace plus the temperature, weather and traffic penalties. Everything else in the row follows from it."
-                  >
-                    Lap
-                  </th>
-                  <th className="py-1 pr-2 text-right">Laps</th>
-                  <th className="py-1 pr-2 text-right">Fuel</th>
-                  {pitOn && (
-                    <>
-                      <th className="py-1 pr-2 text-right" title="Litres taken at the stop that ends this stint. Empty = fill the tank; a smaller number is a splash.">Fill L</th>
-                      <th className="py-1 pr-2 text-center" title="Change tyres at that stop? Unticked keeps the set for the next stint.">🛞</th>
-                      <th className="py-1 pr-2 text-right" title="Tyre condition at the end of this stint.">Tyre %</th>
-                      <th className="py-1 pr-2 text-right" title="What that stop costs: lane loss + fuel + tyres + any uncovered driver change.">Stop</th>
-                    </>
-                  )}
-                  <th className="py-1 pr-2 text-right" title="Track temperature for this stint. Empty = the plan's Track temp, i.e. exactly the entered pace.">°C</th>
-                  <th className="py-1 pr-2 text-center" title="Track condition for this stint: dry, half wet (damp/drying) or full wet. Each adds its own penalty per lap.">Track</th>
-                  <th className="py-1 pr-2">Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.stints.map((st, i) => {
-                  const a = assignmentAt(i);
-                  const driverOpts = s.drivers.filter(
-                    (d) =>
-                      driverFreeForStint(d.id, st.startSec, st.endSec) ||
-                      d.id === a.driverId
-                  );
-                  const spotterOpts = s.drivers.filter(
-                    (d) =>
-                      d.id !== a.driverId &&
-                      (driverFreeForStint(d.id, st.startSec, st.endSec) ||
-                        d.id === a.spotterId)
-                  );
-                  const spotterName =
-                    s.drivers.find((d) => d.id === a.spotterId)?.name ?? null;
-                  return (
-                    <tr key={i} className={`border-t border-zinc-800/60 text-zinc-200 ${i === currentIdx ? "bg-emerald-950/30 ring-1 ring-inset ring-emerald-600/50" : st.condition === "wet" ? "bg-sky-950/20" : st.condition === "half" ? "bg-sky-950/10" : st.correctionMin ? "bg-amber-950/20" : ""}`}>
-                      <td className="py-1 pr-2 text-zinc-500">
-                        {st.index}
-                        {st.partial && (
-                          <span className="ml-1 text-[10px] uppercase text-amber-400">fin</span>
-                        )}
-                      </td>
-                      <td className="py-1 pr-2 print:hidden">
-                        <select
-                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
-                          value={a.driverId ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value || null;
-                            setAssignment(i, {
-                              driverId: v,
-                              ...(a.spotterId && a.spotterId === v
-                                ? { spotterId: null }
-                                : {}),
-                            });
-                          }}
-                        >
-                          <option value="">— Unassigned —</option>
-                          {driverOpts.map((d) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="hidden py-1 pr-2 print:table-cell">
-                        {st.driverName ?? "—"}
-                      </td>
-                      <td className="py-1 pr-2 print:hidden">
-                        <select
-                          className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
-                          value={a.spotterId ?? ""}
-                          onChange={(e) => setAssignment(i, { spotterId: e.target.value || null })}
-                          title={spotterName ? `Spotter: ${spotterName}` : "No spotter for this stint"}
-                        >
-                          <option value="">—</option>
-                          {spotterOpts.map((d) => (
-                            <option key={d.id} value={d.id} title={d.name}>
-                              {initialsOf(d.name)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="hidden py-1 pr-2 print:table-cell" title={spotterName ?? undefined}>
-                        {spotterName ? initialsOf(spotterName) : "—"}
-                      </td>
-                      {s.savingEnabled && (
-                        <td className="py-1 pr-2 print:hidden">
-                          <select
-                            className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
-                            value={a.profile}
-                            onChange={(e) => setAssignment(i, { profile: e.target.value as StintProfileKey })}
-                          >
-                            <option value="standard">Std</option>
-                            <option value="saving">FS</option>
-                          </select>
-                        </td>
-                      )}
-                      <td className="py-1 pr-2 text-right text-zinc-400">{fmtDuration(st.startSec)}</td>
-                      {showClock && (
-                        <td className="py-1 pr-2 text-right text-zinc-400">{fmtClock(st.wallStartMs)}</td>
-                      )}
-                      <td className="py-1 pr-2 text-right text-zinc-400">{fmtDuration(st.endSec)}</td>
-                      <td className="py-1 pr-2 text-right print:hidden">
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={a.correctionMin ?? 0}
-                          onChange={(e) =>
-                            setAssignment(i, {
-                              correctionMin: e.target.value === "" ? 0 : Number(e.target.value),
-                            })
-                          }
-                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
-                        />
-                      </td>
-                      <td className="hidden py-1 pr-2 text-right print:table-cell">
-                        {st.correctionMin
-                          ? st.correctionMin > 0
-                            ? `+${st.correctionMin}`
-                            : st.correctionMin
-                          : "—"}
-                      </td>
-                      <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
-                      <td
-                        className="py-1 pr-2 text-right text-zinc-300"
-                        title={lapBreakdownText(st)}
-                      >
-                        {fmtLap(st.lapSec)}
-                        {st.lapSec - st.baseLapSec > 0.0005 && (
-                          <span className="ml-1 text-[10px] text-amber-400/80">
-                            +{(st.lapSec - st.baseLapSec).toFixed(1)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
-                      <td className="py-1 pr-2 text-right">
-                        {fmtFuel(st.fuel)} L
-                        {st.shortFill && (
-                          <span className="ml-1 text-[10px] uppercase text-amber-400" title="Short stint — the previous stop was only a splash">
-                            short
-                          </span>
-                        )}
-                      </td>
-                      {pitOn && (
-                        <>
-                          <td className="py-1 pr-2 text-right print:hidden">
-                            {st.isFinal ? (
-                              <span className="text-zinc-600">—</span>
-                            ) : (
-                              <input
-                                type="number"
-                                step="1"
-                                min={0}
-                                value={a.fillLitres ?? ""}
-                                placeholder={fmtFuel(st.fillLitres)}
-                                onChange={(e) =>
-                                  setAssignment(i, {
-                                    fillLitres:
-                                      e.target.value === "" ? null : Number(e.target.value),
-                                  })
-                                }
-                                title="Litres at this stop. Empty = fill the tank."
-                                className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
-                              />
-                            )}
-                          </td>
-                          <td className="hidden py-1 pr-2 text-right print:table-cell">
-                            {st.isFinal ? "—" : `${fmtFuel(st.fillLitres)} L`}
-                          </td>
-                          <td className="py-1 pr-2 text-center print:hidden">
-                            {st.isFinal ? (
-                              <span className="text-zinc-600">—</span>
-                            ) : (
-                              <input
-                                type="checkbox"
-                                checked={a.tyreChange ?? true}
-                                onChange={(e) => setAssignment(i, { tyreChange: e.target.checked })}
-                                title="Change tyres at this stop"
-                              />
-                            )}
-                          </td>
-                          <td className="hidden py-1 pr-2 text-center print:table-cell">
-                            {st.isFinal ? "" : st.tyreChange ? "NEW" : "keep"}
-                          </td>
-                          <td
-                            className={`py-1 pr-2 text-right ${
-                              st.tyreWarn ? "font-semibold text-red-300" : "text-zinc-400"
-                            }`}
-                            title={
-                              st.tyreWarn
-                                ? `Ends below the ${s.event.tyreMinPct}% floor — change tyres earlier or shorten the stint.`
-                                : `Tyres: ${st.tyreStartPct.toFixed(0)}% → ${st.tyreEndPct.toFixed(0)}%`
-                            }
-                          >
-                            {st.tyreEndPct >= 99.999 && st.tyreStartPct >= 99.999
-                              ? "—"
-                              : `${st.tyreEndPct.toFixed(0)}%`}
-                          </td>
-                          <td
-                            className="py-1 pr-2 text-right text-zinc-400"
-                            title={
-                              st.stop && planPitModel(s)
-                                ? stopBreakdownText(st.stop, planPitModel(s)!)
-                                : undefined
-                            }
-                          >
-                            {st.isFinal ? "—" : `${st.stopSec.toFixed(0)}s`}
-                          </td>
-                        </>
-                      )}
-                      <td className="py-1 pr-2 text-right print:hidden">
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={a.trackTempC ?? ""}
-                          placeholder={
-                            s.event.trackTempC.trim() !== ""
-                              ? s.event.trackTempC
-                              : "—"
-                          }
-                          onChange={(e) =>
-                            setAssignment(i, {
-                              trackTempC:
-                                e.target.value === "" ? null : Number(e.target.value),
-                            })
-                          }
-                          title={
-                            st.tempDeltaSec
-                              ? `${st.tempDeltaSec > 0 ? "+" : ""}${st.tempDeltaSec.toFixed(2)} s/lap vs the plan's base temperature`
-                              : "Track temperature for this stint (blank = base temp)"
-                          }
-                          className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
-                            st.tempDeltaSec > 0
-                              ? "border-red-800/70 text-red-200"
-                              : st.tempDeltaSec < 0
-                                ? "border-emerald-800/70 text-emerald-200"
-                                : "border-zinc-700 text-zinc-100"
-                          }`}
-                        />
-                      </td>
-                      <td className="hidden py-1 pr-2 text-right print:table-cell">
-                        {st.trackTempC != null ? `${st.trackTempC}°` : "—"}
-                      </td>
-                      <td className="py-1 pr-2 text-center print:hidden">
-                        <select
-                          value={conditionOf(a)}
-                          onChange={(e) => {
-                            const c = e.target.value as StintCondition;
-                            setAssignment(i, { condition: c, wet: c === "wet" });
-                          }}
-                          title={
-                            st.weatherDeltaSec
-                              ? `+${st.weatherDeltaSec.toFixed(1)} s/lap for this stint`
-                              : "Track condition for this stint"
-                          }
-                          className={`rounded border bg-zinc-950 px-1 py-1 text-sm ${
-                            st.condition === "wet"
-                              ? "border-sky-700 text-sky-200"
-                              : st.condition === "half"
-                                ? "border-sky-900/60 text-sky-300/80"
-                                : "border-zinc-700 text-zinc-400"
-                          }`}
-                        >
-                          <option value="dry">dry</option>
-                          <option value="half">½ wet</option>
-                          <option value="wet">wet</option>
-                        </select>
-                      </td>
-                      <td className="hidden py-1 pr-2 text-center text-sky-300 print:table-cell">
-                        {st.condition === "wet" ? "WET" : st.condition === "half" ? "½ WET" : ""}
-                      </td>
-                      <td className="py-1 pr-2 print:hidden">
-                        <input
-                          type="text"
-                          value={a.note ?? ""}
-                          onChange={(e) => setAssignment(i, { note: e.target.value })}
-                          placeholder="incident, weather, SC…"
-                          className="w-44 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-sm text-zinc-100"
-                        />
-                      </td>
-                      <td className="hidden max-w-[16rem] py-1 pr-2 align-top text-zinc-300 print:table-cell">
-                        {a.note?.trim() ? a.note : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {scheduleCard({ showNote: true })}
 
       {/* Per-driver totals */}
       {result.perDriver.length > 0 && (

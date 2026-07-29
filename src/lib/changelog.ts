@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.82.0",
+    date: "2026-07-29",
+    changes: [
+      "Stint Planner: the stint schedule now also appears in the Pre-Race phase. It is what an event is planned around — who drives when, where the stops fall, how long each stint runs — so having it only in During-Race meant switching phases to answer a planning question. Both phases render the same table from one definition, so they cannot drift apart.",
+      "Stint Planner: the Pre-Race copy leaves out the Note column. Notes are written while the race runs; before it, the column is just width. On paper nothing changes — the schedule still prints once, from the During-Race section.",
+    ],
+  },
+  {
     version: "1.81.0",
     date: "2026-07-29",
     changes: [
