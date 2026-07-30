@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.85.1",
+    date: "2026-07-30",
+    changes: [
+      "The new no-show rule was applied to the rounds of the 13th season that have already been run, not only to the ones still to come — so the penalty pool reads the same way from round 1 as it will for the rest of the season.",
+    ],
+  },
+  {
     version: "1.85.0",
     date: "2026-07-30",
     changes: [
