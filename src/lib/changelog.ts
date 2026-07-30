@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.84.0",
+    date: "2026-07-29",
+    changes: [
+      "Stint Planner: a “Clear Garage 61 data” button. It removes the stored analysis — the driver table stops showing Garage 61 columns, the provenance line and the measured pit stops go — and puts the temperature and wet coefficients back to their manual values, so you can start again from a clean pull instead of wondering what is still in there from last time.",
+      "Stint Planner: clearing takes two clicks, and the pace and fuel the import had written into the driver table are only wiped if you tick the box for it. By then those are the numbers the schedule is built on, so they are not thrown away by accident — and figures you typed yourself are never touched either way.",
+    ],
+  },
+  {
     version: "1.83.0",
     date: "2026-07-29",
     changes: [

@@ -926,6 +926,11 @@ export default function StintPlanner({
   // The spotter column is the widest thing in the schedule that nobody reads
   // twice, so it is off until asked for. Everything else stays visible.
   const [showSpotter, setShowSpotter] = useState(false);
+  // Clearing the import is a two-click action: the analysis is cheap to re-pull,
+  // but the pace and fuel it wrote into the driver table are the plan's numbers
+  // by then, so wiping those is opt-in inside the confirmation.
+  const [clearArmed, setClearArmed] = useState(false);
+  const [clearDriverFigures, setClearDriverFigures] = useState(false);
   const [g61Busy, setG61Busy] = useState(false);
   const [g61PullBusy, setG61PullBusy] = useState(false);
   const [g61Msg, setG61Msg] = useState<string | null>(null);
@@ -1175,6 +1180,55 @@ export default function StintPlanner({
     setG61(null);
     setG61Msg(
       `Applied to the driver table: pace + fuel/lap for ${matched} driver${matched === 1 ? "" : "s"}.${tempNote} Save keeps it.`
+    );
+  }
+
+  /**
+   * Throw away everything that came from Garage 61 for this plan.
+   *
+   * Removes the stored analysis (so the driver table stops showing Garage 61
+   * columns and the provenance line disappears) and drops the data-derived
+   * temperature and wet coefficients back to their manual values. Figures the
+   * team typed in are never touched; pace and fuel that the import wrote into
+   * the driver rows only go when explicitly asked for, because by then they are
+   * what the schedule is built on.
+   */
+  function clearGarage61(alsoDriverFigures: boolean) {
+    setS((p) => ({
+      ...p,
+      g61Analysis: null,
+      tempModel: p.tempModel
+        ? {
+            ...p.tempModel,
+            slopePerC: p.tempModel.manualSlopePerC ?? DEFAULT_TEMP_SLOPE_PER_C,
+            fromData: false,
+          }
+        : p.tempModel,
+      wetModel: p.wetModel
+        ? {
+            ...p.wetModel,
+            deltaSec: p.wetModel.manualDeltaSec ?? DEFAULT_WET_DELTA_SEC,
+            fromData: false,
+            wetFuelPerLap: null,
+          }
+        : p.wetModel,
+      drivers: alsoDriverFigures
+        ? p.drivers.map((d) => ({
+            ...d,
+            laptime: d.manual?.laptime ? d.laptime : "",
+            fuelPerLap: d.manual?.fuelPerLap ? d.fuelPerLap : "",
+          }))
+        : p.drivers,
+    }));
+    setG61(null);
+    setPitScan(null);
+    setPitKinds([]);
+    setClearArmed(false);
+    setClearDriverFigures(false);
+    setG61Msg(
+      alsoDriverFigures
+        ? "Garage 61 data cleared, including the pace and fuel it had filled in. Figures you typed yourself were kept. Save to make it permanent."
+        : "Garage 61 data cleared. The pace and fuel already in the driver table stayed — they are the plan's numbers now. Save to make it permanent."
     );
   }
 
@@ -3617,6 +3671,46 @@ export default function StintPlanner({
                 onChange={(e) => onGarage61Files(e.target.files)}
               />
             </label>
+            {/* Clearing is two clicks, and wiping the pace/fuel the import wrote
+                into the driver table is a separate opt-in — by then those are
+                the numbers the schedule is built on. */}
+            {(s.g61Analysis || g61 || pitScan) &&
+              (clearArmed ? (
+                <span className="flex flex-wrap items-center gap-2 rounded border border-red-900/60 bg-red-950/20 px-2 py-1">
+                  <span className="text-xs text-red-200">Clear it?</span>
+                  <label className="flex cursor-pointer items-center gap-1 text-[11px] text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={clearDriverFigures}
+                      onChange={(e) => setClearDriverFigures(e.target.checked)}
+                    />
+                    also the pace &amp; fuel it filled in
+                  </label>
+                  <button
+                    onClick={() => clearGarage61(clearDriverFigures)}
+                    className="rounded bg-red-800 px-2 py-1 text-xs font-semibold text-red-50 hover:bg-red-700"
+                  >
+                    Yes, clear
+                  </button>
+                  <button
+                    onClick={() => {
+                      setClearArmed(false);
+                      setClearDriverFigures(false);
+                    }}
+                    className="px-1 text-xs text-zinc-400 hover:text-zinc-200"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => setClearArmed(true)}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  title="Remove the Garage 61 analysis from this plan — the tables go empty and you can pull again."
+                >
+                  Clear Garage 61 data
+                </button>
+              ))}
           </div>
         </div>
         <p className="mb-3 text-xs text-zinc-500">
