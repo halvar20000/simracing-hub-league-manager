@@ -203,6 +203,15 @@ model Season {
   proAmEnabled Boolean      @default(false)
   gdcEnabled   Boolean      @default(false)
 
+  /// Penalty pool (FULL mode only): when true, NO_RSVP_NO_SHOW penalties take
+  /// part in the auto-forgiveness cycle exactly like incident penalties —
+  /// incurring one resets the clean-race counter, and two clean races forgive
+  /// one point from the oldest open penalty regardless of its source.
+  /// When false (legacy behaviour, GT3 WCT season 12 and earlier) a no-show
+  /// point is a permanent demerit: never forgiven, never resetting the counter.
+  /// Rule change requested by Andreas for GT3 WCT season 13 onward.
+  noShowForgivenessEnabled Boolean @default(false)
+
   scoringSystemId String
   scoringSystem   ScoringSystem @relation(fields: [scoringSystemId], references: [id])
 

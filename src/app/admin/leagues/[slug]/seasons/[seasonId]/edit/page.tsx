@@ -127,6 +127,22 @@ export default async function EditSeasonPage({
           it on the roster; configure its points table on the scoring system.
         </p>
 
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            name="noShowForgivenessEnabled"
+            defaultChecked={season.noShowForgivenessEnabled}
+          />
+          No-show points can be forgiven
+        </label>
+        <p className="-mt-2 text-xs text-zinc-500">
+          Penalty pool only. When on, a “no RSVP and no-show” point behaves like
+          any other pool point: it resets the clean-race counter, and two clean
+          races forgive one point from the driver&apos;s oldest open penalty. When
+          off, a no-show point is permanent and never forgiven (behaviour up to
+          GT3 WCT season 12).
+        </p>
+
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
             Team scoring mode

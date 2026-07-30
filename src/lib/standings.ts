@@ -306,7 +306,14 @@ export async function computeDriverStandings(
         if (p.pointsValue == null) continue;
         // Deferred systems: only released penalties hit the standings.
         if (defersPenalties && p.releasedAt == null) continue;
-        const effective = Math.max(0, p.pointsValue - (p.forgivenPoints ?? 0));
+        // Both kinds of forgiveness count: manual (admin) and automatic (the
+        // penalty-pool engine's 2-clean-races credit). Ignoring the automatic
+        // part made the whole forgiveness mechanic cosmetic — the pool table
+        // showed a point as forgiven while the standings still deducted it.
+        const effective = Math.max(
+          0,
+          p.pointsValue - (p.forgivenPoints ?? 0) - (p.autoForgivenPoints ?? 0)
+        );
         penalty += effective;
       }
     }

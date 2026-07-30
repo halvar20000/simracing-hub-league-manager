@@ -219,6 +219,13 @@ export default async function PenaltyPoolAdminPage({
                 ? "Pending penalty points stay in the pool until you release them. Releasing applies them to the championship standings."
                 : "Penalty points apply IMMEDIATELY to standings on this scoring system. This view is informational."}
         </p>
+        {isFull && (
+          <p className="mt-1 text-sm text-zinc-500">
+            {season.noShowForgivenessEnabled
+              ? "No-show points take part in auto-forgiveness on this season: a no-show resets the driver's clean-race counter, and two clean races forgive 1 point from their oldest open penalty — no matter whether it came from an incident or a no-show."
+              : "No-show points are a permanent demerit on this season: never auto-forgiven, and they do not reset the clean-race counter."}
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <span className="rounded bg-amber-900/40 px-2 py-1 text-amber-200">
             Pending: <strong>{totals.pending}</strong>

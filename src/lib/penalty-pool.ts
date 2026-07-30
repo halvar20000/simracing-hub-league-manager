@@ -22,14 +22,32 @@ import { prisma } from "@/lib/prisma";
  * Effective pool point per penalty = pointsValue - forgivenPoints - autoForgivenPoints
  * Effective season pool = sum of effective points over all non-released penalties.
  *
- * NO_RSVP_NO_SHOW penalties are EXCLUDED from this engine entirely:
- *   - They are never auto-forgiven (their autoForgivenPoints stays at 0).
- *   - They do not contribute to the "remaining pool" gate that triggers
- *     forgiveness cycles.
- *   - They do not reset the clean-race counter (not showing up is not a
- *     racing incident).
- * They sit permanently as their own kind of demerit. Clean races forgive
- * incident-decision penalties only.
+ * NO_RSVP_NO_SHOW penalties — two regimes, switched per season by
+ * Season.noShowForgivenessEnabled:
+ *
+ *   OFF (default; GT3 WCT season 12 and earlier) — they are EXCLUDED from this
+ *   engine entirely:
+ *     - They are never auto-forgiven (their autoForgivenPoints stays at 0).
+ *     - They do not contribute to the "remaining pool" gate that triggers
+ *       forgiveness cycles.
+ *     - They do not reset the clean-race counter (not showing up is not a
+ *       racing incident).
+ *   They sit permanently as their own kind of demerit. Clean races forgive
+ *   incident-decision penalties only.
+ *
+ *   ON (GT3 WCT season 13 onward, Andreas's rule change) — a no-show point is
+ *   an ordinary pool penalty:
+ *     - Incurring one RESETS the clean-race counter, just like an incident.
+ *     - It counts toward the remaining pool.
+ *     - Two clean races forgive 1 point from the driver's OLDEST open penalty,
+ *       whatever its source — one shared queue, no separate no-show bucket.
+ *   A driver who ghosts a round therefore gets the point back by racing the
+ *   next two rounds cleanly.
+ *
+ * "Oldest" means earliest ROUND (then earliest createdAt). Round order is what
+ * the drivers see in the pool table; createdAt alone would be misleading,
+ * because a no-show penalty is written the moment the round completes while an
+ * incident penalty for that same round only appears once the stewards decide.
  *
  * The engine OWNS autoForgivenPoints. It resets it for every penalty in the
  * season's registrations before recomputing, so it is idempotent and free of
@@ -59,12 +77,17 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
     };
   }
 
+  // Per-season rule switch: do no-show penalties join the forgiveness pool?
+  // GT3 WCT season 13 onward: yes. Season 12 and earlier: no.
+  const noShowForgiveness = season.noShowForgivenessEnabled;
+
   const rounds = await prisma.round.findMany({
     where: { seasonId },
     orderBy: { roundNumber: "asc" },
     select: { id: true, status: true, roundNumber: true },
   });
   const completedRounds = rounds.filter((r) => r.status === "COMPLETED");
+  const roundOrder = new Map(rounds.map((r) => [r.id, r.roundNumber]));
 
   const registrations = await prisma.registration.findMany({
     where: { seasonId },
@@ -82,15 +105,17 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
   });
 
   // 2. Load all penalties + race-result entries in one shot.
-  //    NO_RSVP_NO_SHOW penalties are excluded — they never participate in the
-  //    auto-forgiveness loop (they're a separate, permanent demerit).
+  //    Legacy seasons exclude NO_RSVP_NO_SHOW penalties — they never
+  //    participate in the auto-forgiveness loop (a separate, permanent
+  //    demerit). From GT3 WCT season 13 on (noShowForgivenessEnabled) they
+  //    are loaded like any other penalty and take part in full.
   const allPenalties = await prisma.penalty.findMany({
     where: {
       registrationId: { in: regIds },
       type: "POINTS_DEDUCTION",
       releasedAt: null,
       pointsValue: { gt: 0 },
-      source: { not: "NO_RSVP_NO_SHOW" },
+      ...(noShowForgiveness ? {} : { source: { not: "NO_RSVP_NO_SHOW" as const } }),
     },
     select: {
       id: true,
@@ -134,10 +159,21 @@ export async function recomputePenaltyPoolForSeason(seasonId: string): Promise<{
       .map((p) => ({
         id: p.id,
         roundId: p.roundId,
+        roundNumber: roundOrder.get(p.roundId) ?? Number.MAX_SAFE_INTEGER,
+        createdAt: p.createdAt,
         pointsValue: p.pointsValue ?? 0,
         manualForgiven: p.forgivenPoints,
         autoForgiven: 0,
-      }));
+      }))
+      // "Oldest first" = earliest round, then earliest creation. A no-show
+      // penalty is written when the round completes, an incident penalty for
+      // the same round days later once the stewards decide — createdAt alone
+      // would forgive them out of the order drivers see in the pool table.
+      .sort(
+        (a, b) =>
+          a.roundNumber - b.roundNumber ||
+          a.createdAt.getTime() - b.createdAt.getTime()
+      );
 
     if (myPenalties.length === 0) continue;
 

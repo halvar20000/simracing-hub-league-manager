@@ -190,7 +190,9 @@ export default async function PenaltyPoolPublicPage({
             : isFull && perRace
               ? "Penalty points are deducted directly in the race they were incurred. This pool tracks them to calculate forgiveness: two clean races forgive 1 point automatically. Forgiven points are credited back to the season total at the end of the season; no-show points are deducted from the season total at the end of the season."
               : isFull
-                ? "Penalty points incurred per round. Two clean races forgive 1 point automatically."
+                ? season.noShowForgivenessEnabled
+                  ? "Penalty points incurred per round. Two clean races forgive 1 point automatically, starting from the oldest one. No-show points count too: missing a round without an RSVP resets the clean-race counter, and the point comes back off after the next two clean races."
+                  : "Penalty points incurred per round. Two clean races forgive 1 point automatically. No-show points are not forgiven."
                 : "Penalty points incurred per round."}
         </p>
       </div>

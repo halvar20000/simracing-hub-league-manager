@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.85.0",
+    date: "2026-07-30",
+    changes: [
+      "GT3 WCT, from the 13th season: a no-show point can be raced off again. Until now a point for “no RSVP and no-show” sat there for the rest of the season — it was the one demerit forgiveness never touched. From this season it behaves like any other pool point: two clean races take one point off, oldest first, whether that point came from an incident or from a missed round. Andreas asked for it, and it is on for the 13th season only — the 12th keeps the old rule.",
+      "The other half of that rule: a no-show now interrupts a clean run. Miss a round without an RSVP and the clean-race counter goes back to zero, so the two races that earn the point back are the two after the no-show, not two you had already banked before it.",
+      "Whether no-show points can be forgiven is now a per-season switch on the season settings page, so a future season can be set either way without touching the code.",
+      "Fix: automatically forgiven points were shown in the penalty pool but were still deducted in full from the championship when the pool was released at the end of the season. Forgiveness now reaches the standings — which is the point of it.",
+    ],
+  },
+  {
     version: "1.84.0",
     date: "2026-07-29",
     changes: [

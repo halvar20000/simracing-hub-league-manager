@@ -211,6 +211,19 @@ export default async function NewSeasonPage({ params, searchParams }: Props) {
               Pro / Am sub-classification
             </label>
 
+            <label className="flex items-center gap-2 text-sm text-zinc-200">
+              <input
+                type="checkbox"
+                name="noShowForgivenessEnabled"
+                className="h-4 w-4 accent-orange-500"
+              />
+              No-show penalty points can be forgiven
+            </label>
+            <p className="-mt-2 text-xs text-zinc-500">
+              Penalty pool only: a no-show point resets the clean-race counter
+              and can be forgiven by two clean races, like any other pool point.
+            </p>
+
             <label className="block">
               <span className="mb-1 block text-sm text-zinc-300">
                 Team scoring

@@ -21,6 +21,8 @@ export async function createSeason(leagueSlug: string, formData: FormData) {
   const templateId = String(formData.get("template") ?? "").trim() || null;
   const isMulticlass = formData.get("isMulticlass") === "on";
   const proAmEnabled = formData.get("proAmEnabled") === "on";
+  const noShowForgivenessEnabled =
+    formData.get("noShowForgivenessEnabled") === "on";
   const teamScoringMode = String(
     formData.get("teamScoringMode") ?? "NONE"
   ) as TeamScoringMode;
@@ -78,6 +80,7 @@ export async function createSeason(leagueSlug: string, formData: FormData) {
       scoringSystemId,
       isMulticlass,
       proAmEnabled,
+      noShowForgivenessEnabled,
       teamScoringMode,
       teamScoringBestN,
     },
@@ -102,6 +105,9 @@ export async function updateSeason(
   const isMulticlass = formData.get("isMulticlass") === "on";
   const proAmEnabled = formData.get("proAmEnabled") === "on";
   const gdcEnabled = formData.get("gdcEnabled") === "on";
+  // Penalty pool: do no-show points take part in auto-forgiveness?
+  const noShowForgivenessEnabled =
+    formData.get("noShowForgivenessEnabled") === "on";
   const teamScoringMode = String(
     formData.get("teamScoringMode") ?? "NONE"
   ) as TeamScoringMode;
@@ -154,6 +160,7 @@ export async function updateSeason(
       isMulticlass,
       proAmEnabled,
       gdcEnabled,
+      noShowForgivenessEnabled,
       teamScoringMode,
       teamScoringBestN,
       teamScoringWeeksCounted,
