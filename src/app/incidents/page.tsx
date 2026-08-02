@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
+import { SPECIAL_MEASURE_LABEL } from "@/lib/penalty-categories";
 
 export const metadata: Metadata = pageMetadata({
   title: "Incident Reports & Decisions",
@@ -34,6 +35,7 @@ type PenaltyRow = {
   pointsValue: number | null;
   timePenaltySeconds: number | null;
   gridPositions: number | null;
+  specialMeasure: string | null;
   reason: string;
   registration: {
     user: { firstName: string | null; lastName: string | null; name: string | null };
@@ -52,6 +54,9 @@ function penaltyAmount(p: PenaltyRow): string {
       return p.gridPositions != null ? `${p.gridPositions} grid pos` : "Grid penalty";
     case "WARNING":
       return "Warning";
+    case "SPECIAL_MEASURE":
+      // Category 4 — no points, the measure itself is the payload.
+      return p.specialMeasure?.trim() || SPECIAL_MEASURE_LABEL;
     default:
       return p.type.replace(/_/g, " ");
   }
@@ -371,7 +376,18 @@ export default async function PublicIncidentsList({
                               {penaltyDriver(p, teamMode)}
                             </span>
                             <span className="mx-1 text-zinc-500">—</span>
-                            <span className="font-semibold text-red-200">
+                            {p.type === "SPECIAL_MEASURE" && (
+                              <span className="mr-1 rounded bg-cyan-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-cyan-200">
+                                {SPECIAL_MEASURE_LABEL}
+                              </span>
+                            )}
+                            <span
+                              className={
+                                p.type === "SPECIAL_MEASURE"
+                                  ? "font-semibold text-cyan-100"
+                                  : "font-semibold text-red-200"
+                              }
+                            >
                               {penaltyAmount(p)}
                             </span>
                             {p.reason && p.reason !== decision.publicSummary && (

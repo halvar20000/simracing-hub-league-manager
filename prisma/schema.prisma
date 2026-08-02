@@ -643,6 +643,11 @@ model Penalty {
   forgivenAt         DateTime?
   forgivenReason     String?
   categoryLevel      Int?
+
+  /// Free-text "Sondermaßnahme" typed by the steward for penalty category 4.
+  /// Category 4 never deducts points (type = SPECIAL_MEASURE, pointsValue null),
+  /// so these rows stay out of the standings and the penalty pool.
+  specialMeasure     String?
 }
 
 // ==========================================
@@ -878,6 +883,7 @@ enum PenaltyType {
   POINTS_DEDUCTION
   GRID_PENALTY
   WARNING
+  SPECIAL_MEASURE // penalty category 4 — free text, no points
 }
 
 enum RaceSession {

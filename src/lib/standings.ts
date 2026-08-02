@@ -11,6 +11,14 @@ export interface RoundPoints {
   classRawPoints: number;     // class-position race points (within Pro or AM)
   participationPoints: number;
   penaltyPoints: number;
+  /**
+   * The part of `penaltyPoints` that comes from steward / admin penalties on
+   * a season WITHOUT a deferred pool (they hit the championship immediately).
+   * Displayed in the round's Pen column, but deliberately added back when
+   * ranking rounds for drop-weeks — a penalty must not decide which round is
+   * dropped (the penalty is subtracted from the season total either way).
+   */
+  immediatePenaltyPoints?: number;
   correctionPoints: number;
   combinedPoints: number;     // = rawPoints + (participation if enabled) - penalty
   classPoints: number;        // = classRawPoints + participation - penalty
@@ -271,6 +279,9 @@ export async function computeDriverStandings(
     // and only once the season is COMPLETED. Individual race results stay
     // untouched by forgiveness.
     const incidentPenaltyByRound = new Map<string, number>();
+    // Non-deferred seasons: per-round attribution of penalties that are
+    // already counted in the season total (display only — see RoundPoints).
+    const immediatePenaltyByRound = new Map<string, number>();
     let forgivenessCredit = 0;
     let noShowPenaltyPoints = 0;
     if (perRacePenalties) {
@@ -315,6 +326,17 @@ export async function computeDriverStandings(
           p.pointsValue - (p.forgivenPoints ?? 0) - (p.autoForgivenPoints ?? 0)
         );
         penalty += effective;
+        // Immediate systems (no deferred pool — PCCD, IEC, Nascar, SFL,
+        // Combined Cup): the penalty is already inside the season total, so
+        // also attribute it to its round. Without this the round results page
+        // and the race-by-race table showed the gross round points while the
+        // championship total was lower — the two never added up.
+        if (!defersPenalties && effective > 0) {
+          immediatePenaltyByRound.set(
+            p.roundId,
+            (immediatePenaltyByRound.get(p.roundId) ?? 0) + effective
+          );
+        }
       }
     }
 
@@ -371,11 +393,14 @@ export async function computeDriverStandings(
         (sum, r) => sum + r.participationPointsAwarded,
         0
       );
-      // Per-race mode: incident penalties show up in the round they were
-      // incurred, on top of any manual per-result penalty points.
+      // Incident penalties show up in the round they were incurred, on top of
+      // any manual per-result penalty points — in per-race mode, and on every
+      // season that applies penalties immediately (no deferred pool).
+      const rImmediatePen = immediatePenaltyByRound.get(round.id) ?? 0;
       const rPen =
         results.reduce((sum, r) => sum + r.manualPenaltyPoints, 0) +
-        (incidentPenaltyByRound.get(round.id) ?? 0);
+        (incidentPenaltyByRound.get(round.id) ?? 0) +
+        rImmediatePen;
       const rCorrection = results.reduce(
         (sum, r) => sum + r.correctionPoints,
         0
@@ -410,6 +435,7 @@ export async function computeDriverStandings(
         classRawPoints: rClassRaw,
         participationPoints: rPart,
         penaltyPoints: rPen,
+        immediatePenaltyPoints: rImmediatePen,
         fprPoints: roundFpr,
         correctionPoints: rCorrection,
         combinedPoints: rRaw + (includeParticipationInCombined ? rPart : 0) - rPen + rCorrection,
@@ -453,9 +479,17 @@ export async function computeDriverStandings(
       const pickDropped = (metric: (rp: RoundPoints) => number) => {
         // Only rounds that actually have a result are droppable; pick the
         // worst `numToDrop` of them by the given metric.
+        //
+        // A steward penalty on an immediate-application season is added back
+        // here on purpose: it is subtracted from the season total whether or
+        // not the round is dropped, so letting it push a round down the drop
+        // ranking would punish the driver twice (and would have silently
+        // reshuffled live standings when per-round attribution was added).
+        const rank = (rp: RoundPoints) =>
+          metric(rp) + (rp.immediatePenaltyPoints ?? 0);
         const sorted = roundPoints
           .filter((rp) => rp.hasResult)
-          .sort((a, b) => metric(a) - metric(b));
+          .sort((a, b) => rank(a) - rank(b));
         return new Set(sorted.slice(0, numToDrop).map((rp) => rp.roundId));
       };
       const droppedCombined = pickDropped((rp) => rp.combinedPoints);

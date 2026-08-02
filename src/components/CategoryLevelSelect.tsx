@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  PENALTY_LEVELS,
+  POINT_PENALTY_LEVELS,
   PENALTY_LEVEL_LABEL,
 } from "@/lib/penalty-categories";
 
@@ -27,7 +27,7 @@ export function CategoryLevelSelect({
         className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
       >
         <option value="">— (keine Kategorie)</option>
-        {PENALTY_LEVELS.map((lv) => (
+        {POINT_PENALTY_LEVELS.map((lv) => (
           <option key={lv} value={String(lv)}>
             {PENALTY_LEVEL_LABEL[lv]} — {pointsTable[String(lv)] ?? 0} pts
           </option>

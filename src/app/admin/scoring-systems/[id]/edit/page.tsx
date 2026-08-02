@@ -3,7 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateScoringSystem } from "@/lib/actions/scoring-systems";
-import { readCategoryPoints, PENALTY_LEVELS, PENALTY_LEVEL_LABEL } from "@/lib/penalty-categories";
+import {
+  readCategoryPoints,
+  POINT_PENALTY_LEVELS,
+  PENALTY_LEVEL_LABEL,
+  SPECIAL_MEASURE_LEVEL,
+} from "@/lib/penalty-categories";
 import { readDriverFprTiers, DEFAULT_DRIVER_FPR_TIERS } from "@/lib/driver-fpr";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
@@ -238,7 +243,7 @@ export default async function EditScoringSystem({
             points it was created with).
           </p>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {PENALTY_LEVELS.map((lv) => (
+            {POINT_PENALTY_LEVELS.map((lv) => (
               <Field
                 key={lv}
                 label={PENALTY_LEVEL_LABEL[lv]}
@@ -249,6 +254,15 @@ export default async function EditScoringSystem({
                 max={50}
               />
             ))}
+          </div>
+          <div className="mt-3 rounded border border-cyan-900/60 bg-cyan-950/20 px-3 py-2 text-xs text-zinc-300">
+            <span className="font-medium text-cyan-200">
+              {PENALTY_LEVEL_LABEL[SPECIAL_MEASURE_LEVEL]}
+            </span>{" "}
+            — keine Strafpunkte, daher kein Punktefeld. Der Steward trägt die
+            Maßnahme beim Urteil als Freitext ein; sie wird mit der
+            Entscheidung veröffentlicht und berührt weder Wertung noch
+            Penalty Pool. Steht in jeder Liga automatisch zur Verfügung.
           </div>
         </Section>
 

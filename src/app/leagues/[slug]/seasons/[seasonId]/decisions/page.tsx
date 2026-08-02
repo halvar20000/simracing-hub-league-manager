@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
+import { SPECIAL_MEASURE_LABEL } from "@/lib/penalty-categories";
 
 export default async function PublicDecisions({
   params,
@@ -90,14 +91,27 @@ export default async function PublicDecisions({
                     {d.penalties.map((p) => {
                       const showReason =
                         p.reason && p.reason.trim() !== d.publicSummary.trim();
+                      const special = p.type === "SPECIAL_MEASURE";
                       return (
                         <div key={p.id}>
-                          <span className="text-red-300">
-                            {p.type.replace(/_/g, " ")}
+                          <span
+                            className={
+                              special ? "text-cyan-300" : "text-red-300"
+                            }
+                          >
+                            {special
+                              ? SPECIAL_MEASURE_LABEL
+                              : p.type.replace(/_/g, " ")}
                           </span>{" "}
                           — {p.registration.user.firstName}{" "}
                           {p.registration.user.lastName}
-                          {p.pointsValue != null && `: −${p.pointsValue} pts`}
+                          {special
+                            ? p.specialMeasure && (
+                                <span className="text-zinc-300">
+                                  : {p.specialMeasure}
+                                </span>
+                              )
+                            : p.pointsValue != null && `: −${p.pointsValue} pts`}
                           {p.timePenaltySeconds != null &&
                             `: +${p.timePenaltySeconds}s`}
                           {p.gridPositions != null &&

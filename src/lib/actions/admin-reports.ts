@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSteward } from "@/lib/auth-helpers";
 import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
-import { pointsForLevel } from "@/lib/penalty-categories";
+import {
+  pointsForLevel,
+  isSpecialMeasureLevel,
+} from "@/lib/penalty-categories";
 import type { IncidentStatus, Verdict } from "@prisma/client";
 
 export async function setReportStatus(
@@ -42,10 +45,15 @@ export async function submitDecision(
   // Multiple penalty recipients: one row per driver, each with its own
   // category level (→ points) and its own public reason. The reporter and any
   // round participant can be selected.
+  //
+  // Category 4 = Sondermaßnahme: no points, a free-text measure instead, and
+  // it is saved regardless of the verdict (a special measure can accompany a
+  // warning, a reprimand or even "no action").
   type PenaltyRowInput = {
     registrationId: string;
     level: number | null;
     reason: string;
+    specialMeasure: string;
   };
   let penaltyRows: PenaltyRowInput[] = [];
   try {
@@ -61,14 +69,26 @@ export async function submitDecision(
               "string" &&
             ((r as { registrationId: string }).registrationId.length > 0)
         )
-        .map((r) => ({
-          registrationId: r.registrationId,
-          level:
-            r.level === null || r.level === undefined
-              ? null
-              : Number(r.level),
-          reason: typeof r.reason === "string" ? r.reason.trim() : "",
-        }));
+        .map((r) => {
+          const row = r as {
+            registrationId: string;
+            level?: unknown;
+            reason?: unknown;
+            specialMeasure?: unknown;
+          };
+          return {
+            registrationId: row.registrationId,
+            level:
+              row.level === null || row.level === undefined
+                ? null
+                : Number(row.level),
+            reason: typeof row.reason === "string" ? row.reason.trim() : "",
+            specialMeasure:
+              typeof row.specialMeasure === "string"
+                ? row.specialMeasure.trim()
+                : "",
+          };
+        });
     }
   } catch {
     penaltyRows = [];
@@ -122,13 +142,39 @@ export async function submitDecision(
     where: { sourceIncidentDecisionId: decision.id },
   });
 
-  if (verdict === "POINTS_DEDUCTION" && penaltyRows.length > 0) {
+  // Rows to persist:
+  //  * points rows (category 0–3) only when the verdict IS "points deduction"
+  //  * special-measure rows (category 4) under ANY verdict — they carry no
+  //    points, just the free-text measure.
+  const rowsToSave = penaltyRows.filter((row) =>
+    isSpecialMeasureLevel(row.level) ? true : verdict === "POINTS_DEDUCTION"
+  );
+
+  if (rowsToSave.length > 0) {
     // One penalty per selected driver; de-dupe in case the same driver was
     // picked twice.
     const seen = new Set<string>();
-    for (const row of penaltyRows) {
+    for (const row of rowsToSave) {
       if (seen.has(row.registrationId)) continue;
       seen.add(row.registrationId);
+
+      if (isSpecialMeasureLevel(row.level)) {
+        await prisma.penalty.create({
+          data: {
+            registrationId: row.registrationId,
+            roundId: report.roundId,
+            source: "INCIDENT_DECISION",
+            sourceIncidentDecisionId: decision.id,
+            type: "SPECIAL_MEASURE",
+            pointsValue: null,
+            reason: row.reason || publicSummary,
+            categoryLevel: row.level,
+            specialMeasure: row.specialMeasure || null,
+          },
+        });
+        continue;
+      }
+
       const rowPoints = pointsForLevel(scoringSystemForCat, row.level);
       await prisma.penalty.create({
         data: {

@@ -449,11 +449,20 @@ export default async function PublicRoundResults({
     a.penaltyPoints += r.manualPenaltyPoints;
     a.incidents += r.incidents;
   }
-  // Per-race penalty mode (GT3 WCT 13th Season onward): steward incident
-  // penalties are deducted directly in the round they were incurred, so this
-  // round's points tables must show them. No-show penalties stay out — they
-  // settle on the season total at season end.
-  if (isPerRacePenaltySeason(slug, seasonId)) {
+  // Steward / admin penalties belong in this round's Pen column whenever they
+  // are applied straight away, i.e.:
+  //   * per-race penalty mode (GT3 WCT 13th Season onward), and
+  //   * every season WITHOUT a deferred pool — PCCD, IEC, Nascar, SFL,
+  //     Combined Cup. Those already lose the points in the championship the
+  //     moment the verdict is saved, so showing gross points here made the
+  //     round page disagree with the standings.
+  // Deferred-pool seasons (GT3 WCT) stay out: their points only count once an
+  // admin releases the pool at season end. No-show penalties stay out too —
+  // that driver has no result in this round anyway.
+  const appliesPenaltiesImmediately =
+    isPerRacePenaltySeason(slug, seasonId) ||
+    !round.season.scoringSystem.deferPenaltyPoints;
+  if (appliesPenaltiesImmediately) {
     const roundIncidentPenalties = await prisma.penalty.findMany({
       where: {
         roundId,
@@ -461,11 +470,24 @@ export default async function PublicRoundResults({
         pointsValue: { gt: 0 },
         source: { not: "NO_RSVP_NO_SHOW" },
       },
-      select: { registrationId: true, pointsValue: true },
+      select: {
+        registrationId: true,
+        pointsValue: true,
+        forgivenPoints: true,
+        autoForgivenPoints: true,
+      },
     });
     for (const p of roundIncidentPenalties) {
       const a = aggMap.get(p.registrationId);
-      if (a) a.penaltyPoints += p.pointsValue ?? 0;
+      if (!a) continue;
+      // Mirror computeDriverStandings: forgiven points (manual + automatic)
+      // are never deducted twice.
+      a.penaltyPoints += Math.max(
+        0,
+        (p.pointsValue ?? 0) -
+          (p.forgivenPoints ?? 0) -
+          (p.autoForgivenPoints ?? 0)
+      );
     }
   }
   for (const a of aggMap.values()) {

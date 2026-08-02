@@ -19,6 +19,24 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.86.1",
+    date: "2026-08-02",
+    changes: [
+      "Fix: in the leagues that apply penalty points straight away — Porsche Community Cup, IEC, NASCAR, SFL Cup, Combined Cup — a steward penalty was deducted from the championship but was nowhere to be seen on the round results page. The round showed the full points, the standings showed fewer, and nothing explained the difference. The penalty now appears in that round's Pen column and in its cell of the race-by-race table, so the round and the championship add up.",
+      "GT3 WCT is unchanged: its points go into the penalty pool and only reach the standings when the pool is released at the end of the season, so they are deliberately not shown on the round.",
+      "Drop weeks are unaffected: a penalised round is no more likely to be the dropped one than before. The penalty comes off the season total either way, so letting it decide the drop would cost the driver twice.",
+    ],
+  },
+  {
+    version: "1.86.0",
+    date: "2026-08-02",
+    changes: [
+      "Reporting has a fourth penalty category. Kategorie 4 is a “Sondermaßnahme”: it deducts no points at all. Instead the steward types the measure as free text — a warning, a talk with race control, whatever the case calls for — and it is published with the decision next to the driver it applies to.",
+      "Because it carries no points, a special measure can be issued with any verdict, not only with “points deduction”. It never reaches the championship standings and never enters the penalty pool.",
+      "The scoring system page shows Kategorie 4 without a points box, since there is nothing to configure — it is available in every league automatically. Kategorie 0 to 3 keep their per-league point values exactly as before.",
+    ],
+  },
+  {
     version: "1.85.1",
     date: "2026-07-30",
     changes: [

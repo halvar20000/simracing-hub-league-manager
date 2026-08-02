@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PENALTY_LEVELS, PENALTY_LEVEL_LABEL } from "@/lib/penalty-categories";
+import {
+  PENALTY_LEVELS,
+  PENALTY_LEVEL_LABEL,
+  SPECIAL_MEASURE_LEVEL,
+} from "@/lib/penalty-categories";
 
 export type PenaltyDriverOption = {
   registrationId: string;
@@ -10,11 +14,15 @@ export type PenaltyDriverOption = {
 
 export type PenaltyRowInit = {
   registrationId: string;
-  level: string; // "" | "0" | "1" | "2" | "3"
+  level: string; // "" | "0" | "1" | "2" | "3" | "4"
   reason: string;
+  /** Free text, only used by category 4 (Sondermaßnahme). */
+  specialMeasure?: string;
 };
 
-type Row = PenaltyRowInit & { key: string };
+type Row = PenaltyRowInit & { key: string; specialMeasure: string };
+
+const SPECIAL = String(SPECIAL_MEASURE_LEVEL);
 
 let rowSeq = 0;
 function newRow(init?: Partial<PenaltyRowInit>): Row {
@@ -24,6 +32,7 @@ function newRow(init?: Partial<PenaltyRowInit>): Row {
     registrationId: init?.registrationId ?? "",
     level: init?.level ?? "",
     reason: init?.reason ?? "",
+    specialMeasure: init?.specialMeasure ?? "",
   };
 }
 
@@ -49,13 +58,16 @@ export function PenaltyRowsEditor({
   const add = () => setRows((rs) => [...rs, newRow()]);
 
   const ptsFor = (level: string) =>
-    level === "" ? null : pointsTable[level] ?? 0;
+    level === "" || level === SPECIAL ? null : pointsTable[level] ?? 0;
 
   const totalPoints = useMemo(
     () =>
       rows.reduce(
         (sum, r) =>
-          sum + (r.registrationId && r.level !== "" ? pointsTable[r.level] ?? 0 : 0),
+          sum +
+          (r.registrationId && r.level !== "" && r.level !== SPECIAL
+            ? pointsTable[r.level] ?? 0
+            : 0),
         0
       ),
     [rows, pointsTable]
@@ -69,15 +81,19 @@ export function PenaltyRowsEditor({
         registrationId: r.registrationId,
         level: r.level === "" ? null : parseInt(r.level, 10),
         reason: r.reason.trim(),
+        specialMeasure:
+          r.level === SPECIAL ? r.specialMeasure.trim() : "",
       }))
   );
 
   return (
     <div className="rounded border border-zinc-800 p-3">
       <p className="text-xs text-zinc-500">
-        Strafempfänger — nur für „Strafpunkte“. Wähle einen oder mehrere Fahrer
-        (auch der Melder ist wählbar). Jede Zeile kann eine eigene Kategorie und
-        einen eigenen öffentlichen Kommentar haben.
+        Strafempfänger — Wähle einen oder mehrere Fahrer (auch der Melder ist
+        wählbar). Jede Zeile kann eine eigene Kategorie und einen eigenen
+        öffentlichen Kommentar haben. <strong>Kategorie 4</strong> zieht keine
+        Strafpunkte ab — dort wird die Maßnahme als Freitext eingetragen und mit
+        der Entscheidung veröffentlicht.
       </p>
 
       <input type="hidden" name={name} value={serialized} />
@@ -97,6 +113,7 @@ export function PenaltyRowsEditor({
           <tbody>
             {rows.map((r) => {
               const pts = ptsFor(r.level);
+              const isSpecial = r.level === SPECIAL;
               return (
                 <tr
                   key={r.key}
@@ -127,13 +144,20 @@ export function PenaltyRowsEditor({
                       <option value="">— keine —</option>
                       {PENALTY_LEVELS.map((lv) => (
                         <option key={lv} value={String(lv)}>
-                          {PENALTY_LEVEL_LABEL[lv]} — {pointsTable[String(lv)] ?? 0} pts
+                          {lv === SPECIAL_MEASURE_LEVEL
+                            ? `${PENALTY_LEVEL_LABEL[lv]} — keine Punkte`
+                            : `${PENALTY_LEVEL_LABEL[lv]} — ${pointsTable[String(lv)] ?? 0} pts`}
                         </option>
                       ))}
                     </select>
                     {pts != null && pts > 0 && (
                       <div className="mt-1 text-xs text-amber-200">
                         −{pts} Punkt{pts === 1 ? "" : "e"}
+                      </div>
+                    )}
+                    {isSpecial && (
+                      <div className="mt-1 text-xs text-cyan-300">
+                        Keine Strafpunkte
                       </div>
                     )}
                   </td>
@@ -145,6 +169,22 @@ export function PenaltyRowsEditor({
                       placeholder="Begründung für diesen Fahrer (optional)"
                       className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
                     />
+                    {isSpecial && (
+                      <div className="mt-2">
+                        <label className="mb-1 block text-[10px] uppercase tracking-widest text-cyan-300">
+                          Maßnahme (öffentlich)
+                        </label>
+                        <input
+                          type="text"
+                          value={r.specialMeasure}
+                          onChange={(e) =>
+                            update(r.key, { specialMeasure: e.target.value })
+                          }
+                          placeholder="z.B. Verwarnung, Startplatzstrafe nächste Runde, Gespräch mit der Rennleitung …"
+                          className="w-full rounded border border-cyan-800/70 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+                        />
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-2 text-right">
                     <button

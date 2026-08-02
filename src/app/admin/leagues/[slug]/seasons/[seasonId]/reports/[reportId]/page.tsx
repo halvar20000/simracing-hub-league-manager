@@ -123,11 +123,14 @@ export default async function AdminReportDetail({
     .map(({ registrationId, label }) => ({ registrationId, label }));
 
   const initialPenaltyRows = (report.decision?.penalties ?? [])
-    .filter((p) => p.type === "POINTS_DEDUCTION")
+    .filter(
+      (p) => p.type === "POINTS_DEDUCTION" || p.type === "SPECIAL_MEASURE"
+    )
     .map((p) => ({
       registrationId: p.registrationId,
       level: p.categoryLevel != null ? String(p.categoryLevel) : "",
       reason: p.reason ?? "",
+      specialMeasure: p.specialMeasure ?? "",
     }));
 
   const submit = submitDecision.bind(null, slug, seasonId, reportId);
@@ -386,7 +389,10 @@ export default async function AdminReportDetail({
             Strafpunkte werden nur vergeben, wenn das Urteil „Strafpunkte“ ist.
             Die Kategorie pro Zeile bestimmt die Punktezahl gemäß der Tabelle
             dieses Wertungssystems; der Kommentar pro Zeile erscheint öffentlich
-            neben dem jeweiligen Fahrer.
+            neben dem jeweiligen Fahrer. <strong>Kategorie 4
+            (Sondermaßnahme)</strong> ist davon unabhängig: sie zieht keine
+            Punkte ab und wird bei <em>jedem</em> Urteil gespeichert und
+            veröffentlicht.
           </p>
 
           <label className="flex items-center gap-2 text-sm text-zinc-300">
