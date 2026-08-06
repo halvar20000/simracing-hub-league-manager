@@ -21,9 +21,12 @@ import {
   listRecentUploads,
   type YoutubeUpload,
 } from "@/lib/youtube";
-
-/** CLS stores round start times as a naive wall-clock in German time. */
-const LEAGUE_TIME_ZONE = "Europe/Berlin";
+import {
+  LEAGUE_TIME_ZONE,
+  norm,
+  reinterpretLocalAsZone,
+  trackMatches,
+} from "@/lib/match-stream";
 
 /**
  * Date windows (in days) around the race. Channels often RE-UPLOAD the stream
@@ -48,53 +51,6 @@ const WINDOW_DATE_DAYS = 1.5; // last-resort date-only match
  */
 export const MATCH_LOOKBACK_DAYS = 150;
 
-/** How DST-aware-many ms a timezone is ahead of UTC at a given instant. */
-function zoneOffsetMs(at: Date, timeZone: string): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const p: Record<string, string> = {};
-  for (const part of dtf.formatToParts(at)) p[part.type] = part.value;
-  const asUTC = Date.UTC(
-    Number(p.year),
-    Number(p.month) - 1,
-    Number(p.day),
-    Number(p.hour),
-    Number(p.minute),
-    Number(p.second)
-  );
-  return asUTC - at.getTime();
-}
-
-/**
- * Reinterpret a Date's runtime-local wall-clock as a wall-clock in `timeZone`
- * and return the true UTC instant. No-op if the runtime already runs in
- * `timeZone`, so it's safe regardless of the server's TZ.
- */
-function reinterpretLocalAsZone(d: Date, timeZone: string): Date {
-  const asUTC = Date.UTC(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    d.getHours(),
-    d.getMinutes(),
-    d.getSeconds()
-  );
-  const guess = new Date(asUTC);
-  return new Date(asUTC - zoneOffsetMs(guess, timeZone));
-}
-
-function norm(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 /**
  * Pull the round number out of a video title. Handles the German "Lauf N"
  * (CAS uses this) plus English "Round N" / "Race N" / "RN". Returns null if
@@ -111,27 +67,6 @@ function parseRoundNumber(title: string): number | null {
     t.match(/\brace\s*(\d{1,2})\b/) || // "Race 5"
     t.match(/\br(\d{1,2})\b/); // "R5"
   return m ? parseInt(m[1], 10) : null;
-}
-
-// Words that appear in titles/track names but don't identify a venue.
-const TRACK_STOPWORDS = new Set([
-  "the", "gp", "circuit", "international", "speedway", "grand", "prix",
-  "street", "park", "raceway", "motorsport", "motor", "sim", "tv", "cas",
-  "gt3", "gt4", "wct", "iec", "pccd", "sfl", "tss", "season", "finale",
-  "lauf", "round", "race", "und", "der", "die",
-]);
-
-/**
- * True if the title mentions the round's track. Driven by the (short) track
- * name's own tokens: every venue word of 3+ chars that isn't a stopword must
- * appear somewhere in the title. e.g. track "Spa-Francorchamps" → token "spa".
- */
-function trackMatches(title: string, track: string): boolean {
-  const t = norm(title);
-  const tokens = norm(track)
-    .split(" ")
-    .filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !TRACK_STOPWORDS.has(w));
-  return tokens.length > 0 && tokens.some((w) => t.includes(w));
 }
 
 /**

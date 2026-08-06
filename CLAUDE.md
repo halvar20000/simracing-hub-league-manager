@@ -216,7 +216,22 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 - **Matcher**: `src/lib/match-youtube.ts` (pure, not `"use server"`) — `pickBestUpload` scores uploads by publish-time distance to the race start (window −12h/+18h) minus a title bonus for round-number/track mentions; `matchYoutubeForRound(roundId,{force,uploadsCache})` stores the pick; `matchYoutubeForRecentRounds()` is the cron sweep (COMPLETED rounds in the last `MATCH_LOOKBACK_DAYS`=45, channel set, video null). Race start is `reinterpretLocalAsZone(startsAt,"Europe/Berlin")` (naive-walltime convention — see [[project_cls_naive_walltime]]).
 - **Cron**: `/api/cron/youtube-match` (Bearer `CRON_SECRET`) + `.github/workflows/cron-youtube-match.yml` (every 3h).
 - **Admin actions**: `src/lib/actions/race-videos.ts` — `matchYoutubeAction` ("📺 Match YouTube" button, force) and `setRoundYoutubeAction` (paste URL/ID or clear). Round page shows a thumbnail + status panel; redirect status flag is `yt=`.
-- **Public**: embedded player section at the top of the round results page when `youtubeVideoId` is set. Plus a site-wide **`/streams`** page (`src/app/streams/page.tsx`, linked in `nav.tsx`) listing every COMPLETED round with a `youtubeVideoId` across non-archived leagues, newest first, as thumbnail cards linking straight to YouTube, with `?league=<slug>` filter chips.
+- **Public**: embedded player section at the top of the round results page when `youtubeVideoId` is set. Plus a site-wide **`/streams`** page (`src/app/streams/page.tsx`, linked in `nav.tsx`) listing every COMPLETED round with a `youtubeVideoId` **or `twitchVideoId`** across non-archived leagues, newest first, as thumbnail cards, with `?league=<slug>` filter chips.
+- **Shared matcher helpers**: `src/lib/match-stream.ts` — `reinterpretLocalAsZone`, `norm`, `TRACK_STOPWORDS`, `trackMatches`, `LEAGUE_TIME_ZONE`. Imported by BOTH the YouTube and Twitch matchers; don't re-declare them.
+- **Guard**: `updateLeague` rejects a URL in the YouTube-channel field (trimming a `youtube.com/@handle` URL down to the handle, redirecting with an error otherwise). Before v1.87.0 a pasted URL — including a Twitch one — was stored silently and then failed forever inside the cron with no visible error. Keep that guard.
+
+## Twitch VOD auto-match (SFL Cup — v1.87.0)
+
+Twitch sibling of the YouTube matcher above, for leagues streamed on Twitch rather than YouTube.
+
+- **Config**: `League.twitchChannelLogin` (bare login, e.g. `maxstion`; the form accepts `@login` / a full `twitch.tv/…` URL and normalizes). Null = off. Requires env vars **`TWITCH_CLIENT_ID`** + **`TWITCH_CLIENT_SECRET`** (app at https://dev.twitch.tv/console/apps — client-credentials flow, no scopes, no user login). Currently set for **`cas-sfl-cup` only**.
+- **Schema**: `Round.twitchVideoId` (numeric), `twitchVideoType` (`archive`/`highlight`/`upload`), `twitchThumbnailUrl`, `twitchMatchedAt`. Cron only fills rounds where `twitchVideoId` is null.
+- **API client**: `src/lib/twitch.ts` — cached app access token, `resolveUserId`, `listChannelVideos` (`type=all`), `normalizeChannelLogin`, `extractTwitchVideoId`, `twitchThumbUrl`, `isExpiringVodType`.
+- **Matcher**: `src/lib/match-twitch.ts` — **DATE-first, deliberately unlike the YouTube one.** A Twitch `archive` VOD's `published_at` IS the live-broadcast start, so it lands 8-50 min after the scheduled race; titles are actively wrong (the SFL stream titled "Rennen drei" is round **4** — round 3 was postponed). Window: −3h/+6h, tie-broken by track-name match then time. **Do not add title round-number scoring here.**
+- **VOD retention**: Twitch DELETES `archive` videos after 7-60 days; only `highlight`/`upload` are permanent. The round page and admin panel show an expiry warning for `archive`, and `/streams` degrades a dead thumbnail to a purple gradient (`alt=""`). Promoting a stream to a Highlight on Twitch clears the warning on the next match run.
+- **Cron**: `/api/cron/twitch-match` + `.github/workflows/cron-twitch-match.yml` (every 3h at :50).
+- **Admin actions**: `matchTwitchAction` ("🟣 Match Twitch", force) + `setRoundTwitchAction` in `race-videos.ts`; redirect status flag is `tw=`.
+- **Player embed**: `player.twitch.tv/?video=<id>&parent=<host>` — the `parent` param is mandatory and is derived from `NEXT_PUBLIC_SITE_URL` (`TWITCH_PARENT` in the public round page).
 
 ## Driver of the Day (all leagues)
 

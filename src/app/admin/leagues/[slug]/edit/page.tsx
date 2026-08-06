@@ -231,9 +231,32 @@ export default async function EditLeaguePage({
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
               />
               <span className="mt-1 block text-[11px] text-zinc-500">
-                Channel @handle (from the channel URL) or ID. A cron finds the
-                stream VOD for each completed round and embeds it on the round
-                page. Requires <code>YOUTUBE_API_KEY</code> in env.
+                Channel @handle (from the channel URL) or ID —{" "}
+                <strong className="text-zinc-400">not a URL</strong>, and not a
+                Twitch link (use the Twitch field below for that). A cron finds
+                the stream VOD for each completed round and embeds it on the
+                round page. Requires <code>YOUTUBE_API_KEY</code> in env.
+              </span>
+            </label>
+            <label className="block flex-1 min-w-[16rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
+                Twitch channel — auto-link race VOD (optional)
+              </span>
+              <input
+                name="twitchChannelLogin"
+                type="text"
+                defaultValue={league.twitchChannelLogin ?? ""}
+                placeholder="maxstion"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+              <span className="mt-1 block text-[11px] text-zinc-500">
+                The channel name from <code>twitch.tv/&lt;name&gt;</code> (a
+                full URL is accepted and trimmed down). A cron matches each
+                completed round to the broadcast that started around the race
+                time and embeds it on the round page. Requires{" "}
+                <code>TWITCH_CLIENT_ID</code> + <code>TWITCH_CLIENT_SECRET</code>{" "}
+                in env. Note: Twitch deletes past broadcasts after 7-60 days —
+                only Highlights and Uploads stay permanently.
               </span>
             </label>
             <label className="block flex-1 min-w-[16rem]">

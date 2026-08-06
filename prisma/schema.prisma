@@ -170,6 +170,14 @@ model League {
   /// Null = auto-matching off for this league. Requires YOUTUBE_API_KEY.
   youtubeChannelId String?
 
+  /// Twitch channel login (the name in twitch.tv/<login>, lowercase) whose
+  /// past broadcasts are auto-linked to this league's rounds by the Twitch
+  /// auto-match cron (src/lib/match-twitch.ts). Null = feature off for this
+  /// league. Unlike YouTube, Twitch VODs carry the true live-stream start
+  /// time, so matching is by date proximity, not by title.
+  /// Requires TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET in env.
+  twitchChannelLogin String?
+
   /// Optional public Garage 61 team URL for the league. Rendered as a
   /// small "Garage 61 team →" link on league / season pages so members
   /// can jump straight to the shared setups + practice laps.
@@ -342,6 +350,26 @@ model Round {
   /// When the video was linked (auto-match run or manual save). Doubles as
   /// the cron's idempotency marker.
   youtubeMatchedAt DateTime?
+
+  /// Twitch VOD id (numeric, as in twitch.tv/videos/<id>) of the race-stream
+  /// replay for this round. Set by the Twitch auto-match cron
+  /// (src/lib/match-twitch.ts) from League.twitchChannelLogin, or pasted /
+  /// cleared manually by an admin. Like the YouTube one, the cron only fills
+  /// rounds where this is null, so a manual value is never overwritten.
+  twitchVideoId    String?
+  /// Twitch video kind: "archive" (a past broadcast — Twitch DELETES these
+  /// after 7-60 days depending on the broadcaster's status), "highlight" or
+  /// "upload" (both permanent). Drives the "VOD may have expired" warning on
+  /// the round page. Null when the kind is unknown (manually pasted link).
+  twitchVideoType  String?
+  /// Resolved Twitch thumbnail URL (Twitch's %{width}x%{height} template is
+  /// already filled in) for the /streams grid. Null for manually pasted links
+  /// and for VODs whose thumbnail Twitch hadn't generated yet; the grid falls
+  /// back to a Twitch-purple placeholder, which is also what a deleted VOD's
+  /// dead thumbnail degrades to.
+  twitchThumbnailUrl String?
+  /// When the Twitch VOD was linked (auto-match run or manual save).
+  twitchMatchedAt  DateTime?
 
   /// Public Vercel Blob URL of the raw iRacing eventresult JSON last imported
   /// for this round via the "Import iRacing JSON" admin flow. Surfaced as a

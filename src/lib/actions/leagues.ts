@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/slug";
 import { uploadLogoIfProvided } from "@/lib/logo-upload";
+import { normalizeChannelLogin } from "@/lib/twitch";
 
 export async function createLeague(formData: FormData) {
   const admin = await requireAdmin();
@@ -97,8 +98,48 @@ export async function updateLeague(id: string, formData: FormData) {
 
   // YouTube channel for auto-linking each round's stream VOD. Stored as the
   // admin typed it (an @handle or a "UC…" channel ID); resolved at match time.
-  const youtubeChannelId =
-    String(formData.get("youtubeChannelId") ?? "").trim() || null;
+  // Reject anything URL-shaped up front: pasting a channel URL (or worse, a
+  // Twitch URL) here used to be accepted silently and then fail forever inside
+  // the cron, with no visible error anywhere. A youtube.com/@handle URL is
+  // salvageable, so trim it down instead of rejecting.
+  const youtubeChannelIdRaw = String(
+    formData.get("youtubeChannelId") ?? ""
+  ).trim();
+  let youtubeChannelId: string | null = youtubeChannelIdRaw || null;
+  if (youtubeChannelId) {
+    const ytHandle = youtubeChannelId.match(
+      /^(?:https?:\/\/)?(?:www\.)?youtube\.com\/(@[\w.-]+)/i
+    );
+    const ytChannelId = youtubeChannelId.match(
+      /^(?:https?:\/\/)?(?:www\.)?youtube\.com\/channel\/(UC[\w-]{22})/i
+    );
+    if (ytHandle) youtubeChannelId = ytHandle[1];
+    else if (ytChannelId) youtubeChannelId = ytChannelId[1];
+    else if (/^https?:\/\//i.test(youtubeChannelId) || /\//.test(youtubeChannelId)) {
+      redirect(
+        `/admin/leagues/${id}/edit?error=${encodeURIComponent(
+          "The YouTube channel field takes an @handle or a UC… channel ID, not a URL. For a Twitch stream, use the “Twitch channel” field instead."
+        )}`
+      );
+    }
+  }
+
+  // Twitch channel login for auto-linking each round's broadcast VOD. Accepts
+  // a bare login, "@login" or a full twitch.tv URL; stored normalized.
+  const twitchChannelLoginRaw = String(
+    formData.get("twitchChannelLogin") ?? ""
+  ).trim();
+  let twitchChannelLogin: string | null = null;
+  if (twitchChannelLoginRaw) {
+    twitchChannelLogin = normalizeChannelLogin(twitchChannelLoginRaw);
+    if (!twitchChannelLogin) {
+      redirect(
+        `/admin/leagues/${id}/edit?error=${encodeURIComponent(
+          "That doesn't look like a Twitch channel name. Use the name from twitch.tv/<name>, e.g. maxstion."
+        )}`
+      );
+    }
+  }
 
   // Discord results-post + new-member welcome bot config.
   const discordResultsChannelId =
@@ -194,6 +235,7 @@ export async function updateLeague(id: string, formData: FormData) {
       discordStreamChannelId,
       twitchUrl,
       youtubeChannelId,
+      twitchChannelLogin,
       discordResultsChannelId,
       discordWelcomeChannelId,
       discordWelcomeMessage,

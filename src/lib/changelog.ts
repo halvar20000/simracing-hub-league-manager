@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.87.0",
+    date: "2026-08-06",
+    changes: [
+      "Twitch replays: rounds can now link a Twitch VOD, not just a YouTube video. The SFL Cup is streamed on Twitch, so its races now show a player on the round page and cards on the Race Streams page like every other league. A league gets this by setting its Twitch channel on the league edit page; a cron then finds the broadcast for each completed round automatically.",
+      "The Twitch matcher goes by broadcast time, not by title — a Twitch recording starts when the stream goes live, which is within an hour of the race, while the titles can be misleading (the SFL stream titled “Rennen drei” is in fact round 4, because round 3 was postponed). YouTube keeps matching by title, since those VODs are re-uploads posted days later.",
+      "Twitch deletes past broadcasts after 7-60 days, so a linked Twitch replay carries a warning that it may already be gone. Ask the streamer to save a race as a Highlight to keep it permanently — the warning disappears once that happens.",
+      "Fix: the “YouTube channel” field on the league edit page silently swallowed anything you typed, including a Twitch URL, and then failed forever inside the cron with no error shown anywhere. It now trims a pasted YouTube channel URL down to the handle and refuses anything else with a clear message pointing at the Twitch field.",
+    ],
+  },
+  {
     version: "1.86.1",
     date: "2026-08-02",
     changes: [

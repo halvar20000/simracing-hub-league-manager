@@ -9,7 +9,13 @@ import { pullResultsFromIRLM } from "@/lib/actions/irlm-import";
 import { PullFromIRLMButton } from "@/components/PullFromIRLMButton";
 import { setRoundPublished } from "@/lib/actions/rounds";
 import { createRaceEventAction } from "@/lib/actions/race-events";
-import { matchYoutubeAction, setRoundYoutubeAction } from "@/lib/actions/race-videos";
+import {
+  matchYoutubeAction,
+  setRoundYoutubeAction,
+  matchTwitchAction,
+  setRoundTwitchAction,
+} from "@/lib/actions/race-videos";
+import { isExpiringVodType, twitchVideoUrl } from "@/lib/twitch";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { formatDateTime } from "@/lib/date";
 import { compareStartNumber } from "@/lib/start-number";
@@ -29,11 +35,13 @@ export default async function AdminRoundResults({
     eventDetail?: string;
     yt?: string;
     ytDetail?: string;
+    tw?: string;
+    twDetail?: string;
   }>;
 }) {
   await requireAdmin();
   const { slug, seasonId, roundId } = await params;
-  const { imported, skipped, cls: clsRaw, published, unpublished, event, eventDetail, yt, ytDetail } =
+  const { imported, skipped, cls: clsRaw, published, unpublished, event, eventDetail, yt, ytDetail, tw, twDetail } =
     await searchParams;
   type Cls = "combined" | "pro" | "am" | "team";
   const cls: Cls =
@@ -197,6 +205,18 @@ export default async function AdminRoundResults({
                 />
               </form>
             )}
+            {round.season.league.twitchChannelLogin && (
+              <form action={matchTwitchAction}>
+                <input type="hidden" name="slug" value={slug} />
+                <input type="hidden" name="seasonId" value={seasonId} />
+                <input type="hidden" name="roundId" value={roundId} />
+                <SubmitWithSpinner
+                  label="🟣 Match Twitch"
+                  pendingLabel="Searching…"
+                  className="rounded border border-purple-700/60 bg-purple-950/30 px-3 py-1.5 text-sm text-purple-200 hover:bg-purple-900/40"
+                />
+              </form>
+            )}
             <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/race-center`}
               className="rounded border border-red-700/60 bg-red-950/30 px-3 py-1.5 text-sm text-red-200 hover:bg-red-900/40"
@@ -298,6 +318,39 @@ export default async function AdminRoundResults({
         )
       )}
 
+      {tw && (
+        tw.startsWith("failed") ? (
+          <div className="rounded border border-purple-800 bg-purple-950 p-3 text-sm text-purple-200">
+            <p>
+              {tw === "failed:no-candidate"
+                ? "No Twitch broadcast found in the window around this race (3h before to 6h after the start). Twitch also deletes past broadcasts after a few weeks — if the race is older than that, the VOD is gone."
+                : tw === "failed:not-configured"
+                  ? "This league has no Twitch channel set. Add it on the league edit page."
+                  : tw === "failed:no-key"
+                    ? "TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET are not set in the environment."
+                    : tw === "failed:channel-not-found"
+                      ? "Could not resolve the league's Twitch channel — check the channel name on the league edit page."
+                      : tw === "failed:bad-url"
+                        ? "That doesn't look like a Twitch VOD URL or id (expected twitch.tv/videos/123456789)."
+                        : `Could not match a Twitch VOD (${tw.replace("failed:", "")}).`}
+            </p>
+            {twDetail && (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-purple-950/60 p-2 text-xs text-purple-300">
+                {twDetail}
+              </pre>
+            )}
+          </div>
+        ) : (
+          <div className="rounded border border-purple-800 bg-purple-950 p-3 text-sm text-purple-200">
+            {tw === "cleared"
+              ? "Twitch VOD cleared."
+              : tw === "tw-unchanged"
+                ? "Already linked to the best-matching VOD — no change."
+                : "Twitch VOD linked — it now embeds on the public round page."}
+          </div>
+        )
+      )}
+
       <section className="rounded border border-zinc-800 bg-zinc-900/50 p-4">
         <h2 className="text-sm font-semibold text-zinc-200">📺 Stream video</h2>
         {round.youtubeVideoId ? (
@@ -348,6 +401,84 @@ export default async function AdminRoundResults({
               type="text"
               defaultValue=""
               placeholder="https://www.youtube.com/watch?v=…"
+              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+          </label>
+          <SubmitWithSpinner
+            label="Save"
+            pendingLabel="Saving…"
+            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800"
+          />
+        </form>
+      </section>
+
+      <section className="rounded border border-zinc-800 bg-zinc-900/50 p-4">
+        <h2 className="text-sm font-semibold text-zinc-200">🟣 Twitch VOD</h2>
+        {round.twitchVideoId ? (
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <a
+              href={twitchVideoUrl(round.twitchVideoId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0"
+            >
+              {round.twitchThumbnailUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={round.twitchThumbnailUrl}
+                  alt=""
+                  className="h-16 w-28 rounded bg-purple-950 object-cover"
+                />
+              ) : (
+                <span className="flex h-16 w-28 items-center justify-center rounded bg-purple-950 text-xs text-purple-300">
+                  Twitch
+                </span>
+              )}
+            </a>
+            <span className="text-xs text-zinc-400">
+              Linked VOD{" "}
+              <code className="rounded bg-zinc-800 px-1.5 py-0.5">
+                {round.twitchVideoId}
+              </code>
+              {round.twitchVideoType && (
+                <span className="ml-1 text-zinc-500">
+                  · {round.twitchVideoType}
+                </span>
+              )}
+              {round.twitchMatchedAt && (
+                <span className="ml-1 text-zinc-500">
+                  · {formatDateTime(round.twitchMatchedAt)}
+                </span>
+              )}
+              {isExpiringVodType(round.twitchVideoType) && (
+                <span className="mt-1 block text-amber-300/80">
+                  ⚠ Past broadcast — Twitch deletes these after 7-60 days. Ask
+                  the streamer to save it as a Highlight to keep it permanently.
+                </span>
+              )}
+            </span>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-zinc-500">
+            No Twitch VOD linked yet.
+            {round.season.league.twitchChannelLogin
+              ? " Use “🟣 Match Twitch” above to auto-find it, or paste a link below."
+              : " Set the league's Twitch channel to enable auto-matching, or paste a link below."}
+          </p>
+        )}
+        <form action={setRoundTwitchAction} className="mt-3 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="slug" value={slug} />
+          <input type="hidden" name="seasonId" value={seasonId} />
+          <input type="hidden" name="roundId" value={roundId} />
+          <label className="block flex-1 min-w-[16rem]">
+            <span className="mb-1 block text-xs text-zinc-400">
+              Paste Twitch VOD URL or id (leave empty + save to clear)
+            </span>
+            <input
+              name="twitchUrl"
+              type="text"
+              defaultValue=""
+              placeholder="https://www.twitch.tv/videos/2838058556"
               className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
             />
           </label>

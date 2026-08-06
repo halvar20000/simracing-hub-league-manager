@@ -1,0 +1,38 @@
+name: Match Twitch race VODs
+
+on:
+  schedule:
+    # Every 3 hours (UTC), offset from the YouTube sweep. Idempotent: only
+    # fills rounds with no Twitch VOD yet, so re-running is harmless. A Twitch
+    # archive exists the moment the broadcast ends, so the first run after a
+    # race usually finds it.
+    - cron: "50 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "How many days back to scan for completed rounds (manual backfill). Leave blank for the default ~120 days. NOTE: Twitch deletes past broadcasts after 7-60 days, so reaching further back rarely helps."
+        required: false
+        default: ""
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call cron endpoint
+        run: |
+          set -euo pipefail
+          URL="https://league.simracing-hub.com/api/cron/twitch-match"
+          DAYS="${{ github.event.inputs.lookback_days }}"
+          if [ -n "$DAYS" ]; then URL="$URL?days=$DAYS"; fi
+          echo "Calling $URL"
+          response=$(curl -fsS \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP_STATUS:%{http_code}" \
+            "$URL")
+          echo "$response"
+          status=$(echo "$response" | tail -1 | sed 's/HTTP_STATUS://')
+          if [ "$status" != "200" ]; then
+            echo "::error::Endpoint returned HTTP $status"
+            exit 1
+          fi

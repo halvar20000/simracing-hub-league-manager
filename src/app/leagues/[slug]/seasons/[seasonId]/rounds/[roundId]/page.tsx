@@ -18,6 +18,21 @@ import { RaceCenterView } from "@/components/RaceCenterView";
 import { DriverOfTheDayHero } from "@/components/DriverOfTheDayHero";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
+import { isExpiringVodType, twitchVideoUrl } from "@/lib/twitch";
+
+/**
+ * Twitch's embedded player refuses to load unless the embedding host is named
+ * in a `parent` query param, so derive it from the configured site URL.
+ */
+const TWITCH_PARENT = (() => {
+  const raw =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return "league.simracing-hub.com";
+  }
+})();
 
 type Cls = "combined" | "pro" | "am" | "gdc" | "team" | "race1" | "race2" | "quali" | "car" | "teams" | "race-center";
 const TEAM_BEST_N = 2;
@@ -670,21 +685,48 @@ export default async function PublicRoundResults({
         </div>
       </div>
 
-      {round.youtubeVideoId && (
+      {(round.youtubeVideoId || round.twitchVideoId) && (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-zinc-300">
             📺 Race stream
           </h2>
           <div className="relative w-full overflow-hidden rounded-lg border border-zinc-800 bg-black pt-[56.25%]">
-            <iframe
-              className="absolute inset-0 h-full w-full"
-              src={`https://www.youtube-nocookie.com/embed/${round.youtubeVideoId}`}
-              title="Race stream replay"
-              loading="lazy"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            {round.youtubeVideoId ? (
+              <iframe
+                className="absolute inset-0 h-full w-full"
+                src={`https://www.youtube-nocookie.com/embed/${round.youtubeVideoId}`}
+                title="Race stream replay"
+                loading="lazy"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            ) : (
+              <iframe
+                className="absolute inset-0 h-full w-full"
+                src={`https://player.twitch.tv/?video=${round.twitchVideoId}&parent=${TWITCH_PARENT}&autoplay=false`}
+                title="Race stream replay (Twitch)"
+                loading="lazy"
+                allow="autoplay; fullscreen; picture-in-picture"
+                allowFullScreen
+              />
+            )}
           </div>
+          {!round.youtubeVideoId &&
+            round.twitchVideoId &&
+            isExpiringVodType(round.twitchVideoType) && (
+              <p className="mt-2 text-xs text-amber-300/80">
+                ⚠ Twitch deletes past broadcasts after a few weeks — if the
+                player stays blank, this replay is no longer available.{" "}
+                <a
+                  href={twitchVideoUrl(round.twitchVideoId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-amber-200"
+                >
+                  Open on Twitch
+                </a>
+              </p>
+            )}
         </section>
       )}
 
