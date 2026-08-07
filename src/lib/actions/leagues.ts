@@ -144,6 +144,10 @@ export async function updateLeague(id: string, formData: FormData) {
   // Discord results-post + new-member welcome bot config.
   const discordResultsChannelId =
     String(formData.get("discordResultsChannelId") ?? "").trim() || null;
+  // Channel for the "incident reports open" post. Null falls back to the RSVP
+  // channel at post time (see src/lib/notify-reporting.ts).
+  const discordReportsChannelId =
+    String(formData.get("discordReportsChannelId") ?? "").trim() || null;
   const discordWelcomeChannelId =
     String(formData.get("discordWelcomeChannelId") ?? "").trim() || null;
   const discordWelcomeMessage =
@@ -237,6 +241,7 @@ export async function updateLeague(id: string, formData: FormData) {
       youtubeChannelId,
       twitchChannelLogin,
       discordResultsChannelId,
+      discordReportsChannelId,
       discordWelcomeChannelId,
       discordWelcomeMessage,
       garage61TeamUrl,

@@ -187,6 +187,17 @@ model League {
   /// results-post feature is off for this league. See src/lib/notify-results.ts.
   discordResultsChannelId String?
 
+  /// Discord channel for the "incident reports are open" post. Falls back to
+  /// discordRsvpChannelId when null, so a league that already posts RSVPs
+  /// needs no extra configuration. Set both to null to switch the
+  /// announcement off. See src/lib/notify-reporting.ts.
+  ///
+  /// Until 2026-08-07 this notification was the last one still driven by a
+  /// Discord WEBHOOK URL (discordRegistrationsWebhookUrl) rather than the bot.
+  /// No league ever had that webhook set, so it had never fired once for any
+  /// league since it was built. It now uses the bot like every other notifier.
+  discordReportsChannelId String?
+
   /// Discord channel for the daily new-member welcome post. Null = the
   /// welcome feature is off. See src/lib/notify-welcome.ts.
   discordWelcomeChannelId String?

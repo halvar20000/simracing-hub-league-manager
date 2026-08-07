@@ -197,6 +197,23 @@ export default async function EditLeaguePage({
             </label>
             <label className="block flex-1 min-w-[12rem]">
               <span className="mb-1 block text-xs text-zinc-400">
+                Reports channel ID — “incident reports open” post
+              </span>
+              <input
+                name="discordReportsChannelId"
+                type="text"
+                defaultValue={league.discordReportsChannelId ?? ""}
+                placeholder="defaults to the RSVP channel"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+              />
+              <span className="mt-1 block text-[11px] text-zinc-500">
+                Posted once per round when the protest window opens. Leave
+                empty to use the RSVP channel above; clear both to switch the
+                announcement off.
+              </span>
+            </label>
+            <label className="block flex-1 min-w-[12rem]">
+              <span className="mb-1 block text-xs text-zinc-400">
                 Stream channel ID (Twitch announcement bot)
               </span>
               <input

@@ -1,5 +1,15 @@
+/**
+ * Post "incident reports are open" for a round to Discord. Idempotent via
+ * Round.reportingNotifiedAt.
+ *
+ * Uses the Discord BOT (like every other notifier in this codebase). Until
+ * 2026-08-07 it was the last one still posting through a webhook URL
+ * (League.discordRegistrationsWebhookUrl) — and since no league ever had that
+ * webhook configured, it had never fired once for any league. Don't move it
+ * back to a webhook.
+ */
 import { prisma } from "@/lib/prisma";
-import { postDiscordWebhook } from "@/lib/discord-webhook";
+import { postBotMessage } from "@/lib/discord-bot";
 
 export type NotifyResult =
   | { ok: true }
@@ -8,10 +18,10 @@ export type NotifyResult =
       reason:
         | "round-not-found"
         | "already-notified"
-        | "no-webhook"
+        | "no-channel"
         | "no-cooldown"
         | "too-early"
-        | "webhook-failed";
+        | "post-failed";
     };
 
 export async function notifyReportingOpenForRound(
@@ -28,8 +38,11 @@ export async function notifyReportingOpenForRound(
   if (round.reportingNotifiedAt) return { ok: false, reason: "already-notified" };
 
   const lg = round.season.league;
-  if (!lg.discordRegistrationsWebhookUrl) {
-    return { ok: false, reason: "no-webhook" };
+  // Dedicated reports channel if set, otherwise reuse the league's RSVP
+  // channel — the drivers who need to see this are already in it.
+  const channelId = lg.discordReportsChannelId ?? lg.discordRsvpChannelId;
+  if (!channelId) {
+    return { ok: false, reason: "no-channel" };
   }
 
   const cooldownHrs = round.season.scoringSystem?.protestCooldownHours ?? null;
@@ -56,9 +69,7 @@ export async function notifyReportingOpenForRound(
     deadlineText = `Reports close ${closeAt.toUTCString()}.`;
   }
 
-  try {
-    await postDiscordWebhook(lg.discordRegistrationsWebhookUrl, {
-      username: "CLS Reports",
+  const posted = await postBotMessage(channelId, {
       embeds: [
         {
           title: `📋 Incident reports open — ${lg.name}`,
@@ -79,9 +90,9 @@ export async function notifyReportingOpenForRound(
           footer: { text: "CLS — Incident reports" },
         },
       ],
-    });
-  } catch {
-    return { ok: false, reason: "webhook-failed" };
+  });
+  if (!posted.ok) {
+    return { ok: false, reason: "post-failed" };
   }
 
   await prisma.round.update({

@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.90.0",
+    date: "2026-08-07",
+    changes: [
+      "Fix: the “incident reports are open” Discord post had never worked — not for one league, not once since it was built. It was the last notification still sent through a Discord webhook URL, and no league ever had that webhook filled in, so every announcement was silently dropped. It now posts through the CLS bot like every other notification.",
+      "By default it goes to the league's RSVP channel, so nothing needs configuring. A new “Reports channel ID” field on the league edit page can send it somewhere else; clearing both switches the announcement off.",
+      "The 12 rounds whose protest windows opened while this was broken (GT3 WCT 1-7, SFL 1, 2 and 4, PCCD 1 and 2) were marked as already announced, so nobody gets a burst of notices about races from June and July. The next race to finish is the first one that posts.",
+    ],
+  },
+  {
     version: "1.89.0",
     date: "2026-08-07",
     changes: [
