@@ -154,7 +154,9 @@ On JSON import, leagues in `CAR_ENFORCED_LEAGUE_SLUGS` (`cas-iec`, `cas-gt3-wct`
 
 ## Discord notifications
 
-- `src/lib/notify-reporting.ts:notifyReportingOpenForRound(roundId)` — pure helper, idempotent via `Round.reportingNotifiedAt`.
+- `src/lib/notify-reporting.ts:notifyReportingOpenForRound(roundId)` — pure helper, idempotent via `Round.reportingNotifiedAt`. Posts via **`postBotMessage`** to `League.discordReportsChannelId ?? League.discordRsvpChannelId`; `no-channel` when both are null.
+  - **Until v1.90.0 (2026-08-07) this was the last notifier still using a webhook URL** (`discordRegistrationsWebhookUrl`), which no league had ever set — so it had **never fired once for any league**, silently, because `no-webhook` is a "skipped" reason and not an error. Don't move it back to a webhook. The 12 already-open rounds were stamped `reportingNotifiedAt` on the live DB before the deploy so the fix didn't dump stale announcements into Discord — **do the same suppression if you ever re-enable a long-broken notifier.**
+  - `cas-iec` has neither channel set, so IEC rounds will skip with `no-channel` until one is configured.
 - Cron endpoint: `/api/cron/notify-reporting-open` — requires `Authorization: Bearer ${CRON_SECRET}`. Has `runtime = "nodejs"`, `dynamic = "force-dynamic"`, `maxDuration = 60`.
 - Schedulers:
   - `vercel.json` cron — DEAD (Vercel decommissioned 2026-06-19).
