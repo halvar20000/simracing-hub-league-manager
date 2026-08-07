@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.90.1",
+    date: "2026-08-07",
+    changes: [
+      "Privacy policy: added Vercel Blob to the list of recipients. Uploaded images — league and team logos, stint-planner screenshots — are stored there and loaded by your browser directly, so it belongs in the list alongside Hetzner, Discord and Resend. Nothing about how the site works changed; the policy was simply incomplete.",
+    ],
+  },
+  {
     version: "1.90.0",
     date: "2026-08-07",
     changes: [

@@ -280,6 +280,13 @@ export default function DatenschutzPage() {
               DSGVO;
             </li>
             <li>
+              Vercel Inc., USA — Dateispeicher (Vercel Blob) für hochgeladene
+              Bilder wie Liga- und Teamlogos sowie für archivierte
+              Ergebnis- und Rennprotokolldateien, Auftragsverarbeiter. Beim
+              Anzeigen einer Seite mit einem solchen Bild ruft Ihr Browser
+              dieses direkt von dort ab;
+            </li>
+            <li>
               Resend, Inc., USA — Versand von Benachrichtigungs- und
               Kontakt-E-Mails, Auftragsverarbeiter;
             </li>
@@ -305,7 +312,7 @@ export default function DatenschutzPage() {
 
         <Section title="12. Übermittlung in Drittländer">
           <p>
-            Soweit Daten an Anbieter in den USA übermittelt werden (Resend,
+            Soweit Daten an Anbieter in den USA übermittelt werden (Vercel, Resend,
             Discord, iRacing, Google, Twitch), stützt sich die Übermittlung auf
             das EU-US Data Privacy Framework, soweit der jeweilige Anbieter
             zertifiziert ist, andernfalls auf Standardvertragsklauseln der
@@ -585,6 +592,12 @@ export default function DatenschutzPage() {
               (servers in the EU), processor under Art. 28 GDPR;
             </li>
             <li>
+              Vercel Inc., USA — file storage (Vercel Blob) for uploaded images
+              such as league and team logos, and for archived result and race
+              log files, processor. When a page shows such an image your browser
+              fetches it from there directly;
+            </li>
+            <li>
               Resend, Inc., USA — sending notification and contact emails,
               processor;
             </li>
@@ -606,7 +619,7 @@ export default function DatenschutzPage() {
 
         <Section title="12. Transfers to third countries">
           <p>
-            Where data is transferred to providers in the USA (Resend, Discord,
+            Where data is transferred to providers in the USA (Vercel, Resend, Discord,
             iRacing, Google, Twitch), the transfer relies on the EU-US Data
             Privacy Framework where the provider is certified, and otherwise on
             the European Commission&apos;s standard contractual clauses under
