@@ -13,7 +13,7 @@ A Next.js 15 App Router application that manages race leagues, seasons, registra
 - NextAuth.js with PrismaAdapter + Discord OAuth
 - Tailwind CSS — dark zinc-based theme
 - PayPal integration for registration fees (per-league config on `League`)
-- **Self-hosted Hetzner VPS + Coolify is the LIVE stack** (migrated off Vercel/Neon on 2026-06-19; both decommissioned). App + Postgres run as Docker containers on one Hetzner CX23 box (IP `5.75.174.170`), fronted by Coolify's Traefik with automatic Let's Encrypt. Scheduling is **GitHub Actions crons only** (they hit the live endpoints); the old `vercel.json` daily cron is dead.
+- **Self-hosted Hetzner VPS + Coolify is the LIVE stack** (migrated off Vercel/Neon on 2026-06-19; both decommissioned). App + Postgres run as Docker containers on one Hetzner CX23 box (IP `5.75.174.170`), fronted by Coolify's Traefik with automatic Let's Encrypt. Scheduling is a **root crontab on the box** (primary, since 2026-08-06) with the **GitHub Actions crons as backup** — see "Cron scheduling" below; the old `vercel.json` daily cron is dead.
 
 ## Repo & deployment
 
@@ -157,8 +157,19 @@ On JSON import, leagues in `CAR_ENFORCED_LEAGUE_SLUGS` (`cas-iec`, `cas-gt3-wct`
 - `src/lib/notify-reporting.ts:notifyReportingOpenForRound(roundId)` — pure helper, idempotent via `Round.reportingNotifiedAt`.
 - Cron endpoint: `/api/cron/notify-reporting-open` — requires `Authorization: Bearer ${CRON_SECRET}`. Has `runtime = "nodejs"`, `dynamic = "force-dynamic"`, `maxDuration = 60`.
 - Schedulers:
-  - `vercel.json` cron — DEAD (Vercel decommissioned 2026-06-19). The GitHub Actions workflows below are now the only schedulers; they call the live `league.simracing-hub.com` endpoints with the `CRON_SECRET` (kept in sync between Coolify and the GitHub Actions repo secret).
-  - `.github/workflows/cron-reporting-open.yml` — every 30 min, runs free on GitHub Actions
+  - `vercel.json` cron — DEAD (Vercel decommissioned 2026-06-19).
+  - **PRIMARY scheduler = root crontab on the Hetzner box** (since 2026-08-06) — see "Cron scheduling" below. `.github/workflows/cron-*.yml` are kept enabled as a slow BACKUP.
+  - `.github/workflows/cron-reporting-open.yml` — nominally every 30 min, in practice far less (see below)
+
+## Cron scheduling — host crontab is primary, GitHub Actions is backup
+
+**Do not move scheduling back to GitHub Actions alone.** Measured over 8 days (Aug 2026), the `"*/10"` post-stream workflow fired **~13 times a day instead of 144** — median gap 101 min, shortest gap across 99 intervals 56 min, zero gaps under 15 min. GitHub's `schedule` event is best-effort: it delays and outright drops runs under load, and high-frequency crons on free public repos are culled first. A stream announcement due 30 min before the race could land after the race started.
+
+- **Primary**: `/root/cls-cron.sh <endpoint>` on `5.75.174.170`, driven by root's crontab. Versioned here as `deploy/cls-cron.sh` + `deploy/cls-crontab`; **edit those and re-`scp`**, they are not auto-deployed by Coolify.
+- The script **discovers `CRON_SECRET` from the running app container** (the container name is a Coolify hash that changes on every deploy, so it probes for the one that has the var) and caches it in `/root/.cls-cron.secret` (0600). On a `401` it re-discovers once and retries, so rotating `CRON_SECRET` in Coolify self-heals without touching the box.
+- `flock` per endpoint prevents a slow run stacking on itself. Log: `/var/log/cls-cron.log` (logrotate daily ×14, `deploy/cls-cron.logrotate`).
+- **Backup**: the GitHub workflows stay enabled deliberately. Every cron endpoint is idempotent (`postedAt` / `reportingNotifiedAt` / `rsvpClosedAt` / `youtubeVideoId` / `twitchVideoId` markers), so a duplicate or late GitHub run is a harmless no-op. If the Hetzner box dies, the jobs still limp along.
+- **Health check**: `ssh -i ~/.ssh/hetzner_cls root@5.75.174.170 'tail -20 /var/log/cls-cron.log; grep -c FAIL /var/log/cls-cron.log'`. Adding a new cron endpoint means editing BOTH `deploy/cls-crontab` (then `crontab /root/cls-crontab`) and the workflow file.
 - Team-mode change notifications use a similar pattern via `src/lib/actions/registrations.ts:notifyTeamChange`.
 
 ## Per-round RSVP (Discord bot)

@@ -1,0 +1,26 @@
+# CLS scheduled jobs — PRIMARY scheduler (root crontab on the Hetzner box).
+# Times are UTC (the box is Etc/UTC). Install with:  crontab /root/cls-crontab
+#
+# The matching .github/workflows/cron-*.yml stay ENABLED as a slow backup.
+# GitHub's `schedule` event drops ~91% of high-frequency triggers (measured:
+# "*/10" fired ~13x/day, median gap 101 min), so it cannot be the primary.
+# Every endpoint is idempotent, so the backup firing late is a harmless no-op.
+#
+# Log: /var/log/cls-cron.log  (rotated daily, 14 days — /etc/logrotate.d/cls-cron)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# --- time-critical: a late run has real consequences -----------------------
+*/10 * * * * /root/cls-cron.sh post-stream-announcements
+*/15 * * * * /root/cls-cron.sh rsvp-close
+*/30 * * * * /root/cls-cron.sh post-rsvp
+*/30 * * * * /root/cls-cron.sh notify-reporting-open
+
+# --- periodic: lateness is harmless ---------------------------------------
+20 */6 * * * /root/cls-cron.sh discord-race-events
+40 */3 * * * /root/cls-cron.sh youtube-match
+50 */3 * * * /root/cls-cron.sh twitch-match
+
+# --- daily ----------------------------------------------------------------
+30 4 * * *  /root/cls-cron.sh discord-stats
+0 16 * * *  /root/cls-cron.sh discord-welcome
