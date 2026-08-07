@@ -6,9 +6,18 @@ export default function Footer() {
     <footer className="mt-12 border-t border-zinc-800 bg-[#0a0a0f]">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 px-6 py-4 text-center sm:flex-row sm:justify-between sm:text-left">
         <p className="text-xs text-zinc-500">
-          Independent. No ads. No tracking. No affiliate links.
+          Independent. No ads. No analytics. No affiliate links.
         </p>
         <nav className="flex flex-wrap items-center justify-center gap-3 text-xs">
+          <Link href="/impressum" className="text-zinc-400 hover:text-[#ff6b35]">
+            Impressum
+          </Link>
+          <Link
+            href="/datenschutz"
+            className="text-zinc-400 hover:text-[#ff6b35]"
+          >
+            Datenschutz
+          </Link>
           <Link
             href="/contact"
             className="inline-flex items-center gap-1.5 rounded border border-[#ff6b35] px-3 py-1.5 font-medium text-[#ff6b35] hover:bg-[#ff6b35]/10"

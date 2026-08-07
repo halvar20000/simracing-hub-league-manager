@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.88.0",
+    date: "2026-08-07",
+    changes: [
+      "The site now has an Impressum and a privacy policy, both linked from the footer on every page. Until now it had neither, which is a legal requirement in the EU for a site that carries names, results and Discord logins — not just for shops. Both pages are bilingual, German and English.",
+      "The Impressum names the operator, a postal address, phone and email, as required by § 5 DDG in Germany and article 6 III LCEN in France, and adds the usual liability, link and copyright notices plus a trademark disclaimer for iRacing and the manufacturer names used in the league titles.",
+      "The privacy policy explains, per GDPR articles 13 and 14, what the site actually stores about a driver and why: the Discord sign-in, the driver profile, iRacing customer ID and ratings, results, penalties, RSVP, incident reports, race-logger uploads, and which of those are public and which are only visible to stewards and admins. It also lists the third parties involved (Hetzner, Discord, Resend, iRacing, and the embedded YouTube/Twitch players), the retention rules, and how to request access, correction or deletion.",
+      "Footer wording changed from “No tracking” to “No analytics”. There is still no analytics, no advertising and no profiling on this site — but an embedded YouTube or Twitch player on a round page is loaded from Google and Amazon servers and does see your visit, so the old claim was broader than it should have been.",
+    ],
+  },
+  {
     version: "1.87.0",
     date: "2026-08-06",
     changes: [
