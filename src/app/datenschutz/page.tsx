@@ -239,21 +239,36 @@ export default function DatenschutzPage() {
           </p>
         </Section>
 
-        <Section title="10. Eingebettete Videos (YouTube, Twitch)">
+        <Section title="10. Rennaufzeichnungen (YouTube, Twitch)">
           <p>
-            Auf Rennseiten kann eine Aufzeichnung des jeweiligen Rennens
-            eingebettet sein. Wird eine solche Seite aufgerufen, stellt Ihr
-            Browser eine Verbindung zu den Servern von Google Ireland Ltd. /
-            Google LLC (YouTube) bzw. Twitch Interactive, Inc. (Amazon) her.
-            Dabei werden mindestens Ihre IP-Adresse, die aufgerufene Seite und
-            gegebenenfalls dort gesetzte Cookies verarbeitet; sind Sie bei
-            diesen Diensten angemeldet, kann der Abruf Ihrem Konto zugeordnet
-            werden. Auf diese Verarbeitung besteht kein Einfluss; sie erfolgt
-            in eigener Verantwortung der genannten Anbieter. Rechtsgrundlage
-            für die Einbindung: Art. 6 Abs. 1 lit. f DSGVO (Bereitstellung der
-            Rennaufzeichnung im Ligakontext). Wenn Sie das vermeiden möchten,
-            rufen Sie die betreffenden Rennseiten nicht auf oder blockieren Sie
-            Drittanbieter-Inhalte in Ihrem Browser.
+            <span className="text-zinc-300">
+              Beim bloßen Aufruf einer Seite werden keine Daten an YouTube oder
+              Twitch übertragen.
+            </span>{" "}
+            Der Videoplayer auf den Rennseiten ist durch eine Zwei-Klick-Lösung
+            geschützt: Zunächst wird nur ein lokaler Platzhalter angezeigt. Erst
+            wenn Sie darin ausdrücklich auf „Load the … player“ klicken, wird
+            der Player nachgeladen und Ihr Browser verbindet sich mit Google
+            Ireland Ltd. / Google LLC (YouTube, ausgeliefert über
+            youtube-nocookie.com) bzw. Twitch Interactive, Inc. (Amazon). Ab
+            diesem Zeitpunkt werden mindestens Ihre IP-Adresse, die aufgerufene
+            Seite und gegebenenfalls dort gesetzte Cookies verarbeitet; sind Sie
+            bei diesen Diensten angemeldet, kann der Abruf Ihrem Konto
+            zugeordnet werden. Auf diese Verarbeitung besteht kein Einfluss; sie
+            erfolgt in eigener Verantwortung der genannten Anbieter.
+          </p>
+          <p>
+            Rechtsgrundlage für das Laden des Players ist Ihre durch den Klick
+            erteilte Einwilligung (Art. 6 Abs. 1 lit. a DSGVO sowie § 25 Abs. 1
+            TDDDG). Die Einwilligung gilt nur für das jeweilige Video und wird
+            nicht gespeichert; beim nächsten Seitenaufruf erscheint wieder der
+            Platzhalter. Klicken Sie nicht, findet keine Übermittlung statt.
+          </p>
+          <p>
+            Auch die Vorschaubilder auf der Seite „Race Streams“ und in der
+            Administration werden nicht direkt von YouTube oder Twitch geladen,
+            sondern über einen Proxy auf unserem eigenen Server abgerufen. Ihr
+            Browser kontaktiert dabei ausschließlich league.simracing-hub.com.
           </p>
         </Section>
 
@@ -277,8 +292,9 @@ export default function DatenschutzPage() {
               Ergebnis- und Ratingdaten;
             </li>
             <li>
-              Google Ireland Ltd. / Twitch Interactive, Inc. — nur beim Aufruf
-              von Seiten mit eingebetteter Rennaufzeichnung.
+              Google Ireland Ltd. / Twitch Interactive, Inc. — ausschließlich
+              dann, wenn Sie den Videoplayer einer Rennaufzeichnung aktiv
+              starten (siehe Ziffer 10).
             </li>
           </ul>
           <p>
@@ -532,18 +548,33 @@ export default function DatenschutzPage() {
           </p>
         </Section>
 
-        <Section title="10. Embedded videos (YouTube, Twitch)">
+        <Section title="10. Race recordings (YouTube, Twitch)">
           <p>
-            Round pages may embed a recording of the race. Opening such a page
-            makes your browser connect to servers of Google Ireland Ltd. /
-            Google LLC (YouTube) or Twitch Interactive, Inc. (Amazon). At
-            minimum your IP address, the page requested and any cookies set
-            there are processed; if you are signed in to those services the
-            request may be linked to your account. The operator has no
-            influence over that processing, which those providers carry out
-            under their own responsibility. Legal basis for the embed: Art.
-            6(1)(f) GDPR. To avoid it, do not open the affected round pages or
-            block third-party content in your browser.
+            <span className="text-zinc-300">
+              Simply opening a page transmits nothing to YouTube or Twitch.
+            </span>{" "}
+            The player on round pages is behind a click-to-load gate: at first
+            only a local placeholder is shown. The player is loaded, and your
+            browser connects to Google Ireland Ltd. / Google LLC (YouTube,
+            served via youtube-nocookie.com) or Twitch Interactive, Inc.
+            (Amazon), only once you explicitly click &quot;Load the … player&quot;.
+            From that point at minimum your IP address, the page requested and
+            any cookies set there are processed; if you are signed in to those
+            services the request may be linked to your account. The operator has
+            no influence over that processing, which those providers carry out
+            under their own responsibility.
+          </p>
+          <p>
+            The legal basis for loading the player is the consent you give by
+            clicking (Art. 6(1)(a) GDPR). That consent covers only the video
+            concerned and is not stored; the placeholder returns on your next
+            visit. If you do not click, no transfer takes place.
+          </p>
+          <p>
+            The preview images on the Race Streams page and in the admin area
+            are likewise not loaded from YouTube or Twitch directly, but fetched
+            through a proxy on our own server. Your browser only ever contacts
+            league.simracing-hub.com.
           </p>
         </Section>
 
@@ -566,8 +597,8 @@ export default function DatenschutzPage() {
               and rating data;
             </li>
             <li>
-              Google Ireland Ltd. / Twitch Interactive, Inc. — only when you
-              open a page with an embedded race recording.
+              Google Ireland Ltd. / Twitch Interactive, Inc. — only if you
+              actively start the player for a race recording (see section 10).
             </li>
           </ul>
           <p>Data is never sold or passed on for advertising purposes.</p>

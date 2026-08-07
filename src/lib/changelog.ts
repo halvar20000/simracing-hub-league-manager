@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.89.0",
+    date: "2026-08-07",
+    changes: [
+      "Race replays now load only when you ask for them. Until now, opening a round page with a linked video immediately loaded the YouTube or Twitch player, which handed your IP address to Google or Amazon before you had decided to watch anything. The player is now behind a placeholder with a play button: nothing leaves the site until you click it. There is also a link to open the replay directly on YouTube or Twitch instead.",
+      "The thumbnails on the Race Streams page came from Google's image servers for the same reason, so every visit to that page pinged Google once per card. They are now fetched by our own server and served from this site, so the page looks exactly the same but your browser only ever talks to league.simracing-hub.com.",
+      "The privacy policy has been updated to match: section 10 now states that simply opening a page transmits nothing to YouTube or Twitch, and that loading a player is your own choice.",
+    ],
+  },
+  {
     version: "1.88.0",
     date: "2026-08-07",
     changes: [

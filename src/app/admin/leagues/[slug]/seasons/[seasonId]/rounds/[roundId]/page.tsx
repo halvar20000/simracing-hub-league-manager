@@ -363,7 +363,7 @@ export default async function AdminRoundResults({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`https://i.ytimg.com/vi/${round.youtubeVideoId}/mqdefault.jpg`}
+                src={`/api/stream-thumb?yt=${round.youtubeVideoId}`}
                 alt="Stream thumbnail"
                 className="h-16 w-28 rounded object-cover"
               />

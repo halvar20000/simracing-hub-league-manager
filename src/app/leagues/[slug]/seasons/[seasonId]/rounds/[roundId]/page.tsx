@@ -19,6 +19,7 @@ import { DriverOfTheDayHero } from "@/components/DriverOfTheDayHero";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { isExpiringVodType, twitchVideoUrl } from "@/lib/twitch";
+import { RaceStreamEmbed } from "@/components/RaceStreamEmbed";
 
 /**
  * Twitch's embedded player refuses to load unless the embedding host is named
@@ -690,27 +691,11 @@ export default async function PublicRoundResults({
           <h2 className="mb-2 text-sm font-semibold text-zinc-300">
             📺 Race stream
           </h2>
-          <div className="relative w-full overflow-hidden rounded-lg border border-zinc-800 bg-black pt-[56.25%]">
-            {round.youtubeVideoId ? (
-              <iframe
-                className="absolute inset-0 h-full w-full"
-                src={`https://www.youtube-nocookie.com/embed/${round.youtubeVideoId}`}
-                title="Race stream replay"
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            ) : (
-              <iframe
-                className="absolute inset-0 h-full w-full"
-                src={`https://player.twitch.tv/?video=${round.twitchVideoId}&parent=${TWITCH_PARENT}&autoplay=false`}
-                title="Race stream replay (Twitch)"
-                loading="lazy"
-                allow="autoplay; fullscreen; picture-in-picture"
-                allowFullScreen
-              />
-            )}
-          </div>
+          <RaceStreamEmbed
+            youtubeVideoId={round.youtubeVideoId}
+            twitchVideoId={round.twitchVideoId}
+            twitchParent={TWITCH_PARENT}
+          />
           {!round.youtubeVideoId &&
             round.twitchVideoId &&
             isExpiringVodType(round.twitchVideoType) && (

@@ -113,9 +113,14 @@ export default async function StreamsPage({
             const href = isYt
               ? `https://www.youtube.com/watch?v=${r.youtubeVideoId}`
               : twitchVideoUrl(r.twitchVideoId!);
+            // Proxied through our own origin so the browser never contacts
+            // Google / Twitch just to render this page — see
+            // src/app/api/stream-thumb/route.ts.
             const thumb = isYt
-              ? `https://i.ytimg.com/vi/${r.youtubeVideoId}/mqdefault.jpg`
-              : r.twitchThumbnailUrl;
+              ? `/api/stream-thumb?yt=${r.youtubeVideoId}`
+              : r.twitchThumbnailUrl
+                ? `/api/stream-thumb?tw=${encodeURIComponent(r.twitchThumbnailUrl)}`
+                : null;
             return (
             <a
               key={r.id}
