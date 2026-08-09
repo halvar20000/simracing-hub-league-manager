@@ -162,6 +162,25 @@ export default async function EditScoringSystem({
               (Class and Team scoring always include participation)
             </span>
           </label>
+          <label className="mt-3 flex items-start gap-2 text-sm text-zinc-200">
+            <input
+              type="checkbox"
+              name="participationCombinedDistance"
+              defaultChecked={ss.participationCombinedDistance}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              Measure that distance across the <strong>whole round</strong>, not per race
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                Only matters on rounds with more than one race. Off (default): any single
+                race that reaches the threshold earns the points. On: the driver&rsquo;s laps
+                over all races of the round are measured against the sum of the races&rsquo;
+                leader laps — so winning race 1 and skipping race 2 is 50 % of the round,
+                not 100 %. The CAS Combined Cup regulation asks for this reading
+                (&bdquo;75 % der Gesamt-Rundenzahl in der kombinierten Wertung&ldquo;).
+              </span>
+            </span>
+          </label>
         </Section>
 
         <Section title="Bonuses">

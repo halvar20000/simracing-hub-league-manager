@@ -46,6 +46,63 @@ export function calculateParticipationPoints(
   return participationPoints;
 }
 
+/** The laps the leader covered in each race of a round, keyed by raceNumber.
+ *  This is the same denominator the importer used for `raceDistancePct`
+ *  (iRacing's `session.maxLaps`), reconstructed from the stored results so it
+ *  also holds for CSV and iRLM imports, which never carry that number. */
+export function leaderLapsByRace(
+  results: { raceNumber: number; lapsCompleted: number }[]
+): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const r of results) {
+    const cur = out.get(r.raceNumber) ?? 0;
+    if (r.lapsCompleted > cur) out.set(r.raceNumber, r.lapsCompleted);
+  }
+  return out;
+}
+
+/**
+ * Did this driver earn the round's participation points?
+ *
+ * The same threshold has two readings, chosen per scoring system:
+ *
+ *  - **per race** (default, and how every league scored until now): any single
+ *    race of the round that reaches the threshold on its own distance earns
+ *    the points.
+ *  - **across the round** (`participationCombinedDistance`): the laps the
+ *    driver completed in the WHOLE round are measured against the sum of the
+ *    races' leader laps.
+ *
+ * The difference is not academic. The CAS Combined Cup runs two races per
+ * round and its regulation asks for "75 % der Gesamt-Rundenzahl in der
+ * kombinierten Wertung": a driver who wins race 1 and skips race 2 has 100 %
+ * of one race but only half the round, and only the second reading refuses him
+ * the points.
+ */
+export function participationEarned(
+  results: {
+    raceNumber: number;
+    lapsCompleted: number;
+    raceDistancePct: number;
+    finishStatus: FinishStatus;
+  }[],
+  leaderLaps: Map<number, number>,
+  minPct: number,
+  combined: boolean
+): boolean {
+  const counted = results.filter((r) => r.finishStatus !== "DNS");
+  if (!combined) {
+    return counted.some((r) => r.raceDistancePct >= minPct);
+  }
+  let roundLaps = 0;
+  for (const laps of leaderLaps.values()) roundLaps += laps;
+  if (roundLaps <= 0) return false;
+  const driven = counted.reduce((sum, r) => sum + r.lapsCompleted, 0);
+  // Floored, exactly like the importer computes raceDistancePct — a driver on
+  // 74.9 % is below 75, not rounded up into the points.
+  return Math.floor((driven / roundLaps) * 100) >= minPct;
+}
+
 /**
  * Recompute the points for a single race result and persist the new values.
  * Picks the correct points table based on raceNumber (race 1 uses
@@ -120,11 +177,15 @@ async function recomputeParticipationForRound(
     byReg.set(r.registrationId, list);
   }
 
+  const leaderLaps = leaderLapsByRace(round.raceResults);
+  const combinedDistance = scoring.participationCombinedDistance === true;
+
   for (const list of byReg.values()) {
-    const earned = list.some(
-      (r) =>
-        r.finishStatus !== "DNS" &&
-        r.raceDistancePct >= scoring.participationMinDistancePct
+    const earned = participationEarned(
+      list,
+      leaderLaps,
+      scoring.participationMinDistancePct,
+      combinedDistance
     );
     const sorted = [...list].sort((a, b) => a.raceNumber - b.raceNumber);
     for (let i = 0; i < sorted.length; i++) {

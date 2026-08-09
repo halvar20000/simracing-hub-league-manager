@@ -116,6 +116,7 @@ export async function createScoringSystem(formData: FormData): Promise<void> {
         fprTiers: j(src.fprTiers),
         fprMode: src.fprMode,
         participationInCombined: src.participationInCombined,
+        participationCombinedDistance: src.participationCombinedDistance,
         racesPerRound: src.racesPerRound,
         pointsTableRace2: j(src.pointsTableRace2),
         protestWindowHours: src.protestWindowHours,
@@ -179,6 +180,8 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
   const incidentReportingEnabled =
     formData.get("incidentReportingEnabled") === "on";
   const participationInCombined = formData.get("participationInCombined") === "on";
+  const participationCombinedDistance =
+    formData.get("participationCombinedDistance") === "on";
   const deferPenaltyPoints = formData.get("deferPenaltyPoints") === "on";
   // Penalty pool mode: radio buttons send the value of the selected option.
   const penaltyPoolModeRaw = String(formData.get("penaltyPoolMode") ?? "OFF");
@@ -231,6 +234,7 @@ export async function updateScoringSystem(formData: FormData): Promise<void> {
       protestCooldownHours,
       incidentReportingEnabled,
       participationInCombined,
+      participationCombinedDistance,
       deferPenaltyPoints,
       penaltyPoolMode,
       noRsvpNoShowPenaltyPoints,

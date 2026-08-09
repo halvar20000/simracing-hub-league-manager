@@ -505,6 +505,14 @@ model ScoringSystem {
   gdcPointsTable              Json?
   participationPoints         Int     @default(0)
   participationMinDistancePct Int     @default(75)
+  /// How `participationMinDistancePct` is measured on a multi-race round.
+  /// false (default): per race — any single race that reaches the threshold on
+  /// its own distance earns the points. true: across the whole round — the
+  /// driver's laps over all races against the sum of the races' leader laps.
+  /// The CAS Combined Cup regulation means the latter ("75 % der
+  /// Gesamt-Rundenzahl in der kombinierten Wertung"); every other league keeps
+  /// the per-race reading.
+  participationCombinedDistance Boolean @default(false)
   racePointsMinDistancePct    Int     @default(50)
   bonusFastestLap             Int?
   bonusPole                   Int?

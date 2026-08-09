@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.92.0",
+    date: "2026-08-09",
+    changes: [
+      "Combined Cup, 11th Season: the participation points (PCP) were configured with the wrong values — 6 points from 45 % race distance, while the new regulation says 5 points from 75 %. Both are corrected. The season had not been scored yet, so no standing changes.",
+      "The 75 % is now measured across the whole round instead of per race. The Combined Cup runs two races per round and the regulation asks for “75 % der Gesamt-Rundenzahl in der kombinierten Wertung” — so a driver who runs one race in full and skips the other has covered half the round, not all of it, and no longer collects the participation points. A new option on the scoring system controls this; every other league keeps the previous per-race reading and is unaffected.",
+      "The FPR bonus was checked against the same regulation and needed no change: 0–2 incidents = 3 points, 3–5 = 2, 6–7 = 1, equal incident counts get equal points, and both races of a round must reach 90 % distance.",
+    ],
+  },
+  {
     version: "1.91.0",
     date: "2026-08-09",
     changes: [
