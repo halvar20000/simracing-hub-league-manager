@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.93.0",
+    date: "2026-08-09",
+    changes: [
+      "Stint planner: the Drivers table now sits below the Garage 61 block and its charts, because that is the order the work happens in — pull the real laps, look at them, then settle the numbers the plan runs on.",
+      "Fixed a trap that could cost a whole race weekend: a driver's Pace and L/lap cell was outlined green as soon as Garage 61 had data for them, even when the cell was still empty and the pulled figure was only sitting in it as a grey placeholder. It looked exactly like a filled-in value, so a plan could quietly run every driver on the Standard profile. Green now means there is a value in the cell; an empty cell with data waiting is outlined amber.",
+      "The roster now says so out loud: any driver in the schedule without their own pace or fuel is named above the table, with a one-click “Apply Garage 61” button when the data is already there, and a note to type the numbers when it is not.",
+      "“Apply to plan” no longer disappears after a page reload. It used to work only on a pull made in the same session, so a pull saved with the plan could be seen in the charts but never applied again — you had to pull afresh just to undo a ↺ or to re-project the pace after changing the track temperature.",
+      "Above the table, a line explaining what nobody could tell from looking: typing in a cell takes effect immediately and needs no “apply” — that button only copies Garage 61's numbers into the table in the first place.",
+    ],
+  },
+  {
     version: "1.92.0",
     date: "2026-08-09",
     changes: [

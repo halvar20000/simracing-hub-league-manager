@@ -261,9 +261,22 @@ export default function StintPlannerGuidePage() {
             Stintlänge, sein Verbrauch die Runden aus einem Tank. Zwischen zwei
             Fahrern liegt da oft eine ganze Runde pro Stint. Leer lassen heißt:
             Der Fahrer läuft auf dem Standard-Profil; solche Stints sind in der
-            Tabelle mit <K>est</K> markiert und die Fahrer stehen unter der
+            Tabelle mit <K>est</K> markiert und die Fahrer stehen über der
             Tabelle namentlich, damit du siehst, welcher Teil des Plans auf
             Annahmen steht.
+          </p>
+          <p>
+            <strong>Wichtig zum Zusammenspiel mit Garage 61:</strong>{" "}
+            <K>Apply to plan</K> kopiert die Zahlen des Pulls <em>in</em> die
+            Tabelle — mehr macht der Knopf nicht. Was danach in den Feldern
+            steht, ist der Plan. Änderst du eine Zahl von Hand, wirkt das{" "}
+            <strong>sofort</strong>; es gibt keinen zweiten Schritt und nichts
+            zu bestätigen. Ein <span className="text-emerald-300">grün</span>{" "}
+            umrandetes Feld enthält einen Wert aus Garage 61, ein{" "}
+            <span className="text-amber-200">amber</span> umrandetes deinen
+            eigenen — und ein amber umrandetes <em>leeres</em> Feld heißt:
+            Garage 61 hat Daten, die aber noch nicht übernommen sind. Die Zahl
+            darin ist nur ein Platzhalter und zählt für den Plan nicht.
           </p>
         </Section>
 

@@ -1120,16 +1120,27 @@ export default function StintPlanner({
     return srcTemp != null && targetTemp != null ? slope * (targetTemp - srcTemp) : 0;
   }
 
-  function applyGarage61() {
-    if (!g61) return;
+  /**
+   * Write a Garage 61 analysis into the plan: Standard profile, per-driver pace
+   * and fuel, the temperature fit and the wet delta.
+   *
+   * Takes the analysis as an argument rather than reading the `g61` state,
+   * because a pull that was saved with the plan must stay applicable after a
+   * reload — the fresh-pull state is gone by then, but `s.g61Analysis` is not,
+   * and re-applying is exactly what you want after handing a field back with ↺
+   * or after changing the plan's track temperature.
+   */
+  function applyGarage61(source?: G61ImportResult | null) {
+    const analysis = source ?? g61 ?? s.g61Analysis;
+    if (!analysis) return;
     const norm = (x: string) => x.trim().toLowerCase();
-    const matched = g61.drivers.filter((gd) =>
+    const matched = analysis.drivers.filter((gd) =>
       s.drivers.some((d) => norm(d.name) === norm(gd.driver))
     ).length;
 
     // Temperature model: prefer a data-driven slope, else keep the manual one.
-    const srcTemp = g61.temp.sourceTempC;
-    const dataSlope = g61.temp.slopePerC;
+    const srcTemp = analysis.temp.sourceTempC;
+    const dataSlope = analysis.temp.slopePerC;
     const manual = s.tempModel?.manualSlopePerC ?? DEFAULT_TEMP_SLOPE_PER_C;
     const slope = dataSlope != null ? dataSlope : manual;
     const fromData = dataSlope != null;
@@ -1146,8 +1157,8 @@ export default function StintPlanner({
 
     // Wet-weather model from the rain laps (measured delta wins; else manual).
     const measuredWet =
-      g61.wet && g61.wet.deltaSec != null && g61.wet.deltaSec > 0
-        ? g61.wet.deltaSec
+      analysis.wet && analysis.wet.deltaSec != null && analysis.wet.deltaSec > 0
+        ? analysis.wet.deltaSec
         : null;
     const manualWet = s.wetModel?.manualDeltaSec ?? DEFAULT_WET_DELTA_SEC;
     const wetDelta = measuredWet ?? manualWet;
@@ -1161,11 +1172,11 @@ export default function StintPlanner({
         conditions: "dry",
       },
       standard: {
-        laptime: fmtLap(g61.overall.laptimeSec + proj),
-        fuelPerLap: g61.overall.fuelPerLap.toFixed(2),
+        laptime: fmtLap(analysis.overall.laptimeSec + proj),
+        fuelPerLap: analysis.overall.fuelPerLap.toFixed(2),
       },
       drivers: p.drivers.map((d) => {
-        const gd = g61.drivers.find((x) => norm(x.driver) === norm(d.name));
+        const gd = analysis.drivers.find((x) => norm(x.driver) === norm(d.name));
         if (!gd) return d;
         // Fill what Garage 61 measured, but never overwrite a figure the team
         // typed in themselves — they know something the data doesn't.
@@ -1185,11 +1196,11 @@ export default function StintPlanner({
         deltaSec: wetDelta,
         fromData: measuredWet != null,
         manualDeltaSec: manualWet,
-        wetFuelPerLap: g61.wet?.fuelPerLap ?? null,
+        wetFuelPerLap: analysis.wet?.fuelPerLap ?? null,
         appliedDeltaSec: 0,
       },
       g61Analysis: {
-        ...g61,
+        ...analysis,
         generatedAt: new Date().toISOString(),
         // Keep where the data came from — the pull already recorded it.
         source: p.g61Analysis?.source,
@@ -1199,7 +1210,7 @@ export default function StintPlanner({
     const tempNote =
       srcTemp != null
         ? fromData
-          ? ` Temperature fit from data: ${slope.toFixed(3)} s/°C over ${g61.temp.minTempC?.toFixed(0)}–${g61.temp.maxTempC?.toFixed(0)}°C; pace set at ${targetTemp != null ? round1(targetTemp) : round1(srcTemp)}°C.`
+          ? ` Temperature fit from data: ${slope.toFixed(3)} s/°C over ${analysis.temp.minTempC?.toFixed(0)}–${analysis.temp.maxTempC?.toFixed(0)}°C; pace set at ${targetTemp != null ? round1(targetTemp) : round1(srcTemp)}°C.`
           : ` Laps were all near ${round1(srcTemp)}°C (no spread to fit) — using the ${(slope * 10).toFixed(1)} s/10°C manual estimate.`
         : "";
     // The pull has landed in the driver table, so drop the pending change list.
@@ -3472,358 +3483,6 @@ export default function StintPlanner({
           })()}
       </div>
 
-      {/* Drivers */}
-      <div className={card}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Drivers
-          </h2>
-          <ClsDriverPicker
-            options={clsDrivers.filter(
-              (d) => !s.drivers.some((r) => r.id === d.id)
-            )}
-            onPick={addClsDriver}
-          />
-        </div>
-        {s.drivers.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            Search for a CLS driver in the field above to add them.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm tabular-nums">
-              <thead className="text-xs uppercase tracking-wide text-zinc-500">
-                <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-2">Driver</th>
-                  <th className="py-1 pr-2 text-right" title="Clean laps Garage 61 measured for this driver on this track + car.">Laps</th>
-                  <th className="py-1 pr-2 text-right" title="Fastest clean lap in the Garage 61 data.">Best</th>
-                  <th className="py-1 pr-2 text-right" title="Mean of the driver's clean laps — how they really run, not their one hot lap.">Ø lap</th>
-                  <th className="py-1 pr-2 text-right" title="Track temperature the Garage 61 laps were set at.">°C</th>
-                  <th className="py-1 pr-2 text-right" title="Race pace used by the planner. Filled from Garage 61 (median clean lap, projected to the plan's track temp) — type to override.">Pace</th>
-                  <th className="py-1 pr-2 text-right" title="Fuel per lap used by the planner. Filled from Garage 61 — type to override.">L/lap</th>
-                  <th className="py-1 pr-2 text-right" title="Tyre wear in % per lap. Garage 61 does not measure this, so it is yours to enter; blank falls back to the plan default.">%/lap</th>
-                  {s.savingEnabled && deltaSaving && (
-                    <>
-                      <th
-                        className="py-1 pr-2 text-right text-cyan-300/80"
-                        title="Seconds per lap THIS driver gives up on a fuel-save stint, added to their own pace. Blank = the plan default (the gap between the Standard and Fuel-saving profiles)."
-                      >
-                        FS +s
-                      </th>
-                      <th
-                        className="py-1 pr-2 text-right text-cyan-300/80"
-                        title="Litres per lap THIS driver saves on a fuel-save stint, taken off their own consumption. Blank = the plan default."
-                      >
-                        FS −L
-                      </th>
-                    </>
-                  )}
-                  <th className="py-1 pr-2 text-right" title="How far this driver gets on one tank: laps, and how long that takes at their pace including the race-traffic penalty (dry).">Range/stint</th>
-                  <th className="py-1 pr-2 text-right" title="Laps this driver runs in the current schedule.">Laps tot.</th>
-                  <th className="py-1 pr-2 text-right" title="Stints this driver runs in the current schedule.">Stints</th>
-                  <th className="py-1" />
-                </tr>
-              </thead>
-              <tbody>
-                {s.drivers.map((d) => {
-                  const gd = g61ByDriver.get(normName(d.name)) ?? null;
-                  const perf = driverPerf.rows.find((r) => r.id === d.id) ?? null;
-                  const cell = (manual: boolean | undefined, hasData: boolean) =>
-                    `w-20 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
-                      manual
-                        ? "border-amber-700/70 text-amber-100"
-                        : hasData
-                          ? "border-emerald-900/60 text-emerald-100"
-                          : "border-zinc-700 text-zinc-100"
-                    }`;
-                  return (
-                    <tr key={d.id} className="border-t border-zinc-800/60">
-                      <td className="py-1 pr-2 text-zinc-100">
-                        <span className={`mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full align-middle ${driverColour(d.id).dot}`} />
-                        {d.name}
-                      </td>
-                      <td className="py-1 pr-2 text-right text-zinc-500">{gd?.laps ?? "—"}</td>
-                      <td className="py-1 pr-2 text-right text-zinc-400">
-                        {gd ? fmtLap(gd.bestSec) : "—"}
-                      </td>
-                      <td className="py-1 pr-2 text-right text-zinc-400">
-                        {gd ? fmtLap(gd.meanSec) : "—"}
-                      </td>
-                      <td
-                        className="py-1 pr-2 text-right text-zinc-500"
-                        title={
-                          gd
-                            ? `Track temperature of this driver's Garage 61 laps` +
-                              (analysisTemp?.minTempC != null && analysisTemp?.maxTempC != null
-                                ? ` — the import spans ${analysisTemp.minTempC.toFixed(0)}–${analysisTemp.maxTempC.toFixed(0)}°C` +
-                                  (analysisTemp.slopePerC != null
-                                    ? `, fitted at ${(analysisTemp.slopePerC * 10).toFixed(1)} s per 10°C`
-                                    : "")
-                                : "")
-                            : undefined
-                        }
-                      >
-                        {gd?.medianTempC != null
-                          ? `${gd.medianTempC.toFixed(0)}°`
-                          : analysisTemp?.sourceTempC != null
-                            ? `~${round1(analysisTemp.sourceTempC)}°`
-                            : "—"}
-                      </td>
-                      <td className="py-1 pr-2 text-right print:hidden">
-                        <input
-                          className={cell(d.manual?.laptime, !!gd)}
-                          value={d.laptime}
-                          onChange={(e) => patchDriverLaptime(d.id, e.target.value)}
-                          placeholder={gd ? fmtLap(gd.racePaceSec) : "m:ss"}
-                          title={
-                            d.manual?.laptime
-                              ? "Your own figure — a Garage 61 pull will not overwrite it."
-                              : "From Garage 61 (or blank = Standard profile pace)."
-                          }
-                        />
-                      </td>
-                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.laptime || "—"}</td>
-                      <td className="py-1 pr-2 text-right print:hidden">
-                        <input
-                          className={cell(d.manual?.fuelPerLap, !!gd)}
-                          value={d.fuelPerLap ?? ""}
-                          onChange={(e) => patchDriverField(d.id, "fuelPerLap", e.target.value)}
-                          placeholder={gd ? gd.fuelPerLap.toFixed(2) : "L"}
-                          title={
-                            d.manual?.fuelPerLap
-                              ? "Your own figure — a Garage 61 pull will not overwrite it."
-                              : "From Garage 61 (median of the clean laps)."
-                          }
-                        />
-                      </td>
-                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.fuelPerLap || "—"}</td>
-                      <td className="py-1 pr-2 text-right print:hidden">
-                        <input
-                          className={cell(d.manual?.tyreWear, false)}
-                          value={d.tyreWear ?? ""}
-                          onChange={(e) => patchDriverField(d.id, "tyreWear", e.target.value)}
-                          placeholder={s.event.tyreWearPctPerLap || "%"}
-                          title="Tyre wear in % per lap. Not measured by Garage 61 — read it off the car or leave blank for the plan default."
-                        />
-                      </td>
-                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.tyreWear || "—"}</td>
-                      {s.savingEnabled && deltaSaving && (
-                        <>
-                          <td className="py-1 pr-2 text-right print:hidden">
-                            <input
-                              className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
-                                d.savingSec?.trim()
-                                  ? "border-cyan-800/70 text-cyan-100"
-                                  : "border-zinc-700 text-zinc-100"
-                              }`}
-                              value={d.savingSec ?? ""}
-                              onChange={(e) => patchDriverSaving(d.id, "savingSec", e.target.value)}
-                              placeholder={planDelta.sec ? planDelta.sec.toFixed(1) : "s"}
-                              title="Seconds/lap this driver gives up when saving fuel. Blank = the plan default."
-                            />
-                          </td>
-                          <td className="hidden py-1 pr-2 text-right print:table-cell">
-                            {d.savingSec || (planDelta.sec ? planDelta.sec.toFixed(1) : "—")}
-                          </td>
-                          <td className="py-1 pr-2 text-right print:hidden">
-                            <input
-                              className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
-                                d.savingFuel?.trim()
-                                  ? "border-cyan-800/70 text-cyan-100"
-                                  : "border-zinc-700 text-zinc-100"
-                              }`}
-                              value={d.savingFuel ?? ""}
-                              onChange={(e) => patchDriverSaving(d.id, "savingFuel", e.target.value)}
-                              placeholder={planDelta.litres ? planDelta.litres.toFixed(2) : "L"}
-                              title="Litres/lap this driver saves when saving fuel. Blank = the plan default."
-                            />
-                          </td>
-                          <td className="hidden py-1 pr-2 text-right print:table-cell">
-                            {d.savingFuel || (planDelta.litres ? planDelta.litres.toFixed(2) : "—")}
-                          </td>
-                        </>
-                      )}
-                      <td className="py-1 pr-2 text-right text-zinc-300">
-                        {perf && perf.lapsPerStint > 0 ? (
-                          <>
-                            {perf.lapsPerStint}
-                            <span className="ml-1 text-zinc-500">{fmtDuration(perf.rangeSec)}</span>
-                          </>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </td>
-                      <td
-                        className={`py-1 pr-2 text-right ${
-                          perf && perf.laps > 0 && driverPerf.evenShare > 0 &&
-                          perf.laps < driverPerf.evenShare * 0.85
-                            ? "text-amber-300"
-                            : "text-zinc-300"
-                        }`}
-                        title={
-                          driverPerf.evenShare > 0
-                            ? `An even share would be ~${driverPerf.evenShare} laps each`
-                            : undefined
-                        }
-                      >
-                        {perf?.laps ? fmtLaps(perf.laps) : "—"}
-                      </td>
-                      <td className="py-1 pr-2 text-right text-zinc-300">{perf?.stints || "—"}</td>
-                      <td className="py-1 text-right print:hidden">
-                        {(d.manual?.laptime || d.manual?.fuelPerLap || d.manual?.tyreWear) && (
-                          <button
-                            onClick={() => {
-                              resetDriverField(d.id, "laptime");
-                              resetDriverField(d.id, "fuelPerLap");
-                              resetDriverField(d.id, "tyreWear");
-                            }}
-                            className="mr-1 rounded border border-zinc-700 px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
-                            title="Drop your own figures and let the next Garage 61 pull fill them again"
-                          >
-                            ↺
-                          </button>
-                        )}
-                        <button
-                          onClick={() => removeDriver(d.id)}
-                          className="rounded border border-red-900/60 px-2 py-1 text-sm text-red-300 hover:bg-red-950/40"
-                          aria-label="Remove driver"
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {driverPerf.rows.length > 0 && (
-                <tfoot>
-                  <tr className="border-t-2 border-zinc-700 text-zinc-400">
-                    <td className="py-1 pr-2 font-medium text-zinc-300">Team</td>
-                    <td className="py-1 pr-2 text-right" />
-                    <td className="py-1 pr-2 text-right" />
-                    <td className="py-1 pr-2 text-right" />
-                    <td className="py-1 pr-2 text-right" />
-                    <td className="py-1 pr-2 text-right" title="Weighted by the laps each driver runs">
-                      {driverPerf.avg.paceSec > 0 ? fmtLap(driverPerf.avg.paceSec) : "—"}
-                    </td>
-                    <td className="py-1 pr-2 text-right">
-                      {driverPerf.avg.fuelPerLap > 0 ? driverPerf.avg.fuelPerLap.toFixed(2) : "—"}
-                    </td>
-                    <td className="py-1 pr-2 text-right">
-                      {driverPerf.avg.wear > 0 ? driverPerf.avg.wear.toFixed(2) : "—"}
-                    </td>
-                    {s.savingEnabled && deltaSaving && (
-                      <>
-                        <td className="py-1 pr-2 text-right" />
-                        <td className="py-1 pr-2 text-right" />
-                      </>
-                    )}
-                    <td className="py-1 pr-2 text-right" />
-                    <td className="py-1 pr-2 text-right font-medium text-zinc-200">
-                      {fmtLaps(driverPerf.avg.laps)}
-                    </td>
-                    <td className="py-1 pr-2 text-right font-medium text-zinc-200">
-                      {driverPerf.avg.stints}
-                    </td>
-                    <td className="py-1" />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-            {/* Tyre wear is a per-driver figure — it used to sit in the
-                pit-stop model, where it read as if a session export measured
-                it. Nothing measures it; it belongs next to the column it
-                fills. */}
-            <div className="mt-3 flex flex-wrap items-center gap-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 print:hidden">
-              <label className="text-[11px] uppercase tracking-wider text-zinc-500">
-                Default tyre wear (%/lap)
-              </label>
-              <input
-                className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-right text-sm text-zinc-100"
-                value={s.event.tyreWearPctPerLap}
-                onChange={(e) => patchEvent("tyreWearPctPerLap", e.target.value)}
-                placeholder="0 = off"
-              />
-              <span className="text-[11px] text-zinc-500">
-                Used for drivers with no %/lap of their own. Nobody measures this for you —
-                Garage 61 records the compound, never the wear — so it is yours to judge, per
-                driver where they differ.
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
-              {s.g61Analysis && (
-                <span className="text-emerald-300/80">
-                  Data:{" "}
-                  {s.g61Analysis.source?.kind === "upload"
-                    ? "session export"
-                    : `Garage 61${s.g61Analysis.source?.window ? ` · ${s.g61Analysis.source.window}` : ""}`}
-                  {s.g61Analysis.source?.oldestLapMs != null &&
-                  s.g61Analysis.source?.newestLapMs != null
-                    ? ` · ${fmtDay(s.g61Analysis.source.oldestLapMs)}–${fmtDay(s.g61Analysis.source.newestLapMs)}`
-                    : ""}
-                  {" · "}
-                  {s.g61Analysis.overall.cleanLaps} clean laps
-                  {s.g61Analysis.source?.lapsTooOld
-                    ? ` · ${s.g61Analysis.source.lapsTooOld} older left out`
-                    : ""}
-                  {" · pulled "}
-                  {fmtDay(Date.parse(s.g61Analysis.generatedAt))}
-                </span>
-              )}
-              <span>
-                Even share:{" "}
-                <strong className="text-zinc-300">{driverPerf.evenShare} laps</strong> per driver
-                {" "}— anyone under 85 % of it is flagged amber.
-              </span>
-              {driverPerf.traffic > 0 && (
-                <span className="text-amber-300/80">
-                  Range includes +{driverPerf.traffic} s/lap race traffic.
-                </span>
-              )}
-              {s.event.trackTempC.trim() !== "" && (
-                <span>
-                  Pace is at {s.event.trackTempC} °C
-                  {s.tempModel?.slopePerC
-                    ? ` (${(s.tempModel.slopePerC * 10).toFixed(1)} s/10 °C fit)`
-                    : ""}
-                  ; per-stint temperatures, ½ wet and wet are applied in the schedule.
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-        <p className="mt-2 text-xs text-zinc-500">
-          Drivers come from CLS (anyone with a registration). <strong className="text-emerald-300">Green</strong>{" "}
-          values came from Garage 61, <strong className="text-amber-200">amber</strong> ones you
-          typed yourself — a new Garage 61 pull refills the green ones and leaves yours
-          alone (↺ hands a row back to the data). Pace and fuel per lap drive the
-          schedule directly: they decide how long a driver&rsquo;s stint runs and how many
-          laps they get out of a tank. Tyre wear is not something Garage 61 measures, so
-          that column is always yours &mdash; and neither is a fuel-save delta.
-        </p>
-        {/* Which rows the schedule is guessing at. An empty pace or fuel cell is
-            easy to miss in a twelve-column table, and it quietly turns a stint
-            into an assumption — so name the drivers instead of hoping. */}
-        {(() => {
-          const assigned = new Set(
-            s.assignments.map((a) => a.driverId).filter(Boolean) as string[]
-          );
-          const gaps = s.drivers.filter(
-            (d) =>
-              assigned.has(d.id) && (!d.laptime.trim() || !d.fuelPerLap?.trim())
-          );
-          if (gaps.length === 0) return null;
-          return (
-            <p className="mt-2 rounded border border-amber-900/50 bg-amber-950/20 p-2 text-xs text-amber-300">
-              Running on the Standard profile (no own figures):{" "}
-              <strong>{gaps.map((d) => d.name).join(", ")}</strong>. Their stints are
-              marked <span className="uppercase">est</span> in the schedule &mdash; pull
-              Garage 61 or type the numbers to make the plan theirs.
-            </p>
-          );
-        })()}
-      </div>
-
       {/* Garage 61 import */}
       <div className={card}>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -4020,16 +3679,23 @@ export default function StintPlanner({
 
         {g61Msg && <p className="mb-2 text-sm text-amber-300">{g61Msg}</p>}
 
-        {g61 && (
+        {/* The pull to review: the fresh one when there is one, otherwise the
+            analysis saved with the plan. Gating this on the fresh pull alone
+            meant a stored pull could be SEEN (the dashboard renders it) but
+            never re-applied — you had to pull again just to undo a ↺ or to
+            re-project the pace after changing the track temperature. */}
+        {(() => {
+          const pending = g61 ?? s.g61Analysis;
+          return pending ? (
           <div className="space-y-3">
             {/* Not a second driver table — just what Apply would change in the
-                one above, so the team can see the delta before committing. */}
+                one below, so the team can see the delta before committing. */}
             <div className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
               <div className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
                 What “Apply to plan” changes
               </div>
               <ul className="space-y-1.5 text-sm">
-                {g61.drivers.map((d) => {
+                {pending.drivers.map((d) => {
                   const row = s.drivers.find(
                     (x) => x.name.trim().toLowerCase() === d.driver.trim().toLowerCase()
                   );
@@ -4040,7 +3706,7 @@ export default function StintPlanner({
                       </li>
                     );
                   }
-                  const proj = g61Projection(g61);
+                  const proj = g61Projection(pending);
                   const newPace = fmtLap(d.racePaceSec + proj);
                   const newFuel = d.fuelPerLap.toFixed(2);
                   const paceKept = !!row.manual?.laptime;
@@ -4066,38 +3732,39 @@ export default function StintPlanner({
                   );
                 })}
               </ul>
-              {g61Projection(g61) !== 0 && (
+              {g61Projection(pending) !== 0 && (
                 <p className="mt-2 text-[11px] text-zinc-500">
                   Pace is projected to the plan&rsquo;s track temperature (
-                  {g61Projection(g61) > 0 ? "+" : ""}
-                  {g61Projection(g61).toFixed(1)} s/lap vs the temperature these laps were
+                  {g61Projection(pending) > 0 ? "+" : ""}
+                  {g61Projection(pending).toFixed(1)} s/lap vs the temperature these laps were
                   set at), which is why it differs from the raw race pace of the laps.
                 </p>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs text-zinc-500">
-                Standard profile → {fmtLap(g61.overall.laptimeSec)} ·{" "}
-                {g61.overall.fuelPerLap.toFixed(2)} L/lap ({g61.overall.cleanLaps}{" "}
+                Standard profile → {fmtLap(pending.overall.laptimeSec)} ·{" "}
+                {pending.overall.fuelPerLap.toFixed(2)} L/lap ({pending.overall.cleanLaps}{" "}
                 clean laps)
-                {g61.temp.sourceTempC != null && (
+                {pending.temp.sourceTempC != null && (
                   <>
                     {" · "}
-                    {g61.temp.slopePerC != null
-                      ? `temp fit ${(g61.temp.slopePerC * 10).toFixed(1)} s/10°C (${g61.temp.minTempC?.toFixed(0)}–${g61.temp.maxTempC?.toFixed(0)}°C)`
-                      : `all ~${round1(g61.temp.sourceTempC)}°C (no temp spread)`}
+                    {pending.temp.slopePerC != null
+                      ? `temp fit ${(pending.temp.slopePerC * 10).toFixed(1)} s/10°C (${pending.temp.minTempC?.toFixed(0)}–${pending.temp.maxTempC?.toFixed(0)}°C)`
+                      : `all ~${round1(pending.temp.sourceTempC)}°C (no temp spread)`}
                   </>
                 )}
               </span>
               <button
-                onClick={applyGarage61}
+                onClick={() => applyGarage61(pending)}
                 className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
               >
                 Apply to plan
               </button>
             </div>
           </div>
-        )}
+          ) : null;
+        })()}
       </div>
 
       {/* Driver performance dashboard (from a Garage 61 pull/import) */}
@@ -4110,6 +3777,411 @@ export default function StintPlanner({
           />
         ) : null;
       })()}
+
+      {/* Drivers */}
+      <div className={card}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Drivers
+          </h2>
+          <ClsDriverPicker
+            options={clsDrivers.filter(
+              (d) => !s.drivers.some((r) => r.id === d.id)
+            )}
+            onPick={addClsDriver}
+          />
+        </div>
+        {s.drivers.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            Search for a CLS driver in the field above to add them.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <p className="mb-2 text-xs text-zinc-500">
+              This table is what the schedule runs on.{" "}
+              <strong className="text-zinc-400">Pace</strong> and{" "}
+              <strong className="text-zinc-400">L/lap</strong> decide how long each
+              driver&rsquo;s stint lasts and how many laps come out of a tank. Type in any
+              cell and the schedule below updates on the spot &mdash; there is nothing to
+              apply. Garage 61 only <em>pre-fills</em> these fields:{" "}
+              <span className="text-emerald-300">green</span> came from the data,{" "}
+              <span className="text-amber-200">amber</span> is a figure you typed (a new
+              pull leaves it alone; ↺ hands the row back to the data).
+            </p>
+            {/* One honest status line for the whole roster. An empty Pace or
+                L/lap cell is easy to miss in a twelve-column table, and it
+                quietly turns a stint into a guess — so name the drivers, and
+                where Garage 61 already has the answer, offer the one click that
+                fixes it instead of just complaining. */}
+            {(() => {
+              const assigned = new Set(
+                s.assignments.map((a) => a.driverId).filter(Boolean) as string[]
+              );
+              const gaps = s.drivers.filter(
+                (d) =>
+                  assigned.has(d.id) && (!d.laptime.trim() || !d.fuelPerLap?.trim())
+              );
+              if (gaps.length === 0) return null;
+              const pending = g61 ?? s.g61Analysis;
+              const fixable = gaps.filter((d) => g61ByDriver.has(normName(d.name)));
+              const manualOnly = gaps.filter((d) => !g61ByDriver.has(normName(d.name)));
+              return (
+                <div className="mb-2 rounded border border-amber-900/50 bg-amber-950/20 p-2.5 text-xs text-amber-200">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      Running on the <strong>Standard profile</strong>, not their own
+                      numbers: <strong>{gaps.map((d) => d.name).join(", ")}</strong>. Their
+                      stints are marked <span className="uppercase">est</span> in the
+                      schedule.
+                    </span>
+                    {pending && fixable.length > 0 && (
+                      <button
+                        onClick={() => applyGarage61(pending)}
+                        className="shrink-0 rounded bg-[#ff6b35] px-2.5 py-1 text-xs font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
+                      >
+                        Apply Garage 61 to {fixable.length}{" "}
+                        {fixable.length === 1 ? "driver" : "drivers"}
+                      </button>
+                    )}
+                  </div>
+                  {pending && fixable.length > 0 && (
+                    <p className="mt-1.5 text-[11px] text-amber-300/70">
+                      Garage 61 has laps for{" "}
+                      {fixable.map((d) => d.name).join(", ")} — the figures are sitting in
+                      those cells as a placeholder, but a placeholder is not a value.
+                    </p>
+                  )}
+                  {manualOnly.length > 0 && (
+                    <p className="mt-1.5 text-[11px] text-amber-300/70">
+                      No Garage 61 laps for{" "}
+                      {manualOnly.map((d) => d.name).join(", ")} — type their pace and
+                      fuel by hand, or pull again with a wider window.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="text-xs uppercase tracking-wide text-zinc-500">
+                <tr className="border-b border-zinc-800">
+                  <th className="py-1 pr-2">Driver</th>
+                  <th className="py-1 pr-2 text-right" title="Clean laps Garage 61 measured for this driver on this track + car.">Laps</th>
+                  <th className="py-1 pr-2 text-right" title="Fastest clean lap in the Garage 61 data.">Best</th>
+                  <th className="py-1 pr-2 text-right" title="Mean of the driver's clean laps — how they really run, not their one hot lap.">Ø lap</th>
+                  <th className="py-1 pr-2 text-right" title="Track temperature the Garage 61 laps were set at.">°C</th>
+                  <th className="py-1 pr-2 text-right" title="Race pace used by the planner. Filled from Garage 61 (median clean lap, projected to the plan's track temp) — type to override.">Pace</th>
+                  <th className="py-1 pr-2 text-right" title="Fuel per lap used by the planner. Filled from Garage 61 — type to override.">L/lap</th>
+                  <th className="py-1 pr-2 text-right" title="Tyre wear in % per lap. Garage 61 does not measure this, so it is yours to enter; blank falls back to the plan default.">%/lap</th>
+                  {s.savingEnabled && deltaSaving && (
+                    <>
+                      <th
+                        className="py-1 pr-2 text-right text-cyan-300/80"
+                        title="Seconds per lap THIS driver gives up on a fuel-save stint, added to their own pace. Blank = the plan default (the gap between the Standard and Fuel-saving profiles)."
+                      >
+                        FS +s
+                      </th>
+                      <th
+                        className="py-1 pr-2 text-right text-cyan-300/80"
+                        title="Litres per lap THIS driver saves on a fuel-save stint, taken off their own consumption. Blank = the plan default."
+                      >
+                        FS −L
+                      </th>
+                    </>
+                  )}
+                  <th className="py-1 pr-2 text-right" title="How far this driver gets on one tank: laps, and how long that takes at their pace including the race-traffic penalty (dry).">Range/stint</th>
+                  <th className="py-1 pr-2 text-right" title="Laps this driver runs in the current schedule.">Laps tot.</th>
+                  <th className="py-1 pr-2 text-right" title="Stints this driver runs in the current schedule.">Stints</th>
+                  <th className="py-1" />
+                </tr>
+              </thead>
+              <tbody>
+                {s.drivers.map((d) => {
+                  const gd = g61ByDriver.get(normName(d.name)) ?? null;
+                  const perf = driverPerf.rows.find((r) => r.id === d.id) ?? null;
+                  // Colour the FIELD, not the driver. Green used to mean "this
+                  // driver has Garage 61 data", which painted an EMPTY field
+                  // green with the pulled figure sitting in it as a grey
+                  // placeholder — indistinguishable from a filled one, and a
+                  // plan can run a whole race weekend on the Standard profile
+                  // that way. Green now means "there is a value in here".
+                  const cell = (
+                    manual: boolean | undefined,
+                    value: string | undefined,
+                    hasData: boolean
+                  ) => {
+                    const filled = !!value?.trim();
+                    return `w-20 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                      !filled
+                        ? hasData
+                          ? "border-amber-600/60 text-zinc-100 placeholder:text-amber-300/50"
+                          : "border-zinc-700 text-zinc-100"
+                        : manual
+                          ? "border-amber-700/70 text-amber-100"
+                          : "border-emerald-900/60 text-emerald-100"
+                    }`;
+                  };
+                  return (
+                    <tr key={d.id} className="border-t border-zinc-800/60">
+                      <td className="py-1 pr-2 text-zinc-100">
+                        <span className={`mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full align-middle ${driverColour(d.id).dot}`} />
+                        {d.name}
+                      </td>
+                      <td className="py-1 pr-2 text-right text-zinc-500">{gd?.laps ?? "—"}</td>
+                      <td className="py-1 pr-2 text-right text-zinc-400">
+                        {gd ? fmtLap(gd.bestSec) : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right text-zinc-400">
+                        {gd ? fmtLap(gd.meanSec) : "—"}
+                      </td>
+                      <td
+                        className="py-1 pr-2 text-right text-zinc-500"
+                        title={
+                          gd
+                            ? `Track temperature of this driver's Garage 61 laps` +
+                              (analysisTemp?.minTempC != null && analysisTemp?.maxTempC != null
+                                ? ` — the import spans ${analysisTemp.minTempC.toFixed(0)}–${analysisTemp.maxTempC.toFixed(0)}°C` +
+                                  (analysisTemp.slopePerC != null
+                                    ? `, fitted at ${(analysisTemp.slopePerC * 10).toFixed(1)} s per 10°C`
+                                    : "")
+                                : "")
+                            : undefined
+                        }
+                      >
+                        {gd?.medianTempC != null
+                          ? `${gd.medianTempC.toFixed(0)}°`
+                          : analysisTemp?.sourceTempC != null
+                            ? `~${round1(analysisTemp.sourceTempC)}°`
+                            : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          className={cell(d.manual?.laptime, d.laptime, !!gd)}
+                          value={d.laptime}
+                          onChange={(e) => patchDriverLaptime(d.id, e.target.value)}
+                          placeholder={gd ? fmtLap(gd.racePaceSec) : "m:ss"}
+                          title={
+                            d.manual?.laptime
+                              ? "Your own figure — a Garage 61 pull will not overwrite it."
+                              : "From Garage 61 (or blank = Standard profile pace)."
+                          }
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.laptime || "—"}</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          className={cell(d.manual?.fuelPerLap, d.fuelPerLap, !!gd)}
+                          value={d.fuelPerLap ?? ""}
+                          onChange={(e) => patchDriverField(d.id, "fuelPerLap", e.target.value)}
+                          placeholder={gd ? gd.fuelPerLap.toFixed(2) : "L"}
+                          title={
+                            d.manual?.fuelPerLap
+                              ? "Your own figure — a Garage 61 pull will not overwrite it."
+                              : "From Garage 61 (median of the clean laps)."
+                          }
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.fuelPerLap || "—"}</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          className={cell(d.manual?.tyreWear, d.tyreWear, false)}
+                          value={d.tyreWear ?? ""}
+                          onChange={(e) => patchDriverField(d.id, "tyreWear", e.target.value)}
+                          placeholder={s.event.tyreWearPctPerLap || "%"}
+                          title="Tyre wear in % per lap. Not measured by Garage 61 — read it off the car or leave blank for the plan default."
+                        />
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">{d.tyreWear || "—"}</td>
+                      {s.savingEnabled && deltaSaving && (
+                        <>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            <input
+                              className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                                d.savingSec?.trim()
+                                  ? "border-cyan-800/70 text-cyan-100"
+                                  : "border-zinc-700 text-zinc-100"
+                              }`}
+                              value={d.savingSec ?? ""}
+                              onChange={(e) => patchDriverSaving(d.id, "savingSec", e.target.value)}
+                              placeholder={planDelta.sec ? planDelta.sec.toFixed(1) : "s"}
+                              title="Seconds/lap this driver gives up when saving fuel. Blank = the plan default."
+                            />
+                          </td>
+                          <td className="hidden py-1 pr-2 text-right print:table-cell">
+                            {d.savingSec || (planDelta.sec ? planDelta.sec.toFixed(1) : "—")}
+                          </td>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            <input
+                              className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                                d.savingFuel?.trim()
+                                  ? "border-cyan-800/70 text-cyan-100"
+                                  : "border-zinc-700 text-zinc-100"
+                              }`}
+                              value={d.savingFuel ?? ""}
+                              onChange={(e) => patchDriverSaving(d.id, "savingFuel", e.target.value)}
+                              placeholder={planDelta.litres ? planDelta.litres.toFixed(2) : "L"}
+                              title="Litres/lap this driver saves when saving fuel. Blank = the plan default."
+                            />
+                          </td>
+                          <td className="hidden py-1 pr-2 text-right print:table-cell">
+                            {d.savingFuel || (planDelta.litres ? planDelta.litres.toFixed(2) : "—")}
+                          </td>
+                        </>
+                      )}
+                      <td className="py-1 pr-2 text-right text-zinc-300">
+                        {perf && perf.lapsPerStint > 0 ? (
+                          <>
+                            {perf.lapsPerStint}
+                            <span className="ml-1 text-zinc-500">{fmtDuration(perf.rangeSec)}</span>
+                          </>
+                        ) : (
+                          <span className="text-zinc-600">—</span>
+                        )}
+                      </td>
+                      <td
+                        className={`py-1 pr-2 text-right ${
+                          perf && perf.laps > 0 && driverPerf.evenShare > 0 &&
+                          perf.laps < driverPerf.evenShare * 0.85
+                            ? "text-amber-300"
+                            : "text-zinc-300"
+                        }`}
+                        title={
+                          driverPerf.evenShare > 0
+                            ? `An even share would be ~${driverPerf.evenShare} laps each`
+                            : undefined
+                        }
+                      >
+                        {perf?.laps ? fmtLaps(perf.laps) : "—"}
+                      </td>
+                      <td className="py-1 pr-2 text-right text-zinc-300">{perf?.stints || "—"}</td>
+                      <td className="py-1 text-right print:hidden">
+                        {(d.manual?.laptime || d.manual?.fuelPerLap || d.manual?.tyreWear) && (
+                          <button
+                            onClick={() => {
+                              resetDriverField(d.id, "laptime");
+                              resetDriverField(d.id, "fuelPerLap");
+                              resetDriverField(d.id, "tyreWear");
+                            }}
+                            className="mr-1 rounded border border-zinc-700 px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+                            title="Drop your own figures and let the next Garage 61 pull fill them again"
+                          >
+                            ↺
+                          </button>
+                        )}
+                        <button
+                          onClick={() => removeDriver(d.id)}
+                          className="rounded border border-red-900/60 px-2 py-1 text-sm text-red-300 hover:bg-red-950/40"
+                          aria-label="Remove driver"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {driverPerf.rows.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-zinc-700 text-zinc-400">
+                    <td className="py-1 pr-2 font-medium text-zinc-300">Team</td>
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right" title="Weighted by the laps each driver runs">
+                      {driverPerf.avg.paceSec > 0 ? fmtLap(driverPerf.avg.paceSec) : "—"}
+                    </td>
+                    <td className="py-1 pr-2 text-right">
+                      {driverPerf.avg.fuelPerLap > 0 ? driverPerf.avg.fuelPerLap.toFixed(2) : "—"}
+                    </td>
+                    <td className="py-1 pr-2 text-right">
+                      {driverPerf.avg.wear > 0 ? driverPerf.avg.wear.toFixed(2) : "—"}
+                    </td>
+                    {s.savingEnabled && deltaSaving && (
+                      <>
+                        <td className="py-1 pr-2 text-right" />
+                        <td className="py-1 pr-2 text-right" />
+                      </>
+                    )}
+                    <td className="py-1 pr-2 text-right" />
+                    <td className="py-1 pr-2 text-right font-medium text-zinc-200">
+                      {fmtLaps(driverPerf.avg.laps)}
+                    </td>
+                    <td className="py-1 pr-2 text-right font-medium text-zinc-200">
+                      {driverPerf.avg.stints}
+                    </td>
+                    <td className="py-1" />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+            {/* Tyre wear is a per-driver figure — it used to sit in the
+                pit-stop model, where it read as if a session export measured
+                it. Nothing measures it; it belongs next to the column it
+                fills. */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 print:hidden">
+              <label className="text-[11px] uppercase tracking-wider text-zinc-500">
+                Default tyre wear (%/lap)
+              </label>
+              <input
+                className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-right text-sm text-zinc-100"
+                value={s.event.tyreWearPctPerLap}
+                onChange={(e) => patchEvent("tyreWearPctPerLap", e.target.value)}
+                placeholder="0 = off"
+              />
+              <span className="text-[11px] text-zinc-500">
+                Used for drivers with no %/lap of their own. Nobody measures this for you —
+                Garage 61 records the compound, never the wear — so it is yours to judge, per
+                driver where they differ.
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
+              {s.g61Analysis && (
+                <span className="text-emerald-300/80">
+                  Data:{" "}
+                  {s.g61Analysis.source?.kind === "upload"
+                    ? "session export"
+                    : `Garage 61${s.g61Analysis.source?.window ? ` · ${s.g61Analysis.source.window}` : ""}`}
+                  {s.g61Analysis.source?.oldestLapMs != null &&
+                  s.g61Analysis.source?.newestLapMs != null
+                    ? ` · ${fmtDay(s.g61Analysis.source.oldestLapMs)}–${fmtDay(s.g61Analysis.source.newestLapMs)}`
+                    : ""}
+                  {" · "}
+                  {s.g61Analysis.overall.cleanLaps} clean laps
+                  {s.g61Analysis.source?.lapsTooOld
+                    ? ` · ${s.g61Analysis.source.lapsTooOld} older left out`
+                    : ""}
+                  {" · pulled "}
+                  {fmtDay(Date.parse(s.g61Analysis.generatedAt))}
+                </span>
+              )}
+              <span>
+                Even share:{" "}
+                <strong className="text-zinc-300">{driverPerf.evenShare} laps</strong> per driver
+                {" "}— anyone under 85 % of it is flagged amber.
+              </span>
+              {driverPerf.traffic > 0 && (
+                <span className="text-amber-300/80">
+                  Range includes +{driverPerf.traffic} s/lap race traffic.
+                </span>
+              )}
+              {s.event.trackTempC.trim() !== "" && (
+                <span>
+                  Pace is at {s.event.trackTempC} °C
+                  {s.tempModel?.slopePerC
+                    ? ` (${(s.tempModel.slopePerC * 10).toFixed(1)} s/10 °C fit)`
+                    : ""}
+                  ; per-stint temperatures, ½ wet and wet are applied in the schedule.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+        <p className="mt-2 text-xs text-zinc-500">
+          Drivers come from CLS — anyone with a registration. Tyre wear is not something
+          Garage 61 measures (it records the compound, never the wear), and neither is a
+          fuel-save delta, so those columns are always yours to judge.
+        </p>
+      </div>
 
       {/* Availability */}
       {s.drivers.length > 0 && hourCount > 0 && (
