@@ -248,11 +248,16 @@ export default function StintPlannerGuidePage() {
             </li>
           </ul>
           <p>
-            <strong>Fahrer</strong> fügst du im Suchfeld hinzu: zwei, drei
-            Buchstaben tippen, mit ↑↓ auswählen, Enter. Das Feld bleibt aktiv,
-            du kannst also die ganze Besetzung hintereinander eintippen. Umlaute
-            sind egal — „muller“ findet „Müller“. Ein Fahrer muss in CLS
-            registriert sein, damit er in der Liste auftaucht.
+            <strong>Fahrer</strong> fügst du im Kasten <K>Roster</K> hinzu, oben
+            neben den Fuel Profiles: zwei, drei Buchstaben tippen, mit ↑↓
+            auswählen, Enter. Das Feld bleibt aktiv, du kannst also die ganze
+            Besetzung hintereinander eintippen. Umlaute sind egal — „muller“
+            findet „Müller“. Ein Fahrer muss in CLS registriert sein, damit er
+            in der Liste auftaucht. Lege die Besetzung <strong>vor</strong> dem
+            Garage-61-Pull an: Der Abgleich läuft über den Namen, wer nicht auf
+            dem Plan steht, wird ignoriert. Ein amber eingefärbter Name im
+            Roster heißt: Für den Fahrer stehen noch keine eigenen Zahlen im
+            Plan.
           </p>
           <p>
             <K>Pace</K> und <K>L/lap</K> pro Fahrer sind die wichtigsten Felder

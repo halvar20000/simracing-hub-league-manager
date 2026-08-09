@@ -3378,6 +3378,80 @@ export default function StintPlanner({
             </p>
           )}
         </div>
+
+        {/* Roster — who is on this plan, and the one place to add someone.
+            The table that settles their pace and fuel sits far below now (after
+            the Garage 61 charts, because that is the order the work happens
+            in), which left no obvious place to build the line-up while setting
+            the race up. This is that place; the numbers stay down there. */}
+        <div className={card}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              Roster
+            </h2>
+            <ClsDriverPicker
+              options={clsDrivers.filter(
+                (d) => !s.drivers.some((r) => r.id === d.id)
+              )}
+              onPick={addClsDriver}
+            />
+          </div>
+          {s.drivers.length === 0 ? (
+            <p className="text-sm text-zinc-500">
+              No drivers yet — type a name in the field above. A driver has to be
+              registered in CLS to appear there. Add them before pulling from Garage 61:
+              the pull matches on name, so anyone not on this list is ignored.
+            </p>
+          ) : (
+            (() => {
+              const missing = s.drivers.filter(
+                (d) => !d.laptime.trim() || !d.fuelPerLap?.trim()
+              );
+              return (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {s.drivers.map((d) => {
+                      const gap = !d.laptime.trim() || !d.fuelPerLap?.trim();
+                      return (
+                        <span
+                          key={d.id}
+                          title={
+                            gap
+                              ? "No pace or fuel of their own yet — their stints run on the Standard profile"
+                              : `${d.laptime} · ${d.fuelPerLap} L/lap`
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm ${
+                            gap
+                              ? "border-amber-800/60 bg-amber-950/20 text-amber-100"
+                              : "border-zinc-700 bg-zinc-900/60 text-zinc-200"
+                          }`}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${driverColour(d.id).dot}`}
+                          />
+                          {d.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500">
+                    {s.drivers.length} driver{s.drivers.length === 1 ? "" : "s"}. Pace, fuel
+                    and tyre wear are set in the <strong className="text-zinc-400">Drivers</strong>{" "}
+                    table further down — it sits after the Garage 61 block, so the figures you
+                    settle on there are the last word.
+                    {missing.length > 0 && (
+                      <span className="text-amber-300">
+                        {" "}
+                        {missing.length} of them {missing.length === 1 ? "has" : "have"} no
+                        figures of their own yet and would run on the Standard profile.
+                      </span>
+                    )}
+                  </p>
+                </>
+              );
+            })()
+          )}
+        </div>
       </div>
 
       {/* Fuel-save strategy optimizer */}
@@ -3780,20 +3854,18 @@ export default function StintPlanner({
 
       {/* Drivers */}
       <div className={card}>
+        {/* No "add driver" field here any more — the line-up is built in the
+            Roster card at the top, next to the fuel profiles, where you are
+            when you set a race up. This table is for the numbers. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
             Drivers
           </h2>
-          <ClsDriverPicker
-            options={clsDrivers.filter(
-              (d) => !s.drivers.some((r) => r.id === d.id)
-            )}
-            onPick={addClsDriver}
-          />
         </div>
         {s.drivers.length === 0 ? (
           <p className="text-sm text-zinc-500">
-            Search for a CLS driver in the field above to add them.
+            No drivers on this plan yet — add them in the{" "}
+            <strong className="text-zinc-400">Roster</strong> box at the top of the page.
           </p>
         ) : (
           <div className="overflow-x-auto">
