@@ -8,6 +8,7 @@ import {
   pitStopSeconds,
   conditionOf,
   type StintCondition,
+  type FuelProfile,
   type PitModel,
   type PlannerInput,
   type StintMode,
@@ -48,6 +49,14 @@ export type PlannerDriverState = {
   fuelPerLap?: string;
   /** Per-driver tyre wear in % per lap; "" = use the plan's default. */
   tyreWear?: string;
+  /** How much slower THIS driver is on a fuel-save stint, in seconds/lap;
+   *  "" = use the plan's default (Fuel-saving minus Standard profile).
+   *  Lifting and coasting is a skill — one driver's 0.6 s buys the same litres
+   *  another one pays 1.4 s for, and averaging that away costs a stint. */
+  savingSec?: string;
+  /** How much fuel THIS driver saves on a fuel-save stint, in litres/lap;
+   *  "" = use the plan's default. */
+  savingFuel?: string;
   /** Which of the three figures the team typed in by hand. A Garage 61 pull
    *  fills the others and leaves these alone — a hand-tuned number must not be
    *  silently overwritten by the next import. */
@@ -315,8 +324,21 @@ export type PlannerState = {
      *  below it are flagged. "" = don't check. */
     tyreMinPct: string;
   };
+  /** The roster default: the pace and consumption used for any driver who has
+   *  no figures of their own. In delta mode this is a fallback, not the plan. */
   standard: { laptime: string; fuelPerLap: string };
   savingEnabled: boolean;
+  /** How a fuel-save stint is derived — see `PlannerInput.savingMode`.
+   *  "delta" (the default for new plans) computes every stint from the
+   *  DRIVER's own average lap time and fuel and adds `savingDelta` on top for
+   *  an FS stint. "absolute" is the legacy pair of profile values and is what
+   *  every plan saved before this existed keeps, so an archived plan re-opens
+   *  with exactly the numbers it was signed off with. */
+  savingMode: "delta" | "absolute";
+  /** The fuel-saving profile. In legacy mode these ARE the numbers a fuel-save
+   *  stint runs on. In delta mode they are the roster default: the difference
+   *  to `standard` is the effort (+s/lap, −L/lap) applied to each driver's own
+   *  figures, for every driver who has not typed their own. */
   saving: { laptime: string; fuelPerLap: string };
   drivers: PlannerDriverState[];
   assignments: PlannerAssignmentState[];
@@ -389,6 +411,7 @@ export function defaultPlannerState(): PlannerState {
     },
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
+    savingMode: "delta",
     saving: { laptime: "1:56", fuelPerLap: "3.20" },
     drivers: [],
     assignments: [],
@@ -418,6 +441,12 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
     ...migrated,
     title,
     event: { ...base.event, ...(migrated.event ?? {}) },
+    // A plan saved before the delta model keeps the absolute pair: an archived
+    // plan must re-open with exactly the schedule it was signed off with, and
+    // a live plan must not silently re-time itself under the team. A payload
+    // with no `standard` at all is a brand-new plan, so it takes the default.
+    savingMode:
+      migrated.savingMode ?? (migrated.standard ? "absolute" : base.savingMode),
     notes: { ...base.notes, ...(stored.notes ?? {}) },
     availability: stored.availability ?? base.availability,
     impressions: stored.impressions ?? base.impressions,
@@ -499,6 +528,39 @@ export function planLapTarget(s: PlannerState): number | null {
   return null;
 }
 
+/** Whether a plan derives its fuel-save stints from each driver's own numbers.
+ *  Plans saved before the delta model exist and hydrate as "absolute". */
+export function isDeltaSaving(s: PlannerState): boolean {
+  return (s.savingMode ?? "absolute") === "delta";
+}
+
+/** The fuel-saving profile of a plan, or null when saving is off. */
+export function savingProfileOf(s: PlannerState): FuelProfile | null {
+  if (!s.savingEnabled) return null;
+  return {
+    laptimeSec: parseDurationToSec(s.saving.laptime) ?? 0,
+    fuelPerLap: num(s.saving.fuelPerLap),
+  };
+}
+
+/**
+ * The plan's DEFAULT fuel-save effort: how much slower and how much thriftier
+ * the Fuel-saving profile is than Standard. In delta mode this is what a driver
+ * without their own delta columns saves — so the profile pair the team already
+ * maintains keeps earning its keep instead of being replaced by yet another
+ * pair of fields.
+ */
+export function savingDeltas(s: PlannerState): { sec: number; litres: number } {
+  const sav = savingProfileOf(s);
+  if (!sav) return { sec: 0, litres: 0 };
+  const stdLap = parseDurationToSec(s.standard.laptime) ?? 0;
+  const stdFuel = num(s.standard.fuelPerLap);
+  return {
+    sec: Math.max(0, sav.laptimeSec - stdLap),
+    litres: Math.max(0, stdFuel - sav.fuelPerLap),
+  };
+}
+
 export function stateToInput(s: PlannerState): PlannerInput {
   const sessionMs =
     s.event.sessionStartLocal.trim() !== ""
@@ -514,12 +576,10 @@ export function stateToInput(s: PlannerState): PlannerInput {
       laptimeSec: parseDurationToSec(s.standard.laptime) ?? 0,
       fuelPerLap: num(s.standard.fuelPerLap),
     },
-    saving: s.savingEnabled
-      ? {
-          laptimeSec: parseDurationToSec(s.saving.laptime) ?? 0,
-          fuelPerLap: num(s.saving.fuelPerLap),
-        }
-      : null,
+    saving: savingProfileOf(s),
+    savingMode: isDeltaSaving(s) ? "delta" : "absolute",
+    savingDeltaSec: savingDeltas(s).sec,
+    savingFuelDelta: savingDeltas(s).litres,
     sessionStartUtcMs: sessionMs && isFinite(sessionMs) ? sessionMs : null,
     stintMode: s.event.stintMode,
     stintSec:
@@ -534,6 +594,8 @@ export function stateToInput(s: PlannerState): PlannerInput {
       laptimeSec: d.laptime.trim() ? parseDurationToSec(d.laptime) : null,
       fuelPerLap: d.fuelPerLap?.trim() ? num(d.fuelPerLap) : null,
       tyreWearPctPerLap: d.tyreWear?.trim() ? num(d.tyreWear) : null,
+      savingDeltaSec: d.savingSec?.trim() ? num(d.savingSec) : null,
+      savingFuelDelta: d.savingFuel?.trim() ? num(d.savingFuel) : null,
     })),
     assignments: s.assignments.map((a) => ({
       profile: a.profile,

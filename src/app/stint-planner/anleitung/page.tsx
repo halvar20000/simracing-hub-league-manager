@@ -255,9 +255,15 @@ export default function StintPlannerGuidePage() {
             registriert sein, damit er in der Liste auftaucht.
           </p>
           <p>
-            Die optionale <K>laptime</K> pro Fahrer verlängert dessen Stints
-            entsprechend seiner Pace. Leer lassen heißt: er fährt die
-            Standard-Pace.
+            <K>Pace</K> und <K>L/lap</K> pro Fahrer sind die wichtigsten Felder
+            der Tabelle: Der Planer rechnet <strong>jeden Stint mit den Werten
+            des Fahrers</strong>, der drin sitzt — seine Rundenzeit bestimmt die
+            Stintlänge, sein Verbrauch die Runden aus einem Tank. Zwischen zwei
+            Fahrern liegt da oft eine ganze Runde pro Stint. Leer lassen heißt:
+            Der Fahrer läuft auf dem Standard-Profil; solche Stints sind in der
+            Tabelle mit <K>est</K> markiert und die Fahrer stehen unter der
+            Tabelle namentlich, damit du siehst, welcher Teil des Plans auf
+            Annahmen steht.
           </p>
         </Section>
 
@@ -270,13 +276,35 @@ export default function StintPlannerGuidePage() {
             In <strong>Fuel Profiles</strong> trägst du unter{" "}
             <strong>Standard</strong> deine Renn-Pace und den Verbrauch pro
             Runde ein. Daraus ergeben sich Runden pro Stint, Stintlänge und
-            Spritmenge — der Planer zeigt sie direkt unter den Feldern.
+            Spritmenge — der Planer zeigt sie direkt unter den Feldern. Wichtig:
+            Standard ist nur der <strong>Rückfallwert</strong> für Fahrer ohne
+            eigene Zahlen. Wer in der Fahrertabelle eine eigene Pace und einen
+            eigenen Verbrauch hat, fährt seine Stints damit.
           </p>
           <p>
             Das zweite Profil <strong>Fuel-Saving</strong> aktivierst du per
             Häkchen: etwas langsamere Runde, dafür weniger Verbrauch. In der
             Stint-Tabelle kannst du dann pro Stint zwischen <K>Std</K> und{" "}
             <K>FS</K> umschalten.
+          </p>
+          <p>
+            Sparen ist dabei ein <strong>Aufschlag auf die Werte des jeweiligen
+            Fahrers</strong>, kein zweiter Satz absoluter Rundenzeiten: Ein
+            FS-Stint rechnet mit „Pace des Fahrers + x Sekunden“ und „Verbrauch
+            des Fahrers − y Liter“. Wie groß x und y sind, kannst du pro Fahrer
+            in den Spalten <K>FS +s</K> und <K>FS −L</K> hinterlegen — Lift and
+            Coast ist Können, der eine kauft dieselben Liter für eine halbe
+            Sekunde, der andere zahlt fast zwei. Bleiben die Spalten leer, gilt
+            der Abstand zwischen deinem Standard- und deinem Fuel-Saving-Profil
+            als Vorgabe.
+          </p>
+          <p>
+            Der Umschalter <strong>Where a stint gets its numbers</strong> steht
+            bei neuen Plänen auf <K>Per driver</K>. Pläne, die vor dieser
+            Änderung gespeichert wurden, öffnen weiter im alten Modus{" "}
+            <K>Profile only</K> und rechnen exakt wie bisher — ein abgeschlossener
+            Plan zeigt also weiterhin genau den Ablauf, mit dem er ins Rennen
+            gegangen ist. Umstellen kannst du ihn jederzeit von Hand.
           </p>
           <p>
             <strong>Fuel-Save Strategy → Optimize</strong> beantwortet die Frage,

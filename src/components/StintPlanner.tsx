@@ -41,6 +41,8 @@ import {
   planPitModel,
   planLapTarget,
   parseTypedNumber,
+  isDeltaSaving,
+  savingDeltas,
   halfWetDeltaSec,
   DEFAULT_HALF_WET_FRACTION,
   DEFAULT_TEMP_SLOPE_PER_C,
@@ -207,17 +209,27 @@ const lapBreakdownText = (st: {
   trackTempC: number | null;
   condition: string;
   driverName: string | null;
+  paceFallback?: boolean;
+  fuelFallback?: boolean;
+  fuelPerLapUsed?: number;
 }): string => {
-  const parts: string[] = [
-    `${fmtLap(st.baseLapSec)} ${st.driverName ? `(${st.driverName})` : "(profile pace)"}`,
-  ];
+  const who = st.driverName
+    ? st.paceFallback
+      ? `(${st.driverName} — no pace of their own, Standard profile)`
+      : `(${st.driverName})`
+    : "(profile pace)";
+  const parts: string[] = [`${fmtLap(st.baseLapSec)} ${who}`];
   const add = (v: number, label: string) => {
     if (Math.abs(v) > 0.0005) parts.push(`${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(2)} s ${label}`);
   };
   add(st.tempDeltaSec, st.trackTempC != null ? `at ${st.trackTempC}°C` : "temperature");
   add(st.weatherDeltaSec, st.condition === "wet" ? "full wet" : "half wet");
   add(st.trafficDeltaSec, "race traffic");
-  return `${parts.join("  ")}  =  ${fmtLap(st.lapSec)} per lap`;
+  const fuel =
+    st.fuelPerLapUsed != null
+      ? `\n${st.fuelPerLapUsed.toFixed(2)} L/lap${st.fuelFallback ? " (Standard profile — this driver has no fuel figure)" : ""}`
+      : "";
+  return `${parts.join("  ")}  =  ${fmtLap(st.lapSec)} per lap${fuel}`;
 };
 
 // One stable colour per driver, the way Johann's sheet does it: the rotation is
@@ -519,6 +531,20 @@ export default function StintPlanner({
     setS((p) => ({ ...p, standard: { ...p.standard, [k]: v } }));
   const patchSav = (k: "laptime" | "fuelPerLap", v: string) =>
     setS((p) => ({ ...p, saving: { ...p.saving, [k]: v } }));
+  /** Whether this plan computes stints from each driver's own averages. Plans
+   *  saved before the delta model open in the legacy mode and stay there until
+   *  someone flips this switch. */
+  const deltaSaving = isDeltaSaving(s);
+  /** The plan-wide fuel-save effort — the gap between the two profiles. It is
+   *  what a driver without their own delta columns gives up and saves. */
+  const planDelta = savingDeltas(s);
+  /** Per-driver fuel-save effort, typed by hand. Garage 61 cannot measure a
+   *  lift-and-coast delta, so these columns are always the team's own. */
+  const patchDriverSaving = (id: string, key: "savingSec" | "savingFuel", v: string) =>
+    setS((p) => ({
+      ...p,
+      drivers: p.drivers.map((d) => (d.id === id ? { ...d, [key]: v } : d)),
+    }));
 
   const addClsDriver = (userId: string) =>
     setS((p) => {
@@ -2154,6 +2180,24 @@ export default function StintPlanner({
                             +{(st.lapSec - st.baseLapSec).toFixed(1)}
                           </span>
                         )}
+                        {/* This stint is an assumption, not data: the driver has
+                            no measured pace or fuel of their own and the plan
+                            fell back to the Standard profile. Say so rather than
+                            let it pass for a measured number. */}
+                        {st.driverId && (st.paceFallback || st.fuelFallback) && (
+                          <span
+                            className="ml-1 text-[10px] uppercase text-amber-400/90"
+                            title={`No own ${
+                              st.paceFallback && st.fuelFallback
+                                ? "pace or fuel figure"
+                                : st.paceFallback
+                                  ? "pace"
+                                  : "fuel figure"
+                            } for this driver — the Standard profile was used.`}
+                          >
+                            est
+                          </span>
+                        )}
                       </td>
                       <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
                       <td className="py-1 pr-2 text-right">
@@ -3217,7 +3261,7 @@ export default function StintPlanner({
             Fuel profiles
           </h2>
           <ProfileRow
-            title="Standard"
+            title={deltaSaving ? "Standard (roster fallback)" : "Standard"}
             laptime={s.standard.laptime}
             fuelPerLap={s.standard.fuelPerLap}
             onLaptime={(v) => patchStd("laptime", v)}
@@ -3227,6 +3271,55 @@ export default function StintPlanner({
             total={std.totalTimeSec}
             fuel={std.fuelPerStint}
           />
+
+          {/* How a stint gets its pace and fuel. The old model let the profile
+              decide for everyone, which meant a driver's own averages either
+              replaced it wholesale (standard stints) or were quietly ignored
+              (fuel-save stints). The delta model below fixes both. */}
+          <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/50 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Where a stint gets its numbers
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["delta", "Per driver"],
+                  ["absolute", "Profile only (legacy)"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setS((p) => ({ ...p, savingMode: mode }))}
+                  className={`rounded px-2.5 py-1 text-xs font-semibold ${
+                    (s.savingMode ?? "absolute") === mode
+                      ? "bg-[#ff6b35] text-zinc-950"
+                      : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              {deltaSaving ? (
+                <>
+                  Every stint runs on the{" "}
+                  <strong className="text-zinc-300">driver&rsquo;s own average pace and
+                  fuel</strong> from the Drivers table; the Standard profile above is only
+                  the fallback for a driver who has none. A fuel-save stint adds that
+                  driver&rsquo;s fuel-save delta on top.
+                </>
+              ) : (
+                <>
+                  Legacy model: the profiles below are the numbers, and a driver&rsquo;s own
+                  figures simply replace them &mdash; which makes the fuel-saving profile a
+                  no-op for anyone who has their own pace and fuel. Kept so plans that were
+                  built and signed off this way still read exactly as they did.
+                </>
+              )}
+            </p>
+          </div>
+
           <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
             <input type="checkbox" checked={s.savingEnabled}
               onChange={(e) => setS((p) => ({ ...p, savingEnabled: e.target.checked }))} />
@@ -3235,7 +3328,7 @@ export default function StintPlanner({
           {s.savingEnabled && sav && (
             <div className="mt-2">
               <ProfileRow
-                title="Fuel-saving"
+                title={deltaSaving ? "Fuel-saving (roster default)" : "Fuel-saving"}
                 laptime={s.saving.laptime}
                 fuelPerLap={s.saving.fuelPerLap}
                 onLaptime={(v) => patchSav("laptime", v)}
@@ -3245,6 +3338,26 @@ export default function StintPlanner({
                 total={sav.totalTimeSec}
                 fuel={sav.fuelPerStint}
               />
+              {deltaSaving && (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Against Standard that is{" "}
+                  <strong className="text-cyan-300">
+                    +{planDelta.sec.toFixed(1)} s/lap for &minus;{planDelta.litres.toFixed(2)} L/lap
+                  </strong>
+                  {" "}&mdash; the effort a driver gives up on an{" "}
+                  <span className="text-zinc-400">FS</span> stint unless they carry their own
+                  figures in the <strong className="text-zinc-400">FS +s</strong> /{" "}
+                  <strong className="text-zinc-400">FS &minus;L</strong> columns of the Drivers
+                  table. Lifting and coasting is a skill: not everyone buys the same litres at
+                  the same price.
+                  {planDelta.sec <= 0 && planDelta.litres <= 0 && (
+                    <span className="text-amber-400">
+                      {" "}Right now both are zero, so a fuel-save stint is identical to a
+                      normal one.
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           )}
           {(std.overFuel || (sav != null && sav.overFuel)) && (
@@ -3389,6 +3502,22 @@ export default function StintPlanner({
                   <th className="py-1 pr-2 text-right" title="Race pace used by the planner. Filled from Garage 61 (median clean lap, projected to the plan's track temp) — type to override.">Pace</th>
                   <th className="py-1 pr-2 text-right" title="Fuel per lap used by the planner. Filled from Garage 61 — type to override.">L/lap</th>
                   <th className="py-1 pr-2 text-right" title="Tyre wear in % per lap. Garage 61 does not measure this, so it is yours to enter; blank falls back to the plan default.">%/lap</th>
+                  {s.savingEnabled && deltaSaving && (
+                    <>
+                      <th
+                        className="py-1 pr-2 text-right text-cyan-300/80"
+                        title="Seconds per lap THIS driver gives up on a fuel-save stint, added to their own pace. Blank = the plan default (the gap between the Standard and Fuel-saving profiles)."
+                      >
+                        FS +s
+                      </th>
+                      <th
+                        className="py-1 pr-2 text-right text-cyan-300/80"
+                        title="Litres per lap THIS driver saves on a fuel-save stint, taken off their own consumption. Blank = the plan default."
+                      >
+                        FS −L
+                      </th>
+                    </>
+                  )}
                   <th className="py-1 pr-2 text-right" title="How far this driver gets on one tank: laps, and how long that takes at their pace including the race-traffic penalty (dry).">Range/stint</th>
                   <th className="py-1 pr-2 text-right" title="Laps this driver runs in the current schedule.">Laps tot.</th>
                   <th className="py-1 pr-2 text-right" title="Stints this driver runs in the current schedule.">Stints</th>
@@ -3478,6 +3607,42 @@ export default function StintPlanner({
                         />
                       </td>
                       <td className="hidden py-1 pr-2 text-right print:table-cell">{d.tyreWear || "—"}</td>
+                      {s.savingEnabled && deltaSaving && (
+                        <>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            <input
+                              className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                                d.savingSec?.trim()
+                                  ? "border-cyan-800/70 text-cyan-100"
+                                  : "border-zinc-700 text-zinc-100"
+                              }`}
+                              value={d.savingSec ?? ""}
+                              onChange={(e) => patchDriverSaving(d.id, "savingSec", e.target.value)}
+                              placeholder={planDelta.sec ? planDelta.sec.toFixed(1) : "s"}
+                              title="Seconds/lap this driver gives up when saving fuel. Blank = the plan default."
+                            />
+                          </td>
+                          <td className="hidden py-1 pr-2 text-right print:table-cell">
+                            {d.savingSec || (planDelta.sec ? planDelta.sec.toFixed(1) : "—")}
+                          </td>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            <input
+                              className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                                d.savingFuel?.trim()
+                                  ? "border-cyan-800/70 text-cyan-100"
+                                  : "border-zinc-700 text-zinc-100"
+                              }`}
+                              value={d.savingFuel ?? ""}
+                              onChange={(e) => patchDriverSaving(d.id, "savingFuel", e.target.value)}
+                              placeholder={planDelta.litres ? planDelta.litres.toFixed(2) : "L"}
+                              title="Litres/lap this driver saves when saving fuel. Blank = the plan default."
+                            />
+                          </td>
+                          <td className="hidden py-1 pr-2 text-right print:table-cell">
+                            {d.savingFuel || (planDelta.litres ? planDelta.litres.toFixed(2) : "—")}
+                          </td>
+                        </>
+                      )}
                       <td className="py-1 pr-2 text-right text-zinc-300">
                         {perf && perf.lapsPerStint > 0 ? (
                           <>
@@ -3547,6 +3712,12 @@ export default function StintPlanner({
                     <td className="py-1 pr-2 text-right">
                       {driverPerf.avg.wear > 0 ? driverPerf.avg.wear.toFixed(2) : "—"}
                     </td>
+                    {s.savingEnabled && deltaSaving && (
+                      <>
+                        <td className="py-1 pr-2 text-right" />
+                        <td className="py-1 pr-2 text-right" />
+                      </>
+                    )}
                     <td className="py-1 pr-2 text-right" />
                     <td className="py-1 pr-2 text-right font-medium text-zinc-200">
                       {fmtLaps(driverPerf.avg.laps)}
@@ -3628,8 +3799,29 @@ export default function StintPlanner({
           alone (↺ hands a row back to the data). Pace and fuel per lap drive the
           schedule directly: they decide how long a driver&rsquo;s stint runs and how many
           laps they get out of a tank. Tyre wear is not something Garage 61 measures, so
-          that column is always yours.
+          that column is always yours &mdash; and neither is a fuel-save delta.
         </p>
+        {/* Which rows the schedule is guessing at. An empty pace or fuel cell is
+            easy to miss in a twelve-column table, and it quietly turns a stint
+            into an assumption — so name the drivers instead of hoping. */}
+        {(() => {
+          const assigned = new Set(
+            s.assignments.map((a) => a.driverId).filter(Boolean) as string[]
+          );
+          const gaps = s.drivers.filter(
+            (d) =>
+              assigned.has(d.id) && (!d.laptime.trim() || !d.fuelPerLap?.trim())
+          );
+          if (gaps.length === 0) return null;
+          return (
+            <p className="mt-2 rounded border border-amber-900/50 bg-amber-950/20 p-2 text-xs text-amber-300">
+              Running on the Standard profile (no own figures):{" "}
+              <strong>{gaps.map((d) => d.name).join(", ")}</strong>. Their stints are
+              marked <span className="uppercase">est</span> in the schedule &mdash; pull
+              Garage 61 or type the numbers to make the plan theirs.
+            </p>
+          );
+        })()}
       </div>
 
       {/* Garage 61 import */}

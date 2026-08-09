@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.91.0",
+    date: "2026-08-09",
+    changes: [
+      "Stint planner: every stint is now calculated from the driver who is actually in the car. Their own average lap time and fuel per lap from the Drivers table decide how long the stint runs and how many laps come out of a tank — not one shared profile for the whole team. Differences between drivers are often worth a lap a stint, and the plan now shows them.",
+      "Fuel saving is an effort on top of that, not a second set of lap times: a fuel-save stint adds seconds per lap and takes litres per lap off that driver's own figures. Two new columns in the Drivers table, “FS +s” and “FS −L”, hold each driver's own saving — lifting and coasting is a skill, and one driver's half second buys what another pays nearly two seconds for. Left blank, a driver uses the gap between the Standard and Fuel-saving profiles.",
+      "This fixes a quiet hole in the old model: a driver with their own pace and fuel had the profile replaced outright, so the Fuel-saving profile did nothing at all for exactly the drivers the team had the best data on. The plan showed a saving that never happened.",
+      "A driver with no figures of their own still falls back to the Standard profile, but the plan says so now: their stints are marked “est” in the schedule and they are named under the Drivers table, so it is obvious which part of a plan is data and which part is an assumption.",
+      "Existing plans are untouched. Every plan saved before this update keeps calculating exactly the way it did — an archived plan re-opens with the schedule it was signed off with. A new switch in Fuel profiles, “Where a stint gets its numbers”, moves an old plan over when you want it; new plans start on the new model.",
+    ],
+  },
+  {
     version: "1.90.1",
     date: "2026-08-07",
     changes: [

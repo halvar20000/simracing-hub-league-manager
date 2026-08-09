@@ -30,6 +30,14 @@ export type PlannerDriver = {
   /** Optional per-driver tyre wear in % per lap. Drives the tyre condition
    *  carried across stints when tyres are not changed. */
   tyreWearPctPerLap?: number | null;
+  /** Seconds/lap THIS driver gives up on a fuel-save stint, on top of their own
+   *  pace. Null = use the plan's default (`PlannerInput.savingDeltaSec`).
+   *  Not everyone saves equally well: lifting and coasting is a skill, and one
+   *  driver's 0.6 s for 0.12 L is another's 1.4 s for the same litres. */
+  savingDeltaSec?: number | null;
+  /** Litres/lap THIS driver saves on a fuel-save stint, off their own
+   *  consumption. Null = use the plan's default. */
+  savingFuelDelta?: number | null;
 };
 
 export type StintProfileKey = "standard" | "saving";
@@ -140,8 +148,33 @@ export type PlannerInput = {
   /** Fuel tank capacity, in litres. */
   tankSize: number;
   standard: FuelProfile;
-  /** Optional fuel-saving profile (slightly slower lap, less fuel/lap). */
+  /** Optional fuel-saving profile (slightly slower lap, less fuel/lap).
+   *  In "delta" mode this is the DERIVED roster-default profile (standard plus
+   *  the deltas below); it drives the template/summary display, while the
+   *  schedule itself is computed per driver. */
   saving?: FuelProfile | null;
+  /** How a fuel-save stint is derived.
+   *
+   *  "absolute" (legacy — every plan saved before the delta model keeps it):
+   *  the `standard` / `saving` profiles ARE the numbers, and a driver's own
+   *  lap time / fuel simply replaces them. That quietly made the fuel-saving
+   *  profile a no-op for any driver who had their own data, which is the whole
+   *  reason the mode below exists.
+   *
+   *  "delta": every stint starts from the DRIVER's own average lap time and
+   *  fuel (falling back to `standard` when they have none), and a fuel-save
+   *  stint adds `savingDeltaSec` to the lap and takes `savingFuelDelta` litres
+   *  off it. The saving is then the same *effort* for everyone rather than the
+   *  same absolute lap time — a 1:54 driver lifting and coasting does not
+   *  suddenly run the 1:56 of the slowest man on the roster. */
+  savingMode?: "absolute" | "delta";
+  /** DEFAULT seconds/lap a fuel-save stint costs on top of a driver's own pace,
+   *  used for any driver who has no `savingDeltaSec` of their own. Derived from
+   *  the plan's Standard ↔ Fuel-saving profile pair. */
+  savingDeltaSec?: number;
+  /** DEFAULT litres/lap a fuel-save stint saves off a driver's own
+   *  consumption, used for any driver who has no figure of their own. */
+  savingFuelDelta?: number;
   /** Optional wall-clock of the session start (ms since epoch, UTC). */
   sessionStartUtcMs?: number | null;
   drivers: PlannerDriver[];
@@ -281,8 +314,17 @@ export type ScheduleStint = {
    *  driver's own pace plus every penalty below. This is the number the laps,
    *  the length and the whole schedule come out of, so it is shown. */
   lapSec: number;
-  /** The driver's pace before any penalty (profile pace × their factor). */
+  /** The driver's pace before any penalty (their own average, or the Standard
+   *  profile when they have none, plus the fuel-save delta on an FS stint). */
   baseLapSec: number;
+  /** The fuel per lap this stint was actually computed with. */
+  fuelPerLapUsed: number;
+  /** True when the pace above is the Standard profile rather than this
+   *  driver's own measured average — the stint is an assumption, and the UI
+   *  says so instead of letting it pass for data. */
+  paceFallback: boolean;
+  /** Same for the fuel figure. */
+  fuelFallback: boolean;
 
   // --- the stop that ENDS this stint (null on the last stint) ---
   /** Total time lost at that stop, in seconds — flat or modelled. */
@@ -391,6 +433,11 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   // fuel state below is expressed in usable litres, so "full" always means
   // `usableTank` and a splash is simply a smaller number.
   const usableTank = Math.max(0, tankSize - Math.max(0, fuelReserve ?? 0));
+  // Delta mode computes every stint from the driver's own averages; the
+  // fuel-save profile becomes an effort added on top of them. See PlannerInput.
+  const deltaMode = (input.savingMode ?? "absolute") === "delta";
+  const savDeltaSec = Math.max(0, input.savingDeltaSec ?? 0);
+  const savFuelDelta = Math.max(0, input.savingFuelDelta ?? 0);
   const model = input.pitModel ?? null;
   const baseWear = Math.max(0, input.tyreWearPctPerLap ?? 0);
   const tyreMin = Math.max(0, input.tyreMinPct ?? 0);
@@ -416,15 +463,44 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     const useSaving = assign.profile === "saving" && saving != null;
     const prof: FuelProfile = useSaving ? saving! : standard;
     const tpl = useSaving && savTpl ? savTpl : stdTpl;
-    if (tpl.laps <= 0) break; // no valid stint (bad inputs) — stop cleanly
+    // In delta mode the template is only a display default — a plan may leave
+    // the Standard profile empty and carry all its numbers on the drivers, so
+    // an empty template must not abort the schedule. `plannedLaps <= 0` below
+    // still stops cleanly when there is genuinely nothing to run on.
+    if (!deltaMode && tpl.laps <= 0) break; // no valid stint (bad inputs)
     const driver = assign.driverId ? driverById.get(assign.driverId) : null;
-    const factor =
-      driver?.laptimeSec && prof.laptimeSec > 0
-        ? driver.laptimeSec / prof.laptimeSec
-        : 1;
-    // Per-driver fuel + tyre figures fall back to the profile / plan defaults.
-    const fuelPerLapEff =
-      driver?.fuelPerLap && driver.fuelPerLap > 0 ? driver.fuelPerLap : prof.fuelPerLap;
+
+    // --- whose pace and whose fuel does this stint run on? ------------------
+    const paceFallback = !(driver?.laptimeSec && driver.laptimeSec > 0);
+    const fuelFallback = !(driver?.fuelPerLap && driver.fuelPerLap > 0);
+    let driverLapSec: number;
+    let fuelPerLapEff: number;
+    if (deltaMode) {
+      // The driver's own averages are the truth; the fuel-save profile is an
+      // effort ON TOP of them. Standard is the fallback for an unfilled row.
+      const ownLap = paceFallback ? standard.laptimeSec : driver!.laptimeSec!;
+      const ownFuel = fuelFallback ? standard.fuelPerLap : driver!.fuelPerLap!;
+      // Each driver may carry their own fuel-save effort; the plan's default
+      // (derived from the Standard ↔ Fuel-saving pair) covers the rest.
+      const dSec =
+        driver?.savingDeltaSec != null && driver.savingDeltaSec >= 0
+          ? driver.savingDeltaSec
+          : savDeltaSec;
+      const dFuel =
+        driver?.savingFuelDelta != null && driver.savingFuelDelta >= 0
+          ? driver.savingFuelDelta
+          : savFuelDelta;
+      driverLapSec = useSaving ? ownLap + dSec : ownLap;
+      fuelPerLapEff = useSaving ? Math.max(0, ownFuel - dFuel) : ownFuel;
+    } else {
+      // Legacy: the profile is the truth and a driver figure replaces it.
+      const factor =
+        driver?.laptimeSec && prof.laptimeSec > 0
+          ? driver.laptimeSec / prof.laptimeSec
+          : 1;
+      driverLapSec = prof.laptimeSec * factor;
+      fuelPerLapEff = fuelFallback ? prof.fuelPerLap : driver!.fuelPerLap!;
+    }
     const wearPerLap =
       driver?.tyreWearPctPerLap != null && driver.tyreWearPctPerLap >= 0
         ? driver.tyreWearPctPerLap
@@ -461,17 +537,22 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
         ? (tempSlopePerC ?? 0) * (stintTemp - baseTempC)
         : 0;
     const paceAdd = wetAdd + tempAdd + trafficAdd;
-    const effLaptime = prof.laptimeSec * factor + paceAdd;
+    const effLaptime = driverLapSec + paceAdd;
 
     // How many laps this stint runs. In fuel mode that is what is actually in
     // the tank — which after a splash is less than a full stint. time/laps mode
-    // keep the template.
+    // keep the template, except that in delta mode a fixed-TIME stint is
+    // measured with the lap THIS driver runs: a slower driver genuinely gets
+    // fewer laps into the same 40 minutes, and the old profile-based template
+    // gave everyone the same count.
     const plannedLaps =
       (stintMode ?? "fuel") === "fuel"
         ? fuelPerLapEff > 0
           ? Math.floor(fuelAtStart / fuelPerLapEff)
           : 0
-        : tpl.laps;
+        : deltaMode && stintMode === "time" && stintSec && effLaptime > 0
+          ? Math.max(0, Math.floor(stintSec / effLaptime))
+          : tpl.laps;
     if (plannedLaps <= 0) break; // no fuel / bad inputs — stop cleanly
     const fullGreen = effLaptime * plannedLaps;
     let greenSec = fullGreen;
@@ -576,7 +657,10 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       trackTempC: stintTemp ?? null,
       tempDeltaSec: Math.round(tempAdd * 1000) / 1000,
       lapSec: effLaptime,
-      baseLapSec: prof.laptimeSec * factor,
+      baseLapSec: driverLapSec,
+      fuelPerLapUsed: fuelPerLapEff,
+      paceFallback,
+      fuelFallback,
       stopSec: isFinal ? 0 : stopLoss,
       stop: isFinal ? null : stop,
       tyreChange: isFinal ? false : wantsTyres,
