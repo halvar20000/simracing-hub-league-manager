@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.95.1",
+    date: "2026-08-15",
+    changes: [
+      "The upload inside Pit-stop model feeds the same lap pool — one session export carries both the stops and the green laps, and it always did go into both. It just wasn't visible from there: the switch lived two cards down in Garage 61. It is now repeated under that upload button, with the current pool size next to it, so you can see what a file dropped there will do before you drop it.",
+    ],
+  },
+  {
     version: "1.95.0",
     date: "2026-08-15",
     changes: [

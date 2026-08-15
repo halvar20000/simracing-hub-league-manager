@@ -3340,6 +3340,35 @@ export default function StintPlanner({
                     />
                   </label>
                 </div>
+                {/* The same handler as the Garage 61 card: a file dropped here
+                    measures the stops AND feeds the lap pool. That is useful —
+                    it is one file with both kinds of data in it — but it must
+                    not be invisible, so the pool switch is repeated here
+                    instead of living two cards away. */}
+                <label
+                  className="mt-2 flex cursor-pointer items-start gap-1.5 text-[11px] text-zinc-500 print:hidden"
+                  title="The same file also carries the green laps. On: they are added to the plan's lap pool. Off: they replace the Garage 61 data this plan holds."
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={s.g61Cumulative === true}
+                    onChange={(e) =>
+                      setS((p) => ({ ...p, g61Cumulative: e.target.checked }))
+                    }
+                  />
+                  <span>
+                    A file dropped here also fills the{" "}
+                    <strong className="text-zinc-400">lap pool</strong> in the
+                    Garage 61 card — pace and fuel come out of the same laps.
+                    Ticked, it is <strong className="text-zinc-400">added</strong>{" "}
+                    to the laps already there
+                    {(s.g61Sources?.length ?? 0) > 0
+                      ? ` (${poolLapCount(s.g61Sources)} laps from ${s.g61Sources.length} import${s.g61Sources.length === 1 ? "" : "s"} right now)`
+                      : ""}
+                    ; unticked it replaces them. Same switch as down there.
+                  </span>
+                </label>
                 <p className="mt-2 text-[11px] text-zinc-500">
                   The fields above are filled from a Garage 61{" "}
                   <strong className="text-zinc-400">session export</strong> — in Garage 61
