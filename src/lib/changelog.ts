@@ -19,6 +19,26 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.94.0",
+    date: "2026-08-15",
+    changes: [
+      "Stint planner, on Johann Solowej's list of wishes. Refuelling is now a plain tick box: “Full” is on for every stop, and only when you untick it does the litres field open — pre-filled with what a full tank would have taken, so a splash is a number you edit down instead of one you have to work out. Next to the fuel a stint burns, the schedule now also shows the fuel LEFT in the tank when the stint ends (above the reserve), which is the number the stop has to put back in.",
+      "The lap count of a stint can be typed over. After damage, a shortcut or a lap under safety car the car comes in when it comes in, not when the tank says so — type the laps that were actually run and the whole schedule after it moves. The cell turns amber to show the model has been overruled, and red when the laps typed need more fuel than the car has on board.",
+      "New switch in the Race box: “Finish on a whole lap (+ 1)”. A timed race never ends mid-lap — it runs to the end of the lap the clock expires on and one more after that. The planner used to cut the last stint at the exact second, which quietly under-planned the fuel for the finish. With the switch on, the final stint is rounded up to whole laps plus one, using the lap time of the stint the flag falls in, and the finish becomes a projection like it already is in a distance race. Where those laps no longer fit in the tank, the plan honestly shows the extra splash it needs.",
+      "Existing plans keep the finish they were built with: the switch is on for new plans only, so an archived plan re-opens with exactly the schedule it was signed off with.",
+      "Race evaluation: a new “Ø clean” average lap per driver that ignores the lap into the pits and the lap back out. iRacing's own average divides total time by laps, so a stop sits inside it — a driver doing two stints back-to-back carries two stops in their average and reads slower than someone who did one, and a repair stop wrecks the figure completely. The “Average lap — gap to class best” chart now uses the clean figure, with a button to switch back to iRacing's own number.",
+    ],
+  },
+  {
+    version: "1.93.1",
+    date: "2026-08-13",
+    changes: [
+      "Stream announcement: the “📺 Stream live” line in the Discord embed could advertise a time that had nothing to do with the stream. When the “Stream goes live at” field was left empty, the embed silently fell back to the “Post at” time — the moment the bot drops the message into the channel, usually a day or two before the race. The PCCD Oran Park embed therefore promised a stream on Tuesday 22:00 while the race was on Thursday 19:00.",
+      "There is no fallback any more: no stream time set means the line is left out of the embed altogether. Better one line less than a wrong appointment. The admin page says so on the field and the Status box now shows “(not set — line hidden in the embed)” instead of pretending a fallback value is a real stream time.",
+      "“Refresh embed” used to fail with a bare “Could not refresh: edit-failed” that told you nothing. The banner now carries Discord's own answer — for instance “Maximum number of edits to messages older than 1 hour reached (code 30046)”, a rate limit you hit by clicking Refresh a few times in a row, not a broken button. On top of that, a short rate limit is now simply waited out and retried instead of being handed to you as a failure.",
+    ],
+  },
+  {
     version: "1.93.0",
     date: "2026-08-09",
     changes: [

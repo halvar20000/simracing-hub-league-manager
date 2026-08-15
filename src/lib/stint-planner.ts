@@ -73,6 +73,13 @@ export type StintAssignment = {
   /** Litres to put in at the stop that ENDS this stint. Undefined/null = fill
    *  the tank. A smaller number is a splash: shorter stop, shorter next stint. */
   fillLitres?: number | null;
+  /** Laps actually run in this stint, overriding what the model computes.
+   *  For the race that did not go to plan: damage, a shortcut, a safety car —
+   *  the car came in early (or stayed out a lap longer) and everything after it
+   *  has to move. Null/undefined/0 = let the model decide. The fuel for those
+   *  laps is still charged to the tank, so an override that cannot be fuelled
+   *  is reported (`fuelShort`) rather than silently rounded away. */
+  lapsOverride?: number | null;
 };
 
 /**
@@ -222,6 +229,19 @@ export type PlannerInput = {
    *  When set (> 0) the race ends on this lap count and `raceDurationSec` is
    *  ignored — the finish time becomes a projection instead of an input. */
   raceLaps?: number | null;
+  /** How a TIMED race ends. False (the default, and what every plan saved
+   *  before this keeps) cuts the last stint at the exact second the clock runs
+   *  out, mid-lap. True uses Johann Solowej's rule, which is what iRacing
+   *  actually does: the race runs to the end of the lap the clock expires on,
+   *  and one more lap after it —
+   *
+   *    laps of the final stint = ceil(time left / that stint's lap) + 1
+   *
+   *  measured with the lap time of the stint the flag falls in, penalties
+   *  included. The finish becomes a projection (like a distance race) and those
+   *  last laps cost real fuel: a plan that only just made it on the old rule
+   *  now correctly shows it needs a splash. */
+  roundRaceEnd?: boolean;
 };
 
 export type StintMode = "fuel" | "time" | "laps";
@@ -296,6 +316,12 @@ export type ScheduleStint = {
   isFinal: boolean;
   /** True when the stint was cut short by the chequered flag. */
   partial: boolean;
+  /** True when `laps` was typed in by the team instead of computed. */
+  lapsOverridden: boolean;
+  /** True when the stint burns more fuel than it started with — only reachable
+   *  through a lap override. The tank is still shown empty, but the plan is
+   *  telling you the car does not get that far. */
+  fuelShort: boolean;
   /** The live correction applied to this stint, in minutes. */
   correctionMin: number;
   /** True when this stint was run in the full wet (kept for existing callers). */
@@ -369,6 +395,10 @@ export type PlannerResult = {
   raceSec: number;
   /** True when the race ends on a lap count rather than on the clock. */
   lapLimited: boolean;
+  /** True when a timed race was finished on Johann's whole-lap + 1 rule, so
+   *  `raceSec` / `raceEndUtcMs` are a projection rather than the entered
+   *  duration. */
+  raceEndRounded: boolean;
   /** Laps still to run when the schedule ran out of stints (should be 0). */
   lapsShort: number;
   totals: {
@@ -446,6 +476,12 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   // clock: the loop counts laps down and the finish time falls out of it.
   const lapTarget = input.raceLaps && input.raceLaps > 0 ? Math.floor(input.raceLaps) : null;
   const lapLimited = lapTarget != null;
+  // A timed race that finishes on a whole lap (+ the lap iRacing runs after the
+  // clock expires). The finish is then a projection, exactly like a distance
+  // race, so the loop can no longer stop on the clock: it stops when the
+  // chequered lap has actually been driven.
+  const roundEnd = !lapLimited && input.roundRaceEnd === true;
+  let finished = false;
 
   const stints: ScheduleStint[] = [];
   let t = 0;
@@ -456,7 +492,11 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   let fuelAtStart = Math.max(0, usableTank - Math.max(0, input.gridFuelL ?? 0));
   let tyreStartPct = 100;
   while (
-    (lapLimited ? lapsDone < lapTarget! - 1e-9 : t < raceDurationSec - 0.001) &&
+    (lapLimited
+      ? lapsDone < lapTarget! - 1e-9
+      : roundEnd
+        ? !finished
+        : t < raceDurationSec - 0.001) &&
     i < MAX_STINTS
   ) {
     const assign = assignments[i] ?? { profile: "standard", driverId: null };
@@ -545,7 +585,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     // measured with the lap THIS driver runs: a slower driver genuinely gets
     // fewer laps into the same 40 minutes, and the old profile-based template
     // gave everyone the same count.
-    const plannedLaps =
+    const modelLaps =
       (stintMode ?? "fuel") === "fuel"
         ? fuelPerLapEff > 0
           ? Math.floor(fuelAtStart / fuelPerLapEff)
@@ -553,6 +593,14 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
         : deltaMode && stintMode === "time" && stintSec && effLaptime > 0
           ? Math.max(0, Math.floor(stintSec / effLaptime))
           : tpl.laps;
+    // A typed lap count wins over the model. It is what actually happened —
+    // pitted early after contact, a shortcut, one lap more under safety car —
+    // and the rest of the plan has to be rebuilt around it, not around what the
+    // tank would have allowed.
+    const override = assign.lapsOverride;
+    const lapsOverridden =
+      override != null && Number.isFinite(override) && Math.floor(override) > 0;
+    const plannedLaps = lapsOverridden ? Math.floor(override!) : modelLaps;
     if (plannedLaps <= 0) break; // no fuel / bad inputs — stop cleanly
     const fullGreen = effLaptime * plannedLaps;
     let greenSec = fullGreen;
@@ -583,6 +631,23 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
         laps = lapsLeft;
         fuel = laps * fuelPerLapEff;
         greenSec = effLaptime * laps;
+      }
+    } else if (roundEnd) {
+      // Johann's rule: the clock never ends a race mid-lap. Round the time left
+      // up to a whole lap of THIS stint and add the lap iRacing runs after the
+      // timer expires. If the stint cannot cover that many laps it is simply
+      // not the last one — the schedule adds another stop, which is the honest
+      // answer and the reason for doing this at all.
+      const remSec = raceDurationSec - t;
+      const need =
+        effLaptime > 0 ? Math.max(1, Math.ceil(remSec / effLaptime - 1e-9) + 1) : 1;
+      if (plannedLaps >= need) {
+        isFinal = true;
+        partial = plannedLaps > need;
+        laps = need;
+        fuel = laps * fuelPerLapEff;
+        greenSec = effLaptime * laps;
+        finished = true;
       }
     } else if (t + fullGreen >= raceDurationSec) {
       // Timed race: the chequered flag falls during this stint's running.
@@ -622,7 +687,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       );
     }
 
-    if (lapLimited) {
+    if (lapLimited || roundEnd) {
       // The clock is a consequence here: run the laps, then stop (unless done).
       endSec = t + greenSec + (isFinal ? 0 : stopLoss) + corrSec;
     } else if (isFinal && partial) {
@@ -649,6 +714,8 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       fuel,
       isFinal,
       partial,
+      lapsOverridden,
+      fuelShort: fuel > fuelAtStart + 1e-9,
       correctionMin,
       wet: cond === "wet",
       condition: cond,
@@ -697,10 +764,13 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
 
   const laps = stints.reduce((a, s) => a + s.laps, 0);
   const fuel = stints.reduce((a, s) => a + s.fuel, 0);
-  const raceSec = lapLimited
+  // The finish is a projection whenever the race ends on a lap rather than on
+  // the clock — a distance race, or Johann's whole-lap rule on a timed one.
+  const projectedEnd = lapLimited || roundEnd;
+  const raceSec = projectedEnd
     ? (stints[stints.length - 1]?.endSec ?? 0)
     : raceDurationSec;
-  if (lapLimited && raceStartUtcMs != null) {
+  if (projectedEnd && raceStartUtcMs != null) {
     raceEndUtcMs = raceStartUtcMs + raceSec * 1000;
   }
   const stopTimeSec = stints.reduce((a, s) => a + s.stopSec, 0);
@@ -716,6 +786,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     raceEndUtcMs,
     raceSec,
     lapLimited,
+    raceEndRounded: roundEnd,
     lapsShort: lapLimited ? Math.max(0, lapTarget! - lapsDone) : 0,
     totals: {
       stintCount: stints.length,

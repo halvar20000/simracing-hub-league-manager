@@ -219,6 +219,17 @@ export default function StintPlannerGuidePage() {
               <K>6:00:00</K>.
             </li>
             <li>
+              <K>Finish on a whole lap (+ 1)</K> — ein Zeitrennen endet nie
+              mitten in einer Runde: Es läuft bis zum Ende der Runde, in der die
+              Uhr abläuft, und danach noch eine weitere. Mit dem Häkchen rechnet
+              der Planer den letzten Stint auf volle Runden plus eine auf — mit
+              der Rundenzeit des Stints, in dem die Flagge fällt — und das
+              Rennende wird zur Hochrechnung. Diese Runden kosten echten Sprit;
+              passen sie nicht mehr in den Tank, zeigt der Plan den zusätzlichen
+              Splash-Stopp, den es dafür braucht. Neue Pläne haben das Häkchen
+              gesetzt, ältere Pläne behalten ihr altes Rennende.
+            </li>
+            <li>
               <K>Race start</K> — wann das Rennen wirklich losgeht, als echte
               Uhrzeit. Ohne diese Angabe gibt es keine <K>Clock in</K>-Spalte,
               keinen Live-Tracker und keine Discord-Erinnerungen. Der Knopf{" "}
@@ -407,6 +418,26 @@ export default function StintPlannerGuidePage() {
             begrenzt ist. Negative Werte gehen genauso.
           </p>
           <p>
+            <strong>Rundenzahl überschreiben.</strong> Kommt das Auto anders
+            rein als geplant — Schaden, Shortcut, eine Runde länger hinter dem
+            Safety Car — trägst du in der Spalte <K>Laps</K> die Runden ein, die
+            wirklich gefahren wurden. Der Stint rechnet mit dieser Zahl, alle
+            folgenden verschieben sich mit. Amber heißt: Hier ist das Modell
+            überschrieben; rot heißt: So viele Runden gibt der Sprit an Bord
+            nicht her. Feld leeren gibt die Runden wieder dem Modell zurück.
+          </p>
+          <p>
+            <strong>Volltanken oder Splash.</strong> Das Häkchen <K>Full</K> ist
+            bei jedem Stopp gesetzt — der Tank wird gefüllt. Nimmst du es heraus,
+            öffnet sich das Feld <K>Fill L</K> mit der Menge, die eine volle
+            Füllung gekostet hätte; du korrigierst sie nach unten. Ein Splash
+            macht den Stopp kürzer und den nächsten Stint entsprechend kürzer
+            (der ist dann mit <K>short</K> markiert). Die Spalte <K>Left</K>
+            zeigt, wie viel Sprit am Stintende noch im Tank ist — über der
+            Reserve gerechnet; genau die Menge, die der Stopp wieder reinlegen
+            muss.
+          </p>
+          <p>
             In der Spalte <K>Note</K> hältst du fest, was passiert ist: „Unfall,
             13 Min Reparatur“, „sauberer Stint“. Das ist später bei der
             Auswertung Gold wert — und in der Kachel{" "}
@@ -445,6 +476,19 @@ export default function StintPlannerGuidePage() {
             <strong>race-log .jsonl</strong> (aus dem Race Logger) ergänzt, was
             im Ergebnis nicht steht: den Verlauf. Daraus entsteht das Dashboard
             mit Rundenzeit-Verlauf, Stint-für-Stint-Pace und Boxenstandzeiten.
+          </p>
+          <p className="rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-zinc-400">
+            <strong className="text-zinc-200">
+              Ø clean statt iRacing-Durchschnitt.
+            </strong>{" "}
+            iRacing teilt die Gesamtzeit eines Fahrers durch seine Runden — der
+            Boxenstopp am Stintende steckt also mittendrin. Wer zwei Stints am
+            Stück fährt, schleppt zwei Stopps in seinem Durchschnitt mit und
+            sieht langsamer aus als ein Einfachstint-Fahrer; eine Reparatur
+            zerlegt den Wert vollends. Die Fahrerkarte zeigt deshalb zusätzlich{" "}
+            <K>Ø clean</K>: den Schnitt über die echten Rennrunden, ohne In- und
+            Outlap. Das Diagramm <strong>Average lap</strong> rechnet damit; per
+            Knopf oben rechts schaltest du auf iRacings eigenen Wert zurück.
           </p>
           <Shot
             src="/docs/stint-planner/race-log.jpg"
@@ -501,8 +545,11 @@ export default function StintPlannerGuidePage() {
               </dt>
               <dd className="text-zinc-400">
                 Der letzte Stint ist fast immer angebrochen — er wird mit{" "}
-                <K>FIN</K> markiert und nur so weit gerechnet, wie die Renndauer
-                reicht.
+                <K>FIN</K> markiert. Ohne{" "}
+                <K>Finish on a whole lap (+ 1)</K> wird er nur so weit gerechnet,
+                wie die Renndauer reicht, also mitten in der Runde; mit dem
+                Häkchen endet er auf einer vollen Runde plus einer weiteren, wie
+                iRacing es macht.
               </dd>
             </div>
             <div>

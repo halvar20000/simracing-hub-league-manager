@@ -23,7 +23,50 @@
  * Pure module: no DB, no "use server", no React.
  */
 
-import type { RaceLogStintRow, TeamDriverStat } from "@/lib/stint-plan-state";
+import type {
+  RaceLogLap,
+  RaceLogStintRow,
+  TeamDriverStat,
+} from "@/lib/stint-plan-state";
+
+/**
+ * The average lap over a driver's RACING laps — in-laps and out-laps removed.
+ *
+ * Johann Solowej's method, and the reason for it: iRacing's average lap is the
+ * driver's total time divided by their laps, so the pit stop at the end of a
+ * stint sits inside it. A driver who runs two stints back-to-back carries two
+ * stops in one average and reads slower than someone who ran one, and a repair
+ * stop wrecks the figure outright. Dropping the lap that ends in the pits and
+ * the lap back out leaves what the driver actually raced.
+ *
+ * `mine` holds indices into `all`, so the out-lap is recognised on the CAR's
+ * lap sequence — including across a driver change, where the out-lap belongs to
+ * the man taking over.
+ */
+export function cleanLapStats(
+  all: RaceLogLap[],
+  mine: number[]
+): { avg: number | null; laps: number; dropped: number } {
+  const kept: number[] = [];
+  let dropped = 0;
+  for (const li of mine) {
+    const l = all[li];
+    if (!l) continue;
+    const prev = li > 0 ? all[li - 1] : null;
+    const isInLap = l.pit === true;
+    const isOutLap = !!prev && prev.pit === true && prev.lap === l.lap - 1;
+    if (isInLap || isOutLap) {
+      dropped += 1;
+      continue;
+    }
+    kept.push(l.sec);
+  }
+  return {
+    avg: kept.length ? kept.reduce((a, b) => a + b, 0) / kept.length : null,
+    laps: kept.length,
+    dropped,
+  };
+}
 
 /** One stint of the PLAN: its race-clock window and who was supposed to drive
  *  it. `startSec`/`endSec` are seconds from the race start, as the planner

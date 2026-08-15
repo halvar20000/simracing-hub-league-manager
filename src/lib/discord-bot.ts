@@ -57,9 +57,24 @@ function botToken(): string | null {
   return t && t.length > 0 ? t : null;
 }
 
+/** Discord's rate-limit payload: { message, retry_after (seconds), code }. */
+function retryAfterMs(body: string): number | null {
+  try {
+    const j = JSON.parse(body) as { retry_after?: number };
+    if (typeof j.retry_after !== "number") return null;
+    // Only wait for short buckets — a multi-minute cooldown is the caller's
+    // problem to report, not something to block a server action on.
+    const ms = Math.ceil(j.retry_after * 1000) + 250;
+    return ms > 0 && ms <= 8000 ? ms : null;
+  } catch {
+    return null;
+  }
+}
+
 async function discordFetch<T>(
   path: string,
-  init: RequestInit
+  init: RequestInit,
+  attempt = 0
 ): Promise<Result<T>> {
   const token = botToken();
   if (!token) return { ok: false, status: 0, body: "missing-DISCORD_BOT_TOKEN" };
@@ -74,7 +89,20 @@ async function discordFetch<T>(
       },
     });
     const text = await res.text();
-    if (!res.ok) return { ok: false, status: res.status, body: text };
+    if (!res.ok) {
+      // 429 with a short retry_after: wait it out once or twice rather than
+      // handing the admin an opaque failure. Editing a message older than an
+      // hour has its own small bucket (error code 30046), which is easy to
+      // exhaust by clicking "Refresh embed" a few times in a row.
+      if (res.status === 429 && attempt < 2) {
+        const waitMs = retryAfterMs(text);
+        if (waitMs) {
+          await new Promise((r) => setTimeout(r, waitMs));
+          return discordFetch<T>(path, init, attempt + 1);
+        }
+      }
+      return { ok: false, status: res.status, body: text };
+    }
     if (!text) return { ok: true, data: undefined as unknown as T };
     return { ok: true, data: JSON.parse(text) as T };
   } catch (e) {

@@ -64,7 +64,9 @@ export async function postStreamAnnouncement(
     track: round.track,
     trackConfig: round.trackConfig,
     startsAt: round.startsAt,
-    scheduledStreamAt: a.streamAt ?? a.scheduledAt,
+    // No fallback to a.scheduledAt — that is the POSTING time, not the
+    // stream time. When streamAt is unset the line is simply omitted.
+    scheduledStreamAt: a.streamAt,
     twitchUrl,
     posterImageUrl: a.posterBlobUrl,
     messageText: a.messageText,
@@ -140,7 +142,9 @@ export async function refreshStreamAnnouncement(
     track: round.track,
     trackConfig: round.trackConfig,
     startsAt: round.startsAt,
-    scheduledStreamAt: a.streamAt ?? a.scheduledAt,
+    // No fallback to a.scheduledAt — that is the POSTING time, not the
+    // stream time. When streamAt is unset the line is simply omitted.
+    scheduledStreamAt: a.streamAt,
     twitchUrl,
     posterImageUrl: a.posterBlobUrl,
     messageText: a.messageText,

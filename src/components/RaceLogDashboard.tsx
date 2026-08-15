@@ -5,6 +5,7 @@ import type { PlannerRaceLog, TeamDriverStat } from "@/lib/stint-plan-state";
 import {
   attributeByPlan,
   attributeStints,
+  cleanLapStats,
   type PlanStintWindow,
 } from "@/lib/race-log-attribution";
 
@@ -83,6 +84,14 @@ type Row = {
   greenSec: number | null;
   spreadSec: number | null;
   stints: number;
+  /** Mean lap over this driver's RACING laps: pit in-laps and the out-laps
+   *  after them removed. iRacing's own average counts them, which is why a
+   *  double-stinter or anyone who sat in the box for repairs looks slower than
+   *  they drove. */
+  cleanSec: number | null;
+  /** How many laps that mean is built on, and how many were dropped. */
+  cleanLaps: number;
+  cleanDropped: number;
 };
 
 const normName = (s: string) => s.trim().toLowerCase();
@@ -101,6 +110,8 @@ export default function RaceLogDashboard({
   const laps = useMemo(() => log.laps ?? [], [log.laps]);
   const logDrivers = useMemo(() => log.drivers ?? [], [log.drivers]);
   const stints = useMemo(() => log.stints ?? [], [log.stints]);
+  /** Which average the gap chart shows: the clean one by default. */
+  const [cleanAvg, setCleanAvg] = useState(true);
 
   const model = useMemo(() => {
     const team = teamDrivers ?? [];
@@ -126,17 +137,26 @@ export default function RaceLogDashboard({
     // --- solo race with neither a plan line-up nor an event result --------
     if (names.length === 0) {
       return {
-        rows: logDrivers.map<Row>((d) => ({
-          name: d.driver,
-          slot: d.slot,
-          laps: d.laps,
-          bestSec: d.bestSec,
-          avgSec: d.avgSec,
-          incidents: d.incidents,
-          greenSec: d.greenSec,
-          spreadSec: d.spreadSec,
-          stints: d.stints,
-        })),
+        rows: logDrivers.map<Row>((d, di) => {
+          const clean = cleanLapStats(
+            laps,
+            laps.map((_, li) => li).filter((li) => laps[li].d === di)
+          );
+          return {
+            name: d.driver,
+            slot: d.slot,
+            laps: d.laps,
+            bestSec: d.bestSec,
+            avgSec: d.avgSec,
+            incidents: d.incidents,
+            greenSec: d.greenSec,
+            spreadSec: d.spreadSec,
+            stints: d.stints,
+            cleanSec: clean.avg,
+            cleanLaps: clean.laps,
+            cleanDropped: clean.dropped,
+          };
+        }),
         lapRow: laps.map((l) => l.d),
         stintRow: stints.map((s) => s.d),
         source: "log" as const,
@@ -166,11 +186,16 @@ export default function RaceLogDashboard({
     });
 
     const rows = names.map<Row>(({ name, stat }, i) => {
-      const mine = laps.filter((_, li) => lapRow[li] === i).map((l) => l.sec);
+      const mineIdx = laps.map((_, li) => li).filter((li) => lapRow[li] === i);
+      const mine = mineIdx.map((li) => laps[li].sec);
       const best = mine.length ? Math.min(...mine) : null;
       const green = best ? mine.filter((s) => s <= best * 1.05) : [];
       const p90 = percentile(green, 0.9);
+      const clean = cleanLapStats(laps, mineIdx);
       return {
+        cleanSec: clean.avg,
+        cleanLaps: clean.laps,
+        cleanDropped: clean.dropped,
         name,
         slot: i,
         // iRacing's numbers when we have them; otherwise what the log shows
@@ -205,6 +230,12 @@ export default function RaceLogDashboard({
       <p className="text-sm text-zinc-500">No lap data for our car in this log.</p>
     );
   }
+
+  // The clean average is the better number, so it leads — but iRacing's own
+  // average stays one click away, because that is what the results page shows
+  // and someone will always want to reconcile the two.
+  const haveClean = rows.some((r) => r.cleanSec != null);
+  const droppedTotal = rows.reduce((a, r) => a + r.cleanDropped, 0);
 
   const teamBest = (() => {
     const xs = rows.map((r) => r.bestSec).filter((n): n is number => n != null);
@@ -270,6 +301,22 @@ export default function RaceLogDashboard({
               <dd className="text-right text-zinc-200">{d.laps ?? "—"}</dd>
               <dt className="text-zinc-500">Average</dt>
               <dd className="text-right text-zinc-200">{fmtLapSec(d.avgSec)}</dd>
+              <dt
+                className="text-zinc-500"
+                title="Average over this driver's racing laps only — the lap into the pits and the lap back out are left out, so a double stint and a repair stop no longer make a driver look slow."
+              >
+                Ø clean{source !== "log" && <sup className="text-zinc-600">*</sup>}
+              </dt>
+              <dd
+                className="text-right text-zinc-200"
+                title={
+                  d.cleanLaps
+                    ? `${d.cleanLaps} racing laps, ${d.cleanDropped} in/out laps ignored`
+                    : "No racing laps left after removing the in/out laps"
+                }
+              >
+                {fmtLapSec(d.cleanSec)}
+              </dd>
               <dt className="text-zinc-500">Incidents</dt>
               <dd
                 className={`text-right ${
@@ -323,12 +370,31 @@ export default function RaceLogDashboard({
         />
         <GapBars
           title="Average lap — gap to class best"
-          note="iRacing's average over every lap the driver completed, so pit, caution and repair laps are in it."
+          note={
+            cleanAvg
+              ? `Average over racing laps only: the lap into the pits and the lap back out are ignored${
+                  droppedTotal > 0 ? ` (${droppedTotal} laps)` : ""
+                }, so a double stint and a repair stop don't count against the driver.`
+              : "iRacing's average over every lap the driver completed, so pit, caution and repair laps are in it."
+          }
+          action={
+            haveClean && (
+              <button
+                type="button"
+                onClick={() => setCleanAvg((v) => !v)}
+                className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800"
+                title="Switch between the clean average (in/out laps removed) and iRacing's own average."
+              >
+                {cleanAvg ? "Ø clean" : "iRacing Ø"}
+              </button>
+            )
+          }
           rows={rows}
-          values={rows.map((r) =>
-            r.avgSec != null && reference != null ? r.avgSec - reference : null
-          )}
-          absolutes={rows.map((r) => r.avgSec)}
+          values={rows.map((r) => {
+            const v = cleanAvg ? (r.cleanSec ?? r.avgSec) : r.avgSec;
+            return v != null && reference != null ? v - reference : null;
+          })}
+          absolutes={rows.map((r) => (cleanAvg ? (r.cleanSec ?? r.avgSec) : r.avgSec))}
         />
         <CountBars
           title="Laps driven"
@@ -641,12 +707,15 @@ function LapTrace({
 function GapBars({
   title,
   note,
+  action,
   rows,
   values,
   absolutes,
 }: {
   title: string;
   note?: string;
+  /** Optional control shown next to the title (e.g. a metric switch). */
+  action?: React.ReactNode;
   rows: Row[];
   values: (number | null)[];
   absolutes: (number | null)[];
@@ -655,8 +724,9 @@ function GapBars({
   const max = Math.max(0.001, ...usable);
   return (
     <figure className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
-      <figcaption className="mb-1 text-sm font-semibold text-zinc-200">
-        {title}
+      <figcaption className="mb-1 flex items-center justify-between gap-2 text-sm font-semibold text-zinc-200">
+        <span>{title}</span>
+        {action}
       </figcaption>
       {note && <p className="mb-3 text-xs text-zinc-500">{note}</p>}
       {usable.length === 0 ? (

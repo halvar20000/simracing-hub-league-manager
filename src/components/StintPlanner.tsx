@@ -2059,11 +2059,23 @@ export default function StintPlanner({
                   >
                     Lap
                   </th>
-                  <th className="py-1 pr-2 text-right">Laps</th>
+                  <th
+                    className="py-1 pr-2 text-right"
+                    title="Laps this stint runs. Type a number to overrule the model — pitted early after damage or a shortcut, or stayed out a lap longer. Clear the field to hand it back to the model."
+                  >
+                    Laps
+                  </th>
                   <th className="py-1 pr-2 text-right">Fuel</th>
+                  <th
+                    className="py-1 pr-2 text-right"
+                    title="Fuel left in the tank when the stint ends, above the reserve. This is what the stop has to put back in."
+                  >
+                    Left
+                  </th>
                   {pitOn && (
                     <>
-                      <th className="py-1 pr-2 text-right" title="Litres taken at the stop that ends this stint. Empty = fill the tank; a smaller number is a splash.">Fill L</th>
+                      <th className="py-1 pr-2 text-center" title="Fill the tank at the stop that ends this stint. Untick to take a set number of litres — a splash: shorter stop, shorter next stint.">Full</th>
+                      <th className="py-1 pr-2 text-right" title="Litres taken at the stop that ends this stint. Only editable when 'Full' is unticked.">Fill L</th>
                       <th className="py-1 pr-2 text-center" title="Change tyres at that stop? Unticked keeps the set for the next stint.">🛞</th>
                       <th className="py-1 pr-2 text-right" title="Tyre condition at the end of this stint.">Tyre %</th>
                       <th className="py-1 pr-2 text-right" title="What that stop costs: lane loss + fuel + tyres + any uncovered driver change.">Stop</th>
@@ -2210,7 +2222,44 @@ export default function StintPlanner({
                           </span>
                         )}
                       </td>
-                      <td className="py-1 pr-2 text-right">{fmtLaps(st.laps)}</td>
+                      <td className="py-1 pr-2 text-right print:hidden">
+                        <input
+                          type="number"
+                          step="1"
+                          min={0}
+                          value={a.lapsOverride ?? ""}
+                          placeholder={fmtLaps(st.laps)}
+                          onChange={(e) =>
+                            setAssignment(i, {
+                              lapsOverride:
+                                e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          title={
+                            st.lapsOverridden
+                              ? "Typed in by hand — the model is overruled for this stint. Clear the field to give it back."
+                              : "Laps from the model. Type a number to overrule it (pitted early, shortcut, a lap longer)."
+                          }
+                          className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                            st.fuelShort
+                              ? "border-red-500/70 text-red-200"
+                              : st.lapsOverridden
+                                ? "border-amber-500/70 text-amber-200"
+                                : "border-zinc-700 text-zinc-100"
+                          }`}
+                        />
+                        {st.fuelShort && (
+                          <span
+                            className="ml-1 text-[10px] uppercase text-red-400"
+                            title="More laps than the fuel on board allows — the car does not get that far."
+                          >
+                            !
+                          </span>
+                        )}
+                      </td>
+                      <td className="hidden py-1 pr-2 text-right print:table-cell">
+                        {fmtLaps(st.laps)}
+                      </td>
                       <td className="py-1 pr-2 text-right">
                         {fmtFuel(st.fuel)} L
                         {st.shortFill && (
@@ -2219,26 +2268,72 @@ export default function StintPlanner({
                           </span>
                         )}
                       </td>
+                      <td
+                        className={`py-1 pr-2 text-right ${
+                          st.fuelShort
+                            ? "font-semibold text-red-300"
+                            : st.fuelAtEnd < 1
+                              ? "text-amber-300"
+                              : "text-zinc-400"
+                        }`}
+                        title={
+                          st.fuelShort
+                            ? "The stint burns more than it started with — it cannot be run on this fuel."
+                            : `Tank at the flag: ${fmtFuel(st.fuelAtStart)} L → ${fmtFuel(st.fuelAtEnd)} L (above the reserve)`
+                        }
+                      >
+                        {fmtFuel(st.fuelAtEnd)} L
+                      </td>
                       {pitOn && (
                         <>
-                          <td className="py-1 pr-2 text-right print:hidden">
+                          <td className="py-1 pr-2 text-center print:hidden">
                             {st.isFinal ? (
                               <span className="text-zinc-600">—</span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={a.fillLitres == null}
+                                onChange={(e) =>
+                                  setAssignment(i, {
+                                    // Ticking hands the stop back to the model
+                                    // (fill it up). Unticking starts from the
+                                    // litres it would have taken, so the number
+                                    // in the box is one the team can edit down
+                                    // instead of an empty field.
+                                    fillLitres: e.target.checked
+                                      ? null
+                                      : Math.round(st.fillLitres),
+                                  })
+                                }
+                                title="Fill the tank at this stop. Untick for a splash."
+                              />
+                            )}
+                          </td>
+                          <td className="hidden py-1 pr-2 text-center print:table-cell">
+                            {st.isFinal ? "" : a.fillLitres == null ? "FULL" : "splash"}
+                          </td>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            {st.isFinal || a.fillLitres == null ? (
+                              <span
+                                className="text-zinc-500"
+                                title={st.isFinal ? undefined : "Tank filled at this stop"}
+                              >
+                                {st.isFinal ? "—" : `${fmtFuel(st.fillLitres)} L`}
+                              </span>
                             ) : (
                               <input
                                 type="number"
                                 step="1"
                                 min={0}
-                                value={a.fillLitres ?? ""}
-                                placeholder={fmtFuel(st.fillLitres)}
+                                value={a.fillLitres}
                                 onChange={(e) =>
                                   setAssignment(i, {
                                     fillLitres:
                                       e.target.value === "" ? null : Number(e.target.value),
                                   })
                                 }
-                                title="Litres at this stop. Empty = fill the tank."
-                                className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+                                title="Litres at this stop."
+                                className="w-16 rounded border border-amber-500/70 bg-zinc-950 px-1.5 py-1 text-right text-sm text-amber-200"
                               />
                             )}
                           </td>
@@ -2578,6 +2673,36 @@ export default function StintPlanner({
                 <label className={lbl}>Race duration (h:mm:ss)</label>
                 <input className={inp} value={s.event.raceDuration}
                   onChange={(e) => patchEvent("raceDuration", e.target.value)} />
+              </div>
+            )}
+            {s.event.raceLimit === "time" && (
+              <div className="col-span-2">
+                <label className="flex items-start gap-2 text-xs text-zinc-400">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={s.event.roundRaceEnd === true}
+                    onChange={(e) => patchEvent("roundRaceEnd", e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-medium text-zinc-300">
+                      Finish on a whole lap (+ 1)
+                    </span>{" "}
+                    — the race runs to the end of the lap the clock expires on and
+                    one more after it, instead of being cut mid-lap. Those laps
+                    cost fuel, so the plan may show a splash the old rule hid.
+                    {result.raceEndRounded && (
+                      <>
+                        {" "}
+                        Projected finish:{" "}
+                        <strong className="text-zinc-300">
+                          {fmtDuration(result.raceSec)}
+                        </strong>{" "}
+                        (+{fmtDuration(Math.max(0, result.raceSec - (parseDurationToSec(s.event.raceDuration) ?? 0)))}).
+                      </>
+                    )}
+                  </span>
+                </label>
               </div>
             )}
             {s.event.raceLimit === "laps" && (

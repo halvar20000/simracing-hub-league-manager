@@ -216,6 +216,10 @@ export type PlannerAssignmentState = {
   /** Litres taken at that stop; null/undefined = fill the tank. A smaller
    *  number is a splash — shorter stop, shorter following stint. */
   fillLitres?: number | null;
+  /** Laps actually run in this stint, typed in by the team. Null/undefined =
+   *  whatever the model computes. For the stint that ended early (damage,
+   *  shortcut) or ran a lap long. */
+  lapsOverride?: number | null;
 };
 
 /** Track-temperature pace model. The Standard + per-driver lap times stored on
@@ -270,6 +274,12 @@ export type PlannerState = {
     /** How the race ends: on the clock, on a lap count, or on a distance. */
     raceLimit: "time" | "laps" | "distance";
     raceDuration: string; // "6:00:00" — used when raceLimit = "time"
+    /** Finish a TIMED race on a whole lap plus the lap iRacing runs after the
+     *  clock expires (Johann's rule), instead of cutting the last stint at the
+     *  exact second. On for new plans; plans saved before this keep the old
+     *  finish, so an archived plan re-opens with the schedule it was signed
+     *  off with. */
+    roundRaceEnd: boolean;
     /** Lap target when raceLimit = "laps" (e.g. "500"). */
     raceLaps: string;
     /** Distance when raceLimit = "distance" (e.g. "1000"), in `distanceUnit`. */
@@ -381,6 +391,7 @@ export function defaultPlannerState(): PlannerState {
       car: "",
       raceLimit: "time",
       raceDuration: "6:00:00",
+      roundRaceEnd: true,
       raceLaps: "",
       raceDistance: "",
       distanceUnit: "km",
@@ -440,7 +451,16 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
     ...base,
     ...migrated,
     title,
-    event: { ...base.event, ...(migrated.event ?? {}) },
+    event: {
+      ...base.event,
+      ...(migrated.event ?? {}),
+      // Same rule as `savingMode` below: a stored plan keeps the finish it was
+      // built with. Only a payload with no `event` at all is a brand-new plan
+      // and takes the default (on).
+      roundRaceEnd:
+        migrated.event?.roundRaceEnd ??
+        (migrated.event ? false : base.event.roundRaceEnd),
+    },
     // A plan saved before the delta model keeps the absolute pair: an archived
     // plan must re-open with exactly the schedule it was signed off with, and
     // a live plan must not silently re-time itself under the team. A payload
@@ -606,7 +626,11 @@ export function stateToInput(s: PlannerState): PlannerInput {
       trackTempC: a.trackTempC ?? null,
       tyreChange: a.tyreChange ?? true,
       fillLitres: a.fillLitres ?? null,
+      lapsOverride: a.lapsOverride ?? null,
     })),
+    // Only a timed race can be rounded up to a whole lap — a distance race
+    // already ends on one.
+    roundRaceEnd: s.event.raceLimit === "time" && s.event.roundRaceEnd === true,
     // Fall back to the default wet penalty when no Garage 61 rain model exists,
     // so ticking a stint wet still lengthens it (the field shows this default).
     wetDeltaSec: s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC,

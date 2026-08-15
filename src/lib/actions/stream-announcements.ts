@@ -195,6 +195,28 @@ export async function deleteStreamAnnouncement(formData: FormData): Promise<void
   redirect(streamPagePath(leagueSlug, seasonId, roundId) + "?ok=Removed");
 }
 
+/**
+ * Turn a failed post/refresh into something an admin can act on. Without this
+ * the banner just said "edit-failed", which hid e.g. Discord error 30046
+ * ("Maximum number of edits to messages older than 1 hour reached") — a
+ * transient rate limit that looks exactly like a broken feature.
+ */
+function describeDiscordFailure(r: {
+  reason: string;
+  discordStatus?: number;
+  discordBody?: string;
+}): string {
+  if (r.discordStatus === undefined) return r.reason;
+  let detail = (r.discordBody ?? "").slice(0, 200);
+  try {
+    const j = JSON.parse(r.discordBody ?? "") as { message?: string; code?: number };
+    if (j.message) detail = j.code ? `${j.message} (code ${j.code})` : j.message;
+  } catch {
+    /* keep the raw snippet */
+  }
+  return `${r.reason} — Discord ${r.discordStatus}${detail ? `: ${detail}` : ""}`;
+}
+
 export async function postStreamNow(formData: FormData): Promise<void> {
   await requireAdmin();
   const leagueSlug = String(formData.get("leagueSlug") ?? "");
@@ -204,7 +226,8 @@ export async function postStreamNow(formData: FormData): Promise<void> {
   const r = await postStreamAnnouncement(roundId, { force: true });
   const qs = r.ok
     ? "?ok=Posted"
-    : "?error=" + encodeURIComponent(`Could not post: ${r.reason}`);
+    : "?error=" +
+      encodeURIComponent(`Could not post: ${describeDiscordFailure(r)}`);
 
   revalidatePath(streamPagePath(leagueSlug, seasonId, roundId));
   redirect(streamPagePath(leagueSlug, seasonId, roundId) + qs);
@@ -219,7 +242,8 @@ export async function refreshStreamEmbed(formData: FormData): Promise<void> {
   const r = await refreshStreamAnnouncement(roundId);
   const qs = r.ok
     ? "?ok=Embed+refreshed"
-    : "?error=" + encodeURIComponent(`Could not refresh: ${r.reason}`);
+    : "?error=" +
+      encodeURIComponent(`Could not refresh: ${describeDiscordFailure(r)}`);
 
   revalidatePath(streamPagePath(leagueSlug, seasonId, roundId));
   redirect(streamPagePath(leagueSlug, seasonId, roundId) + qs);

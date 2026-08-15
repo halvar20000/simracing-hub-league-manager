@@ -19,7 +19,13 @@ export type StreamEmbedInput = {
   track: string;
   trackConfig?: string | null;
   startsAt: Date;               // race start (for "the race is at …")
-  scheduledStreamAt: Date;      // when the stream goes live
+  /**
+   * When the stream goes live. Optional: when null the "Stream live"
+   * line is omitted entirely. It must NOT fall back to the
+   * announcement's scheduledAt — that is only the posting moment and
+   * showing it made the embed advertise a bogus stream time.
+   */
+  scheduledStreamAt?: Date | null;
   twitchUrl?: string | null;
   posterImageUrl?: string | null;
   messageText?: string | null;  // optional custom body
@@ -39,7 +45,6 @@ function parseEmbedColor(hex: string | null | undefined): number {
 export function buildStreamEmbed(input: StreamEmbedInput): MessagePayload {
   // discordTimestamp() corrects the wall-clock-stored-as-UTC quirk so
   // <t:…> renders the right local time on Discord — see src/lib/timezone.ts.
-  const streamTs = discordTimestamp(input.scheduledStreamAt);
   const raceTs = discordTimestamp(input.startsAt);
   const trackLine = input.trackConfig
     ? `${input.track} — ${input.trackConfig}`
@@ -49,8 +54,11 @@ export function buildStreamEmbed(input: StreamEmbedInput): MessagePayload {
     `**${input.seasonLabel}** · Round ${input.roundNumber}: **${input.roundName}**`,
     `📍 ${trackLine}`,
     `🏁 Race: <t:${raceTs}:F>`,
-    `📺 Stream live: <t:${streamTs}:F> (<t:${streamTs}:R>)`,
   ];
+  if (input.scheduledStreamAt) {
+    const streamTs = discordTimestamp(input.scheduledStreamAt);
+    lines.push(`📺 Stream live: <t:${streamTs}:F> (<t:${streamTs}:R>)`);
+  }
   if (input.messageText && input.messageText.trim().length > 0) {
     lines.push("", input.messageText.trim());
   }
