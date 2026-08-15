@@ -61,6 +61,13 @@ import {
   type G61LapRow,
 } from "@/lib/garage61-import";
 import {
+  autofillDrivers,
+  isNightStint,
+  type AutofillResult,
+  type AutofillStint,
+  type StintPref,
+} from "@/lib/stint-autofill";
+import {
   addSource,
   makeSource,
   poolLapCount,
@@ -633,6 +640,62 @@ export default function StintPlanner({
       else next[driverId] = arr;
       return { ...p, availability: next };
     });
+  /** The browser's offset from UTC, read once. Race times are shown in this
+   *  clock, so "night" has to be measured in it too. */
+  const [tzOffsetMin] = useState(() => -new Date().getTimezoneOffset());
+  /** Is this stint in the plan's night window? Only knowable with a race start. */
+  const stintAtNight = (st: { wallStartMs: number | null }) =>
+    isNightStint(
+      { startSec: 0, endSec: 0, wallStartMs: st.wallStartMs, rain: false },
+      {
+        nightFromHour: parseTypedNumber(s.event.nightFromHour, 23),
+        nightToHour: parseTypedNumber(s.event.nightToHour, 6),
+        localOffsetMin: tzOffsetMin,
+      }
+    );
+
+  /** Write one preference onto a driver row. */
+  const patchDriverPref = (
+    driverId: string,
+    patch: Partial<
+      Pick<
+        PlannerState["drivers"][number],
+        "prefNight" | "prefRain" | "prefStart" | "maxConsecutive"
+      >
+    >
+  ) =>
+    setS((p) => ({
+      ...p,
+      drivers: p.drivers.map((d) => (d.id === driverId ? { ...d, ...patch } : d)),
+    }));
+
+  /** The three-way wish selector. "—" is a real answer: most drivers do not
+   *  care, and a plan that pretends otherwise pushes the fill around for
+   *  nothing. */
+  const prefSelect = (
+    driverId: string,
+    key: "prefNight" | "prefRain" | "prefStart",
+    value: StintPref | undefined,
+    what: string
+  ) => (
+    <select
+      value={value ?? ""}
+      onChange={(e) => patchDriverPref(driverId, { [key]: e.target.value as StintPref })}
+      title={`Would they rather drive ${what}, or rather not?`}
+      className={`rounded border bg-zinc-950 px-1.5 py-1 text-xs ${
+        value === "prefer"
+          ? "border-emerald-700/70 text-emerald-200"
+          : value === "avoid"
+            ? "border-amber-700/70 text-amber-200"
+            : "border-zinc-700 text-zinc-400"
+      }`}
+    >
+      <option value="">—</option>
+      <option value="prefer">happy to</option>
+      <option value="avoid">rather not</option>
+    </select>
+  );
+
   const coveredHours = (startSec: number, endSec: number): number[] => {
     const h0 = Math.floor(startSec / 3600);
     const h1 = Math.floor(Math.max(startSec, endSec - 1) / 3600);
@@ -648,7 +711,10 @@ export default function StintPlanner({
 
   const assignmentAt = (i: number): PlannerAssignmentState =>
     s.assignments[i] ?? { profile: "standard", driverId: null };
-  const setAssignment = (i: number, patch: Partial<PlannerAssignmentState>) =>
+  const setAssignment = (i: number, patch: Partial<PlannerAssignmentState>) => {
+    // A hand-picked seat makes the automatic line-up's report stale: it would
+    // still be claiming preferences are met for a plan that has moved on.
+    if ("driverId" in patch) setFillReport(null);
     setS((p) => {
       const next = [...p.assignments];
       while (next.length <= i)
@@ -656,29 +722,82 @@ export default function StintPlanner({
       next[i] = { ...next[i], ...patch };
       return { ...p, assignments: next };
     });
+  };
 
   // Fill drivers across the stints. `double` = double-stint pairs (each driver
   // does 2 consecutive stints, so every other stop is refuel-only); otherwise
   // single-stint round-robin. Preserves each stint's other fields (wet, note…).
-  const fillDrivers = (p: PlannerState, double: boolean): PlannerState => {
-    if (p.drivers.length === 0) return p;
+  const fillDrivers = (
+    p: PlannerState,
+    double: boolean
+  ): { state: PlannerState; report: AutofillResult | null } => {
+    if (p.drivers.length === 0) return { state: p, report: null };
     const n = Math.max(result.stints.length, p.assignments.length);
+    // The schedule is the truth about when a stint runs; assignments past its
+    // end (a plan that lost stints) fall back to the last stint's window so the
+    // fill still has something to reason about.
+    const last = result.stints[result.stints.length - 1];
+    const stints: AutofillStint[] = Array.from({ length: n }, (_, i) => {
+      const st = result.stints[i] ?? last ?? null;
+      const a = p.assignments[i];
+      return {
+        startSec: st?.startSec ?? i * 3600,
+        endSec: st?.endSec ?? (i + 1) * 3600,
+        wallStartMs: st?.wallStartMs ?? null,
+        rain: st ? st.condition !== "dry" : conditionOf(a ?? {}) !== "dry",
+      };
+    });
+    const out = autofillDrivers(
+      stints,
+      p.drivers.map((d) => ({
+        id: d.id,
+        name: d.name,
+        blockedHours: p.availability[d.id] ?? [],
+        night: d.prefNight ?? "",
+        rain: d.prefRain ?? "",
+        start: d.prefStart ?? "",
+        maxConsecutive: parseTypedNumber(d.maxConsecutive, 0),
+      })),
+      {
+        doubleStint: double,
+        nightFromHour: parseTypedNumber(p.event.nightFromHour, 23),
+        nightToHour: parseTypedNumber(p.event.nightToHour, 6),
+        // The plan's times are shown in the browser's zone, so "night" is
+        // measured in the same clock the team reads off the screen.
+        localOffsetMin: tzOffsetMin,
+      }
+    );
     const next: PlannerAssignmentState[] = [];
     for (let i = 0; i < n; i++) {
-      const di = double ? Math.floor(i / 2) : i;
       next.push({
         ...(p.assignments[i] ?? { profile: "standard", driverId: null }),
         profile: p.assignments[i]?.profile ?? "standard",
-        driverId: p.drivers[di % p.drivers.length].id,
+        driverId: out.assignment[i] ?? p.assignments[i]?.driverId ?? null,
         correctionMin: p.assignments[i]?.correctionMin ?? 0,
       });
     }
-    return { ...p, assignments: next };
+    return { state: { ...p, assignments: next }, report: out };
   };
-  const autoFill = () => setS((p) => fillDrivers(p, p.event.doubleStint));
-  const setDoubleStint = (on: boolean) =>
-    setS((p) => fillDrivers({ ...p, event: { ...p.event, doubleStint: on } }, on));
-  const clearAssignments = () => setS((p) => ({ ...p, assignments: [] }));
+  /** What the last automatic line-up had to compromise. Cleared as soon as a
+   *  seat is picked by hand — by then it describes a plan that no longer is. */
+  const [fillReport, setFillReport] = useState<AutofillResult | null>(null);
+  const autoFill = () => {
+    const { state, report } = fillDrivers(s, s.event.doubleStint);
+    setFillReport(report);
+    setS(state);
+  };
+  const setDoubleStint = (on: boolean) => {
+    const { state, report } = fillDrivers(
+      { ...s, event: { ...s.event, doubleStint: on } },
+      on
+    );
+    setFillReport(report);
+    setS(state);
+  };
+  const clearAssignments = () => {
+    setFillReport(null);
+    setS((p) => ({ ...p, assignments: [] }));
+  };
 
   const patchNote = (k: "pre" | "during" | "post", v: string) =>
     setS((p) => ({ ...p, notes: { ...p.notes, [k]: v } }));
@@ -2279,7 +2398,17 @@ export default function StintPlanner({
                       )}
                       <td className="py-1 pr-2 text-right text-zinc-400">{fmtDuration(st.startSec)}</td>
                       {showClock && (
-                        <td className="py-1 pr-2 text-right text-zinc-400">{fmtClock(st.wallStartMs)}</td>
+                        <td className="py-1 pr-2 text-right text-zinc-400">
+                          {fmtClock(st.wallStartMs)}
+                          {stintAtNight(st) && (
+                            <span
+                              className="ml-1 text-[10px] text-sky-300/80"
+                              title={`Starts in the night window (${s.event.nightFromHour}:00–${s.event.nightToHour}:00 your time)`}
+                            >
+                              ☾
+                            </span>
+                          )}
+                        </td>
                       )}
                       <td className="py-1 pr-2 text-right text-zinc-400">{fmtDuration(st.endSec)}</td>
                       <td className="py-1 pr-2 text-right print:hidden">
@@ -4608,13 +4737,51 @@ export default function StintPlanner({
       {s.drivers.length > 0 && hourCount > 0 && (
         <div className={card}>
           <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Availability
+            Availability &amp; stint preferences
           </h2>
-          <p className="mb-3 text-xs text-zinc-500">
+          <p className="mb-2 text-xs text-zinc-500">
             Everyone is available by default — untick an hour to mark a driver
             unavailable. Stint driver &amp; spotter menus only offer drivers
             available for that stint&rsquo;s hour.
           </p>
+          <p className="mb-3 text-xs text-zinc-500">
+            The columns on the right are what each driver would{" "}
+            <em>rather</em> do. They are used by{" "}
+            <strong className="text-zinc-400">Auto-fill drivers</strong> only — a
+            seat you pick by hand and a
+            correction during the race ignore them completely. They are also
+            wishes, not rules: the fill will break one rather than leave a stint
+            empty, and it says so afterwards.
+          </p>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-zinc-400 print:hidden">
+            <span>Night counts from</span>
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={s.event.nightFromHour}
+              onChange={(e) => patchEvent("nightFromHour", e.target.value)}
+              className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+            />
+            <span>to</span>
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={s.event.nightToHour}
+              onChange={(e) => patchEvent("nightToHour", e.target.value)}
+              className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+            />
+            <span className="text-zinc-500">
+              o&rsquo;clock, real time on your clock — not the sim&rsquo;s time of
+              day.
+              {s.event.sessionStartLocal.trim() === "" && (
+                <span className="ml-1 text-amber-400">
+                  Set a Race start above, or night cannot be worked out at all.
+                </span>
+              )}
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="text-left text-sm tabular-nums">
               <thead className="text-zinc-500">
@@ -4625,6 +4792,18 @@ export default function StintPlanner({
                       H{h + 1}
                     </th>
                   ))}
+                  <th className="border-l border-zinc-800 px-2 py-1 font-normal" title="Driving in the real-world night, in the window set above.">
+                    Night
+                  </th>
+                  <th className="px-2 py-1 font-normal" title="Stints marked half wet or wet in the schedule.">
+                    Rain
+                  </th>
+                  <th className="px-2 py-1 font-normal" title="Being in the car when the flag drops.">
+                    Start
+                  </th>
+                  <th className="px-2 py-1 text-right font-normal" title="Most stints in a row this driver wants. Empty = no limit.">
+                    Max row
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -4644,11 +4823,86 @@ export default function StintPlanner({
                         />
                       </td>
                     ))}
+                    <td className="border-l border-zinc-800 px-2 py-1">
+                      {prefSelect(d.id, "prefNight", d.prefNight, "night")}
+                    </td>
+                    <td className="px-2 py-1">
+                      {prefSelect(d.id, "prefRain", d.prefRain, "the wet")}
+                    </td>
+                    <td className="px-2 py-1">
+                      {prefSelect(d.id, "prefStart", d.prefStart, "the start")}
+                    </td>
+                    <td className="px-2 py-1 text-right">
+                      <input
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={d.maxConsecutive ?? ""}
+                        placeholder="—"
+                        onChange={(e) => patchDriverPref(d.id, { maxConsecutive: e.target.value })}
+                        title={`Most stints in a row ${d.name} wants. Empty = no limit.`}
+                        className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* What the automatic line-up had to give up. A fill that quietly
+              breaks a promise is worse than no preferences at all. */}
+          {fillReport && (
+            <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-3 text-xs">
+              <div className="mb-2 font-semibold text-zinc-300">
+                Last auto-fill — {fillReport.perDriver.length} driver
+                {fillReport.perDriver.length === 1 ? "" : "s"}, fair share{" "}
+                {fillReport.fairShare.toFixed(1)} stints each
+                {fillReport.perDriver.every((r) => r.broken.length === 0) && (
+                  <span className="ml-2 text-emerald-300">
+                    every preference honoured
+                  </span>
+                )}
+              </div>
+              <ul className="space-y-1">
+                {fillReport.perDriver.map((r) => (
+                  <li key={r.driverId} className="flex flex-wrap items-baseline gap-x-3">
+                    <span className="text-zinc-200">
+                      <span className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${driverColour(r.driverId).dot}`} />
+                      {r.name}
+                    </span>
+                    <span className="tabular-nums text-zinc-500">
+                      {r.stints} stint{r.stints === 1 ? "" : "s"}
+                      {r.longestRun > 1 ? ` · up to ${r.longestRun} in a row` : ""}
+                      {r.nightStints > 0 ? ` · ${r.nightStints} at night` : ""}
+                      {r.rainStints > 0 ? ` · ${r.rainStints} wet` : ""}
+                      {r.takesStart ? " · takes the start" : ""}
+                    </span>
+                    {r.broken.length > 0 && (
+                      <span className="text-amber-300">
+                        against their wish: {r.broken.join(", ")}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {fillReport.unavailableUsed.length > 0 && (
+                <p className="mt-2 text-amber-300">
+                  {fillReport.unavailableUsed.length} stint
+                  {fillReport.unavailableUsed.length === 1 ? "" : "s"} had to go to
+                  a driver marked unavailable (stint{" "}
+                  {fillReport.unavailableUsed.map((i) => i + 1).join(", ")}) —
+                  there was nobody else.
+                </p>
+              )}
+              {fillReport.unfilled.length > 0 && (
+                <p className="mt-1 text-red-300">
+                  Nobody could take stint{" "}
+                  {fillReport.unfilled.map((i) => i + 1).join(", ")}.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

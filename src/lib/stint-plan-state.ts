@@ -16,6 +16,7 @@ import {
 } from "@/lib/stint-planner";
 import type { G61ImportResult } from "@/lib/garage61-import";
 import type { G61Source } from "@/lib/garage61-pool";
+import type { StintPref } from "@/lib/stint-autofill";
 
 /** Garage 61 performance analysis saved with a plan (per-driver stats + the
  *  temperature fit) so the dashboard renders on the shared link too. */
@@ -62,6 +63,13 @@ export type PlannerDriverState = {
    *  fills the others and leaves these alone — a hand-tuned number must not be
    *  silently overwritten by the next import. */
   manual?: { laptime?: boolean; fuelPerLap?: boolean; tyreWear?: boolean };
+  /** What this driver would rather do. Used by the automatic line-up only —
+   *  never by a hand-picked seat, and never mid-race. Empty = no preference. */
+  prefNight?: StintPref; // real wall-clock night (the plan's local time)
+  prefRain?: StintPref; // stints marked half wet / wet
+  prefStart?: StintPref; // being in the car at the green flag
+  /** Most stints in a row this driver wants; "" = no limit stated. */
+  maxConsecutive?: string;
 };
 
 /** One row of the parsed eventresult finishing order (stored in the payload so
@@ -310,6 +318,10 @@ export type PlannerState = {
     gridFuelL: string;
     trackTempC: string; // race-day track temperature (°C), "" = none
     conditions: "dry" | "wet"; // whole-race weather scenario (legacy, vestigial)
+    /** Wall-clock hours (plan's local time) the automatic line-up treats as
+     *  night, for the drivers who said they prefer or avoid driving then. */
+    nightFromHour: string; // "23"
+    nightToHour: string; // "6"
     driverSwapSec: string; // mandatory driver-swap floor (iRacing = 30s)
     alertLeadMin: string; // minutes before a stint the driver gets a Discord DM
     refuelSec: string; // refuel service time per stop, "" = unknown
@@ -417,6 +429,8 @@ export function defaultPlannerState(): PlannerState {
       g61Age: "-1",
       trackTempC: "",
       conditions: "dry",
+      nightFromHour: "23",
+      nightToHour: "6",
       driverSwapSec: "30",
       alertLeadMin: String(DEFAULT_ALERT_LEAD_MIN),
       refuelSec: "",

@@ -388,6 +388,30 @@ export default function StintPlannerGuidePage() {
             kann nicht gleichzeitig fahren und spotten.
           </p>
           <p>
+            <strong>Wünsche der Fahrer:</strong> In der Karte{" "}
+            <K>Availability &amp; stint preferences</K> steht rechts neben dem
+            Stundenraster, was jeder <em>lieber</em> fährt: <K>Night</K>{" "}
+            (echte Uhrzeit, Fenster standardmäßig 23–06 Uhr, braucht einen
+            eingetragenen <K>Race start</K>), <K>Rain</K> (Stints, die als halb
+            nass oder nass markiert sind), <K>Start</K> (im Auto sitzen, wenn die
+            Flagge fällt) und <K>Max row</K> (wie viele Stints am Stück).{" "}
+            <K>Auto-fill drivers</K> berücksichtigt alles zusammen mit der
+            Verfügbarkeit und einer gleichmäßigen Verteilung der Fahrzeit.
+            Nachtstints sind im Stintplan mit ☾ markiert.
+          </p>
+          <p>
+            Das sind <strong>Wünsche, keine Regeln</strong>: Lieber bricht die
+            Verteilung einen Wunsch, als einen Stint leer zu lassen — und sagt
+            es hinterher. Unter der Tabelle steht danach pro Fahrer, wie viele
+            Stints er bekommen hat, wie viele davon nachts und im Regen, sein
+            längster Block am Stück, und in Amber, was gegen seinen Wunsch lief.
+            Eine geblockte Stunde ist stärker: Die wird nur benutzt, wenn es
+            wirklich keinen anderen gibt, und dann mit Stintnummer gemeldet. Die
+            Wünsche gelten <strong>nur</strong> für die automatische Verteilung —
+            was du von Hand einträgst und was du im Rennen korrigierst, bleibt
+            unangetastet.
+          </p>
+          <p>
             <strong>Streckentemperatur pro Stint (°C):</strong> Ein leeres Feld
             heißt „läuft auf der Basistemperatur“, also genau die Pace, die du
             eingetragen hast. Trägst du etwas ein, verschiebt sich die

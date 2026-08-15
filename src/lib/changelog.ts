@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.96.0",
+    date: "2026-08-15",
+    changes: [
+      "Drivers can now say what they would rather drive, and the automatic line-up listens. Four new columns next to the availability grid: night, rain, the start, and the most stints in a row a driver wants. “Auto-fill drivers” takes all four into account together with the availability hours and an even share of the driving.",
+      "Night is real time on your clock, not the sim's time of day — the window is set on the plan (23:00 to 06:00 by default) and needs a Race start to be worked out at all. Stints that begin in that window are marked ☾ in the schedule, so it is obvious who is being asked to drive at four in the morning.",
+      "Preferences are wishes, not rules. The fill will break one rather than leave a stint empty — and it says so afterwards: a report under the table lists every driver with their stints, longest run, night and wet stints, and names in amber whatever had to go against their wish. Availability is stronger: a blocked hour is only used when there is genuinely nobody else, and that too is reported by stint number.",
+      "They only apply to the automatic fill. A driver you pick by hand and a ± correction during the race are untouched, exactly as before — and picking a seat by hand clears the report rather than letting it describe a plan that has moved on.",
+      "Double-stint mode now respects each driver's own limit: someone who put 1 in “Max row” is never paired, and the pairing never turns into three in a row.",
+    ],
+  },
+  {
     version: "1.95.1",
     date: "2026-08-15",
     changes: [
