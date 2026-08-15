@@ -27,6 +27,10 @@ export type PullGarage61Result =
   | {
       ok: true;
       result: G61ImportResult;
+      /** The raw laps this pull was aggregated from, so the plan can keep them
+       *  in its lap pool and add the next import to them instead of replacing
+       *  everything. */
+      rows: G61LapRow[];
       meta: {
         trackMatched: string | null;
         carMatched: string | null;
@@ -373,6 +377,7 @@ export async function pullGarage61Laps(input: {
   return {
     ok: true,
     result,
+    rows,
     meta: {
       trackMatched: g61Track.name,
       carMatched: g61Car?.name ?? null,

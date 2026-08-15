@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.95.0",
+    date: "2026-08-15",
+    changes: [
+      "Garage 61 imports can now be added up instead of replacing each other. Until now every session export — and every live pull — threw the previous data away, so a second test evening could only overwrite the first. The new tick box “Add to existing data” next to the upload button keeps the laps of every import and recomputes pace, fuel per lap and the temperature curve over all of them.",
+      "It is the raw laps that are kept, not the summaries, so the numbers stay exact: the median is a real median over every lap, and the lap-time-vs-track-temperature fit finally gets the spread it needs — two sessions at 25 °C and 35 °C tell the planner what a degree costs, while one session at a single temperature never can.",
+      "The pull and the file upload feed the same pool, so an old test session the API window no longer reaches can be topped up from its export.",
+      "A “Lap pool” list shows every import with its laps, drivers and dates, and an × to drop one — a wet session or a run on the wrong setup can be removed and everything recomputes from the rest, instead of having to clear the lot and start again. Re-importing the same file is recognised and replaces the earlier copy rather than counting every lap twice. The pool holds up to 2000 laps; beyond that the oldest import is dropped and the message says which.",
+      "Off by default, and existing plans are untouched: without the tick box an import behaves exactly as it always did.",
+    ],
+  },
+  {
     version: "1.94.0",
     date: "2026-08-15",
     changes: [

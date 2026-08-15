@@ -38,6 +38,7 @@ import { CURRENT_VERSION } from "@/lib/changelog";
 import {
   hydratePlanState,
   stateToInput,
+  uid,
   planPitModel,
   planLapTarget,
   parseTypedNumber,
@@ -59,6 +60,14 @@ import {
   type G61ImportResult,
   type G61LapRow,
 } from "@/lib/garage61-import";
+import {
+  addSource,
+  makeSource,
+  poolLapCount,
+  poolRows,
+  sourceSummary,
+  MAX_POOL_LAPS,
+} from "@/lib/garage61-pool";
 import { pullGarage61Laps } from "@/lib/actions/garage61-pull";
 import StintDriverStats from "@/components/StintDriverStats";
 import RaceLogDashboard from "@/components/RaceLogDashboard";
@@ -1021,7 +1030,23 @@ export default function StintPlanner({
         );
         return;
       }
-      const result = aggregateGarage61Laps(rows, {
+      // Cumulative: this file's laps are added to the ones the plan already
+      // holds and everything is re-aggregated over the union. Off, it is the
+      // old behaviour — this import is the whole truth.
+      const cumulative = s.g61Cumulative === true;
+      const added = makeSource({
+        id: uid(),
+        kind: "upload",
+        label:
+          Array.from(fileList)
+            .map((f) => f.name)
+            .join(", ") || "session export",
+        importedAt: new Date().toISOString(),
+        rows,
+      });
+      const pool = addSource(s.g61Sources ?? [], added, cumulative);
+      const allRows = cumulative ? poolRows(pool.sources) : rows;
+      const result = aggregateGarage61Laps(allRows, {
         rosterNames: s.drivers.map((d) => d.name),
       });
       if (result.drivers.length === 0) {
@@ -1037,12 +1062,31 @@ export default function StintPlanner({
       setG61(result);
       setS((p) => ({
         ...p,
+        g61Sources: pool.sources,
         g61Analysis: {
           ...result,
           generatedAt: new Date().toISOString(),
-          source: { kind: "upload", window: "session export" },
+          source: {
+            kind: "upload",
+            window: cumulative
+              ? `${pool.sources.length} imports · ${poolLapCount(pool.sources)} laps`
+              : "session export",
+          },
         },
       }));
+      if (cumulative) {
+        setG61Msg(
+          `Added ${rows.length} lap${rows.length === 1 ? "" : "s"} to the pool — ` +
+            `now ${poolLapCount(pool.sources)} laps from ${pool.sources.length} import${pool.sources.length === 1 ? "" : "s"}.` +
+            (pool.replacedDuplicate
+              ? " This file was already in the pool, so it replaced the earlier copy instead of counting twice."
+              : "") +
+            (pool.evicted.length
+              ? ` Oldest import${pool.evicted.length === 1 ? "" : "s"} dropped to stay under ${MAX_POOL_LAPS} laps: ${pool.evicted.join(", ")}.`
+              : "") +
+            " Review below, then Apply to plan."
+        );
+      }
       // Did this session contain pit stops? Then the constants are in there too.
       const scan = scanPitStops(pitRows);
       // Keep a failed scan too — its error says which stop is missing, which is
@@ -1221,19 +1265,61 @@ export default function StintPlanner({
   }
 
   /**
+   * Drop one import from the lap pool and rebuild the analysis from what is
+   * left. A session that turned out to be a wet run, or a test on the wrong
+   * setup, should not have to be undone by clearing everything and importing
+   * the good sessions again.
+   */
+  function removeG61Source(id: string) {
+    setS((p) => {
+      const sources = (p.g61Sources ?? []).filter((x) => x.id !== id);
+      if (sources.length === 0) {
+        setG61(null);
+        setG61Msg("Removed the last import — the plan has no Garage 61 laps left.");
+        return { ...p, g61Sources: [], g61Analysis: null };
+      }
+      const result = aggregateGarage61Laps(poolRows(sources), {
+        rosterNames: p.drivers.map((d) => d.name),
+      });
+      setG61(result.drivers.length > 0 ? result : null);
+      setG61Msg(
+        result.drivers.length > 0
+          ? `Import removed — recomputed from ${poolLapCount(sources)} laps across ${sources.length} import${sources.length === 1 ? "" : "s"}. Apply to plan to write the new figures into the driver table.`
+          : "Import removed — no clean laps left in the pool."
+      );
+      return {
+        ...p,
+        g61Sources: sources,
+        g61Analysis:
+          result.drivers.length > 0
+            ? {
+                ...result,
+                generatedAt: new Date().toISOString(),
+                source: {
+                  kind: sources[sources.length - 1].kind,
+                  window: `${sources.length} import${sources.length === 1 ? "" : "s"} · ${poolLapCount(sources)} laps`,
+                },
+              }
+            : null,
+      };
+    });
+  }
+
+  /**
    * Throw away everything that came from Garage 61 for this plan.
    *
-   * Removes the stored analysis (so the driver table stops showing Garage 61
-   * columns and the provenance line disappears) and drops the data-derived
-   * temperature and wet coefficients back to their manual values. Figures the
-   * team typed in are never touched; pace and fuel that the import wrote into
-   * the driver rows only go when explicitly asked for, because by then they are
-   * what the schedule is built on.
+   * Removes the stored analysis and the lap pool behind it (so the driver table
+   * stops showing Garage 61 columns and the provenance line disappears) and
+   * drops the data-derived temperature and wet coefficients back to their
+   * manual values. Figures the team typed in are never touched; pace and fuel
+   * that the import wrote into the driver rows only go when explicitly asked
+   * for, because by then they are what the schedule is built on.
    */
   function clearGarage61(alsoDriverFigures: boolean) {
     setS((p) => ({
       ...p,
       g61Analysis: null,
+      g61Sources: [],
       tempModel: p.tempModel
         ? {
             ...p.tempModel,
@@ -1545,7 +1631,23 @@ export default function StintPlanner({
         setG61Msg(res.error);
         return;
       }
-      setG61(res.result);
+      // A pull feeds the same lap pool as an upload, so an API window that no
+      // longer reaches an old test session can be topped up from its export.
+      const cumulative = s.g61Cumulative === true;
+      const added = makeSource({
+        id: uid(),
+        kind: "pull",
+        label: `Garage 61 · ${res.meta.window}`,
+        importedAt: new Date().toISOString(),
+        rows: res.rows,
+      });
+      const pool = addSource(s.g61Sources ?? [], added, cumulative);
+      const merged = cumulative
+        ? aggregateGarage61Laps(poolRows(pool.sources), {
+            rosterNames: s.drivers.map((d) => d.name),
+          })
+        : res.result;
+      setG61(merged);
       // Store it on the plan immediately. The tables read the SAVED analysis,
       // so without this a pull vanished the moment you left the page and the
       // driver table kept showing whatever was applied weeks ago. "Apply to
@@ -1553,12 +1655,15 @@ export default function StintPlanner({
       // fuel figures the schedule runs on.
       setS((p) => ({
         ...p,
+        g61Sources: pool.sources,
         g61Analysis: {
-          ...res.result,
+          ...merged,
           generatedAt: new Date().toISOString(),
           source: {
             kind: "pull",
-            window: res.meta.window,
+            window: cumulative
+              ? `${res.meta.window} + ${pool.sources.length - 1} earlier import${pool.sources.length === 2 ? "" : "s"}`
+              : res.meta.window,
             lapsFetched: res.meta.lapsFetched,
             lapsTooOld: res.meta.lapsTooOld,
             oldestLapMs: res.meta.oldestLapMs,
@@ -1580,6 +1685,11 @@ export default function StintPlanner({
             : res.meta.datesMissing
               ? " · laps carry no date, so only the season filter applied"
               : "") +
+          (cumulative
+            ? ` · added to the pool: ${poolLapCount(pool.sources)} laps from ${pool.sources.length} import${pool.sources.length === 1 ? "" : "s"}` +
+              (pool.replacedDuplicate ? " (this pull replaced an identical earlier one)" : "") +
+              (pool.evicted.length ? ` · dropped: ${pool.evicted.join(", ")}` : "")
+            : "") +
           ". Review below, then Apply to plan."
       );
     } catch {
@@ -3721,6 +3831,26 @@ export default function StintPlanner({
                 onChange={(e) => onGarage61Files(e.target.files)}
               />
             </label>
+            {/* Add instead of replace. Off by default: an import that quietly
+                inherited three-week-old laps would be worse than one that
+                quietly threw them away — so this is asked for, not assumed. */}
+            <label
+              className={`flex cursor-pointer items-center gap-1.5 rounded border px-2.5 py-1.5 text-sm ${
+                s.g61Cumulative
+                  ? "border-emerald-700/70 bg-emerald-950/30 text-emerald-200"
+                  : "border-zinc-700 bg-zinc-900 text-zinc-400"
+              }`}
+              title="On: the next pull or upload is ADDED to the laps this plan already holds, and pace, fuel and the temperature fit are recomputed over all of them. Off: each import replaces everything."
+            >
+              <input
+                type="checkbox"
+                checked={s.g61Cumulative === true}
+                onChange={(e) =>
+                  setS((p) => ({ ...p, g61Cumulative: e.target.checked }))
+                }
+              />
+              Add to existing data
+            </label>
             {/* Clearing is two clicks, and wiping the pace/fuel the import wrote
                 into the driver table is a separate opt-in — by then those are
                 the numbers the schedule is built on. */}
@@ -3776,6 +3906,71 @@ export default function StintPlanner({
           handled up in <strong className="text-zinc-400">Pit-stop model</strong>,
           next to the fields they fill.
         </p>
+
+        {/* The lap pool: every import the plan's figures are computed from.
+            Without this list, "add to existing data" would be a checkbox whose
+            effect nobody can see — and a wet test session could sit in the
+            median for weeks with no way to find it. */}
+        {(s.g61Sources?.length ?? 0) > 0 && (
+          <div className="mb-3 rounded border border-zinc-800 bg-zinc-950/40 p-3 print:hidden">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-xs font-semibold text-zinc-300">
+                Lap pool — {poolLapCount(s.g61Sources)} laps from{" "}
+                {s.g61Sources.length} import
+                {s.g61Sources.length === 1 ? "" : "s"}
+              </span>
+              <span className="text-[11px] text-zinc-500">
+                Pace, fuel and the temperature fit are computed over all of them.
+                Cap {MAX_POOL_LAPS} laps — the oldest import goes first.
+              </span>
+            </div>
+            <ul className="space-y-1">
+              {s.g61Sources.map((src) => {
+                const sum = sourceSummary(src);
+                return (
+                  <li
+                    key={src.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-800/80 bg-zinc-900/40 px-2 py-1 text-xs"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wider ${
+                          src.kind === "pull"
+                            ? "bg-orange-950/60 text-orange-300"
+                            : "bg-zinc-800 text-zinc-400"
+                        }`}
+                      >
+                        {src.kind === "pull" ? "pull" : "file"}
+                      </span>
+                      <span className="truncate text-zinc-200" title={src.label}>
+                        {src.label}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-3 text-zinc-500">
+                      <span className="tabular-nums">
+                        {sum.laps} laps · {sum.drivers} driver
+                        {sum.drivers === 1 ? "" : "s"}
+                        {sum.oldestMs != null && sum.newestMs != null
+                          ? ` · ${fmtDay(sum.oldestMs)}–${fmtDay(sum.newestMs)}`
+                          : ""}
+                      </span>
+                      <span title={`Imported ${fmtDay(Date.parse(src.importedAt))}`}>
+                        {fmtDay(Date.parse(src.importedAt))}
+                      </span>
+                      <button
+                        onClick={() => removeG61Source(src.id)}
+                        className="rounded px-1 text-zinc-500 hover:bg-red-950/40 hover:text-red-300"
+                        title="Remove this import and recompute from the rest"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* Connection status + connect (per-plan token) */}
         <div className="mb-3 rounded border border-zinc-800 bg-zinc-950/40 p-3">

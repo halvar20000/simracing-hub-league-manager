@@ -15,6 +15,7 @@ import {
   type StintProfileKey,
 } from "@/lib/stint-planner";
 import type { G61ImportResult } from "@/lib/garage61-import";
+import type { G61Source } from "@/lib/garage61-pool";
 
 /** Garage 61 performance analysis saved with a plan (per-driver stats + the
  *  temperature fit) so the dashboard renders on the shared link too. */
@@ -358,6 +359,14 @@ export type PlannerState = {
   wetModel: WetModel | null;
   /** Saved Garage 61 performance analysis for the dashboard, or null. */
   g61Analysis: PlannerG61Analysis | null;
+  /** The raw laps behind that analysis, one entry per import. Empty on plans
+   *  saved before the pool existed — the analysis they carry is still shown,
+   *  it simply cannot be added to until the next import. */
+  g61Sources: G61Source[];
+  /** Add the next import to the pool instead of replacing it. Off by default:
+   *  a fresh import that quietly inherited three-week-old laps would be worse
+   *  than one that quietly threw them away. */
+  g61Cumulative: boolean;
   /** Driver availability: driverId → race-hour indices (0-based) the driver is
    *  NOT available. Missing/empty = available all race (the default). */
   availability: Record<string, number[]>;
@@ -429,6 +438,8 @@ export function defaultPlannerState(): PlannerState {
     tempModel: null,
     wetModel: null,
     g61Analysis: null,
+    g61Sources: [],
+    g61Cumulative: false,
     availability: {},
     notes: { pre: "", during: "", post: "" },
     eventResult: null,
@@ -468,6 +479,9 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
     savingMode:
       migrated.savingMode ?? (migrated.standard ? "absolute" : base.savingMode),
     notes: { ...base.notes, ...(stored.notes ?? {}) },
+    // A plan saved before the lap pool has an analysis but no laps behind it.
+    g61Sources: stored.g61Sources ?? base.g61Sources,
+    g61Cumulative: stored.g61Cumulative ?? base.g61Cumulative,
     availability: stored.availability ?? base.availability,
     impressions: stored.impressions ?? base.impressions,
     alertsSent: stored.alertsSent ?? base.alertsSent,

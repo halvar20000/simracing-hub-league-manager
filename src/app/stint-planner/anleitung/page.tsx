@@ -351,6 +351,22 @@ export default function StintPlannerGuidePage() {
             Streckentemperaturen berechnet der Planer, wie viel Rundenzeit ein
             Grad kostet.
           </p>
+          <p>
+            <strong>Mehrere Sessions zusammenrechnen:</strong> Normalerweise
+            ersetzt jeder Import (Upload wie Live-Pull) die vorherigen Daten. Mit
+            dem Häkchen <K>Add to existing data</K> neben dem Upload-Knopf werden
+            die Runden stattdessen <strong>dazugelegt</strong>: Pace, Verbrauch
+            und die Temperaturkurve werden über alle Runden neu gerechnet. Genau
+            das braucht die Temperaturkurve — zwei Abende bei 25 °C und 35 °C
+            sagen dem Planer, was ein Grad kostet, eine einzelne Session bei
+            konstanter Temperatur kann das nie. Die Liste{" "}
+            <K>Lap pool</K> darunter zeigt jeden Import mit Runden, Fahrern und
+            Datum; mit <K>×</K> wirfst du einen wieder raus (Regen-Session,
+            falsches Setup) und alles rechnet sich aus dem Rest neu. Dieselbe
+            Datei zweimal hochgeladen wird erkannt und ersetzt die alte Kopie,
+            statt doppelt zu zählen. Der Pool fasst 2000 Runden — danach fliegt
+            der älteste Import raus, die Meldung sagt welcher.
+          </p>
         </Section>
 
         <Section
