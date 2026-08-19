@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isAccusedIn } from "@/lib/incident-visibility";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
 import { SPECIAL_MEASURE_LABEL } from "@/lib/penalty-categories";
@@ -76,6 +78,14 @@ export default async function PublicIncidentsList({
   searchParams: Promise<{ league?: string }>;
 }) {
   const { league: leagueFilter } = await searchParams;
+
+  // This page is public and shows names + verdicts only — never the written
+  // accusation. The signed-in viewer is used solely to decide whether to offer
+  // a "View details" link into the private report, which /reports/[reportId]
+  // re-checks server-side. Signed out → viewerId stays null and nothing extra
+  // is rendered.
+  const viewerSession = await auth();
+  const viewerId = viewerSession?.user?.id ?? null;
 
   const reports = await prisma.incidentReport.findMany({
     include: {
@@ -316,6 +326,13 @@ export default async function PublicIncidentsList({
 
             const published = isPublished(r);
             const decision = r.decision;
+            // Only the reporter and the accused driver(s) get a way in to the
+            // full text from here. involvedDrivers is already filtered to
+            // ACCUSED by the query above.
+            const canOpen =
+              viewerId != null &&
+              (r.reporterUserId === viewerId ||
+                isAccusedIn(r.involvedDrivers, viewerId));
 
             return (
               <article
@@ -348,8 +365,16 @@ export default async function PublicIncidentsList({
                       {accusedLabel}
                     </div>
                   </div>
-                  <div className="text-xs text-zinc-500">
-                    {formatDateTime(r.submittedAt)}
+                  <div className="text-right text-xs text-zinc-500">
+                    <div>{formatDateTime(r.submittedAt)}</div>
+                    {canOpen && (
+                      <Link
+                        href={`/reports/${r.id}`}
+                        className="mt-1 inline-block text-[#ff6b35] hover:underline"
+                      >
+                        View details →
+                      </Link>
+                    )}
                   </div>
                 </div>
 

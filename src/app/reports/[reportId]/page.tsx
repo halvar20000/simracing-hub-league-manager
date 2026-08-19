@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
 import { StatusTimeline } from "@/components/StatusTimeline";
+import { isAccusedIn } from "@/lib/incident-visibility";
 
 export default async function ReportDetail({
   params,
@@ -28,25 +29,41 @@ export default async function ReportDetail({
   });
   if (!report) notFound();
 
-  // Reporter or admin can view
+  // Reporter, the accused driver, or an admin can view. The accused was added
+  // 2026-08-19: they could see on /incidents that a case existed against them
+  // but not read a single word of it. See src/lib/incident-visibility.ts.
   const me = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { role: true },
   });
   const isOwnReport = report.reporterUserId === session.user.id;
   const isAdmin = me?.role === "ADMIN";
-  if (!isOwnReport && !isAdmin) {
+  const isAccused = isAccusedIn(report.involvedDrivers, session.user.id);
+  if (!isOwnReport && !isAdmin && !isAccused) {
     redirect("/reports");
   }
 
   return (
     <div className="max-w-2xl space-y-5">
       <Link
-        href={isOwnReport ? "/reports" : `/admin/leagues/${report.round.season.league.slug}/seasons/${report.round.seasonId}/reports`}
+        href={
+          isOwnReport || isAccused
+            ? "/reports"
+            : `/admin/leagues/${report.round.season.league.slug}/seasons/${report.round.seasonId}/reports`
+        }
         className="text-sm text-zinc-400 hover:text-zinc-200"
       >
         ← Back
       </Link>
+
+      {isAccused && !isOwnReport && (
+        <div className="rounded border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">
+          <span className="font-semibold">You are named in this report.</span>{" "}
+          Only you, the driver who filed it and the stewards can read it — it is
+          not shown to anyone else. The public incident list shows the names and
+          the verdict, never the text below.
+        </div>
+      )}
 
       <div>
         <h1 className="font-display text-2xl font-bold">Incident Report</h1>

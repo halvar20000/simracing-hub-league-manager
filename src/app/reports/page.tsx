@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { withdrawIncidentReport } from "@/lib/actions/incident-reports";
 import { formatDateTime } from "@/lib/date";
+import { accusedByUserWhere } from "@/lib/incident-visibility";
 
 export default async function MyReports({
   searchParams,
@@ -15,14 +16,33 @@ export default async function MyReports({
 
   const { success, error } = await searchParams;
 
-  const reports = await prisma.incidentReport.findMany({
-    where: { reporterUserId: session.user.id },
-    include: {
-      round: { include: { season: { include: { league: true } } } },
-      decision: true,
-    },
-    orderBy: { submittedAt: "desc" },
-  });
+  const userId = session.user.id;
+
+  const [reports, against] = await Promise.all([
+    prisma.incidentReport.findMany({
+      where: { reporterUserId: userId },
+      include: {
+        round: { include: { season: { include: { league: true } } } },
+        decision: true,
+      },
+      orderBy: { submittedAt: "desc" },
+    }),
+    // Reports filed AGAINST this driver. Private to them, the reporter and
+    // the stewards — see src/lib/incident-visibility.ts. `reporterUserId: not`
+    // guards the odd case of someone naming themselves as accused, so the
+    // report doesn't appear in both lists.
+    prisma.incidentReport.findMany({
+      where: { ...accusedByUserWhere(userId), reporterUserId: { not: userId } },
+      include: {
+        round: { include: { season: { include: { league: true } } } },
+        reporterUser: {
+          select: { firstName: true, lastName: true, name: true },
+        },
+        decision: true,
+      },
+      orderBy: { submittedAt: "desc" },
+    }),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -46,6 +66,10 @@ export default async function MyReports({
           {error}
         </div>
       )}
+
+      <h2 className="pt-2 font-display text-sm font-semibold uppercase tracking-wider text-zinc-400">
+        Reports I filed
+      </h2>
 
       {reports.length === 0 ? (
         <p className="text-sm text-zinc-500">You haven't filed any reports.</p>
@@ -94,6 +118,58 @@ export default async function MyReports({
             </div>
           ))}
         </div>
+      )}
+
+      {against.length > 0 && (
+        <>
+          <h2 className="pt-4 font-display text-sm font-semibold uppercase tracking-wider text-zinc-400">
+            Reports against me
+          </h2>
+          <p className="-mt-2 text-xs text-zinc-500">
+            Private — only you, the driver who filed it and the stewards can
+            read these. The public incident list never shows the text.
+          </p>
+          <div className="space-y-3">
+            {against.map((r) => {
+              const u = r.reporterUser;
+              const reporter =
+                `${u?.firstName ?? ""} ${u?.lastName ?? ""}`.trim() ||
+                u?.name ||
+                "A driver";
+              return (
+                <div
+                  key={r.id}
+                  className="rounded border border-amber-900/50 bg-zinc-900 p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-semibold">
+                        {r.round.season.league.name} — Round{" "}
+                        {r.round.roundNumber} {r.round.name}
+                      </h3>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                        <StatusBadge status={r.status} />
+                        <span>{formatDateTime(r.submittedAt)}</span>
+                        <span>• Filed by {reporter}</span>
+                        {r.lapNumber && <span>• Lap {r.lapNumber}</span>}
+                        {r.turnOrSector && <span>• {r.turnOrSector}</span>}
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm text-zinc-300">
+                        {r.description}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/reports/${r.id}`}
+                      className="text-sm text-[#ff6b35] hover:underline"
+                    >
+                      View details
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

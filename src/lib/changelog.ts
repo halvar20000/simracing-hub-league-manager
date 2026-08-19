@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.99.0",
+    date: "2026-08-19",
+    changes: [
+      "A driver who has been reported can finally read what they are accused of. Until now the incident list told you a case existed against you, who filed it and what round it was about — and not one word of the actual description. There was no way to answer something you could not read.",
+      "“My Reports” now has a second block, “Reports against me”, listing every report in which you are named as the accused, with the text, the lap, the corner and the evidence the reporter attached. The same report also opens straight from the public incident list, but only for the two people it concerns — a “View details” link appears there for the reporter and for the accused, and for nobody else.",
+      "It stays private. The public page still shows only the names and, once published, the verdict — never the written accusation. Being named as a witness is not enough to open it; only the accused, the reporter and the stewards can.",
+      "Visible as soon as the report is filed, so there is time to look at your own replay while the race is still fresh, rather than finding out when the verdict lands.",
+    ],
+  },
+  {
     version: "1.98.0",
     date: "2026-08-19",
     changes: [
