@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.97.0",
+    date: "2026-08-19",
+    changes: [
+      "The GT3 WCT standings can be taken away as a spreadsheet. A new “⬇ Export standings (.xlsx)” button above the table downloads an Excel workbook that opens straight in Excel, Numbers or Google Sheets — no copying out of the browser, no lost columns.",
+      "The sheet holds more than the page shows at once: the summary columns you already know (position, number, driver, team, class, rounds, incidents, iRating, raw, participation, penalties, total) and then one column per round with that round's points, so the whole season sits side by side and can be sorted, filtered or charted however you like. A Dropped column names the rounds the drop-week rule left out, which is why a driver's round columns need not add up to the total.",
+      "Pro and Am come along as their own sheets, and a small Info sheet records the league, the season, when the file was made and what the columns mean.",
+      "It exports what the public sees: only published rounds are in the file, even when an admin is previewing a round that has not been marked completed yet.",
+    ],
+  },
+  {
     version: "1.96.0",
     date: "2026-08-15",
     changes: [

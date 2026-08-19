@@ -19,6 +19,7 @@ import {
 } from "@/lib/standings";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
+import { isStandingsExportEnabled } from "@/lib/standings-export-config";
 import { isAdminOrSteward } from "@/lib/auth-helpers";
 import { RaceByRaceDriverTable } from "@/components/RaceByRaceDriverTable";
 import { RaceByRaceTeamTable } from "@/components/RaceByRaceTeamTable";
@@ -182,6 +183,11 @@ export default async function StandingsPage({
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/standings`;
 
+  // .xlsx download — same allow-list the API route enforces, so the button is
+  // never shown for a league whose export would be rejected. The export always
+  // reflects the PUBLISHED standings, even when an admin is previewing.
+  const canExport = isStandingsExportEnabled(slug) && drivers.length > 0;
+
   return (
     <div className="space-y-8">
       <div>
@@ -202,14 +208,25 @@ export default async function StandingsPage({
           completed round until you mark it Completed.
         </div>
       )}
-      {season.scoringSystem.penaltyPoolMode !== "OFF" && (
-        <div className="mb-4">
-          <Link
-            href={`/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
-            className="inline-block rounded bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-600"
-          >
-            View Penalty Pool →
-          </Link>
+      {(season.scoringSystem.penaltyPoolMode !== "OFF" || canExport) && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {season.scoringSystem.penaltyPoolMode !== "OFF" && (
+            <Link
+              href={`/leagues/${slug}/seasons/${seasonId}/penalty-pool`}
+              className="inline-block rounded bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-600"
+            >
+              View Penalty Pool →
+            </Link>
+          )}
+          {canExport && (
+            <a
+              href={`/api/export/standings?season=${seasonId}`}
+              className="inline-block rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+              title="Download the standings as an Excel workbook (opens in Excel, Numbers or Google Sheets)"
+            >
+              ⬇ Export standings (.xlsx)
+            </a>
+          )}
         </div>
       )}
 
