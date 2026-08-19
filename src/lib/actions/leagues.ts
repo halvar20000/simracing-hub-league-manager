@@ -148,6 +148,10 @@ export async function updateLeague(id: string, formData: FormData) {
   // channel at post time (see src/lib/notify-reporting.ts).
   const discordReportsChannelId =
     String(formData.get("discordReportsChannelId") ?? "").trim() || null;
+  // Master switch for that post — off by default for every league since
+  // 2026-08-19. A channel on its own no longer makes it fire.
+  const reportingOpenNotifyEnabled =
+    String(formData.get("reportingOpenNotifyEnabled") ?? "") === "1";
   const discordWelcomeChannelId =
     String(formData.get("discordWelcomeChannelId") ?? "").trim() || null;
   const discordWelcomeMessage =
@@ -242,6 +246,7 @@ export async function updateLeague(id: string, formData: FormData) {
       twitchChannelLogin,
       discordResultsChannelId,
       discordReportsChannelId,
+      reportingOpenNotifyEnabled,
       discordWelcomeChannelId,
       discordWelcomeMessage,
       garage61TeamUrl,

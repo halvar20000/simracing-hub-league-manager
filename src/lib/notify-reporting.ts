@@ -18,6 +18,7 @@ export type NotifyResult =
       reason:
         | "round-not-found"
         | "already-notified"
+        | "disabled"
         | "no-channel"
         | "no-cooldown"
         | "too-early"
@@ -38,12 +39,6 @@ export async function notifyReportingOpenForRound(
   if (round.reportingNotifiedAt) return { ok: false, reason: "already-notified" };
 
   const lg = round.season.league;
-  // Dedicated reports channel if set, otherwise reuse the league's RSVP
-  // channel — the drivers who need to see this are already in it.
-  const channelId = lg.discordReportsChannelId ?? lg.discordRsvpChannelId;
-  if (!channelId) {
-    return { ok: false, reason: "no-channel" };
-  }
 
   const cooldownHrs = round.season.scoringSystem?.protestCooldownHours ?? null;
   const windowHrs = round.season.scoringSystem?.protestWindowHours ?? null;
@@ -57,6 +52,29 @@ export async function notifyReportingOpenForRound(
   const now = new Date();
   if (!opts?.force && opensAt > now) {
     return { ok: false, reason: "too-early" };
+  }
+
+  // Per-league master switch (default OFF since 2026-08-19). Deliberately
+  // checked AFTER the cooldown gate and BEFORE the channel lookup:
+  //  - after too-early, so a future round is never stamped ahead of time;
+  //  - before no-channel, so a league with no channel configured still gets
+  //    its rounds stamped instead of piling up an invisible backlog.
+  // The stamp is the whole point: it means switching a league back on later
+  // announces only NEW rounds, never a wall of stale ones. `force` (the admin
+  // "Announce reporting now" button) bypasses the switch entirely.
+  if (!opts?.force && !lg.reportingOpenNotifyEnabled) {
+    await prisma.round.update({
+      where: { id: roundId },
+      data: { reportingNotifiedAt: new Date() },
+    });
+    return { ok: false, reason: "disabled" };
+  }
+
+  // Dedicated reports channel if set, otherwise reuse the league's RSVP
+  // channel — the drivers who need to see this are already in it.
+  const channelId = lg.discordReportsChannelId ?? lg.discordRsvpChannelId;
+  if (!channelId) {
+    return { ok: false, reason: "no-channel" };
   }
 
   const baseUrl =

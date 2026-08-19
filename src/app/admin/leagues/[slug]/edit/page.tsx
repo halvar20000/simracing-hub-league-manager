@@ -208,8 +208,30 @@ export default async function EditLeaguePage({
               />
               <span className="mt-1 block text-[11px] text-zinc-500">
                 Posted once per round when the protest window opens. Leave
-                empty to use the RSVP channel above; clear both to switch the
-                announcement off.
+                empty to use the RSVP channel above. The channel alone does
+                nothing — tick the switch below to actually post.
+              </span>
+            </label>
+            <label className="flex w-full items-start gap-2 rounded border border-zinc-800 bg-zinc-900/50 p-3">
+              <input
+                type="checkbox"
+                name="reportingOpenNotifyEnabled"
+                value="1"
+                defaultChecked={league.reportingOpenNotifyEnabled}
+                className="mt-0.5 h-4 w-4 accent-orange-500"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-zinc-200">
+                  Announce “incident reports open” in Discord
+                </span>
+                <span className="mt-0.5 block text-xs text-zinc-500">
+                  Off for every league since 19.08.2026. While it is off,
+                  rounds are still marked as announced behind the scenes, so
+                  ticking this box later posts only for NEW rounds — it will
+                  never dump a backlog of old races into the channel. The
+                  “Announce reporting now” button on the season admin page
+                  works either way.
+                </span>
               </span>
             </label>
             <label className="block flex-1 min-w-[12rem]">

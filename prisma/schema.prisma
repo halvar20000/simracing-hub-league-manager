@@ -198,6 +198,18 @@ model League {
   /// league since it was built. It now uses the bot like every other notifier.
   discordReportsChannelId String?
 
+  /// Master switch for the automatic "incident reports are open" Discord post.
+  /// Default FALSE — since 2026-08-19 the announcement is off for every league
+  /// unless an admin ticks it on the league-edit page. Setting a reports
+  /// channel is no longer enough on its own.
+  ///
+  /// When it is off the cron still stamps Round.reportingNotifiedAt WITHOUT
+  /// posting, so switching a league back on never dumps a backlog of stale
+  /// announcements into Discord (that trap cost us 12 near-misses in v1.90.0).
+  /// The admin "Announce reporting now" button passes force and ignores this
+  /// flag. See src/lib/notify-reporting.ts.
+  reportingOpenNotifyEnabled Boolean @default(false)
+
   /// Discord channel for the daily new-member welcome post. Null = the
   /// welcome feature is off. See src/lib/notify-welcome.ts.
   discordWelcomeChannelId String?

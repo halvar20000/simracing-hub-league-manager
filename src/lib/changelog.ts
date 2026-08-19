@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.98.0",
+    date: "2026-08-19",
+    changes: [
+      "The automatic “📋 Incident reports open” post in Discord is switched off — for every league and every series. It has its own tick box now on the admin league page, under the reports channel, and it starts unticked everywhere. Setting a channel is no longer enough on its own to make it post.",
+      "Reporting itself is untouched: the protest window still opens on time, drivers still file reports on the round page, stewards work exactly as before. Only the announcement in Discord stops.",
+      "While a league is off, its rounds are quietly marked as announced anyway. That matters if you ever tick the box again — it will post for the races that come after, and never for the ones that already went by. Without it, switching back on would empty months of old protest windows into the channel at once.",
+      "The “Announce reporting now” button on the season admin page ignores the tick box, so you can still post it by hand for a single round.",
+    ],
+  },
+  {
     version: "1.97.0",
     date: "2026-08-19",
     changes: [
