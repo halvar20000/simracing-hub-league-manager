@@ -229,6 +229,26 @@ export default async function AdminRoundResults({
             >
               👁 Preview public
             </Link>
+            {round.season.scoringSystem.incidentReportingEnabled && (
+              <>
+                {/* Stewards open a case straight from the round they are
+                    looking at — the form itself is the public one, which
+                    lets a steward file for the league and ignores the
+                    protest window. */}
+                <Link
+                  href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
+                  className="rounded border border-amber-600/60 bg-amber-950/30 px-3 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-900/40"
+                >
+                  ⚑ Report as league
+                </Link>
+                <Link
+                  href={`/admin/leagues/${slug}/seasons/${seasonId}/reports`}
+                  className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                >
+                  ⚖️ Reports
+                </Link>
+              </>
+            )}
             <Link
               href={`/admin/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/edit`}
               className="rounded border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"

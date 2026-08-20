@@ -19,9 +19,20 @@ export default async function AdminReportsQueue({
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
-    include: { league: true },
+    include: { league: true, scoringSystem: true },
   });
   if (!season || season.league.slug !== slug) notFound();
+
+  // Round pills for opening a steward-initiated case without hunting for the
+  // round first. Newest round first — a case is almost always about the race
+  // that just ran.
+  const seasonRounds = season.scoringSystem.incidentReportingEnabled
+    ? await prisma.round.findMany({
+        where: { seasonId },
+        select: { id: true, roundNumber: true, name: true },
+        orderBy: { roundNumber: "desc" },
+      })
+    : [];
 
   const reports = await prisma.incidentReport.findMany({
     where: { round: { seasonId } },
@@ -92,6 +103,31 @@ export default async function AdminReportsQueue({
           {reports.length} total — {counts.submitted} new, {counts.review}{" "}
           under review, {counts.decided} decided, {counts.dismissed} dismissed, {counts.withdrawn} withdrawn
         </p>
+
+        {seasonRounds.length > 0 && (
+          <div className="mt-4 rounded border border-amber-700/50 bg-amber-950/20 p-3">
+            <p className="text-sm font-semibold text-amber-200">
+              ⚑ Meldung im Namen der Liga erfassen
+            </p>
+            <p className="mt-0.5 text-xs text-amber-200/70">
+              Runde wählen — als Steward kannst du auch außerhalb des
+              Protestfensters melden. Melder ist die Rennleitung, nicht du.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {seasonRounds.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/leagues/${slug}/seasons/${seasonId}/rounds/${r.id}/report`}
+                  title={r.name}
+                  className="rounded border border-amber-700/60 bg-amber-950/40 px-2 py-1 text-xs font-medium text-amber-100 hover:bg-amber-900/50"
+                >
+                  R{r.roundNumber}
+                  <span className="ml-1 text-amber-200/60">{r.name}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {reports.length === 0 ? (

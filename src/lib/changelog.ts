@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.0.1",
+    date: "2026-08-20",
+    changes: [
+      "Filing a report on behalf of the league is now reachable from where stewards actually work. The admin page of a round has a “⚑ Report as league” button next to Race Center and Preview public, and a “⚖️ Reports” link to the season's case queue. Until now the only way in was the public round page, which meant leaving the admin area to find it.",
+      "The incident-report queue also has a round picker at the top: pick the round, the report form opens straight away, newest race first.",
+    ],
+  },
+  {
     version: "2.0.0",
     date: "2026-08-20",
     changes: [
