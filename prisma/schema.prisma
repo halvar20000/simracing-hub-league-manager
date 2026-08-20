@@ -496,6 +496,14 @@ model RaceResult {
   manualPenaltyReason        String?
   notes                      String?
 
+  // Set when a steward decision disqualified this result (verdict
+  // DISQUALIFICATION). dsqPreviousStatus keeps the status the result had
+  // BEFORE the DQ so editing or deleting the decision can put it back.
+  // Deliberately no FK: the revert is done explicitly in admin-reports.ts,
+  // and a stale id must never cascade a result row away.
+  dsqDecisionId     String?
+  dsqPreviousStatus FinishStatus?
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   qualifyingTimeMs Int?
@@ -599,9 +607,14 @@ model IncidentReport {
   roundId                String
   round                  Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
   reporterUserId         String
-  reporterUser           User         @relation(fields: [reporterUserId], references: [id])
-  reporterRegistrationId String
-  reporterRegistration   Registration @relation("IncidentReporter", fields: [reporterRegistrationId], references: [id])
+  reporterUser           User          @relation(fields: [reporterUserId], references: [id])
+  // Null ONLY for steward-initiated reports (stewardInitiated = true): the
+  // league itself files the case, so there is no reporting driver. Every
+  // driver-filed report still carries the reporter's registration.
+  reporterRegistrationId String?
+  reporterRegistration   Registration? @relation("IncidentReporter", fields: [reporterRegistrationId], references: [id])
+  /** Filed by a steward/admin on behalf of the league, not by a driver. */
+  stewardInitiated       Boolean       @default(false)
 
   lapNumber    Int?
   turnOrSector String?
@@ -884,6 +897,8 @@ enum Verdict {
   POINTS_DEDUCTION
   GRID_PENALTY_NEXT_ROUND
   SUSPENSION
+  // Sets the selected race result(s) to DSQ — see submitDecision().
+  DISQUALIFICATION
 }
 
 enum PenaltySource {

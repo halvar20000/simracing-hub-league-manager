@@ -15,10 +15,24 @@ export async function createIncidentReport(
 ) {
   const sessionUser = await requireAuth();
 
-  const reporterReg = await prisma.registration.findFirst({
-    where: { seasonId, userId: sessionUser.id, status: "APPROVED" },
+  const me = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { role: true },
   });
-  if (!reporterReg) {
+  const isSteward = me?.role === "ADMIN" || me?.role === "STEWARD";
+
+  // Steward-initiated: the LEAGUE files the case, not a driver. No reporting
+  // registration, no REPORTER row among the involved drivers — the public
+  // feed shows "League stewards" as the reporter. Only a steward/admin may
+  // ask for this; everyone else files under their own registration.
+  const fileAsSteward = isSteward && formData.get("fileAsSteward") === "on";
+
+  const reporterReg = fileAsSteward
+    ? null
+    : await prisma.registration.findFirst({
+        where: { seasonId, userId: sessionUser.id, status: "APPROVED" },
+      });
+  if (!fileAsSteward && !reporterReg) {
     redirect(
       `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${roundId}?error=Only+approved+drivers+can+file+reports`
     );
@@ -41,11 +55,6 @@ export async function createIncidentReport(
   }
 
   // Reporting window check — admins/stewards bypass.
-  const me = await prisma.user.findUnique({
-    where: { id: sessionUser.id },
-    select: { role: true },
-  });
-  const isSteward = me?.role === "ADMIN" || me?.role === "STEWARD";
   const window = protestWindowState({
     raceStartsAt: round.startsAt,
     protestCooldownHours: round.season.scoringSystem.protestCooldownHours,
@@ -98,7 +107,8 @@ export async function createIncidentReport(
     data: {
       roundId,
       reporterUserId: sessionUser.id,
-      reporterRegistrationId: reporterReg.id,
+      reporterRegistrationId: reporterReg?.id ?? null,
+      stewardInitiated: fileAsSteward,
       lapNumber,
       turnOrSector,
       description,
@@ -110,18 +120,21 @@ export async function createIncidentReport(
     },
   });
 
-  // Reporter is always tagged
-  await prisma.incidentReportInvolvedDriver.create({
-    data: {
-      incidentReportId: report.id,
-      registrationId: reporterReg.id,
-      role: "REPORTER",
-    },
-  });
+  // Reporter is always tagged — except on a steward-initiated report, where
+  // there is no reporting driver to tag.
+  if (reporterReg) {
+    await prisma.incidentReportInvolvedDriver.create({
+      data: {
+        incidentReportId: report.id,
+        registrationId: reporterReg.id,
+        role: "REPORTER",
+      },
+    });
+  }
 
   // Tag drivers selected via the picker (preferred)
   for (const regId of involvedRegistrationIds) {
-    if (regId === reporterReg.id) continue;
+    if (regId === reporterReg?.id) continue;
     const reg = await prisma.registration.findFirst({
       where: { id: regId, seasonId, status: "APPROVED" },
     });
@@ -155,7 +168,7 @@ export async function createIncidentReport(
       const reg = approvedRegs.find(
         (r) => parseInt(r.startNumber ?? "", 10) === num
       );
-      if (!reg || reg.id === reporterReg.id) continue;
+      if (!reg || reg.id === reporterReg?.id) continue;
       await prisma.incidentReportInvolvedDriver
         .create({
           data: {
@@ -198,6 +211,13 @@ export async function createIncidentReport(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`
   );
   revalidatePath("/reports");
+  // A steward filing for the league lands straight on the case, where the
+  // verdict (and a possible disqualification) is decided.
+  if (fileAsSteward) {
+    redirect(
+      `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports/${report.id}`
+    );
+  }
   redirect("/reports?success=1");
 }
 

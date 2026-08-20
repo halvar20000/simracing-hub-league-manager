@@ -27,7 +27,8 @@ export function InvolvedDriversPicker({
   teamMode = false,
 }: {
   drivers: Driver[];
-  excludeRegistrationId?: string;
+  /** Null on steward-initiated reports — there is no reporter to hide. */
+  excludeRegistrationId?: string | null;
   name?: string;
   teamMode?: boolean;
 }) {

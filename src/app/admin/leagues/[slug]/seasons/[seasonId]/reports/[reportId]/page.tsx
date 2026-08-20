@@ -23,6 +23,7 @@ import {
 const VERDICTS = [
   { value: "NO_ACTION", label: "Kein Vergehen (No action)" },
   { value: "POINTS_DEDUCTION", label: "Strafpunkte (Penalty-Points)" },
+  { value: "DISQUALIFICATION", label: "Disqualifikation (DSQ)" },
 ];
 
 export default async function AdminReportDetail({
@@ -70,6 +71,7 @@ export default async function AdminReportDetail({
   if (!report || report.round.season.league.slug !== slug) notFound();
 
   const teamMode = !!report.round.season.teamRegistration;
+  const racesPerRound = report.round.season.scoringSystem.racesPerRound ?? 1;
 
   const accusedDrivers = report.involvedDrivers.filter(
     (d) => d.role === "ACCUSED"
@@ -84,7 +86,13 @@ export default async function AdminReportDetail({
   // (accused + reporter). Any of them can receive a penalty point.
   const roundResults = await prisma.raceResult.findMany({
     where: { roundId: report.roundId },
+    orderBy: [{ raceNumber: "asc" }, { finishPosition: "asc" }],
     select: {
+      id: true,
+      raceNumber: true,
+      finishPosition: true,
+      finishStatus: true,
+      dsqDecisionId: true,
       registration: {
         select: {
           id: true,
@@ -121,6 +129,41 @@ export default async function AdminReportDetail({
   const driverOptions: PenaltyDriverOption[] = Array.from(driverMap.values())
     .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label))
     .map(({ registrationId, label }) => ({ registrationId, label }));
+
+  // Disqualification picker: every result of this round, accused drivers
+  // first so the usual case is one click. `checked` marks the results THIS
+  // decision already disqualified — unticking one and saving puts it back.
+  const accusedRegIds = new Set(
+    accusedDrivers.map((d) => d.registration.id)
+  );
+  const dsqChoices = [...roundResults]
+    .sort((a, b) => {
+      const aAcc = accusedRegIds.has(a.registration.id) ? 0 : 1;
+      const bAcc = accusedRegIds.has(b.registration.id) ? 0 : 1;
+      return (
+        aAcc - bAcc ||
+        a.raceNumber - b.raceNumber ||
+        a.finishPosition - b.finishPosition
+      );
+    })
+    .map((r) => {
+      const name = `${r.registration.user.firstName ?? ""} ${r.registration.user.lastName ?? ""}`.trim();
+      const num = r.registration.startNumber
+        ? `#${r.registration.startNumber} `
+        : "";
+      const race = racesPerRound > 1 ? `R${r.raceNumber} ` : "";
+      const pos =
+        r.finishStatus === "CLASSIFIED"
+          ? `P${r.finishPosition}`
+          : r.finishStatus;
+      return {
+        id: r.id,
+        label: `${num}${name || "(ohne Name)"} — ${race}${pos}`,
+        accused: accusedRegIds.has(r.registration.id),
+        checked: r.dsqDecisionId === report.decision?.id,
+        alreadyDsq: r.finishStatus === "DSQ",
+      };
+    });
 
   const initialPenaltyRows = (report.decision?.penalties ?? [])
     .filter(
@@ -218,11 +261,23 @@ export default async function AdminReportDetail({
             Melder
           </h2>
           <p className="mt-1 font-medium">
-            {report.reporterUser.firstName} {report.reporterUser.lastName}
-            {teamMode && report.reporterRegistration?.team?.name && (
-              <span className="ml-2 text-zinc-400">
-                — {report.reporterRegistration.team.name}
-              </span>
+            {report.stewardInitiated ? (
+              <>
+                Rennleitung (League stewards)
+                <span className="ml-2 text-xs font-normal text-zinc-500">
+                  erfasst von {report.reporterUser.firstName}{" "}
+                  {report.reporterUser.lastName}
+                </span>
+              </>
+            ) : (
+              <>
+                {report.reporterUser.firstName} {report.reporterUser.lastName}
+                {teamMode && report.reporterRegistration?.team?.name && (
+                  <span className="ml-2 text-zinc-400">
+                    — {report.reporterRegistration.team.name}
+                  </span>
+                )}
+              </>
             )}
           </p>
           {report.lapNumber != null && (
@@ -394,6 +449,67 @@ export default async function AdminReportDetail({
             Punkte ab und wird bei <em>jedem</em> Urteil gespeichert und
             veröffentlicht.
           </p>
+
+          <details
+            open={dsqChoices.some((c) => c.checked)}
+            className="rounded border border-red-900/60 bg-red-950/10 p-3"
+          >
+            <summary className="cursor-pointer text-sm font-semibold text-red-200">
+              Disqualifikation — Ergebnisse auswählen
+              {dsqChoices.filter((c) => c.checked).length > 0 && (
+                <span className="ml-2 rounded bg-red-900/60 px-1.5 py-0.5 text-[10px] text-red-100">
+                  {dsqChoices.filter((c) => c.checked).length} aktiv
+                </span>
+              )}
+            </summary>
+            <p className="mt-2 text-xs text-zinc-400">
+              Wird <strong>nur</strong> angewendet, wenn das Urteil
+              „Disqualifikation (DSQ)“ lautet. Das Ergebnis wird auf DSQ
+              gesetzt, Rennpunkte und Teilnahmepunkte für dieses Rennen
+              verfallen, und <strong>alle dahinter platzierten Fahrer rücken
+              eine Position auf</strong> — die Wertung wird sofort neu
+              berechnet. Häkchen wieder entfernen (oder das Urteil löschen)
+              stellt den vorherigen Status wieder her.
+              {racesPerRound > 1 &&
+                " Bei Mehrrennen-Runden verfällt nur das ausgewählte Rennen."}
+            </p>
+            <div className="mt-3 grid max-h-72 gap-1 overflow-y-auto sm:grid-cols-2">
+              {dsqChoices.length === 0 ? (
+                <p className="text-xs text-zinc-500">
+                  Für diese Runde sind noch keine Ergebnisse importiert.
+                </p>
+              ) : (
+                dsqChoices.map((c) => (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${
+                      c.accused
+                        ? "bg-zinc-800/80 text-zinc-100"
+                        : "text-zinc-400"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      name="dsqResultIds"
+                      value={c.id}
+                      defaultChecked={c.checked}
+                    />
+                    <span>{c.label}</span>
+                    {c.accused && (
+                      <span className="rounded bg-amber-900/60 px-1 text-[10px] uppercase tracking-wider text-amber-200">
+                        beschuldigt
+                      </span>
+                    )}
+                    {c.alreadyDsq && !c.checked && (
+                      <span className="rounded bg-zinc-700 px-1 text-[10px] uppercase tracking-wider text-zinc-300">
+                        bereits DSQ
+                      </span>
+                    )}
+                  </label>
+                ))
+              )}
+            </div>
+          </details>
 
           <label className="flex items-center gap-2 text-sm text-zinc-300">
             <input

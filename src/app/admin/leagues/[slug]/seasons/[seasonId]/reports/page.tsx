@@ -127,7 +127,13 @@ export default async function AdminReportsQueue({
                       {r.round.name}
                     </td>
                     <td className="px-3 py-2">
-                      {r.reporterUser.firstName} {r.reporterUser.lastName}
+                      {r.stewardInitiated ? (
+                        <span className="text-orange-300">Rennleitung</span>
+                      ) : (
+                        <>
+                          {r.reporterUser.firstName} {r.reporterUser.lastName}
+                        </>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-zinc-400">
                       {accused.length === 0

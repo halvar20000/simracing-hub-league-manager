@@ -114,7 +114,11 @@ export default async function FileReportPage({
     teamId: r.team?.id ?? null,
     teamName: r.team?.name ?? null,
   }));
-  if (!reporterReg) {
+  // A steward with no registration in this season files for the LEAGUE; a
+  // steward who does race can choose (tick box below). Everyone else must
+  // have an approved registration.
+  const mustFileAsSteward = isSteward && !reporterReg;
+  if (!reporterReg && !isSteward) {
     return (
       <div className="space-y-3">
         <Link
@@ -192,15 +196,41 @@ export default async function FileReportPage({
 
       <div className="rounded border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-400">
         Filing as:{" "}
-        <span className="font-semibold text-zinc-200">
-          {reporterReg.user.firstName} {reporterReg.user.lastName}
-        </span>
-        {reporterReg.startNumber != null && (
-          <span> #{reporterReg.startNumber}</span>
+        {mustFileAsSteward ? (
+          <span className="font-semibold text-zinc-200">League stewards</span>
+        ) : (
+          <>
+            <span className="font-semibold text-zinc-200">
+              {reporterReg!.user.firstName} {reporterReg!.user.lastName}
+            </span>
+            {reporterReg!.startNumber != null && (
+              <span> #{reporterReg!.startNumber}</span>
+            )}
+          </>
         )}
       </div>
 
       <form action={action} className="space-y-4">
+        {isSteward &&
+          (mustFileAsSteward ? (
+            <input type="hidden" name="fileAsSteward" value="on" />
+          ) : (
+            <label className="flex items-start gap-2 rounded border border-orange-800/60 bg-orange-950/20 p-3 text-sm text-orange-100">
+              <input
+                type="checkbox"
+                name="fileAsSteward"
+                className="mt-0.5"
+              />
+              <span>
+                File on behalf of the league (steward-initiated)
+                <span className="mt-0.5 block text-xs text-orange-200/70">
+                  The case is filed by the stewards, not by you as a driver.
+                  The public feed and the accused driver see “League stewards”
+                  as the reporter, and you are not tagged as involved.
+                </span>
+              </span>
+            </label>
+          ))}
         <SessionAndTimestampFields sessionOptions={sessionOptions} />
 
         <div className="grid grid-cols-2 gap-3">
@@ -232,11 +262,17 @@ export default async function FileReportPage({
 
         <div>
           <span className="mb-1 block text-sm text-zinc-300">
-            {seasonForFlag?.teamRegistration ? "Other team(s) involved" : "Other driver(s) involved"}
+            {seasonForFlag?.teamRegistration
+              ? mustFileAsSteward
+                ? "Team(s) involved"
+                : "Other team(s) involved"
+              : mustFileAsSteward
+                ? "Driver(s) involved"
+                : "Other driver(s) involved"}
           </span>
           <InvolvedDriversPicker
             drivers={driverChoices}
-            excludeRegistrationId={reporterReg.id}
+            excludeRegistrationId={reporterReg?.id ?? null}
             teamMode={!!seasonForFlag?.teamRegistration}
           />
         </div>

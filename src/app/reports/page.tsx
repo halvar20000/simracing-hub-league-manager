@@ -132,10 +132,13 @@ export default async function MyReports({
           <div className="space-y-3">
             {against.map((r) => {
               const u = r.reporterUser;
-              const reporter =
-                `${u?.firstName ?? ""} ${u?.lastName ?? ""}`.trim() ||
-                u?.name ||
-                "A driver";
+              // A steward-initiated case comes from the league, not from a
+              // driver — name the stewards, not the person who typed it.
+              const reporter = r.stewardInitiated
+                ? "the league stewards"
+                : `${u?.firstName ?? ""} ${u?.lastName ?? ""}`.trim() ||
+                  u?.name ||
+                  "A driver";
               return (
                 <div
                   key={r.id}

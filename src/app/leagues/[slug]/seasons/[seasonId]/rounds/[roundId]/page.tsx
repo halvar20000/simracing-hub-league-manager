@@ -670,6 +670,7 @@ export default async function PublicRoundResults({
           {round.season.scoringSystem.incidentReportingEnabled && (
             <ReportButton
               href={`/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}/report`}
+              isSteward={isAdminViewer}
               window={protestWindowState({
                 raceStartsAt: round.startsAt,
                 protestCooldownHours: round.season.scoringSystem.protestCooldownHours,
@@ -1127,6 +1128,14 @@ function ResultsTable({
         (r) => r.finishStatus === "CLASSIFIED" && r.totalTimeMs != null
       )?.totalTimeMs ?? null
     : winnerTotalTimeMs;
+  // A disqualification takes the driver out of the classification, so the
+  // Pos column must close the gap he leaves — exactly what the scoring engine
+  // does with the points (see recomputeClassificationPointsForRound). Without
+  // this, a DQ'd P4 left the next man showing "P5" while scoring P4's points.
+  // Only kicks in when this table actually contains a DSQ, so untouched
+  // results keep their raw iRacing positions.
+  const renumberAfterDsq = rows.some((r) => r.finishStatus === "DSQ");
+  const renumber = renumberWithinGroup || renumberAfterDsq;
   let classifiedCount = 0;
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
@@ -1167,7 +1176,7 @@ function ResultsTable({
                 : null;
             let displayPos: string | number = r.finishStatus;
             if (r.finishStatus === "CLASSIFIED") {
-              if (renumberWithinGroup) {
+              if (renumber) {
                 classifiedCount += 1;
                 displayPos = classifiedCount;
               } else {
@@ -1271,6 +1280,20 @@ function CombinedMultiRaceTable({
   classRacePoints?: Map<string, number> | null;
 }) {
   const raceNumbers = Array.from({ length: racesPerRound }, (_, i) => i + 1);
+  // Same rule as ResultsTable: once a race contains a DSQ the classified
+  // finishers of THAT race are renumbered 1..N, so the R1/R2 pos columns agree
+  // with the points next to them.
+  const renumberedPosByResultId = new Map<string, number>();
+  for (const n of raceNumbers) {
+    const inRace = rows
+      .map((a) => a.raceResultsByNumber.get(n))
+      .filter((r): r is NonNullable<typeof r> => !!r);
+    if (!inRace.some((r) => r.finishStatus === "DSQ")) continue;
+    inRace
+      .filter((r) => r.finishStatus === "CLASSIFIED")
+      .sort((a, b) => a.finishPosition - b.finishPosition)
+      .forEach((r, i) => renumberedPosByResultId.set(r.id, i + 1));
+  }
   return (
     <div className="overflow-x-auto rounded border border-zinc-800">
       <table className="w-full text-sm freeze-driver-col">
@@ -1343,7 +1366,8 @@ function CombinedMultiRaceTable({
                     >
                       {r
                         ? r.finishStatus === "CLASSIFIED"
-                          ? r.finishPosition
+                          ? renumberedPosByResultId.get(r.id) ??
+                            r.finishPosition
                           : r.finishStatus
                         : "—"}
                     </td>
@@ -1637,10 +1661,25 @@ function QualifyingTable({
 function ReportButton({
   href,
   window: w,
+  isSteward = false,
 }: {
   href: string;
   window: ReturnType<typeof protestWindowState>;
+  /** Stewards bypass the protest window (createIncidentReport lets them),
+   *  so they must keep a working link even when it is shut for drivers. */
+  isSteward?: boolean;
 }) {
+  if (isSteward && w.status !== "OPEN") {
+    return (
+      <a
+        href={href}
+        title="Stewards can file outside the reporting window"
+        className="rounded border border-orange-500/60 bg-orange-500/10 px-3 py-1.5 text-sm font-medium text-orange-200 hover:bg-orange-500/20"
+      >
+        ⚑ File as steward
+      </a>
+    );
+  }
   if (w.status === "COOLDOWN" && w.minutesUntilOpen != null) {
     return (
       <span

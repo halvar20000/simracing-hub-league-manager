@@ -59,9 +59,11 @@ export default async function ReportDetail({
       {isAccused && !isOwnReport && (
         <div className="rounded border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">
           <span className="font-semibold">You are named in this report.</span>{" "}
-          Only you, the driver who filed it and the stewards can read it — it is
-          not shown to anyone else. The public incident list shows the names and
-          the verdict, never the text below.
+          {report.stewardInitiated
+            ? "It was filed by the league stewards, not by another driver. Only you and the stewards can read it"
+            : "Only you, the driver who filed it and the stewards can read it"}{" "}
+          — it is not shown to anyone else. The public incident list shows the
+          names and the verdict, never the text below.
         </div>
       )}
 

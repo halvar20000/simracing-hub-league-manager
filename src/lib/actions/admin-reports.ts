@@ -9,7 +9,50 @@ import {
   pointsForLevel,
   isSpecialMeasureLevel,
 } from "@/lib/penalty-categories";
+import { recomputeRoundScoring } from "@/lib/scoring";
 import type { IncidentStatus, Verdict } from "@prisma/client";
+
+/**
+ * Undo every disqualification a decision applied.
+ *
+ * A DQ'd result carries `dsqDecisionId` (which decision did it) and
+ * `dsqPreviousStatus` (what it was before), so editing the verdict, removing a
+ * driver from the list, deleting the decision or deleting the whole report can
+ * all put the result back exactly as it was. Returns the round ids that were
+ * touched so the caller can re-score them.
+ *
+ * `keepResultIds` are the results that should STAY disqualified (the ones the
+ * steward just re-selected); everything else this decision owns is reverted.
+ */
+async function revertDsqForDecision(
+  decisionId: string,
+  keepResultIds: string[] = []
+): Promise<Set<string>> {
+  const touched = new Set<string>();
+  const owned = await prisma.raceResult.findMany({
+    where: { dsqDecisionId: decisionId },
+    select: {
+      id: true,
+      roundId: true,
+      dsqPreviousStatus: true,
+    },
+  });
+  for (const r of owned) {
+    if (keepResultIds.includes(r.id)) continue;
+    await prisma.raceResult.update({
+      where: { id: r.id },
+      data: {
+        // Legacy rows without a stored previous status fall back to
+        // CLASSIFIED — the only status a DQ'd driver can sensibly return to.
+        finishStatus: r.dsqPreviousStatus ?? "CLASSIFIED",
+        dsqDecisionId: null,
+        dsqPreviousStatus: null,
+      },
+    });
+    touched.add(r.roundId);
+  }
+  return touched;
+}
 
 export async function setReportStatus(
   leagueSlug: string,
@@ -41,6 +84,17 @@ export async function submitDecision(
   const internalNotes =
     String(formData.get("internalNotes") ?? "").trim() || null;
   const publish = formData.get("publish") === "on";
+
+  // Results the steward ticked for disqualification. Only honoured when the
+  // verdict actually IS "Disqualifikation" — ticking a box under any other
+  // verdict must not silently wipe someone's race.
+  const dsqResultIds =
+    verdict === "DISQUALIFICATION"
+      ? formData
+          .getAll("dsqResultIds")
+          .map((v) => String(v))
+          .filter(Boolean)
+      : [];
 
   // Multiple penalty recipients: one row per driver, each with its own
   // category level (→ points) and its own public reason. The reporter and any
@@ -191,6 +245,42 @@ export async function submitDecision(
     }
   }
 
+  // ---- Disqualification ------------------------------------------------
+  // Apply the ticked results, revert anything this decision had DQ'd before
+  // and is no longer ticked, then re-score every affected round.
+  // recomputeRoundScoring ranks only the non-DSQ finishers, so the drivers
+  // behind a disqualified car move up into his points automatically.
+  const touchedRounds = await revertDsqForDecision(decision.id, dsqResultIds);
+  for (const resultId of dsqResultIds) {
+    const rr = await prisma.raceResult.findUnique({
+      where: { id: resultId },
+      select: {
+        id: true,
+        roundId: true,
+        finishStatus: true,
+        dsqDecisionId: true,
+      },
+    });
+    // Guard: only results of THIS report's round can be disqualified here.
+    if (!rr || rr.roundId !== report.roundId) continue;
+    if (rr.dsqDecisionId === decision.id) continue; // already ours, untouched
+    await prisma.raceResult.update({
+      where: { id: rr.id },
+      data: {
+        finishStatus: "DSQ",
+        dsqDecisionId: decision.id,
+        // Keep the real previous status — including an existing DSQ, so
+        // reverting never resurrects a driver the importer had already
+        // disqualified.
+        dsqPreviousStatus: rr.finishStatus,
+      },
+    });
+    touchedRounds.add(rr.roundId);
+  }
+  for (const rid of touchedRounds) {
+    await recomputeRoundScoring(prisma, rid);
+  }
+
   // Penalty pool: recompute auto-forgiveness (GT3 WCT only; engine guards by slug)
   await recomputePenaltyPoolForSeason(seasonId);
 
@@ -200,6 +290,10 @@ export async function submitDecision(
   revalidatePath(`/reports/${reportId}`);
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/standings`);
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/decisions`);
+  revalidatePath(
+    `/leagues/${leagueSlug}/seasons/${seasonId}/rounds/${report.roundId}`
+  );
+  revalidatePath(`/incidents`);
   redirect(
     `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports/${reportId}`
   );
@@ -215,12 +309,18 @@ export async function deleteDecision(
     where: { incidentReportId: reportId },
   });
   if (decision) {
+    // Undo any disqualification this decision applied BEFORE the decision row
+    // disappears — afterwards nothing links the results back to it.
+    const touchedRounds = await revertDsqForDecision(decision.id);
     await prisma.penalty.deleteMany({
       where: { sourceIncidentDecisionId: decision.id },
     });
     await prisma.incidentDecision.delete({
       where: { incidentReportId: reportId },
     });
+    for (const rid of touchedRounds) {
+      await recomputeRoundScoring(prisma, rid);
+    }
   }
   await prisma.incidentReport.update({
     where: { id: reportId },
@@ -255,13 +355,23 @@ export async function deleteIncidentReport(
     redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
   }
 
+  const touchedRounds = new Set<string>();
   if (report.decision) {
+    // Same as deleteDecision: put disqualified results back first, otherwise
+    // the cascade takes the decision away and the DQ can never be undone.
+    for (const rid of await revertDsqForDecision(report.decision.id)) {
+      touchedRounds.add(rid);
+    }
     await prisma.penalty.deleteMany({
       where: { sourceIncidentDecisionId: report.decision.id },
     });
   }
 
   await prisma.incidentReport.delete({ where: { id: reportId } });
+
+  for (const rid of touchedRounds) {
+    await recomputeRoundScoring(prisma, rid);
+  }
 
   // Recompute pool (no-op outside GT3 WCT)
   await recomputePenaltyPoolForSeason(seasonId);

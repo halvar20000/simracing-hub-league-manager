@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.0.0",
+    date: "2026-08-20",
+    changes: [
+      "The league can now open a case itself. Until now only a driver could file an incident report — if the stewards saw something on the replay that nobody protested, there was no way to put it on the record. A steward or admin now files a report on behalf of the league from the round page, with the same form, the same evidence links and the same case file. On the public incident list and for the driver concerned it appears as “League stewards”, not as the person who typed it, and the steward is not tagged as involved.",
+      "Stewards can file at any time. The reporting window still governs drivers exactly as before; for stewards the button stays live and simply reads “File as steward”.",
+      "New verdict: Disqualifikation (DSQ). The stewarding form now has a list of the round's results with tick boxes — the accused drivers first. Ticking a driver and saving the verdict sets that result to DSQ: his race points and his participation points for that race are gone, and every driver behind him moves up one place, both in the points and in the printed classification. On rounds with two races only the ticked race is forfeited; the other one keeps its points.",
+      "It is reversible. Untick the driver and save again, or delete the verdict, and the result goes back to exactly the status it had before — including a disqualification that came from the results import in the first place. The round is re-scored automatically each time; no manual “Recompute scoring” needed.",
+      "Round results now close the gap a disqualification leaves. Before, a disqualified P4 stayed in the table as “DSQ” and the man behind him still read “P5” while quietly scoring P4's points. Any table containing a DSQ is now renumbered so the positions and the points tell the same story. Tables without a disqualification are untouched and keep the original iRacing positions.",
+    ],
+  },
+  {
     version: "1.99.0",
     date: "2026-08-19",
     changes: [

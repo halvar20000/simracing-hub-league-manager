@@ -30,6 +30,7 @@ const VERDICT_TONE: Record<string, string> = {
   POINTS_DEDUCTION: "bg-red-900/40 text-red-200",
   GRID_PENALTY_NEXT_ROUND: "bg-orange-900/40 text-orange-200",
   SUSPENSION: "bg-red-900/50 text-red-100",
+  DISQUALIFICATION: "bg-red-900/70 text-red-50",
 };
 
 type PenaltyRow = {
@@ -304,10 +305,14 @@ export default async function PublicIncidentsList({
             const r = item.report;
             const teamMode = !!r.round.season.teamRegistration;
 
-            const reporterLabel = teamMode
-              ? r.reporterRegistration?.team?.name ??
-                `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim()
-              : `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim();
+            // Steward-initiated cases are filed BY the league, so the public
+            // feed names the stewards, never the individual who typed it.
+            const reporterLabel = r.stewardInitiated
+              ? "League stewards"
+              : teamMode
+                ? r.reporterRegistration?.team?.name ??
+                  `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim()
+                : `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim();
 
             let accusedLabel: string;
             if (teamMode) {
