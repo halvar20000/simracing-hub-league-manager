@@ -10,9 +10,15 @@ type ClassInfo = { id: string; shortCode: string };
 export default function TeamIRatingValidator({
   classes,
   lockedClassShortCode,
+  teammateRows = 4,
+  leaderLabel = "Your",
 }: {
   classes?: ClassInfo[];
   lockedClassShortCode?: string;
+  /** How many teammate rows the form renders (season cap aware). */
+  teammateRows?: number;
+  /** Possessive label for the leader's iRating, e.g. "Fabian Buhl's". */
+  leaderLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [errors, setErrors] = useState<string[]>([]);
@@ -38,22 +44,22 @@ export default function TeamIRatingValidator({
       const lr = String(fd.get("leaderIRating") ?? "").trim();
       if (lr) {
         if (!/^\d+$/.test(lr)) {
-          errs.push("Your iRating must be a number");
+          errs.push(`${leaderLabel} iRating must be a number`);
         } else {
           const n = parseInt(lr, 10);
           if (n > MAX) {
-            errs.push(`Your iRating ${n} is above the ${MAX} maximum`);
+            errs.push(`${leaderLabel} iRating ${n} is above the ${MAX} maximum`);
           }
           if (isLMP2 && n < LMP2_MIN) {
             errs.push(
-              `LMP2 requires iRating ≥ ${LMP2_MIN} — you entered ${n}`
+              `LMP2 requires iRating ≥ ${LMP2_MIN} — ${leaderLabel} iRating is ${n}`
             );
           }
         }
       }
 
       // Teammate iRatings
-      for (let i = 1; i <= 4; i++) {
+      for (let i = 1; i <= teammateRows; i++) {
         const tname = String(fd.get(`teammate${i}Name`) ?? "").trim();
         const tid = String(fd.get(`teammate${i}IracingId`) ?? "").trim();
         const tr = String(fd.get(`teammate${i}IRating`) ?? "").trim();
@@ -91,7 +97,7 @@ export default function TeamIRatingValidator({
       form.removeEventListener("input", validate);
       form.removeEventListener("change", validate);
     };
-  }, [classes, lockedClassShortCode]);
+  }, [classes, lockedClassShortCode, teammateRows, leaderLabel]);
 
   // Disable / re-enable the form's submit button based on validation
   useEffect(() => {

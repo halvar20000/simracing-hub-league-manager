@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.1.1",
+    date: "2026-08-23",
+    changes: [
+      "Manage Team now shows the Teamchef as what he is — the first driver of the team. His name, iRacing ID and e-mail stand in the driver table with a ★, and only his iRating is editable there, so the line-up on Manage Team matches the roster driver for driver. Until now he was a loose “Your current iRating” field above the table, which made a three-driver team look like it had two.",
+      "That field also said “Your” to admins and league staff, who were in fact looking at somebody else's iRating. It now carries the driver's name, both in the form and in the iRating warnings.",
+    ],
+  },
+  {
     version: "2.1.0",
     date: "2026-08-23",
     changes: [

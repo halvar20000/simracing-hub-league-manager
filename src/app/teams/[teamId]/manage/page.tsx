@@ -153,6 +153,12 @@ export default async function ManageTeamPage({
   // asks for a row to be cleared on the next save.
   const teammateRowCount = Math.max(teammateSlotCount, teammates.length);
   const overCap = teammates.length > teammateSlotCount;
+  // Name the Teamchef explicitly — the iRating field used to read "Your
+  // current iRating" for admins too, who were then looking at someone else's
+  // number. On an ownerless team the action adopts the viewer on save.
+  const leaderName =
+    `${leaderReg?.user.firstName ?? ""} ${leaderReg?.user.lastName ?? ""}`.trim() ||
+    "Team leader";
 
   if (!isLeader && !isManager && !isAdmin) {
     return (
@@ -288,32 +294,16 @@ export default async function ManageTeamPage({
           <input type="hidden" name="teamId" value={team.id} />
           <input type="hidden" name="redirectTo" value={basePath} />
 
-          <label className="block">
-            <span className="mb-1 block text-sm text-zinc-300">
-              {isManager
-                ? `Teamchef's current iRating (${leaderReg?.user.firstName ?? ""} ${leaderReg?.user.lastName ?? ""})`
-                : "Your current iRating"}{" "}
-              <span className="text-orange-400">*</span>
-            </span>
-            <input
-              name="leaderIRating"
-              type="number"
-              min={0}
-              max={20000}
-              required
-              defaultValue={leaderReg?.iRating ?? ""}
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
-          </label>
-
           <fieldset className="space-y-3">
             <legend className="text-sm text-zinc-300">
-              Teammates (up to {teammateSlotCount})
+              Drivers{teamLimit != null ? ` (max ${teamLimit})` : ""}
             </legend>
             <p className="text-xs text-zinc-500">
-              Add a brand-new driver to add a teammate (their Invite/Accepted
-              flags reset). Clear a row to withdraw that teammate. Existing
-              teammates keep their flags when their data is unchanged.
+              The Teamchef ★ holds the first seat — only his iRating can be
+              edited here; hand the role over further down. Add a brand-new
+              driver to add a teammate (their Invite/Accepted flags reset).
+              Clear a row to withdraw that teammate. Existing teammates keep
+              their flags when their data is unchanged.
               {teamLimit != null && (
                 <>
                   {" "}
@@ -343,6 +333,41 @@ export default async function ManageTeamPage({
                   </tr>
                 </thead>
                 <tbody>
+                  {/* The Teamchef is a driver like any other and counts
+                      against the cap — he just can't be swapped out here
+                      (that's "Hand over team leadership" below), so his row
+                      is read-only apart from the iRating. */}
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-1 pr-2">
+                      <div className="px-2 py-1 text-xs text-zinc-100">
+                        {leaderName} <span className="text-amber-300">★</span>
+                      </div>
+                      <div className="px-2 text-[11px] text-zinc-500">
+                        Teamchef
+                      </div>
+                    </td>
+                    <td className="py-1 pr-2">
+                      <div className="px-2 py-1 text-xs text-zinc-400">
+                        {leaderReg?.user.iracingMemberId ?? "—"}
+                      </div>
+                    </td>
+                    <td className="py-1 pr-2">
+                      <input
+                        name="leaderIRating"
+                        type="number"
+                        min={0}
+                        max={20000}
+                        required
+                        defaultValue={leaderReg?.iRating ?? ""}
+                        className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                      />
+                    </td>
+                    <td className="py-1">
+                      <div className="px-2 py-1 text-xs text-zinc-400">
+                        {leaderReg?.user.email ?? "—"}
+                      </div>
+                    </td>
+                  </tr>
                   {Array.from(
                     { length: teammateRowCount },
                     (_, idx) => idx + 1
@@ -402,6 +427,8 @@ export default async function ManageTeamPage({
           </fieldset>
           <TeamIRatingValidator
             lockedClassShortCode={leaderReg?.carClass?.shortCode}
+            teammateRows={teammateRowCount}
+            leaderLabel={`${leaderName}'s`}
           />
 
           <SubmitWithSpinner
