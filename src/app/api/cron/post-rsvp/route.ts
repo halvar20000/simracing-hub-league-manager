@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
       status: "UPCOMING",
       rsvpNotifiedAt: null,
       season: {
+        isArchived: false,
         status: { in: ["OPEN_REGISTRATION", "ACTIVE"] },
         league: { discordRsvpChannelId: { not: null } },
       },

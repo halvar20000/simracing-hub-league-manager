@@ -105,6 +105,9 @@ export async function updateSeason(
   const isMulticlass = formData.get("isMulticlass") === "on";
   const proAmEnabled = formData.get("proAmEnabled") === "on";
   const gdcEnabled = formData.get("gdcEnabled") === "on";
+  // Archive: out of every live surface, kept in history. See
+  // @/lib/season-visibility. The checkbox submits value="1", not "on".
+  const isArchived = formData.get("isArchived") === "1";
   // Penalty pool: do no-show points take part in auto-forgiveness?
   const noShowForgivenessEnabled =
     formData.get("noShowForgivenessEnabled") === "on";
@@ -160,6 +163,7 @@ export async function updateSeason(
       isMulticlass,
       proAmEnabled,
       gdcEnabled,
+      isArchived,
       noShowForgivenessEnabled,
       teamScoringMode,
       teamScoringBestN,
@@ -173,6 +177,14 @@ export async function updateSeason(
 
   revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
   revalidatePath(`/leagues/${leagueSlug}`);
+  // Archiving changes what several unrelated pages list, so refresh the live
+  // surfaces too — otherwise an archived season lingers on cached pages.
+  revalidatePath("/");
+  revalidatePath("/leagues");
+  revalidatePath("/rosters");
+  revalidatePath("/calendar");
+  revalidatePath("/streams");
+  revalidatePath("/reporting");
   redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}`);
 }
 

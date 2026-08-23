@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { liveSeasonNested, liveSeasonWhere } from "@/lib/season-visibility";
 
 export default async function PublicLeaguesList() {
   const now = new Date();
@@ -7,6 +8,7 @@ export default async function PublicLeaguesList() {
     where: {
       status: "COMPLETED",
       season: {
+        ...liveSeasonWhere,
         scoringSystem: {
           incidentReportingEnabled: true,
           protestCooldownHours: { not: null },
@@ -41,7 +43,10 @@ export default async function PublicLeaguesList() {
     include: {
       _count: { select: { seasons: true } },
       seasons: {
-        where: { status: { in: ["OPEN_REGISTRATION", "ACTIVE"] } },
+        where: {
+          ...liveSeasonNested,
+          status: { in: ["OPEN_REGISTRATION", "ACTIVE"] },
+        },
         orderBy: { year: "desc" },
         take: 1,
       },

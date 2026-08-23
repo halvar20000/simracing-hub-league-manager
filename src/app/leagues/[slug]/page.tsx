@@ -60,6 +60,12 @@ export default async function PublicLeagueDetail({
 
   const now = Date.now();
 
+  // `league.seasons` stays complete on purpose — the lifetime stats and the
+  // Hall of Fame below are history and must keep counting archived seasons.
+  // Only the live surfaces (the season grid, the active-season hero) use this
+  // filtered list. See @/lib/season-visibility.
+  const liveSeasons = league.seasons.filter((s) => !s.isArchived);
+
   // Stats
   const totalSeasons = league.seasons.length;
   const totalRegistrations = league.seasons.reduce(
@@ -74,11 +80,12 @@ export default async function PublicLeagueDetail({
     where: { round: { season: { leagueId: league.id } } },
   });
 
-  // Active season: ACTIVE or OPEN_REGISTRATION; fall back to most recent
+  // Active season: ACTIVE or OPEN_REGISTRATION; fall back to most recent.
+  // Archived seasons are never the hero, even if nothing else is running.
   const activeSeason =
-    league.seasons.find(
+    liveSeasons.find(
       (s) => s.status === "ACTIVE" || s.status === "OPEN_REGISTRATION"
-    ) ?? league.seasons[0];
+    ) ?? liveSeasons[0];
   let activeNextRound: typeof activeSeason.rounds[number] | null = null;
   let activeLeader: {
     firstName: string | null;
@@ -399,7 +406,7 @@ export default async function PublicLeagueDetail({
           Seasons
         </h2>
         <div className="grid gap-2 md:grid-cols-2">
-          {league.seasons.map((s) => (
+          {liveSeasons.map((s) => (
             <Link
               key={s.id}
               href={`/leagues/${league.slug}/seasons/${s.id}`}
@@ -420,7 +427,7 @@ export default async function PublicLeagueDetail({
               </p>
             </Link>
           ))}
-          {league.seasons.length === 0 && (
+          {liveSeasons.length === 0 && (
             <p className="text-zinc-500">No seasons yet.</p>
           )}
         </div>

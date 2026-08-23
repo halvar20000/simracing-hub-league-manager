@@ -162,8 +162,11 @@ export default async function PublicSeasonDetail({
         .filter((x): x is { shortCode: string; className: string; teamName: string; points: number } => x != null)
     : null;
 
+  // An archived season stays readable via its direct URL, but never offers a
+  // way in — the action and the register page refuse it anyway.
   const registrationOpen =
-    season.status === "OPEN_REGISTRATION" || season.status === "ACTIVE";
+    !season.isArchived &&
+    (season.status === "OPEN_REGISTRATION" || season.status === "ACTIVE");
 
   // Signed-in viewer with an active (pending/approved) registration sees
   // "Edit registration →" instead of "Register →". The registration token is

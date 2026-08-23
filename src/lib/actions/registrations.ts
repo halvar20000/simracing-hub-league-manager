@@ -73,7 +73,11 @@ export async function createRegistration(
   // tier after registration, so the registration form omits the class field.
   const isGt3Wct = season.league.slug === "cas-gt3-wct";
 
-  if (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE") {
+  // Archived seasons take no new entries, whatever their status says.
+  if (
+    season.isArchived ||
+    (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE")
+  ) {
     redirect(
       `/leagues/${leagueSlug}/seasons/${seasonId}?error=Registration+is+not+open`
     );
@@ -587,7 +591,11 @@ export async function createTeamRegistration(
   if (!season || season.league.slug !== leagueSlug) {
     redirect("/leagues");
   }
-  if (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE") {
+  // Archived seasons take no new entries, whatever their status says.
+  if (
+    season.isArchived ||
+    (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE")
+  ) {
     redirect(
       `/leagues/${leagueSlug}/seasons/${seasonId}?error=Registration+is+not+open`
     );

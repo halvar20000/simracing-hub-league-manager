@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { computeDriverStandings } from "@/lib/standings";
 import { CountryFlag } from "@/components/CountryFlag";
 import { NextRaceHero } from "@/components/NextRaceHero";
+import { liveSeasonNested } from "@/lib/season-visibility";
 
 type LeaderInfo = {
   firstName: string | null;
@@ -22,6 +23,7 @@ export default async function Home() {
     orderBy: { name: "asc" },
     include: {
       seasons: {
+        where: liveSeasonNested,
         orderBy: [{ status: "asc" }, { year: "desc" }],
         take: 1,
         include: {

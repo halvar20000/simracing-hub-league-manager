@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     where: {
       reportingNotifiedAt: null,
       season: {
+        isArchived: false,
         status: { in: ["OPEN_REGISTRATION", "ACTIVE"] },
         scoringSystem: {
           protestCooldownHours: { not: null },

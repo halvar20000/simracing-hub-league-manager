@@ -234,6 +234,16 @@ model Season {
   proAmEnabled Boolean      @default(false)
   gdcEnabled   Boolean      @default(false)
 
+  /// Archived seasons drop out of every LIVE surface — the home page, the
+  /// season grid on the league page, /rosters, /calendar (+ ICS), /streams,
+  /// /reporting, the overlay API and all Discord crons — and accept no new
+  /// registrations. HISTORY deliberately keeps them: Hall of Fame, driver
+  /// profiles, /teams and /incidents still show them, and direct URLs
+  /// (standings, roster, rounds) keep working so old links survive.
+  /// Deliberately a flag, not a SeasonStatus value, so status keeps its
+  /// scoring meaning. Toggle on the admin season-edit page.
+  isArchived   Boolean      @default(false)
+
   /// Penalty pool (FULL mode only): when true, NO_RSVP_NO_SHOW penalties take
   /// part in the auto-forgiveness cycle exactly like incident penalties —
   /// incurring one resets the clean-race counter, and two clean races forgive

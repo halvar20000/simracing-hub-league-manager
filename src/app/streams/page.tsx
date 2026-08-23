@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
 import { twitchVideoUrl } from "@/lib/twitch";
+import { liveSeasonWhere } from "@/lib/season-visibility";
 
 export const metadata: Metadata = pageMetadata({
   title: "Race Streams",
@@ -30,7 +31,7 @@ export default async function StreamsPage({
     where: {
       status: "COMPLETED",
       OR: [{ youtubeVideoId: { not: null } }, { twitchVideoId: { not: null } }],
-      season: { league: { isArchived: false } },
+      season: liveSeasonWhere,
     },
     select: {
       id: true,

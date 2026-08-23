@@ -22,7 +22,10 @@ export async function GET(req: NextRequest) {
       postedAt: null,
       scheduledAt: { lte: now },
       round: {
-        season: { league: { discordStreamChannelId: { not: null } } },
+        season: {
+          isArchived: false,
+          league: { discordStreamChannelId: { not: null } },
+        },
       },
     },
     select: { roundId: true },

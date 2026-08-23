@@ -218,6 +218,7 @@ export async function matchTwitchForRecentRounds(
       twitchVideoId: null,
       startsAt: { gte: since },
       season: {
+        isArchived: false,
         league: { twitchChannelLogin: { not: null } },
       },
     },

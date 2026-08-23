@@ -191,7 +191,11 @@ export default async function RegisterPage({
     );
   }
 
-  if (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE") {
+  // Archived seasons take no new entries, whatever their status says.
+  if (
+    season.isArchived ||
+    (season.status !== "OPEN_REGISTRATION" && season.status !== "ACTIVE")
+  ) {
     return (
       <div className="space-y-4">
         <Link
@@ -202,11 +206,20 @@ export default async function RegisterPage({
         </Link>
         <h1 className="text-2xl font-bold">Registration is not open</h1>
         <p className="text-zinc-400">
-          {season.name} {season.year} is currently in status{" "}
-          <code className="rounded bg-zinc-800 px-1.5 py-0.5">
-            {season.status.replace("_", " ")}
-          </code>
-          .
+          {season.isArchived ? (
+            <>
+              {season.name} {season.year} has been archived. Its results stay
+              online, but it takes no new registrations.
+            </>
+          ) : (
+            <>
+              {season.name} {season.year} is currently in status{" "}
+              <code className="rounded bg-zinc-800 px-1.5 py-0.5">
+                {season.status.replace("_", " ")}
+              </code>
+              .
+            </>
+          )}
         </p>
       </div>
     );

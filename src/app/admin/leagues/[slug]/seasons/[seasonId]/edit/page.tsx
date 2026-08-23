@@ -78,6 +78,30 @@ export default async function EditSeasonPage({
           </span>
         </label>
 
+        <label className="flex items-start gap-2 rounded border border-zinc-800 bg-zinc-900/50 p-3">
+          <input
+            type="checkbox"
+            name="isArchived"
+            value="1"
+            defaultChecked={season.isArchived}
+            className="mt-0.5 h-4 w-4 accent-orange-500"
+          />
+          <span className="text-sm">
+            <span className="font-medium text-zinc-200">
+              Archive this season
+            </span>
+            <span className="mt-0.5 block text-xs text-zinc-500">
+              Takes the season out of circulation without deleting anything.
+              It disappears from the home page, the league&apos;s season grid,
+              rosters, calendar (and the ICS feed), streams, reporting and the
+              overlay API, and its rounds stop posting to Discord. No new
+              registrations. Kept on purpose: Hall of Fame, driver profiles,
+              teams and incidents, and every direct link to its standings,
+              roster and rounds still works. Untick to bring it back.
+            </span>
+          </span>
+        </label>
+
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
             Scoring system

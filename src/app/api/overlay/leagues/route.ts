@@ -7,6 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { liveSeasonNested } from "@/lib/season-visibility";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,7 +32,10 @@ export async function GET() {
       slug: true,
       name: true,
       seasons: {
-        where: { status: { in: ["ACTIVE", "OPEN_REGISTRATION"] } },
+        where: {
+          ...liveSeasonNested,
+          status: { in: ["ACTIVE", "OPEN_REGISTRATION"] },
+        },
         orderBy: { startsOn: "desc" },
         select: {
           id: true,

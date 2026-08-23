@@ -304,6 +304,7 @@ export async function createRaceEventsForUpcomingRounds(): Promise<CreateUpcomin
       status: "UPCOMING",
       startsAt: { gt: new Date(now), lte: horizon },
       season: {
+        isArchived: false,
         status: { in: ["OPEN_REGISTRATION", "ACTIVE"] },
         league: { discordGuildId: { not: null } },
       },

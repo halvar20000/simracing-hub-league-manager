@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { liveSeasonWhere } from "@/lib/season-visibility";
 
 /**
  * Public iCalendar feed of every planned round across ACTIVE /
@@ -130,7 +131,10 @@ export async function GET() {
       // subscribed clients see new seasons as soon as their rounds are
       // scheduled. PAUSED stays excluded (that status hides a season
       // everywhere).
-      season: { status: { in: ["DRAFT", "OPEN_REGISTRATION", "ACTIVE"] } },
+      season: {
+        ...liveSeasonWhere,
+        status: { in: ["DRAFT", "OPEN_REGISTRATION", "ACTIVE"] },
+      },
     },
     include: {
       season: {

@@ -86,12 +86,24 @@ export default async function AdminLeagueDetail({
               {league.seasons.map((s) => (
                 <tr
                   key={s.id}
-                  className="border-t border-zinc-800 hover:bg-zinc-900"
+                  className={`border-t border-zinc-800 hover:bg-zinc-900 ${
+                    s.isArchived ? "opacity-60" : ""
+                  }`}
                 >
                   <td className="px-4 py-3 font-medium">{s.name}</td>
                   <td className="px-4 py-3 text-zinc-400">{s.year}</td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={s.status} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge status={s.status} />
+                      {s.isArchived && (
+                        <span
+                          title="Hidden from all live pages. History and direct links still work."
+                          className="rounded border border-zinc-600 bg-zinc-800 px-1.5 py-0.5 text-[11px] font-medium text-zinc-300"
+                        >
+                          📦 Archived
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-zinc-400">
                     {s.scoringSystem.name}

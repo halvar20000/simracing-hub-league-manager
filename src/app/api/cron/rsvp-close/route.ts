@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
       rsvpNotifiedAt: { not: null },
       rsvpClosedAt: null,
       season: {
+        isArchived: false,
         league: { discordRsvpChannelId: { not: null } },
       },
     },

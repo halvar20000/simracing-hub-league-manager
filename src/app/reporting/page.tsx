@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import { protestWindowState, formatCountdown } from "@/lib/protest-window";
+import { liveSeasonWhere } from "@/lib/season-visibility";
 
 export const metadata: Metadata = pageMetadata({
   title: "Open for incident reporting",
@@ -24,6 +25,7 @@ export default async function PublicReportingPage() {
     where: {
       status: "COMPLETED",
       season: {
+        ...liveSeasonWhere,
         scoringSystem: {
           incidentReportingEnabled: true,
           protestCooldownHours: { not: null },

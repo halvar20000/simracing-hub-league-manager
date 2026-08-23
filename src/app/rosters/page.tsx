@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
+import { liveSeasonNested } from "@/lib/season-visibility";
 
 export const metadata: Metadata = pageMetadata({
   title: "Rosters — All seasons",
@@ -17,7 +18,10 @@ export default async function PublicRostersIndex() {
     orderBy: { name: "asc" },
     include: {
       seasons: {
-        where: { status: { in: ["OPEN_REGISTRATION", "ACTIVE"] } },
+        where: {
+          ...liveSeasonNested,
+          status: { in: ["OPEN_REGISTRATION", "ACTIVE"] },
+        },
         orderBy: [{ year: "desc" }, { name: "asc" }],
       },
     },

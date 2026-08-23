@@ -57,6 +57,11 @@ export async function GET(req: NextRequest) {
 
   // Resolve season — explicit id wins, otherwise pick the most recently
   // started ACTIVE/OPEN_REGISTRATION season for this league.
+  //
+  // An explicit id keeps working for an archived season: overlay configs on
+  // streaming PCs point at a fixed season id and shouldn't break the moment
+  // the season is archived. Only the automatic pick skips archived seasons,
+  // so nobody gets an archived championship by accident.
   let season;
   if (seasonIdParam) {
     season = await prisma.season.findFirst({
@@ -67,6 +72,7 @@ export async function GET(req: NextRequest) {
     season = await prisma.season.findFirst({
       where: {
         leagueId: league.id,
+        isArchived: false,
         status: { in: ["ACTIVE", "OPEN_REGISTRATION"] },
       },
       orderBy: { startsOn: "desc" },

@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.1.0",
+    date: "2026-08-23",
+    changes: [
+      "A season can now be archived. Old seasons pile up on the league page long after anyone still cares about them — GT3 WCT is on its 13th. Tick “Archive this season” on the season's admin page and it drops out of everything that is meant to show what is running now: the home page, the season grid on the league page, rosters, the race calendar and its subscribable feed, the streams page, the reporting page and the overlay's season picker. Its rounds stop posting to Discord, and it takes no new registrations.",
+      "Nothing is deleted and the history stays. The Hall of Fame still credits its champion, drivers keep the season on their profile, its teams stay in the teams overview, and its incident reports and steward decisions stay published.",
+      "Every link keeps working. Standings, roster and round pages of an archived season still open, so links already posted in Discord or in a YouTube description don't turn into dead ends. An overlay pointed at a fixed season id keeps feeding too.",
+      "In the admin area nothing disappears: archived seasons stay in the league's season list, marked with a 📦 Archived badge. Untick the box to bring one straight back.",
+    ],
+  },
+  {
     version: "2.0.3",
     date: "2026-08-23",
     changes: [

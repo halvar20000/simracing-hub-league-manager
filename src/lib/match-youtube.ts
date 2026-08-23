@@ -231,6 +231,7 @@ export async function matchYoutubeForRecentRounds(
       youtubeVideoId: null,
       startsAt: { gte: since },
       season: {
+        isArchived: false,
         league: { youtubeChannelId: { not: null } },
       },
     },
