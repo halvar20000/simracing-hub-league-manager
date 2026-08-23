@@ -10,7 +10,11 @@
  *      don't suddenly become uncapped mid-season. Once every GT3 WCT season
  *      carries an explicit `teamMaxDrivers`, this shim can be deleted.
  *
- * The cap is enforced in four places — all importing this helper:
+ * The cap is enforced in five places — all importing this helper:
+ *   - the public "Manage team" form (src/app/teams/[teamId]/manage) renders
+ *     only as many teammate rows as the cap allows, and
+ *     `updateTeamRegistration` re-checks the submitted rows server-side
+ *     (missing until v2.0.3 — that hole let a cap-3 IEC team reach 4 drivers),
  *   - the public solo registration form (src/components/TeamPicker.tsx,
  *     used by GT3 WCT) hides / greys out full teams,
  *   - the public team registration form (IEC) only renders enough teammate
@@ -44,6 +48,29 @@ export function teamSizeLimit(input: {
     return input.teamMaxDrivers;
   }
   return input.leagueSlug === "cas-gt3-wct" ? GT3_WCT_TEAM_LIMIT : null;
+}
+
+/** Teammate rows the Manage Team form offers when the season is uncapped. */
+export const MANAGE_TEAM_UNCAPPED_ROWS = 4;
+
+/** Extra rows the Manage Team action parses, to catch a crafted POST. */
+export const MANAGE_TEAM_ROW_SCAN = 8;
+
+/**
+ * How many teammate slots the Manage Team form may fill. The team leader
+ * (Teamchef) occupies one of the capped driver slots whenever he is a driver
+ * himself — a non-driving Teammanager does not, and neither does a team whose
+ * leader pointer is dangling. Uncapped seasons keep the historical 4 rows.
+ *
+ * Shared by the manage page (how many rows to render) and
+ * `updateTeamRegistration` (how many rows to accept), so the two can't drift.
+ */
+export function teammateSlots(input: {
+  limit: number | null;
+  leaderIsDriver: boolean;
+}): number {
+  if (input.limit == null) return MANAGE_TEAM_UNCAPPED_ROWS;
+  return Math.max(0, input.limit - (input.leaderIsDriver ? 1 : 0));
 }
 
 /**

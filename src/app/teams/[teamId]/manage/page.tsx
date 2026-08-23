@@ -19,6 +19,7 @@ import {
   resolveTeamOwnership,
   isActiveTeamMember,
 } from "@/lib/team-ownership";
+import { teamSizeLimit, teammateSlots } from "@/lib/team-limit";
 
 export default async function ManageTeamPage({
   params,
@@ -129,6 +130,29 @@ export default async function ManageTeamPage({
       r.status !== "WITHDRAWN" &&
       !r.isTeamManager
   );
+
+  // Per-team driver cap. The Teamchef takes one of the capped slots when he is
+  // a driver himself; a non-driving Teammanager does not. `updateTeamRegistration`
+  // re-checks the same numbers server-side.
+  const teamLimit = teamSizeLimit({
+    leagueSlug: team.season.league.slug,
+    teamMaxDrivers: team.season.teamMaxDrivers,
+  });
+  const leaderIsDriver = team.registrations.some(
+    (r) =>
+      r.userId === team.leaderUserId &&
+      !r.isTeamManager &&
+      r.status !== "WITHDRAWN"
+  );
+  const teammateSlotCount = teammateSlots({
+    limit: teamLimit,
+    leaderIsDriver,
+  });
+  // Never hide a driver who is already on the roster: a team that went over
+  // the cap before v2.0.3 still sees every one of its drivers, and the action
+  // asks for a row to be cleared on the next save.
+  const teammateRowCount = Math.max(teammateSlotCount, teammates.length);
+  const overCap = teammates.length > teammateSlotCount;
 
   if (!isLeader && !isManager && !isAdmin) {
     return (
@@ -284,13 +308,30 @@ export default async function ManageTeamPage({
 
           <fieldset className="space-y-3">
             <legend className="text-sm text-zinc-300">
-              Teammates (up to 4)
+              Teammates (up to {teammateSlotCount})
             </legend>
             <p className="text-xs text-zinc-500">
               Add a brand-new driver to add a teammate (their Invite/Accepted
               flags reset). Clear a row to withdraw that teammate. Existing
               teammates keep their flags when their data is unchanged.
+              {teamLimit != null && (
+                <>
+                  {" "}
+                  This season caps teams at{" "}
+                  <strong className="text-zinc-300">
+                    {teamLimit} driver{teamLimit === 1 ? "" : "s"}
+                  </strong>
+                  {leaderIsDriver ? " (the Teamchef included)" : ""}.
+                </>
+              )}
             </p>
+            {overCap && (
+              <p className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">
+                This team has {teammates.length + (leaderIsDriver ? 1 : 0)}{" "}
+                drivers — more than the {teamLimit} this season allows. Clear a
+                row before saving, or ask an admin.
+              </p>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -302,7 +343,10 @@ export default async function ManageTeamPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {[1, 2, 3, 4].map((i) => {
+                  {Array.from(
+                    { length: teammateRowCount },
+                    (_, idx) => idx + 1
+                  ).map((i) => {
                     const pre = teammates[i - 1] ?? null;
                     const preName = pre
                       ? `${pre.user.firstName ?? ""} ${pre.user.lastName ?? ""}`.trim()
@@ -360,12 +404,11 @@ export default async function ManageTeamPage({
             lockedClassShortCode={leaderReg?.carClass?.shortCode}
           />
 
-          <button
-            type="submit"
+          <SubmitWithSpinner
+            label="Save changes"
+            pendingLabel="Saving…"
             className="rounded bg-orange-500 px-4 py-2 text-sm font-medium text-zinc-950 hover:bg-orange-400"
-          >
-            Save changes
-          </button>
+          />
         </form>
       </section>
 

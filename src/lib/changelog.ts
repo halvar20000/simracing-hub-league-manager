@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.0.3",
+    date: "2026-08-23",
+    changes: [
+      "The per-team driver limit now also holds on Manage Team. A season can cap how many drivers a team may field — IEC Season 4 is set to 3 — and that cap was checked on the registration form and on the admin roster, but not on Manage Team: that form always offered four teammate rows and saved them all, so a team could quietly grow past its limit. Manage Team now offers exactly as many rows as the season allows and refuses a line-up that goes over it.",
+      "The limit is spelled out on the form (“This season caps teams at 3 drivers, the Teamchef included”), so it is clear before saving rather than after.",
+      "A team that is already over its limit keeps every driver visible — nobody is silently dropped — and is asked to clear a row the next time the line-up is saved.",
+      "Registering the same team a second time can no longer push it over the limit either: drivers already on the roster who are not in the form now count towards the cap.",
+    ],
+  },
+  {
     version: "2.0.2",
     date: "2026-08-23",
     changes: [

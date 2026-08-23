@@ -13,7 +13,12 @@ import { postDiscordWebhook } from "@/lib/discord-webhook";
 import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
-import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
+import {
+  teamSizeLimit,
+  countTeamMembers,
+  teammateSlots,
+  MANAGE_TEAM_ROW_SCAN,
+} from "@/lib/team-limit";
 import { parseStartNumberInput } from "@/lib/start-number";
 import {
   resolveTeamOwnership,
@@ -849,6 +854,42 @@ export async function createTeamRegistration(
     );
   }
 
+  // Row count alone is not enough on a RESUBMISSION of an existing team: this
+  // action never withdraws teammates that are absent from the form, so drivers
+  // already on the roster keep their slot and would push the team over the cap
+  // (the v2.0.2 bug — a cap-3 team ending up with 4 drivers). Count the drivers
+  // who will still be there afterwards: everyone active on the team who is
+  // neither the leader/manager nor re-submitted in one of the rows. Matched by
+  // iRacing member id so no User row has to be created just to run the check.
+  if (teamLimit != null) {
+    const submittedIracingIds = new Set(teammates.map((t) => t.iracingId));
+    const survivors = await prisma.registration.findMany({
+      where: {
+        teamId: team.id,
+        status: { in: ["PENDING", "APPROVED"] },
+        excludedAt: null,
+        retiredAt: null,
+        isTeamManager: false,
+        userId: { not: leader!.id },
+      },
+      select: { user: { select: { iracingMemberId: true } } },
+    });
+    const keptExisting = survivors.filter(
+      (r) =>
+        !r.user.iracingMemberId ||
+        !submittedIracingIds.has(r.user.iracingMemberId)
+    ).length;
+    // The registrant occupies a driver slot unless he registers as a
+    // non-driving manager.
+    const projected =
+      (isTeamManager ? 0 : 1) + teammates.length + keptExisting;
+    if (projected > teamLimit) {
+      errBack(
+        `This season caps teams at ${teamLimit} drivers. "${teamName}" already has ${keptExisting} driver${keptExisting === 1 ? "" : "s"} on the roster who ${keptExisting === 1 ? "is" : "are"} not in this form, so this submission would make ${projected}. Use Manage Team to change the lineup instead.`
+      );
+    }
+  }
+
   // Manager mode: at least one driver is required, and the Teamchef must be
   // one of the driver rows (defaults to the first row).
   let chefRowIndex: number | null = null;
@@ -1082,6 +1123,27 @@ export async function updateTeamRegistration(formData: FormData) {
     });
   }
 
+  // Per-team driver cap — the Manage Team form is bound by it like every other
+  // entry point. Until v2.0.3 this action ignored the cap entirely and always
+  // offered 4 teammate rows, so a team leader could grow a cap-3 IEC team to
+  // 5 drivers straight past `Season.teamMaxDrivers`.
+  const teamLimit = teamSizeLimit({
+    leagueSlug: team.season.league.slug,
+    teamMaxDrivers: team.season.teamMaxDrivers,
+  });
+  // The Teamchef occupies a driver slot; a non-driving Teammanager does not,
+  // and an ownerless team (dangling leaderUserId) has none to occupy.
+  const leaderIsDriver = team.registrations.some(
+    (r) =>
+      r.userId === team.leaderUserId &&
+      !r.isTeamManager &&
+      r.status !== "WITHDRAWN"
+  );
+  const maxTeammateRows = teammateSlots({
+    limit: teamLimit,
+    leaderIsDriver,
+  });
+
   // Parse + validate teammate rows
   type TM = {
     name: string;
@@ -1090,7 +1152,7 @@ export async function updateTeamRegistration(formData: FormData) {
     iRating: number;
   };
   const tmIn: TM[] = [];
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= MANAGE_TEAM_ROW_SCAN; i++) {
     const name = String(formData.get(`teammate${i}Name`) ?? "").trim();
     const iracingId = String(formData.get(`teammate${i}IracingId`) ?? "").trim();
     const email = String(formData.get(`teammate${i}Email`) ?? "").trim();
@@ -1116,6 +1178,20 @@ export async function updateTeamRegistration(formData: FormData) {
       );
     }
     tmIn.push({ name, iracingId, email, iRating: iR });
+  }
+
+  // Hard cap check. The form renders only `maxTeammateRows` empty rows, but a
+  // crafted POST (or a team that is already over the cap from before v2.0.3)
+  // can still submit more.
+  if (tmIn.length > maxTeammateRows) {
+    const submitted = tmIn.length + (leaderIsDriver ? 1 : 0);
+    throw new Error(
+      teamLimit != null
+        ? `This season caps teams at ${teamLimit} driver${teamLimit === 1 ? "" : "s"}${
+            leaderIsDriver ? " (the team leader included)" : ""
+          }. This lineup has ${submitted} — clear a row before saving.`
+        : `At most ${maxTeammateRows} teammates can be saved here — clear a row before saving.`
+    );
   }
 
   // Existing teammates (active, not the leader, not the manager — the
