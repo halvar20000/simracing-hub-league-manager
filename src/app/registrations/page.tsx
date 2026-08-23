@@ -9,6 +9,7 @@ import {
 import { getLeaguePayment } from "@/lib/payment";
 import PaymentNotice from "@/components/PaymentNotice";
 import TeamManageModal from "@/components/TeamManageModal";
+import { resolveTeamOwnership } from "@/lib/team-ownership";
 
 export default async function MyRegistrationsPage({
   searchParams,
@@ -55,6 +56,19 @@ export default async function MyRegistrationsPage({
   for (const t of managedTeams) {
     if (!managedBySeason.has(t.seasonId)) managedBySeason.set(t.seasonId, []);
     managedBySeason.get(t.seasonId)!.push({ id: t.id, name: t.name });
+  }
+
+  // Teams whose recorded leader/manager no longer exists (deleted or merged
+  // user). Nobody would get a Manage link and the team would be stuck, so
+  // offer it to the viewer when they're still on its roster — the action
+  // heals Team.leaderUserId on the first write. See @/lib/team-ownership.
+  const adoptableTeamIds = new Set<string>();
+  for (const r of registrations) {
+    if (!r.team) continue;
+    if (r.team.leaderUserId === session.user.id) continue;
+    if (r.status === "WITHDRAWN" || r.status === "REJECTED") continue;
+    const owner = await resolveTeamOwnership(r.team);
+    if (owner.ownerless) adoptableTeamIds.add(r.team.id);
   }
 
   const me = await prisma.user.findUnique({
@@ -215,7 +229,11 @@ export default async function MyRegistrationsPage({
                   // One link per team: the team the user leads + every team
                   // they manage (a manager can run several teams).
                   const links = new Map<string, string>();
-                  if (r.team && r.team.leaderUserId === session.user.id) {
+                  if (
+                    r.team &&
+                    (r.team.leaderUserId === session.user.id ||
+                      adoptableTeamIds.has(r.team.id))
+                  ) {
                     links.set(r.team.id, r.team.name);
                   }
                   for (const t of managedBySeason.get(r.season.id) ?? []) {

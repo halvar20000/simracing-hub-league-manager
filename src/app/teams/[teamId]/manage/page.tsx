@@ -15,6 +15,10 @@ import TeamIRatingValidator from "@/components/TeamIRatingValidator";
 import UserSearchPicker from "@/components/UserSearchPicker";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import {
+  resolveTeamOwnership,
+  isActiveTeamMember,
+} from "@/lib/team-ownership";
 
 export default async function ManageTeamPage({
   params,
@@ -68,8 +72,14 @@ export default async function ManageTeamPage({
   });
   if (!team) notFound();
 
-  const isLeader = team.leaderUserId === session.user.id;
-  const isManager = team.managerUserId === session.user.id;
+  // A leader/manager id whose User was deleted or merged away leaves the team
+  // ownerless — any active roster member may then manage it (the action heals
+  // Team.leaderUserId on the first write). See @/lib/team-ownership.
+  const owner = await resolveTeamOwnership(team);
+  const adopts =
+    owner.ownerless && (await isActiveTeamMember(team.id, session.user.id));
+  const isLeader = owner.leaderUserId === session.user.id || adopts;
+  const isManager = owner.managerUserId === session.user.id;
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { role: true },

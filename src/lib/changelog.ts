@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.0.2",
+    date: "2026-08-23",
+    changes: [
+      "Registration errors are readable again on seasons that use a personal invitation link. Until now every error on such a season threw the driver onto “Registration is link-protected”, because the bounce-back dropped the invitation link's token. The actual reason — a missing iRating, a locked class, a team name already taken — was never shown. The form now comes back with the real message.",
+      "A team whose leader no longer has an account is no longer stuck. If the team leader's user record was deleted or merged away, the team belonged to nobody: the leader could not update the line-up (“This team is already registered. Ask the team leader…”) and Manage Team refused everyone, including him. Any driver still on that team's roster can now take it over, and the team gets its leader back the moment he saves.",
+    ],
+  },
+  {
     version: "2.0.1",
     date: "2026-08-20",
     changes: [

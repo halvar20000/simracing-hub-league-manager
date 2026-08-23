@@ -15,6 +15,10 @@ import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 import { parseStartNumberInput } from "@/lib/start-number";
+import {
+  resolveTeamOwnership,
+  isActiveTeamMember,
+} from "@/lib/team-ownership";
 
 // Append a query param to a redirect target, using "&" if the base already
 // carries a query string (e.g. the embedded Manage Team view passes
@@ -25,6 +29,24 @@ function withQuery(base: string, key: string, value: string): string {
   return `${base}${sep}${key}=${encodeURIComponent(value)}`;
 }
 
+/**
+ * Base URL for bouncing back to the registration form with an error.
+ *
+ * A link-protected season only renders the form when the personal invitation
+ * token is present, so an error redirect that drops `?t=` lands the driver on
+ * "Registration is link-protected" and the real reason is never shown. Always
+ * carry the token back. Returns a prefix ending in "?" (or "?t=…&") so call
+ * sites can append `error=…`.
+ */
+function registerBaseUrl(
+  leagueSlug: string,
+  seasonId: string,
+  token: string
+): string {
+  const base = `/leagues/${leagueSlug}/seasons/${seasonId}/register?`;
+  return token ? `${base}t=${encodeURIComponent(token)}&` : base;
+}
+
 export async function createRegistration(
   leagueSlug: string,
   seasonId: string,
@@ -32,6 +54,7 @@ export async function createRegistration(
   formData: FormData
 ) {
   const sessionUser = await requireAuth();
+  const registerBase = registerBaseUrl(leagueSlug, seasonId, token);
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
@@ -75,7 +98,7 @@ export async function createRegistration(
     startNumber = parseStartNumberInput(formData.get("startNumber"));
   } catch {
     redirect(
-      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Start+number+must+be+1-4+digits`
+      `${registerBase}error=Start+number+must+be+1-4+digits`
     );
   }
   const teamIdFromDropdown =
@@ -93,7 +116,7 @@ export async function createRegistration(
   if (iRatingRaw) {
     if (!/^\d+$/.test(iRatingRaw)) {
       redirect(
-        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+        `${registerBase}error=${encodeURIComponent(
           "iRating must be a whole number"
         )}`
       );
@@ -105,14 +128,14 @@ export async function createRegistration(
   if (sflGate.applies) {
     if (iRatingValue == null) {
       redirect(
-        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+        `${registerBase}error=${encodeURIComponent(
           "Your current iRating is required"
         )}`
       );
     }
     if (!sflGate.exempt && iRatingValue > sflGate.maxIRating) {
       redirect(
-        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+        `${registerBase}error=${encodeURIComponent(
           `This season is capped at ${sflGate.maxIRating} iRating. Only drivers who raced in the previous SFL Cup season may register above it.`
         )}`
       );
@@ -126,7 +149,7 @@ export async function createRegistration(
       const liveIrating = getUserLiveIratingForLeague(user, season.league.slug);
       if (liveIrating != null && liveIrating > sflGate.maxIRating) {
         redirect(
-          `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+          `${registerBase}error=${encodeURIComponent(
             `Your live iRating (${liveIrating}) is above the ${sflGate.maxIRating} cap for new SFL Cup drivers. Only drivers who raced in the previous SFL Cup season may register above it.`
           )}`
         );
@@ -200,7 +223,7 @@ export async function createRegistration(
     const occupied = await countTeamMembers(teamId, user.id);
     if (occupied >= teamLimit) {
       redirect(
-        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(
+        `${registerBase}error=${encodeURIComponent(
           `That team is already full — it has the maximum of ${teamLimit} drivers. Pick another team or create your own.`
         )}`
       );
@@ -209,7 +232,7 @@ export async function createRegistration(
 
   if (season.isMulticlass && !isGt3Wct && !carClassId) {
     redirect(
-      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Class+is+required+for+multiclass+seasons`
+      `${registerBase}error=Class+is+required+for+multiclass+seasons`
     );
   }
 
@@ -222,7 +245,7 @@ export async function createRegistration(
     });
     if (!car || car.seasonId !== seasonId) {
       redirect(
-        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Invalid+car`
+        `${registerBase}error=Invalid+car`
       );
     }
     // A car is valid for the chosen class when either:
@@ -236,7 +259,7 @@ export async function createRegistration(
       car.carClassId !== carClassId
     ) {
       redirect(
-        `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+does+not+belong+to+selected+class`
+        `${registerBase}error=Car+does+not+belong+to+selected+class`
       );
     }
     // Only fall back to the car's pinned class if we don't already have one
@@ -253,7 +276,7 @@ export async function createRegistration(
   });
   if (classesWithCars.length > 0 && !carId) {
     redirect(
-      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+is+required`
+      `${registerBase}error=Car+is+required`
     );
   }
 
@@ -274,7 +297,7 @@ export async function createRegistration(
     existing.carId !== carId
   ) {
     redirect(
-      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=Car+is+locked+after+your+first+race`
+      `${registerBase}error=Car+is+locked+after+your+first+race`
     );
   }
 
@@ -550,6 +573,7 @@ export async function createTeamRegistration(
   formData: FormData
 ) {
   const sessionUser = await requireAuth();
+  const registerBase = registerBaseUrl(leagueSlug, seasonId, token);
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
@@ -596,7 +620,7 @@ export async function createTeamRegistration(
 
   const errBack = (msg: string) =>
     redirect(
-      `/leagues/${leagueSlug}/seasons/${seasonId}/register?error=${encodeURIComponent(msg)}`
+      `${registerBase}error=${encodeURIComponent(msg)}`
     );
 
   if (!teamName) errBack("Team name is required");
@@ -640,9 +664,19 @@ export async function createTeamRegistration(
     where: { seasonId, name: teamName },
   });
 
+  // Adopting an ownerless team heals Team.leaderUserId further down.
+  let adoptOwnerlessTeam = false;
   if (team) {
+    const owner = await resolveTeamOwnership(team);
+    // An ownerless team (leader/manager deleted or merged away) may be taken
+    // over by anyone still on its roster — otherwise the team is locked
+    // forever and even Manage Team refuses everyone.
+    adoptOwnerlessTeam =
+      owner.ownerless && (await isActiveTeamMember(team.id, leader!.id));
     const mayResubmit =
-      team.leaderUserId === leader!.id || team.managerUserId === leader!.id;
+      owner.leaderUserId === leader!.id ||
+      owner.managerUserId === leader!.id ||
+      adoptOwnerlessTeam;
     if (!mayResubmit) {
       const teammate = await prisma.registration.findFirst({
         where: { teamId: team.id, userId: leader!.id },
@@ -673,6 +707,13 @@ export async function createTeamRegistration(
     team = await prisma.team.update({
       where: { id: team.id },
       data: { managerUserId: leader!.id },
+    });
+  } else if (adoptOwnerlessTeam) {
+    // Heal the dangling pointer: the roster member who just resubmitted
+    // becomes the leader, so Manage Team works for him from now on.
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: { leaderUserId: leader!.id, managerUserId: null },
     });
   }
 
@@ -967,16 +1008,30 @@ async function requireTeamLeader(teamId: string) {
   if (!team) throw new Error("Team not found");
   // The non-driving team manager has the same management rights as the
   // leader (Teamchef). Admins can manage every team.
-  const isManager = team.managerUserId === sessionUser.id;
+  const owner = await resolveTeamOwnership(team);
+  const isManager = owner.managerUserId === sessionUser.id;
   const me = await prisma.user.findUnique({
     where: { id: sessionUser.id },
     select: { role: true },
   });
   const isAdmin = me?.role === "ADMIN";
-  if (team.leaderUserId !== sessionUser.id && !isManager && !isAdmin) {
+  // Ownerless team (leader/manager deleted or merged away): let an active
+  // roster member manage it and heal the pointer, instead of locking the
+  // team behind an id that no longer exists.
+  const adopts =
+    owner.ownerless && (await isActiveTeamMember(team.id, sessionUser.id));
+  if (owner.leaderUserId !== sessionUser.id && !isManager && !isAdmin && !adopts) {
     throw new Error(
       "Only the team leader, team manager or an admin can perform this action"
     );
+  }
+  if (adopts) {
+    await prisma.team.update({
+      where: { id: team.id },
+      data: { leaderUserId: sessionUser.id, managerUserId: null },
+    });
+    team.leaderUserId = sessionUser.id;
+    team.managerUserId = null;
   }
   return { team, sessionUser, isManager, isAdmin };
 }
