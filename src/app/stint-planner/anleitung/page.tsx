@@ -80,6 +80,20 @@ export default function StintPlannerGuidePage() {
           Boxenmauer bis zur Auswertung danach. Diese Seite erklärt beides: was
           Fahrer wissen müssen, und wie der Einsatzleiter den Plan baut.
         </p>
+        <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 text-sm text-zinc-400">
+          <p className="mb-1 font-semibold text-zinc-200">
+            🔒 Wer einen Plan sehen darf
+          </p>
+          <p>
+            Ein Stint-Plan ist privat. Anlegen darf ihn jeder, der bei CLS
+            registriert ist — öffnen können ihn danach nur der Ersteller, alle
+            Fahrer, die im Plan eingetragen sind, die Leute, die der Ersteller
+            im Kasten <em>Who can open this plan</em> dazugenommen hat (Teamchef,
+            Spotter, Renningenieur), und die CLS-Admins. Der Link allein reicht
+            nicht mehr. Wer im Plan steht, darf ihn auch bearbeiten — an der
+            Boxenmauer sitzt selten der, der den Plan gebaut hat.
+          </p>
+        </div>
       </div>
 
       <nav className="mb-8 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 text-sm">

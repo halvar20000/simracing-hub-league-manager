@@ -1,6 +1,7 @@
 "use server";
 
 import { put } from "@vercel/blob";
+import { requireSignedInViewer } from "@/lib/stint-plan-access";
 import { parseRaceLog } from "@/lib/race-log-pace";
 import type { PlannerRaceLog } from "@/lib/stint-plan-state";
 
@@ -28,6 +29,10 @@ export async function reparseStintPlanRaceLog(
   name: string,
   rosterJson: string
 ): Promise<UploadRaceLogResult> {
+  // Signed-in-only: this reads from / writes to the league's Blob store.
+  const signedIn = await requireSignedInViewer();
+  if (!signedIn.ok) return { ok: false, error: signedIn.error };
+
   if (!/^https:\/\/[a-z0-9.-]+\.public\.blob\.vercel-storage\.com\//i.test(url)) {
     return { ok: false, error: "That log is not in this site's archive." };
   }
@@ -81,6 +86,10 @@ export async function reparseStintPlanRaceLog(
 export async function uploadStintPlanRaceLog(
   formData: FormData
 ): Promise<UploadRaceLogResult> {
+  // Signed-in-only: this reads from / writes to the league's Blob store.
+  const signedIn = await requireSignedInViewer();
+  if (!signedIn.ok) return { ok: false, error: signedIn.error };
+
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "No file selected." };

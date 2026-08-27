@@ -19,6 +19,20 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.0",
+    date: "2026-08-27",
+    changes: [
+      "Stint plans are private now. Until today the planner was wide open: anybody, signed in or not, could open /stint-planner, read every team's plan and even type into it during a race. From now on a plan belongs to the driver who created it. It can be opened by him, by every driver in the line-up, by anyone he adds by hand — and by CLS admins. Nobody else, even with the link.",
+      "Building a plan stays open to the whole league: every CLS member can create one. It is reading someone else's that is closed.",
+      "The overview page now lists your plans — the ones you created, the ones you are driving in and the ones you were added to — instead of everything on the site.",
+      "Every driver you put in the line-up gets access automatically, because the driver rows already carry the CLS account (that is how the Discord stint reminders find them). Take a driver out of the line-up and the access goes with him.",
+      "For everyone who belongs on the pit wall without driving — Teamchef, Spotter, Renningenieur — there is a new box on the plan page, “Who can open this plan”. The plan's creator picks them from the CLS driver list and they get the same rights as a driver.",
+      "Everyone on a plan may edit it, not just its creator. On the boxenmauer it is rarely the person who built the plan who types the live corrections.",
+      "Plans from before today have no recorded creator — that was never stored. They stay open to the drivers who are in them (and to admins), which is exactly the team that ran that race.",
+      "The share link on its own no longer grants anything, and neither does the plan's edit token. The same rule now also guards the Discord stint DMs, the “post to Discord” button, the Garage 61 pull and every upload, so a plan id picked out of a chat log is no longer a way in.",
+    ],
+  },
+  {
     version: "2.1.1",
     date: "2026-08-23",
     changes: [

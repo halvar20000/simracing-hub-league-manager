@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { gateStintPlan } from "@/lib/stint-plan-access";
 import { postBotMessage, type Embed } from "@/lib/discord-bot";
 import { buildSchedule } from "@/lib/stint-planner";
 import {
@@ -22,6 +23,9 @@ export type PostToDiscordResult =
 export async function postStintPlanToDiscord(
   planId: string
 ): Promise<PostToDiscordResult> {
+  const gate = await gateStintPlan(planId);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
   const plan = await prisma.stintPlan.findUnique({
     where: { id: planId },
     select: { id: true, title: true, payload: true },

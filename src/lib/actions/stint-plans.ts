@@ -4,10 +4,16 @@ import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/auth-helpers";
+import { gateStintPlan, getStintPlanViewer } from "@/lib/stint-plan-access";
 
-// Save/share actions for the public stint planner. No auth: plans are
-// unguessable by id, and editing requires the secret editToken returned at
-// creation. Called programmatically from the client (not as <form action>).
+// Save/share actions for the stint planner.
+//
+// Since v2.2.0 these are NOT public any more. Every one of them goes through
+// gateStintPlan() (src/lib/stint-plan-access.ts): you must be signed in to CLS
+// and be the plan's creator, one of its drivers, someone the creator added, or
+// an admin. The edit token still exists so old links keep working, but it is no
+// longer what decides anything — a token that leaks into a Discord channel is
+// exactly the hole Johann asked us to close.
 
 export type SavePlanResult =
   | { ok: true; id: string; editToken: string }
@@ -23,8 +29,8 @@ function cleanTitle(title: unknown): string {
 // ---------------------------------------------------------------------------
 // A completed plan is frozen for planning but still open for the debrief.
 // The freeze MUST live here, not in the UI: liveUpdateStintPlan deliberately
-// takes no edit token, so anyone with the link could otherwise still write to
-// a finished plan. Instead of rejecting the save outright (which would also
+// takes no edit token, so anyone on the plan could otherwise still write to a
+// finished plan. Instead of rejecting the save outright (which would also
 // throw away a race log someone is attaching), we merge only the post-race
 // keys onto the stored payload and drop the rest.
 const ARCHIVED_MERGE_KEYS = ["eventResult", "raceLog", "poster", "impressions"] as const;
@@ -53,19 +59,16 @@ function mergeArchivedPayload(stored: unknown, incoming: unknown): object {
   return base;
 }
 
-async function planArchivedAt(id: string): Promise<Date | null | undefined> {
-  const p = await prisma.stintPlan.findUnique({
-    where: { id },
-    select: { archivedAt: true },
-  });
-  return p ? p.archivedAt : undefined; // undefined = no such plan
-}
-
-/** Create a new saved plan. Returns its id + edit token. */
+/** Create a new saved plan, owned by the signed-in driver who made it.
+ *  Every CLS member may do this — creating is open, reading is not. */
 export async function createStintPlan(
   title: string,
   payload: unknown
 ): Promise<SavePlanResult> {
+  const viewer = await getStintPlanViewer();
+  if (!viewer) {
+    return { ok: false, error: "Sign in to CLS to save a stint plan." };
+  }
   if (payload == null || typeof payload !== "object") {
     return { ok: false, error: "Invalid plan data." };
   }
@@ -75,13 +78,16 @@ export async function createStintPlan(
       title: cleanTitle(title),
       payload: payload as object,
       editToken,
+      createdByUserId: viewer.userId,
     },
     select: { id: true },
   });
+  revalidatePath("/stint-planner");
   return { ok: true, id: plan.id, editToken };
 }
 
-/** Overwrite an existing plan — only with the matching edit token. */
+/** Overwrite an existing plan. The edit token is carried through unchanged for
+ *  the client's sake; access is what actually decides. */
 export async function updateStintPlan(
   id: string,
   editToken: string,
@@ -91,32 +97,33 @@ export async function updateStintPlan(
   if (payload == null || typeof payload !== "object") {
     return { ok: false, error: "Invalid plan data." };
   }
+  const gate = await gateStintPlan(id);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
   const existing = await prisma.stintPlan.findUnique({
     where: { id },
     select: { editToken: true, archivedAt: true, payload: true },
   });
   if (!existing) return { ok: false, error: "Plan not found." };
-  if (existing.editToken !== editToken) {
-    return { ok: false, error: "You do not have edit rights for this plan." };
-  }
+
   if (existing.archivedAt) {
     // Completed: keep the title and the plan itself, take the debrief only.
     await prisma.stintPlan.update({
       where: { id },
       data: { payload: mergeArchivedPayload(existing.payload, payload) },
     });
-    return { ok: true, id, editToken };
+    return { ok: true, id, editToken: existing.editToken };
   }
   await prisma.stintPlan.update({
     where: { id },
     data: { title: cleanTitle(title), payload: payload as object },
   });
-  return { ok: true, id, editToken };
+  return { ok: true, id, editToken: existing.editToken };
 }
 
-/** Live-race save: overwrite a plan by id with NO edit-token check, so anyone
- *  with the link can push corrections during a race. Returns the new updatedAt
- *  (ms) so clients can reconcile who has the freshest version. */
+/** Live-race save: overwrite a plan by id, so anyone ON the plan can push
+ *  corrections during a race without hunting for the edit token. Returns the
+ *  new updatedAt (ms) so clients can reconcile who has the freshest version. */
 export async function liveUpdateStintPlan(
   id: string,
   title: string,
@@ -125,6 +132,9 @@ export async function liveUpdateStintPlan(
   if (payload == null || typeof payload !== "object") {
     return { ok: false, error: "Invalid plan data." };
   }
+  const gate = await gateStintPlan(id);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
   const existing = await prisma.stintPlan.findUnique({
     where: { id },
     select: { archivedAt: true, payload: true },
@@ -155,6 +165,8 @@ export async function getStintPlanLive(
     }
   | { ok: false }
 > {
+  const gate = await gateStintPlan(id);
+  if (!gate.ok) return { ok: false };
   const p = await prisma.stintPlan.findUnique({
     where: { id },
     select: { title: true, payload: true, updatedAt: true, archivedAt: true },
@@ -172,26 +184,19 @@ export async function getStintPlanLive(
 }
 
 /**
- * Mark a plan completed (frozen) or reopen it. Allowed for whoever holds the
- * plan's edit token — the same right as saving it — and for CLS admins.
+ * Mark a plan completed (frozen) or reopen it. Anyone on the plan may do it —
+ * the same right as saving it — plus CLS admins. The editToken argument is
+ * kept so the client call site does not have to change.
  */
 export async function setStintPlanArchived(
   id: string,
   editToken: string | null,
   archived: boolean
 ): Promise<{ ok: true; archivedAt: number | null } | { ok: false; error: string }> {
-  const plan = await prisma.stintPlan.findUnique({
-    where: { id },
-    select: { editToken: true },
-  });
-  if (!plan) return { ok: false, error: "Plan not found." };
-  if (plan.editToken !== editToken && !(await isAdmin())) {
-    return {
-      ok: false,
-      error:
-        "Only the plan's owner can do that — open it in the browser you created it in, or ask an admin.",
-    };
-  }
+  void editToken;
+  const gate = await gateStintPlan(id);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
   const updated = await prisma.stintPlan.update({
     where: { id },
     data: { archivedAt: archived ? new Date() : null },
@@ -202,10 +207,14 @@ export async function setStintPlanArchived(
   return { ok: true, archivedAt: updated.archivedAt ? updated.archivedAt.getTime() : null };
 }
 
-/** Clone an existing plan into a new one ("Copy of …") the caller can edit. */
-export async function duplicateStintPlan(
-  id: string
-): Promise<SavePlanResult> {
+/** Clone a plan you may open into a new one ("Copy of …") that belongs to you.
+ *  The copy starts with an empty extra-access list on purpose: the drivers in
+ *  it still get in by being drivers, but a hand-granted guest of the original
+ *  does not silently follow the plan around. */
+export async function duplicateStintPlan(id: string): Promise<SavePlanResult> {
+  const gate = await gateStintPlan(id);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
   const src = await prisma.stintPlan.findUnique({
     where: { id },
     select: { title: true, payload: true },
@@ -217,9 +226,11 @@ export async function duplicateStintPlan(
       title: cleanTitle(`Copy of ${src.title}`),
       payload: (src.payload ?? {}) as object,
       editToken,
+      createdByUserId: gate.viewer.userId,
     },
     select: { id: true },
   });
+  revalidatePath("/stint-planner");
   return { ok: true, id: plan.id, editToken };
 }
 

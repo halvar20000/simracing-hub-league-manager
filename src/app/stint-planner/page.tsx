@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
 import StintPlanDuplicateButton from "@/components/StintPlanDuplicateButton";
 import StintPlanDeleteButton from "@/components/StintPlanDeleteButton";
-import { isAdmin } from "@/lib/auth-helpers";
+import {
+  canAccessStintPlan,
+  getStintPlanViewer,
+} from "@/lib/stint-plan-access";
 
 export const metadata: Metadata = pageMetadata({
   title: "Stint Planner",
@@ -26,6 +30,8 @@ type PlanRow = {
   updatedAt: Date;
   archivedAt: Date | null;
   payload: unknown;
+  createdByUserId: string | null;
+  accessUserIds: string[];
 };
 
 function PlanList({
@@ -84,20 +90,28 @@ function PlanList({
 }
 
 export default async function StintPlannerIndexPage() {
-  const [plans, admin] = await Promise.all([
-    prisma.stintPlan.findMany({
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        updatedAt: true,
-        archivedAt: true,
-        payload: true,
-      },
-      take: 200,
-    }),
-    isAdmin(),
-  ]);
+  // Signed-in only, and you see your own plans: the ones you created, the ones
+  // you are driving in, and the ones somebody added you to. Admins see all.
+  const viewer = await getStintPlanViewer();
+  if (!viewer) redirect("/api/auth/signin?callbackUrl=/stint-planner");
+
+  const all = await prisma.stintPlan.findMany({
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      updatedAt: true,
+      archivedAt: true,
+      payload: true,
+      createdByUserId: true,
+      accessUserIds: true,
+    },
+    take: 200,
+  });
+  // The driver ids live inside the payload JSON, so this filter cannot be a
+  // WHERE clause — the payload is already selected for the row summary anyway.
+  const plans = all.filter((p) => canAccessStintPlan(p, viewer));
+  const admin = viewer.isAdmin;
 
   const active = plans.filter((p) => !p.archivedAt);
   // Completed plans read as a history: newest race first.
@@ -112,6 +126,8 @@ export default async function StintPlannerIndexPage() {
           <h1 className="text-2xl font-bold">Stint Planner</h1>
           <p className="mt-1 max-w-xl text-sm text-zinc-400">
             Fuel, stint and driver-rotation plans for iRacing Special Events.
+            You see the plans you created, the ones you are driving in and the
+            ones you were added to.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -132,7 +148,7 @@ export default async function StintPlannerIndexPage() {
 
       {plans.length === 0 ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-400">
-          No stint plans yet.{" "}
+          No stint plans for you yet.{" "}
           <Link href="/stint-planner/new" className="text-[#ff6b35] hover:underline">
             Create the first one →
           </Link>

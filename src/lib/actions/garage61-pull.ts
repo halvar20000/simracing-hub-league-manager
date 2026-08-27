@@ -16,6 +16,10 @@ import {
   type G61LapRow,
 } from "@/lib/garage61-import";
 import { resolvePlanGarage61 } from "@/lib/garage61-plan-token";
+import {
+  gateStintPlan,
+  requireSignedInViewer,
+} from "@/lib/stint-plan-access";
 
 // Live Garage 61 pull for the stint planner. Given the selected CLS track + car
 // (the car carries its iRacing id), resolve the matching Garage 61 track/car,
@@ -201,6 +205,17 @@ export async function pullGarage61Laps(input: {
    *  Null/undefined = no limit (everything Garage 61 has). */
   age?: number | null;
 }): Promise<PullGarage61Result> {
+  // A pull spends the plan's (or the league's) Garage 61 token and returns real
+  // team lap data, so it is gated like the plan itself. An unsaved plan has no
+  // id yet — there being signed in to CLS is the whole gate.
+  if (input.planId) {
+    const gate = await gateStintPlan(input.planId);
+    if (!gate.ok) return { ok: false, error: gate.error };
+  } else {
+    const signedIn = await requireSignedInViewer();
+    if (!signedIn.ok) return { ok: false, error: signedIn.error };
+  }
+
   // Prefer this plan's own token; fall back to the global GARAGE61_TOKEN.
   const conn = await resolvePlanGarage61(input.planId ?? null);
   if (!conn.token) {

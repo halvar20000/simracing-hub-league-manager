@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { gateStintPlan } from "@/lib/stint-plan-access";
 import { sendDirectMessage, type Embed } from "@/lib/discord-bot";
 import { buildSchedule, fmtDuration } from "@/lib/stint-planner";
 import {
@@ -54,6 +55,11 @@ export async function checkStintPlanAlerts(
   planId: string,
   force = false
 ): Promise<StintAlertResult> {
+  // DMs go out under the league bot's name — only people on the plan may
+  // trigger them. Without this, any id was enough to spam a team's drivers.
+  const gate = await gateStintPlan(planId);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
   const plan = await prisma.stintPlan.findUnique({
     where: { id: planId },
     select: { id: true, title: true, payload: true, archivedAt: true },

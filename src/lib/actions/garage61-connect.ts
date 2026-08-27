@@ -1,14 +1,21 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { gateStintPlan } from "@/lib/stint-plan-access";
 import { g61GetMe } from "@/lib/garage61";
 import { encryptSecret, secretEncryptionAvailable } from "@/lib/crypto-secret";
 
-// Per-plan Garage 61 connection. A plan's creator (holder of the editToken)
-// pastes their own Garage 61 personal access token; it's validated via /me,
-// stored AES-GCM-encrypted on the StintPlan row, and NEVER returned to any
-// client. Anyone with the plan open can then trigger a pull that uses it. If a
-// plan has no token, the pull falls back to the global GARAGE61_TOKEN env var.
+// Per-plan Garage 61 connection. The plan's creator pastes their own Garage 61
+// personal access token; it's validated via /me, stored AES-GCM-encrypted on
+// the StintPlan row, and NEVER returned to any client. Anyone ON the plan can
+// then trigger a pull that uses it. If a plan has no token, the pull falls back
+// to the global GARAGE61_TOKEN env var.
+//
+// The token is somebody's personal credential, so connecting and disconnecting
+// it is creator/admin only (`manage`), not "anyone on the plan" — a driver who
+// was added for one race should not be able to swap out the team's token.
+// Since v2.2.0 the editToken argument decides nothing; it is kept only so the
+// planner client's call sites did not all have to change.
 
 export type G61TeamOption = { slug: string; name: string };
 
@@ -20,15 +27,9 @@ async function assertEditor(
   planId: string,
   editToken: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const plan = await prisma.stintPlan.findUnique({
-    where: { id: planId },
-    select: { editToken: true },
-  });
-  if (!plan) return { ok: false, error: "Plan not found." };
-  if (!editToken || plan.editToken !== editToken) {
-    return { ok: false, error: "Only the plan's creator can change this." };
-  }
-  return { ok: true };
+  void editToken; // superseded by the access rule — see the note above
+  const gate = await gateStintPlan(planId, { manage: true });
+  return gate.ok ? { ok: true } : { ok: false, error: gate.error };
 }
 
 /** Validate + store a per-plan Garage 61 token; return the token's teams so the
@@ -128,16 +129,18 @@ export type G61Status = {
 
 /** Read-only connection status for the UI. Exposes no secret. */
 export async function getGarage61Status(planId: string): Promise<G61Status> {
-  const plan = planId
-    ? await prisma.stintPlan.findUnique({
-        where: { id: planId },
-        select: {
-          garage61TokenEnc: true,
-          garage61TeamSlug: true,
-          garage61TeamName: true,
-        },
-      })
-    : null;
+  const gate = planId ? await gateStintPlan(planId) : null;
+  const plan =
+    planId && gate?.ok
+      ? await prisma.stintPlan.findUnique({
+          where: { id: planId },
+          select: {
+            garage61TokenEnc: true,
+            garage61TeamSlug: true,
+            garage61TeamName: true,
+          },
+        })
+      : null;
   const globalFallback =
     !!process.env.GARAGE61_TOKEN && process.env.GARAGE61_TOKEN.length > 0;
   return {

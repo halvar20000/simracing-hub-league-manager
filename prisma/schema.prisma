@@ -1327,6 +1327,18 @@ model StintPlan {
   garage61TeamSlug String?
   garage61TeamName String?
 
+  /// The CLS user who created the plan. The plan is theirs: they open it, edit
+  /// it and decide who else gets in. NULL for every plan made before v2.2.0,
+  /// when the planner was public and no creator was ever recorded — those fall
+  /// back to "the drivers listed in the plan". The whole rule lives in
+  /// src/lib/stint-plan-access.ts; never re-implement it at a call site.
+  createdByUserId String?
+  /// Extra CLS users the creator let in who are NOT driving the race — team
+  /// boss, spotter, engineer. Same rights on the plan as a driver. No FK on
+  /// purpose (same as Team.leaderUserId): a deleted user must not cascade a
+  /// stint plan away, and a stale id here simply matches nobody.
+  accessUserIds   String[] @default([])
+
   /// Set when the plan is marked completed on the overview / plan page. A
   /// completed plan is frozen: the server refuses every change to the event,
   /// drivers, stints and live corrections, and the Discord stint alerts stop.

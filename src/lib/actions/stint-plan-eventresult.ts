@@ -1,6 +1,7 @@
 "use server";
 
 import { put } from "@vercel/blob";
+import { requireSignedInViewer } from "@/lib/stint-plan-access";
 import { parseIracingEventJson, IracingJsonParseError } from "@/lib/iracing-json";
 import type { ResultRow, TeamDriverStat } from "@/lib/stint-plan-state";
 
@@ -29,6 +30,12 @@ const norm = (s: string) => s.trim().toLowerCase();
 export async function uploadStintPlanEventResult(
   formData: FormData
 ): Promise<UploadEventResultResult> {
+  // Uploads land in the league's Blob store, so this is signed-in-only. It is
+  // deliberately not plan-scoped: the file is only attached to a plan by the
+  // save that follows, and that save is gated.
+  const signedIn = await requireSignedInViewer();
+  if (!signedIn.ok) return { ok: false, error: signedIn.error };
+
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "No file selected." };

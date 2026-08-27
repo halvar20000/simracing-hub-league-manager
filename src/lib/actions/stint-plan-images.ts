@@ -1,6 +1,7 @@
 "use server";
 
 import { put } from "@vercel/blob";
+import { requireSignedInViewer } from "@/lib/stint-plan-access";
 import { MAX_IMPRESSIONS, type PlannerImage } from "@/lib/stint-plan-state";
 
 // Pictures kept with a stint plan: the finisher's certificate/poster and the
@@ -29,6 +30,12 @@ export type UploadImagesResult =
 export async function uploadStintPlanImages(
   formData: FormData
 ): Promise<UploadImagesResult> {
+  // Uploads land in the league's Blob store, so this is signed-in-only. It is
+  // deliberately not plan-scoped: the file is only attached to a plan by the
+  // save that follows, and that save is gated.
+  const signedIn = await requireSignedInViewer();
+  if (!signedIn.ok) return { ok: false, error: signedIn.error };
+
   const kindRaw = formData.get("kind");
   const kind = kindRaw === "poster" ? "poster" : "impression";
   const files = formData

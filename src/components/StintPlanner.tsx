@@ -276,6 +276,7 @@ export default function StintPlanner({
   initialUpdatedAtMs = null,
   initialArchivedAtMs = null,
   viewerIsAdmin = false,
+  viewerCanManage = false,
   clsDrivers,
   tracks,
   cars,
@@ -287,6 +288,9 @@ export default function StintPlanner({
   /** Set when the plan is marked completed — the plan half goes read-only. */
   initialArchivedAtMs?: number | null;
   viewerIsAdmin?: boolean;
+  /** Creator or admin: may connect this plan's own Garage 61 token. Everyone
+   *  else on the plan can edit it but not swap out somebody's credential. */
+  viewerCanManage?: boolean;
   clsDrivers: ClsDriverOption[];
   tracks: string[];
   cars: ClsCarOption[];
@@ -392,9 +396,12 @@ export default function StintPlanner({
     return () => clearInterval(iv);
   }, [curId]);
 
-  // The edit token (only the plan's creator holds it) is read live from local
-  // storage via useSyncExternalStore — SSR-safe (no hydration mismatch) and it
-  // re-reads after we save a plan and update curId.
+  // The edit token, read live from local storage via useSyncExternalStore —
+  // SSR-safe (no hydration mismatch) and it re-reads after we save a plan and
+  // update curId. Since v2.2.0 it decides NOTHING: whether you may edit is the
+  // server's access rule (creator / driver in the plan / added / admin), and
+  // the page only renders for someone who passed it. The token is still sent
+  // and stored so old links and old browser state keep working.
   const editToken = useSyncExternalStore(
     emptyStoreSubscribe,
     () => (curId ? window.localStorage.getItem(`stintplan:${curId}`) : null),
@@ -1843,7 +1850,7 @@ export default function StintPlanner({
   }, [curId]);
 
   async function onG61Connect() {
-    if (!curId || !editToken) return;
+    if (!curId) return;
     if (g61Token.trim().length < 8) {
       setG61ConnMsg("Paste your Garage 61 personal access token first.");
       return;
@@ -1851,7 +1858,7 @@ export default function StintPlanner({
     setG61ConnBusy(true);
     setG61ConnMsg(null);
     try {
-      const res = await connectGarage61(curId, editToken, g61Token.trim());
+      const res = await connectGarage61(curId, editToken ?? "", g61Token.trim());
       if (!res.ok) {
         setG61ConnMsg(res.error);
         return;
@@ -1873,11 +1880,11 @@ export default function StintPlanner({
   }
 
   async function onG61PickTeam(slug: string) {
-    if (!curId || !editToken) return;
+    if (!curId) return;
     const team = g61Teams.find((t) => t.slug === slug);
     setG61ConnBusy(true);
     try {
-      await setGarage61Team(curId, editToken, slug, team?.name ?? "");
+      await setGarage61Team(curId, editToken ?? "", slug, team?.name ?? "");
       const st = await getGarage61Status(curId);
       setG61Status(st);
     } finally {
@@ -1886,11 +1893,11 @@ export default function StintPlanner({
   }
 
   async function onG61Disconnect() {
-    if (!curId || !editToken) return;
+    if (!curId) return;
     setG61ConnBusy(true);
     setG61ConnMsg(null);
     try {
-      await disconnectGarage61(curId, editToken);
+      await disconnectGarage61(curId, editToken ?? "");
       setG61Teams([]);
       const st = await getGarage61Status(curId);
       setG61Status(st);
@@ -1923,8 +1930,8 @@ export default function StintPlanner({
     setStatus(null);
     try {
       const res =
-        !forceNew && curId && editToken
-          ? await updateStintPlan(curId, editToken, s.title, s)
+        !forceNew && curId
+          ? await updateStintPlan(curId, editToken ?? "", s.title, s)
           : await createStintPlan(s.title, s);
       if (!res.ok) {
         setStatus(res.error);
@@ -2742,7 +2749,7 @@ export default function StintPlanner({
             go out. Race result, race log, pictures and post-race notes can still
             be added.
           </span>
-          {curId && (editToken || viewerIsAdmin) && (
+          {curId && (
             <button
               onClick={onToggleArchived}
               disabled={archiveBusy}
@@ -2815,7 +2822,7 @@ export default function StintPlanner({
               {postingDiscord ? "Posting…" : "Post to Discord"}
             </button>
           )}
-          {curId && !frozen && (editToken || viewerIsAdmin) && (
+          {curId && !frozen && (
             <button
               onClick={onToggleArchived}
               disabled={archiveBusy}
@@ -4149,7 +4156,7 @@ export default function StintPlanner({
                 <span className="text-zinc-500">● Not connected to Garage 61</span>
               )}
             </span>
-            {curId && editToken && (
+            {curId && viewerCanManage && (
               <div className="flex items-center gap-2 print:hidden">
                 {g61Status?.connected && (
                   <button
@@ -4177,13 +4184,13 @@ export default function StintPlanner({
             </p>
           )}
 
-          {curId && editToken && g61ShowConnect && (
+          {curId && viewerCanManage && g61ShowConnect && (
             <div className="mt-3 space-y-2">
               <p className="text-[11px] text-zinc-500">
                 Paste a Garage 61 <strong>personal access token</strong> (create
                 one at garage61.net/developer). It&rsquo;s encrypted, stored with
-                this plan only, and never shown again — anyone with the plan link
-                can then pull, but only you (the creator) can change it.
+                this plan only, and never shown again — everyone on the plan can
+                then pull with it, but only you (the creator) can change it.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
