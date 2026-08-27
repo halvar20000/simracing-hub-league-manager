@@ -909,13 +909,21 @@ function AdminRegList({
     );
   }
 
-  // Team view: group by team name, expandable per team
+  // Team view: group by team name, expandable per team.
+  // Drivers without a team are NOT a team — they used to land in a fake
+  // "Independent" bucket here, which read like a real team. They are left out
+  // of this tab; use the Combined / Pro / Am tabs to enter their results.
   const byTeam = new Map<
     string,
     typeof registrations
   >();
+  let teamlessCount = 0;
   for (const reg of registrations) {
-    const key = reg.team?.name ?? "Independent";
+    const key = reg.team?.name;
+    if (!key) {
+      teamlessCount++;
+      continue;
+    }
     const arr = byTeam.get(key);
     if (arr) arr.push(reg);
     else byTeam.set(key, [reg]);
@@ -923,6 +931,15 @@ function AdminRegList({
   const groups = [...byTeam.entries()].sort((a, b) =>
     a[0].localeCompare(b[0])
   );
+
+  if (groups.length === 0) {
+    return (
+      <p className="text-sm text-zinc-500">
+        No teams in this round — all {teamlessCount} entrants race without a
+        team. Use the Combined tab to enter their results.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-3">

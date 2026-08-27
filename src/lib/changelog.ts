@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.2.1",
+    date: "2026-08-27",
+    changes: [
+      "The Team view on a round page no longer invents a team called “Independent”. Drivers who race without a team were bucketed together there and ranked like a real team — in Combined Cup S11 R1 that fake team even led the round with 106 points. A driver without a team is not a team: he scores for nobody and is simply not listed in the Team view any more. The season Team championship was always right; only the round view was wrong.",
+      "The same round view also scored the wrong formula. It always took the best 2 drivers and counted the participation bonus, no matter what the season actually uses. It now reads the season's rules — for the Combined Cup that is the best 3 drivers per round on race points only — so the round Team view and the season Team championship finally show the same numbers (Combined Cup S11 R1: CAS Tech Performance grün 114, not 90).",
+      "Each driver row in that view now shows the points that really count for his team, and the “Counts” column marks who made the cut. Where the participation bonus does not count for teams it is struck through instead of quietly added.",
+      "The admin result-entry page had the same fake “Independent” team group; it is gone. Team-less drivers are entered from the Combined / Pro / Am tabs as usual.",
+    ],
+  },
+  {
     version: "2.2.0",
     date: "2026-08-27",
     changes: [

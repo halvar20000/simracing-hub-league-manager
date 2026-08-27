@@ -36,7 +36,6 @@ const TWITCH_PARENT = (() => {
 })();
 
 type Cls = "combined" | "pro" | "am" | "gdc" | "team" | "race1" | "race2" | "quali" | "car" | "teams" | "race-center";
-const TEAM_BEST_N = 2;
 
 function sortByFinish<R extends { finishStatus: string; finishPosition: number }>(
   rows: R[]
@@ -435,6 +434,7 @@ export default async function PublicRoundResults({
     penaltyPoints: number;
     totalPoints: number;                 // total using class-relative race pts
     combinedTotalPoints: number;         // total using combined race pts
+    teamRoundPoints: number;             // contribution to the TEAM standings
     incidents: number;
     fprPoints: number;                   // driver FPR for the round (0 if off)
   };
@@ -452,6 +452,7 @@ export default async function PublicRoundResults({
         penaltyPoints: 0,
         totalPoints: 0,
         combinedTotalPoints: 0,
+        teamRoundPoints: 0,
         incidents: 0,
         fprPoints: 0,
       };
@@ -593,33 +594,89 @@ export default async function PublicRoundResults({
     allRows.filter((r) => r.registration.inGdc)
   );
 
-  // Team groupings (aggregated across all the team's drivers, multi-race aware)
+  // ---- Team groupings ----------------------------------------------------
+  // Mirrors computeTeamStandings() in src/lib/standings.ts so this round view
+  // and the season Team championship can never disagree:
+  //   * a driver with NO team is not a team. Team-less ("Independent")
+  //     drivers used to be bucketed into a fake team here, which could even
+  //     top the table — they are now left out of the Team view entirely.
+  //   * best-N and the points basis come from the Season, never a constant.
+  const teamBestN =
+    round.season.teamScoringMode === "SUM_BEST_N"
+      ? round.season.teamScoringBestN ?? 2
+      : Number.POSITIVE_INFINITY;
+  // iRLM "Source: Raw Results / Bonus: None" — participation never counts.
+  const teamRawOnly = !!round.season.teamScoringRawOnly;
+  // Combined Cup rulebook §5.2: the best N drivers per ROUND, ranked on the
+  // combined (Race 1 + Race 2) race points. Every other league picks the best
+  // N per RACE and sums the races.
+  const teamPerRoundCombined = slug === "cas-combined-cup";
+  /** One race result's contribution to its team, per the season's rules. */
+  const teamPointsOfRow = (r: (typeof allRows)[number]) =>
+    teamPerRoundCombined
+      ? r.rawPointsAwarded - r.manualPenaltyPoints
+      : teamRawOnly
+        ? r.rawPointsAwarded
+        : r.rawPointsAwarded +
+          r.participationPointsAwarded -
+          r.manualPenaltyPoints;
+  for (const a of aggMap.values()) {
+    a.teamRoundPoints = a.rows.reduce((s, r) => s + teamPointsOfRow(r), 0);
+  }
+
   type TeamRow = {
     teamName: string;
     drivers: Agg[];
     topNTotal: number;
     bestFinish: number | null;
+    /** Registration ids that actually contributed to topNTotal. */
+    countingIds: Set<string>;
   };
   const byTeam = new Map<string, Agg[]>();
   for (const a of aggRows) {
     // Use the lowest-raceNumber row for team / class info
     const sample = a.rows[0];
-    const key = sample.registration.team?.name ?? "Independent";
+    const key = sample.registration.team?.name;
+    if (!key) continue; // no team → no team scoring, by definition
     const arr = byTeam.get(key);
     if (arr) arr.push(a);
     else byTeam.set(key, [a]);
   }
   const teamRows: TeamRow[] = [...byTeam.entries()]
     .map(([teamName, drivers]) => {
-      // Team scoring uses COMBINED race points (overall finish), not the
-      // class-relative Pro/Am points. Matches computeTeamStandings in
-      // src/lib/standings.ts and keeps round-level and season-level team
-      // totals consistent.
       const byPts = [...drivers].sort(
-        (a, b) => b.combinedTotalPoints - a.combinedTotalPoints
+        (a, b) => b.teamRoundPoints - a.teamRoundPoints
       );
-      const topN = byPts.slice(0, TEAM_BEST_N);
-      const topNTotal = topN.reduce((s, d) => s + d.combinedTotalPoints, 0);
+      const countingIds = new Set<string>();
+      let topNTotal = 0;
+      if (teamPerRoundCombined) {
+        // Best N drivers of the whole round.
+        const topN = Number.isFinite(teamBestN)
+          ? byPts.slice(0, teamBestN)
+          : byPts;
+        topNTotal = topN.reduce((s, d) => s + d.teamRoundPoints, 0);
+        for (const d of topN) countingIds.add(d.registrationId);
+      } else {
+        // Best N drivers within EACH race, summed across the round's races.
+        const byRace = new Map<number, { id: string; pts: number }[]>();
+        for (const d of drivers) {
+          for (const r of d.rows) {
+            const list = byRace.get(r.raceNumber) ?? [];
+            list.push({ id: d.registrationId, pts: teamPointsOfRow(r) });
+            byRace.set(r.raceNumber, list);
+          }
+        }
+        for (const list of byRace.values()) {
+          const sorted = [...list].sort((a, b) => b.pts - a.pts);
+          const taken = Number.isFinite(teamBestN)
+            ? sorted.slice(0, teamBestN)
+            : sorted;
+          for (const e of taken) {
+            topNTotal += e.pts;
+            countingIds.add(e.id);
+          }
+        }
+      }
       const classifieds = drivers.flatMap((d) =>
         d.rows.filter((r) => r.finishStatus === "CLASSIFIED")
       );
@@ -627,7 +684,7 @@ export default async function PublicRoundResults({
         classifieds.length > 0
           ? Math.min(...classifieds.map((r) => r.finishPosition))
           : null;
-      return { teamName, drivers: byPts, topNTotal, bestFinish };
+      return { teamName, drivers: byPts, topNTotal, bestFinish, countingIds };
     })
     .sort((a, b) => b.topNTotal - a.topNTotal);
 
@@ -943,6 +1000,9 @@ export default async function PublicRoundResults({
             teams={teamRows}
             isMulticlass={isMulticlass}
             isMultiRace={isMultiRace}
+            bestN={teamBestN}
+            rawOnly={teamRawOnly}
+            perRoundCombined={teamPerRoundCombined}
           />
         ) : cls === "race1" ? (
           <ResultsTable
@@ -1263,6 +1323,7 @@ type Agg = {
   penaltyPoints: number;
   totalPoints: number;
   combinedTotalPoints: number;    // total using combinedRacePoints
+  teamRoundPoints: number;        // contribution to the TEAM standings
   incidents: number;
   fprPoints: number;              // driver FPR for the round (0 if off)
 };
@@ -1413,24 +1474,49 @@ function TeamView({
   teams,
   isMulticlass,
   isMultiRace,
+  bestN,
+  rawOnly,
+  perRoundCombined,
 }: {
   teams: {
     teamName: string;
     drivers: Agg[];
     topNTotal: number;
     bestFinish: number | null;
+    countingIds: Set<string>;
   }[];
   isMulticlass: boolean;
   isMultiRace: boolean;
+  /** Season.teamScoringBestN (Infinity = every driver counts). */
+  bestN: number;
+  /** Season.teamScoringRawOnly — participation/bonus never counts. */
+  rawOnly: boolean;
+  /** Combined Cup: best N per ROUND instead of best N per RACE. */
+  perRoundCombined: boolean;
 }) {
+  const bestNLabel = Number.isFinite(bestN) ? String(bestN) : "all";
+  const bonusCounts = !rawOnly && !perRoundCombined;
+  if (teams.length === 0) {
+    return (
+      <p className="text-sm text-zinc-500">
+        No team scored in this round — every entrant raced without a team.
+      </p>
+    );
+  }
   return (
     <div className="space-y-2">
       <p className="text-xs text-zinc-500">
-        Team total = sum of the top {TEAM_BEST_N} drivers&apos; round totals,
-        scored on COMBINED (overall) finishing position — not Pro/Am class
-        rank. Matches the season Team championship.
-        {isMultiRace && " (race 1 + race 2 + bonus − penalty)"}{" "}
-        Click a team to expand its drivers.
+        Team total = the best {bestNLabel} drivers&apos;{" "}
+        {perRoundCombined
+          ? "combined round results"
+          : isMultiRace
+            ? "results in each race, summed over the round"
+            : "results"}
+        , scored on COMBINED (overall) finishing position — not Pro/Am class
+        rank
+        {bonusCounts ? "" : ", race points only (no participation bonus)"}.
+        Matches the season Team championship. Drivers without a team are not a
+        team and score no team points. Click a team to expand its drivers.
       </p>
       {teams.map((team, i) => (
         <details
@@ -1450,7 +1536,7 @@ function TeamView({
               Best P{team.bestFinish ?? "—"}
             </span>
             <span className="font-semibold text-orange-400 tabular-nums">
-              Top {TEAM_BEST_N}: {team.topNTotal} pts
+              Top {bestNLabel}: {team.topNTotal} pts
             </span>
           </summary>
           <div className="overflow-x-auto">
@@ -1464,13 +1550,19 @@ function TeamView({
                 <th className="px-3 py-1.5 text-right">Bonus</th>
                 <th className="px-3 py-1.5 text-right">Pen</th>
                 <th className="px-3 py-1.5 text-right">Total</th>
-                <th className="px-3 py-1.5 text-right">In top {TEAM_BEST_N}</th>
+                <th className="px-3 py-1.5 text-right">Counts</th>
               </tr>
             </thead>
             <tbody>
-              {team.drivers.map((a, idx) => {
+              {team.drivers.map((a) => {
                 const sample = a.rows[0];
-                const inTopN = idx < TEAM_BEST_N;
+                const inTopN = team.countingIds.has(a.registrationId);
+                // The deduction actually applied by the team formula, derived
+                // so the row always adds up: race pts (+ bonus) − pen = total.
+                const teamPenalty =
+                  a.combinedRacePoints +
+                  (bonusCounts ? a.participationPoints : 0) -
+                  a.teamRoundPoints;
                 return (
                   <tr
                     key={a.registrationId}
@@ -1504,14 +1596,21 @@ function TeamView({
                     <td className="px-3 py-1.5 text-right text-zinc-300 tabular-nums">
                       {a.combinedRacePoints}
                     </td>
-                    <td className="px-3 py-1.5 text-right text-emerald-400 tabular-nums">
+                    <td
+                      className={`px-3 py-1.5 text-right tabular-nums ${bonusCounts ? "text-emerald-400" : "text-zinc-600 line-through"}`}
+                      title={
+                        bonusCounts
+                          ? undefined
+                          : "Participation bonus does not count toward team points in this season"
+                      }
+                    >
                       {a.participationPoints || ""}
                     </td>
                     <td className="px-3 py-1.5 text-right text-red-400 tabular-nums">
-                      {a.penaltyPoints ? `−${a.penaltyPoints}` : ""}
+                      {teamPenalty > 0 ? `−${teamPenalty}` : ""}
                     </td>
                     <td className="px-3 py-1.5 text-right font-semibold text-orange-400 tabular-nums">
-                      {a.combinedTotalPoints}
+                      {a.teamRoundPoints}
                     </td>
                     <td className="px-3 py-1.5 text-right">
                       {inTopN ? (
