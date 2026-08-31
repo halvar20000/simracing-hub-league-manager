@@ -155,8 +155,8 @@ export default async function AdminRoundStreamPage({
             className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
           <span className="mt-1 block text-xs text-zinc-500">
-            When the Twitch stream actually starts. Leave blank to fall back to
-            the &quot;Post at&quot; time.
+            When the Twitch stream actually starts. Leave blank to hide the
+            &quot;Stream live&quot; line from the embed completely.
           </span>
         </label>
 
@@ -233,8 +233,9 @@ export default async function AdminRoundStreamPage({
             </dd>
             <dt className="text-zinc-500">Stream live at</dt>
             <dd className="font-mono text-zinc-200">
-              {(a.streamAt ?? a.scheduledAt).toISOString()}
-              {a.streamAt ? "" : " (fallback → Post at)"}
+              {a.streamAt
+                ? a.streamAt.toISOString()
+                : "(not set — line hidden in the embed)"}
             </dd>
             <dt className="text-zinc-500">Posted at</dt>
             <dd className="font-mono text-zinc-200">
