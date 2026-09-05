@@ -17,6 +17,9 @@ export interface ParsedDriver {
   /** 1-based starting grid position, or null if unknown */
   startingPosition: number | null;
   lapsComplete: number;
+  /** Laps this driver led (iRacing `laps_lead`). Driver-level only — the
+   *  team row's value belongs to the whole car, not to a single stint. */
+  lapsLed: number;
   bestLapMs: number | null;
   /** Lap number on which the best lap was set — the only anchor that says
    *  WHEN a driver was in the car during a team event. */
@@ -153,6 +156,10 @@ function buildSession(
         typeof driverOrTeam<number>("laps_complete") === "number"
           ? (driverOrTeam<number>("laps_complete") as number)
           : 0,
+      // Driver-level only: falling back to the team row would credit every
+      // stint driver with the whole car's laps led.
+      lapsLed:
+        typeof r.laps_lead === "number" && r.laps_lead > 0 ? r.laps_lead : 0,
       bestLapMs: tenThousandthsToMs(driverOrTeam("best_lap_time")),
       // Driver-level only: in a team row the team's best_lap_num belongs to
       // whichever driver set it, so never fall back to the team value.

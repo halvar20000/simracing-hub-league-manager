@@ -99,14 +99,27 @@ function buildSummaryQuery(
   imported: number,
   races: number,
   unmatched: UnmatchedDriver[],
-  dq: DqDriver[]
+  dq: DqDriver[],
+  teams: number,
+  unmatchedTeams: string[]
 ): string {
   const params = new URLSearchParams({
     imported: String(imported),
     races: String(races),
     unmatchedCount: String(unmatched.length),
     dqCount: String(dq.length),
+    teams: String(teams),
   });
+  // Team entries in the JSON that could not be tied to a CLS team.
+  if (unmatchedTeams.length > 0) {
+    params.set(
+      "noTeam",
+      unmatchedTeams
+        .slice(0, 12)
+        .map((n) => n.replace(/[|~]/g, " "))
+        .join("|")
+    );
+  }
   // Pack the first 12 unmatched as "custId:name|custId:name" to keep URL short.
   if (unmatched.length > 0) {
     const list = unmatched
@@ -198,6 +211,11 @@ export async function importIracingJson(
       currentCountry: string | null;
       currentCarId: string | null;
       currentStartNumber: string | null;
+      /** CLS team this driver is registered with (team events). */
+      teamId: string | null;
+      /** CLS car class from the registration — the reliable class source for
+       *  team results (iRacing's class short names don't match our codes). */
+      carClassId: string | null;
       /** Car the driver registered with — the source of truth for enforcement. */
       registeredCarId: string | null;
       registeredCarName: string | null;
@@ -216,14 +234,18 @@ export async function importIracingJson(
       currentCountry: reg.user.countryCode,
       currentCarId: reg.carId,
       currentStartNumber: reg.startNumber,
+      teamId: reg.teamId,
+      carClassId: reg.carClassId,
       registeredCarId: reg.carId,
       registeredCarName: reg.car?.name ?? null,
       registeredCarIracingId: reg.car?.iracingCarId ?? null,
     });
   }
 
-  // REPLACE policy: wipe existing race results for this round
+  // REPLACE policy: wipe existing race results for this round. Team results
+  // go too — TeamRoundDriver rows cascade from TeamResult.
   await prisma.raceResult.deleteMany({ where: { roundId } });
+  await prisma.teamResult.deleteMany({ where: { roundId } });
 
   // Build qualifying lookup (cust_id → fastest lap in qualify in ms)
   const qualSession = parsed.sessions.find((s) => s.kind === "QUALIFY");
@@ -368,6 +390,122 @@ export async function importIracingJson(
     }
   }
 
+  // ---- TEAM RESULTS (team events, e.g. IEC) ----------------------------
+  // The round page and the team standings read TeamResult / TeamRoundDriver.
+  // Without them a team round renders as a flat list of individual drivers
+  // instead of per-class team tables, and team standings stay empty.
+  //
+  // Team resolution order:
+  //   1. Team.iracingTeamId (set by a previous import),
+  //   2. the CLS team of the drivers who actually took a stint.
+  // On a (2) match the iRacing id is written back so later rounds resolve
+  // directly. Points stay 0 — the round page and standings.ts derive team
+  // race points from scoringSystem.pointsTable[classPosition], the same as
+  // for the historic script-imported rounds.
+  let teamsCreated = 0;
+  const unmatchedTeams = new Set<string>();
+  for (const session of raceSessions) {
+    if (session.teams.length === 0) continue;
+    const driverByCustId = new Map(session.drivers.map((d) => [d.custId, d]));
+    const doneKeys = new Set<string>();
+    for (const t of session.teams) {
+      const regs = t.driverCustIds
+        .map((c) => memberMap.get(c))
+        .filter((r): r is NonNullable<typeof r> => !!r);
+
+      let clsTeamId: string | null = null;
+      const byIracingId = await prisma.team.findFirst({
+        where: { seasonId, iracingTeamId: t.iracingTeamId },
+        select: { id: true },
+      });
+      if (byIracingId) {
+        clsTeamId = byIracingId.id;
+      } else {
+        clsTeamId = regs.find((r) => r.teamId)?.teamId ?? null;
+        if (clsTeamId) {
+          // Remember the iRacing id — unless another team already claims it
+          // (Team.iracingTeamId is @unique across seasons).
+          const taken = await prisma.team.findUnique({
+            where: { iracingTeamId: t.iracingTeamId },
+            select: { id: true },
+          });
+          if (!taken) {
+            await prisma.team.update({
+              where: { id: clsTeamId },
+              data: { iracingTeamId: t.iracingTeamId },
+            });
+          }
+        }
+      }
+      if (!clsTeamId) {
+        unmatchedTeams.add(t.displayName || `#${t.iracingTeamId}`);
+        continue;
+      }
+      // TeamResult is unique on (roundId, teamId, raceNumber) — if two iRacing
+      // entries ever resolve to the same CLS team, keep the first.
+      const key = `${clsTeamId}::${session.raceNumber}`;
+      if (doneKeys.has(key)) continue;
+      doneKeys.add(key);
+
+      const teamDistancePct =
+        session.maxLaps > 0
+          ? Math.min(100, Math.floor((t.lapsComplete / session.maxLaps) * 100))
+          : 0;
+      // Class comes from the drivers' registrations: iRacing's class short
+      // names ("GT3 2025", "Dallara P217", "Porsche 992.2") do not match the
+      // CLS shortCodes (GT3, LMP2, PCUP).
+      const teamCarClassId = regs.find((r) => r.carClassId)?.carClassId ?? null;
+      const teamCarId = await resolveCarId(
+        seasonId,
+        t.carIracingId ?? 0,
+        t.carName ?? "",
+        t.carClassShortName
+      );
+
+      const teamResult = await prisma.teamResult.create({
+        data: {
+          roundId,
+          teamId: clsTeamId,
+          raceNumber: session.raceNumber,
+          finishPosition: t.finishPosition,
+          classPosition: t.classPosition,
+          lapsCompleted: t.lapsComplete,
+          raceDistancePct: teamDistancePct,
+          totalTimeMs: t.totalTimeMs,
+          bestLapTimeMs: t.bestLapMs,
+          totalIncidents: t.incidents,
+          finishStatus: t.finishStatus,
+          startPosition: t.startingPosition,
+          carId: teamCarId,
+          carClassId: teamCarClassId,
+        },
+      });
+
+      // One participation per driver who took a stint, in file order.
+      const seenRegs = new Set<string>();
+      for (const custId of t.driverCustIds) {
+        const reg = memberMap.get(custId);
+        const d = driverByCustId.get(custId);
+        if (!reg || !d || seenRegs.has(reg.regId)) continue;
+        seenRegs.add(reg.regId);
+        await prisma.teamRoundDriver.create({
+          data: {
+            teamResultId: teamResult.id,
+            registrationId: reg.regId,
+            lapsCompleted: d.lapsComplete,
+            lapsLed: d.lapsLed,
+            bestLapTimeMs: d.bestLapMs,
+            averageLapMs: d.avgLapMs,
+            incidents: d.incidents,
+            iRating: d.iRating,
+            finishStatus: d.finishStatus,
+          },
+        });
+      }
+      teamsCreated++;
+    }
+  }
+
   await recomputeRoundScoring(prisma, roundId);
 
   // Archive the raw uploaded JSON to Vercel Blob so it can be downloaded again
@@ -412,7 +550,9 @@ export async function importIracingJson(
       totalCreated,
       raceSessions.length,
       unmatched,
-      dqDrivers
+      dqDrivers,
+      teamsCreated,
+      [...unmatchedTeams]
     )}`
   );
 }

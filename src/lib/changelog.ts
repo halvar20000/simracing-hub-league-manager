@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.0",
+    date: "2026-09-05",
+    changes: [
+      "Importing the iRacing JSON of a team race now produces team results. Until today the importer only ever wrote the individual drivers, so an IEC round came out as one long list of names instead of the per-class team tables — LMP2, GT3 and Porsche Cup each with their teams. Upload the eventresult file and the round page shows the class tabs straight away; the team championship picks the round up as well.",
+      "Every driver who took a stint is recorded on his team's result with his own laps, laps led, best and average lap and incidents — that is what the driver rows under each team are built from.",
+      "A team is recognised by its iRacing team id, and on the first import by the season team of the drivers who drove the car. The iRacing id is remembered from then on, so later rounds match without a detour. The class comes from the drivers' registration, because iRacing's class names (“GT3 2025”, “Dallara P217”, “Porsche 992.2”) are not our class codes.",
+      "The import page now says how many team results it built, and names any car it could not tie to a team in this season instead of silently leaving it out.",
+      "Individual results are still stored for every driver — driver profiles, penalties, incident reports and the FPR calculation keep working. They are simply not shown on a team round any more.",
+    ],
+  },
+  {
     version: "2.2.1",
     date: "2026-08-27",
     changes: [
