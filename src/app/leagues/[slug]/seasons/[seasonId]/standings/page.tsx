@@ -147,6 +147,21 @@ export default async function StandingsPage({
 
   const isTeamEventSeason = teamClasses.length > 0;
 
+  // Team-event seasons (IEC) mirror the round results page exactly: the tab
+  // bar is one tab per car class and nothing else — no Combined, no Team, no
+  // By Car. `clsRaw` then carries a CarClass shortCode (LMP2 / GT3 / PCUP),
+  // not one of the legacy tab keys.
+  const teamClassByCode = new Map(
+    teamClasses.map((g) => [g.carClassShortCode.toUpperCase(), g])
+  );
+  const selectedTeamClass = isTeamEventSeason
+    ? teamClassByCode.get((clsRaw ?? "").toUpperCase()) ?? teamClasses[0]
+    : null;
+  // Keep the selected class when switching List / Race by race.
+  const teamClsQuery = selectedTeamClass
+    ? `cls=${encodeURIComponent(selectedTeamClass.carClassShortCode)}`
+    : "";
+
   const sortByCombined = (a: DriverStanding, b: DriverStanding) =>
     // Drivers who raced at least one round always rank above non-racers.
     Number(b.roundsCompleted > 0) - Number(a.roundsCompleted > 0) ||
@@ -244,13 +259,13 @@ export default async function StandingsPage({
 
         <div className="mt-4 inline-flex rounded border border-zinc-800 bg-zinc-900 p-1 text-xs">
           <Link
-            href={baseHref}
+            href={teamClsQuery ? `${baseHref}?${teamClsQuery}` : baseHref}
             className={`rounded px-3 py-1.5 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
           >
             List view
           </Link>
           <Link
-            href={`${baseHref}?view=races`}
+            href={`${baseHref}?view=races${teamClsQuery ? `&${teamClsQuery}` : ""}`}
             className={`rounded px-3 py-1.5 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
           >
             Race by race
@@ -258,7 +273,23 @@ export default async function StandingsPage({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-zinc-500">Audience:</span>
+          <span className="text-zinc-500">
+            {isTeamEventSeason ? "Class:" : "Audience:"}
+          </span>
+          {isTeamEventSeason && (
+            <>
+              {teamClasses.map((g) => (
+                <Link
+                  key={g.carClassId}
+                  href={`${baseHref}?cls=${encodeURIComponent(g.carClassShortCode)}${viewSuffix}`}
+                  className={`rounded px-3 py-1.5 ${selectedTeamClass?.carClassId === g.carClassId ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+                >
+                  {g.carClassName}
+                </Link>
+              ))}
+            </>
+          )}
+          {!isTeamEventSeason && (<>
           <Link href={`${baseHref}${viewQuery}`} className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Combined</Link>
           {season.proAmEnabled && (<>
             <Link href={`${baseHref}?cls=pro${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Pro</Link>
@@ -283,6 +314,7 @@ export default async function StandingsPage({
           {!perCarTabs && (
             <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>By Car</Link>
           )}
+          </>)}
         </div>
       </div>
 
@@ -434,18 +466,48 @@ export default async function StandingsPage({
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="mb-1 text-lg font-semibold">Team Championship</h2>
+              <h2 className="mb-1 text-lg font-semibold">
+                {isTeamEventSeason && selectedTeamClass
+                  ? `${selectedTeamClass.carClassName} — Team Championship`
+                  : "Team Championship"}
+              </h2>
               <p className="text-xs text-zinc-500">
                 Endurance / team event — points by class position + bonuses. One championship per car class.
               </p>
             </div>
             <div className="flex items-center gap-1 text-xs">
               <span className="text-zinc-500">View:</span>
-              <Link href={baseHref + (isTeamEventSeason ? "" : "?cls=team")} className={`rounded px-2.5 py-1 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>List</Link>
-              <Link href={baseHref + "?view=races" + (isTeamEventSeason ? "" : "&cls=team")} className={`rounded px-2.5 py-1 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Race by race</Link>
+              <Link
+                href={
+                  isTeamEventSeason
+                    ? teamClsQuery
+                      ? `${baseHref}?${teamClsQuery}`
+                      : baseHref
+                    : `${baseHref}?cls=team`
+                }
+                className={`rounded px-2.5 py-1 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+              >
+                List
+              </Link>
+              <Link
+                href={
+                  isTeamEventSeason
+                    ? `${baseHref}?view=races${teamClsQuery ? `&${teamClsQuery}` : ""}`
+                    : `${baseHref}?view=races&cls=team`
+                }
+                className={`rounded px-2.5 py-1 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+              >
+                Race by race
+              </Link>
             </div>
           </div>
-          {teamClasses.map((g) => (
+          {/* Team-event season: one class per tab, so render only the selected
+              one. Other seasons reaching this section (?cls=team) still get
+              every class stacked. */}
+          {(isTeamEventSeason && selectedTeamClass
+            ? [selectedTeamClass]
+            : teamClasses
+          ).map((g) => (
             <details
               key={g.carClassId}
               open

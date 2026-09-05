@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.3.1",
+    date: "2026-09-05",
+    changes: [
+      "The standings of a team season now look exactly like its results: one tab per class — LMP2, GT3, Porsche Cup — and nothing else. The Combined, Team and By Car tabs are gone there; they were never filled on a team season anyway, and the three class championships used to be stacked underneath each other on one long page. Every other league keeps its usual tabs.",
+      "Switching between List and Race by race stays in the class you were looking at.",
+    ],
+  },
+  {
     version: "2.3.0",
     date: "2026-09-05",
     changes: [
