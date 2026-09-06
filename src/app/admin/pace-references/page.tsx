@@ -120,9 +120,20 @@ export default async function PaceReferencesPage({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-          Library <span className="font-normal text-zinc-500">{rows.length}</span>
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            Library <span className="font-normal text-zinc-500">{rows.length}</span>
+          </h2>
+          {rows.length > 0 && (
+            <a
+              href="/api/export/pace-references"
+              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+              title="Every curve in one workbook — one sheet each, plus an Info sheet."
+            >
+              ⬇ Export all (.xlsx)
+            </a>
+          )}
+        </div>
         {rows.length === 0 ? (
           <p className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-500">
             Nothing yet. Paste the first curve above.
@@ -156,12 +167,21 @@ export default async function PaceReferencesPage({
                     <span className="text-cyan-300">{at(10000)}</span>
                   </p>
                   {r.source && <p className="mt-1 text-[11px] text-zinc-600">{r.source}</p>}
-                  <form action={deletePaceReference} className="mt-2">
-                    <input type="hidden" name="id" value={r.id} />
-                    <button className="rounded border border-red-900/60 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40">
-                      Delete
-                    </button>
-                  </form>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <a
+                      href={`/api/export/pace-references?id=${r.id}`}
+                      className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                      title="This curve as a spreadsheet: iRating, lap time in seconds and as a lap time."
+                    >
+                      ⬇ .xlsx
+                    </a>
+                    <form action={deletePaceReference}>
+                      <input type="hidden" name="id" value={r.id} />
+                      <button className="rounded border border-red-900/60 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40">
+                        Delete
+                      </button>
+                    </form>
+                  </div>
                 </li>
               );
             })}

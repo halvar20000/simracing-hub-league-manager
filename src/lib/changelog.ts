@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.8.2",
+    date: "2026-09-06",
+    changes: [
+      "Pace references can be exported as a spreadsheet. Every saved curve gets a ⬇ .xlsx next to it, and there is an “Export all” above the library that puts the whole collection in one workbook — one sheet per curve with iRating, the lap time in seconds and as a readable lap time, plus an Info sheet listing where each curve came from (car class, track, session, iRacing season and race week) and what it says at 1000, 5000 and 10000 iR.",
+      "Worth having because the source cannot be asked twice: iRacing refits the Pace Analysis curve every week and offers no way back to an earlier one. Once a curve is in CLS it is the only copy, and now it can be taken out again — for a backup, or to do your own maths on it without retyping a hundred rows.",
+      "Admin only, unlike the standings export: the library is an internal working file typed in by hand from a members-site page, not ours to hand out.",
+    ],
+  },
+  {
     version: "2.8.1",
     date: "2026-09-06",
     changes: [
