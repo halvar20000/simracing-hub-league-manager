@@ -109,6 +109,13 @@ async function FullAdminDashboard() {
           Pit references
         </Link>
         <Link
+          href="/admin/pace-references"
+          className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800"
+          title="iRating → lap time curves per car class and track — what an official race is measured against."
+        >
+          Pace references
+        </Link>
+        <Link
           href="/admin/stewards"
           className="rounded border border-amber-700 bg-amber-950/30 px-3 py-1.5 font-medium text-amber-200 hover:bg-amber-900/40"
         >

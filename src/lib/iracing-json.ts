@@ -28,7 +28,12 @@ export interface ParsedDriver {
   avgLapMs: number | null;
   qualLapMs: number | null;
   incidents: number;
+  /** iRating AFTER the race (iRacing `newi_rating`). */
   iRating: number | null;
+  /** iRating the driver STARTED the race with (`oldi_rating`). This is the one
+   *  to interpolate a target lap time from: it is what the driver was worth
+   *  going in, and it does not move because the race went well or badly. */
+  iRatingBefore: number | null;
   carClassShortName: string | null;
   carIracingId: number | null;
   carName: string | null;
@@ -181,6 +186,10 @@ function buildSession(
       iRating:
         typeof r.newi_rating === "number" && r.newi_rating > 0
           ? r.newi_rating
+          : null,
+      iRatingBefore:
+        typeof r.oldi_rating === "number" && r.oldi_rating > 0
+          ? r.oldi_rating
           : null,
       carClassShortName:
         typeof driverOrTeam("car_class_short_name") === "string"

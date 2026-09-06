@@ -116,6 +116,26 @@ export type RaceLogDriverRow = {
   onRoster: boolean;
 };
 
+/**
+ * Why a lap is left out of the average.
+ *
+ *   form    — before the green flag: pace/formation lap
+ *   start   — the first lap after the green: a standing/rolling start is not
+ *             a representative lap and never was
+ *   in      — the lap that ended in the pits
+ *   out     — the lap back out of the pits
+ *   fcy     — the lap ran (wholly or partly) under a FULL COURSE yellow
+ *   restart — the first lap after the caution went green again
+ *
+ * A local waved yellow is NOT a caution and never marks a lap: iRacing throws
+ * `yellow_waving` at a single corner for one incident, often with no green
+ * afterwards at all (verified on the Le Mans 05.09. log: one waved yellow at
+ * t=846 s and no further green — treating it as a full-course yellow would
+ * have thrown away the rest of the race). Only `caution` (raw bit 16384)
+ * opens a caution window.
+ */
+export type LapExclusion = "form" | "start" | "in" | "out" | "fcy" | "restart";
+
 /** One lap of our car, for the lap-time trace. */
 export type RaceLogLap = {
   lap: number;
@@ -127,6 +147,10 @@ export type RaceLogLap = {
   t?: number;
   /** Lap ended with a pit stop. */
   pit?: boolean;
+  /** Set when the lap does not belong in an average, and why. Absent = a
+   *  proper racing lap. Only written by parser generation 2 and later — see
+   *  PlannerRaceLog.exclV. */
+  x?: LapExclusion;
 };
 
 /** One stint of the plan's own car, derived from the log's pit events. */
@@ -166,6 +190,16 @@ export type PlannerRaceLog = {
   drivers: RaceLogDriverRow[];
   laps: RaceLogLap[];
   stints: RaceLogStintRow[];
+  /**
+   * Which generation of the parser produced this trace.
+   *
+   * Absent/1 = the original parser: laps carry no `x` marks, so the dashboard
+   * has to fall back to spotting in/out laps itself and cannot know about the
+   * formation lap or the cautions. 2 = laps are marked (see RaceLogLap.x).
+   * A plan uploaded before this can be brought up to date with the
+   * "Re-analyse" button — the raw .jsonl is still in the archive.
+   */
+  exclV?: number;
 };
 
 /** One of OUR drivers as iRacing scored them. In a team event this is the
@@ -180,6 +214,10 @@ export type TeamDriverStat = {
   bestLapNum: number | null;
   avgSec: number | null;
   incidents: number;
+  /** The iRating the driver STARTED the race with (`oldi_rating`), when the
+   *  results file carries it. Used to interpolate this driver's target lap
+   *  time from a pace curve — see src/lib/pace-reference.ts. */
+  iRating: number | null;
 };
 
 /** Default lead time for the "you're up next" Discord DM, in minutes. */
@@ -318,6 +356,26 @@ export type PlannerState = {
     gridFuelL: string;
     trackTempC: string; // race-day track temperature (°C), "" = none
     conditions: "dry" | "wet"; // whole-race weather scenario (legacy, vestigial)
+    /**
+     * League race or an iRacing OFFICIAL race — it changes what the post-race
+     * analysis measures against, and nothing else.
+     *
+     * In a league everyone runs the same car at roughly the same level, so the
+     * fastest man in class is a fair yardstick. In an official race the field
+     * is whatever iRating showed up, and the class best then says nothing
+     * about whether a 1500 iR driver drove well. "official" unlocks the two
+     * fields below and switches the debrief to measuring each driver against
+     * what his OWN iRating was worth.
+     */
+    raceKind: "league" | "official";
+    /** Official races: the lap time a very strong (≈10k iR) driver sets here —
+     *  a fixed yardstick that does not move with the day's entry list, so the
+     *  same number is comparable across races and across a season. Accepts
+     *  "1:58.775" or plain seconds; "" = none. */
+    refLap: string;
+    /** Official races: id of the pace curve (iRating → lap time) from the
+     *  shared library this plan compares against. "" = none chosen. */
+    paceCurveId: string;
     /** Wall-clock hours (plan's local time) the automatic line-up treats as
      *  night, for the drivers who said they prefer or avoid driving then. */
     nightFromHour: string; // "23"
@@ -429,6 +487,9 @@ export function defaultPlannerState(): PlannerState {
       g61Age: "-1",
       trackTempC: "",
       conditions: "dry",
+      raceKind: "league",
+      refLap: "",
+      paceCurveId: "",
       nightFromHour: "23",
       nightToHour: "6",
       driverSwapSec: "30",

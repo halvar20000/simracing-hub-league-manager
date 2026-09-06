@@ -7,6 +7,7 @@ import { defaultPlannerState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
 import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
 import { getPitReferences } from "@/lib/pit-references";
+import { getPaceReferences } from "@/lib/pace-references";
 import { getStintPlanViewer } from "@/lib/stint-plan-access";
 
 export const metadata: Metadata = pageMetadata({
@@ -22,11 +23,12 @@ export default async function NewStintPlanPage() {
   const viewer = await getStintPlanViewer();
   if (!viewer) redirect("/api/auth/signin?callbackUrl=/stint-planner/new");
 
-  const [clsDrivers, tracks, cars, pitReferences] = await Promise.all([
+  const [clsDrivers, tracks, cars, pitReferences, paceReferences] = await Promise.all([
     getClsDrivers(),
     getClsTracks(),
     getClsCars(),
   getPitReferences(),
+    getPaceReferences(),
   ]);
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
@@ -48,6 +50,7 @@ export default async function NewStintPlanPage() {
         tracks={tracks}
         cars={cars}
         pitReferences={pitReferences}
+        paceReferences={paceReferences}
       />
     </main>
   );

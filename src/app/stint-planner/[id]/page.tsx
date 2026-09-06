@@ -9,6 +9,7 @@ import { hydratePlanState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
 import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
 import { getPitReferences } from "@/lib/pit-references";
+import { getPaceReferences } from "@/lib/pace-references";
 import {
   canAccessStintPlan,
   canManageStintPlan,
@@ -95,13 +96,15 @@ export default async function SavedStintPlanPage({
 
   const canManage = canManageStintPlan(plan, viewer);
   const initial = hydratePlanState(plan.payload, plan.title);
-  const [clsDrivers, tracks, cars, pitReferences, people] = await Promise.all([
-    getClsDrivers(),
-    getClsTracks(),
-    getClsCars(),
-    getPitReferences(),
-    describePlanPeople(plan, canManage),
-  ]);
+  const [clsDrivers, tracks, cars, pitReferences, paceReferences, people] =
+    await Promise.all([
+      getClsDrivers(),
+      getClsTracks(),
+      getClsCars(),
+      getPitReferences(),
+      getPaceReferences(),
+      describePlanPeople(plan, canManage),
+    ]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
@@ -130,6 +133,7 @@ export default async function SavedStintPlanPage({
         tracks={tracks}
         cars={cars}
         pitReferences={pitReferences}
+        paceReferences={paceReferences}
       />
     </main>
   );

@@ -24,20 +24,39 @@
  */
 
 import type {
+  LapExclusion,
   RaceLogLap,
   RaceLogStintRow,
   TeamDriverStat,
 } from "@/lib/stint-plan-state";
 
+export type CleanLapStats = {
+  avg: number | null;
+  laps: number;
+  dropped: number;
+  /** How many laps each reason accounted for (only when the trace is marked). */
+  byReason: Partial<Record<LapExclusion, number>>;
+};
+
 /**
- * The average lap over a driver's RACING laps — in-laps and out-laps removed.
+ * The average lap over a driver's RACING laps.
  *
  * Johann Solowej's method, and the reason for it: iRacing's average lap is the
  * driver's total time divided by their laps, so the pit stop at the end of a
  * stint sits inside it. A driver who runs two stints back-to-back carries two
  * stops in one average and reads slower than someone who ran one, and a repair
- * stop wrecks the figure outright. Dropping the lap that ends in the pits and
- * the lap back out leaves what the driver actually raced.
+ * stop wrecks the figure outright.
+ *
+ * Since parser generation 2 the decision is made once, in the parser, and each
+ * lap carries WHY it is out (`RaceLogLap.x`): formation lap, the lap with the
+ * start on it, in-lap, out-lap, a lap under a full-course yellow, and the
+ * restart lap after one. Pass `marked` when the trace came from that parser
+ * (PlannerRaceLog.exclV >= 2).
+ *
+ * `marked: false` is the fallback for a log parsed before that: the only thing
+ * reconstructible from the stored trace is the in/out pair, so that is all it
+ * drops. Such a plan can be brought up to date with "Re-analyse" — the raw
+ * .jsonl is still in the archive.
  *
  * `mine` holds indices into `all`, so the out-lap is recognised on the CAR's
  * lap sequence — including across a driver change, where the out-lap belongs to
@@ -45,18 +64,28 @@ import type {
  */
 export function cleanLapStats(
   all: RaceLogLap[],
-  mine: number[]
-): { avg: number | null; laps: number; dropped: number } {
+  mine: number[],
+  marked = false
+): CleanLapStats {
   const kept: number[] = [];
+  const byReason: Partial<Record<LapExclusion, number>> = {};
   let dropped = 0;
   for (const li of mine) {
     const l = all[li];
     if (!l) continue;
-    const prev = li > 0 ? all[li - 1] : null;
-    const isInLap = l.pit === true;
-    const isOutLap = !!prev && prev.pit === true && prev.lap === l.lap - 1;
-    if (isInLap || isOutLap) {
+
+    let reason: LapExclusion | null = null;
+    if (marked) {
+      reason = l.x ?? null;
+    } else {
+      const prev = li > 0 ? all[li - 1] : null;
+      if (l.pit === true) reason = "in";
+      else if (prev?.pit === true && prev.lap === l.lap - 1) reason = "out";
+    }
+
+    if (reason) {
       dropped += 1;
+      byReason[reason] = (byReason[reason] ?? 0) + 1;
       continue;
     }
     kept.push(l.sec);
@@ -65,7 +94,23 @@ export function cleanLapStats(
     avg: kept.length ? kept.reduce((a, b) => a + b, 0) / kept.length : null,
     laps: kept.length,
     dropped,
+    byReason,
   };
+}
+
+/** "2 formation/start, 6 in/out, 3 under yellow, 1 restart" — for the note
+ *  under the average chart, so a wrong exclusion is visible instead of silent. */
+export function describeExclusions(
+  byReason: Partial<Record<LapExclusion, number>>
+): string {
+  const startish = (byReason.form ?? 0) + (byReason.start ?? 0);
+  const inout = (byReason.in ?? 0) + (byReason.out ?? 0);
+  const parts: string[] = [];
+  if (startish) parts.push(`${startish} formation/start`);
+  if (inout) parts.push(`${inout} in/out`);
+  if (byReason.fcy) parts.push(`${byReason.fcy} under a full-course yellow`);
+  if (byReason.restart) parts.push(`${byReason.restart} restart`);
+  return parts.join(", ");
 }
 
 /** One stint of the PLAN: its race-clock window and who was supposed to drive

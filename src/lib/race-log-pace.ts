@@ -25,10 +25,15 @@
    is validated at the point of use instead. */
 
 import type {
+  LapExclusion,
   RaceLogDriverRow,
   RaceLogLap,
   RaceLogStintRow,
 } from "@/lib/stint-plan-state";
+
+/** Bumped whenever the exclusion rules change, so a plan carrying an older
+ *  trace can be spotted and offered a re-analyse. */
+export const PARSER_EXCLUSION_GENERATION = 2;
 
 export interface ParsedRaceLog {
   ok: boolean;
@@ -45,6 +50,8 @@ export interface ParsedRaceLog {
   drivers: RaceLogDriverRow[];
   laps: RaceLogLap[];
   stints: RaceLogStintRow[];
+  /** See PlannerRaceLog.exclV. */
+  exclV: number;
 }
 
 const norm = (s: unknown) => String(s ?? "").trim().toLowerCase();
@@ -72,8 +79,12 @@ interface LapRec {
   lap: number | null;
   sec: number;
   driver: string;
-  /** Session clock at the end of the lap, in seconds (from `t_session`). */
+  /** Session clock at the END of the lap, in seconds (from `t_session`).
+   *  The lap therefore spans [t − sec, t]. */
   t: number | null;
+  /** The logger saw the car on pit road during this lap — a direct in-lap
+   *  marker, independent of the pit events. */
+  onPit: boolean;
 }
 
 interface CarAcc {
@@ -87,6 +98,137 @@ interface CarAcc {
 
 /** Colour slots available in the dashboard; extra drivers reuse the last one. */
 const MAX_SLOTS = 6;
+
+/** A full-course-yellow window on the session clock, [from, to]. */
+interface CautionWindow {
+  from: number;
+  to: number;
+}
+
+/**
+ * Full-course yellows, from the race-control flags.
+ *
+ * ONLY `caution` (iRacing raw bit 16384) opens a window and only `green`
+ * closes it. `yellow` / `yellow_waving` is a LOCAL flag at one corner and must
+ * never be treated as a course-wide caution: iRacing throws it for a single
+ * incident and frequently never follows it with a green, so "yellow until the
+ * next green" would swallow the remainder of the race. That is not
+ * hypothetical — the Le Mans 05/09 log has exactly one waved yellow at
+ * t=846 s and no green after it, in a session running past t=3174 s.
+ *
+ * A caution that is never closed ran to the end of the session (the race
+ * finished behind the pace car), so it closes at the last event in the log.
+ */
+function cautionWindows(
+  flags: { flag: string; t: number }[],
+  endT: number
+): CautionWindow[] {
+  const out: CautionWindow[] = [];
+  let open: number | null = null;
+  for (const f of flags) {
+    if (f.flag === "caution") {
+      if (open == null) open = f.t;
+    } else if (f.flag === "green" && open != null) {
+      if (f.t > open) out.push({ from: open, to: f.t });
+      open = null;
+    }
+  }
+  if (open != null && endT > open) out.push({ from: open, to: endT });
+  return out;
+}
+
+/**
+ * Which laps do not belong in an average, and why.
+ *
+ * Johann's rule, extended: the formation lap and the lap containing the start
+ * are not racing laps, the lap into the pits and the lap back out carry the
+ * stop, and a lap under a full-course yellow says nothing about pace — nor
+ * does the lap on which the race goes green again, which is a restart.
+ *
+ * Everything is decided on the session clock (`t` is the END of a lap, so the
+ * lap spans [t − sec, t]); a lap with no clock keeps only the in/out marks,
+ * which are lap-number based. Returns a map keyed by lap number.
+ */
+function markExcludedLaps(
+  numbered: LapRec[],
+  inLaps: Set<number>,
+  greenAtSec: number | null,
+  cautions: CautionWindow[]
+): Map<number, LapExclusion> {
+  const marks = new Map<number, LapExclusion>();
+  if (numbered.length === 0) return marks;
+
+  // The start lap is the lap the green flag falls INSIDE — not simply the
+  // first lap after it. The difference matters: iRacing frequently logs the
+  // lap carrying the start without a usable lap time (it is not in `numbered`
+  // at all), and "first lap ending after the green" would then throw away the
+  // first proper racing lap instead. Verified on the Le Mans 05/09 log: green
+  // at t=258 s, and the first timed lap runs 463→673 s — a normal lap.
+  let startLapNo: number | null = null;
+  if (greenAtSec != null) {
+    const hit = numbered.find(
+      (l) => l.t != null && l.t - l.sec <= greenAtSec && l.t > greenAtSec
+    );
+    startLapNo = hit?.lap ?? null;
+  } else {
+    // No green in the log: nothing to measure against, so drop lap 1 only.
+    startLapNo = numbered.some((l) => l.lap === 1) ? 1 : null;
+  }
+
+  // The restart lap: the first lap that BEGINS after the green came back out.
+  // Not "the first lap ending after it" — the lap the restart falls inside is
+  // still a caution lap and is already dropped as such, so keying off the end
+  // would mark a lap that was going to be dropped anyway and let the actual
+  // restart lap through. Verified on the Brands Hatch caution (470→756 s):
+  // laps 3-5 run under yellow, and lap 6 — 84.2 s against a 81.5 s norm,
+  // still bunched up from the restart — is the one this catches.
+  const restartLaps = new Set<number>();
+  for (const w of cautions) {
+    const first = numbered.find((l) => l.t != null && l.t - l.sec >= w.to);
+    if (first?.lap != null) restartLaps.add(first.lap);
+  }
+
+  for (let i = 0; i < numbered.length; i += 1) {
+    const l = numbered[i];
+    if (l.lap == null) continue;
+    const end = l.t;
+    const start = end == null ? null : end - l.sec;
+
+    // Order matters only for the reason shown to the user; a lap is dropped
+    // either way.
+    if (greenAtSec != null && end != null && end <= greenAtSec) {
+      marks.set(l.lap, "form");
+      continue;
+    }
+    if (startLapNo != null && l.lap === startLapNo) {
+      marks.set(l.lap, "start");
+      continue;
+    }
+    if (inLaps.has(l.lap) || l.onPit) {
+      marks.set(l.lap, "in");
+      continue;
+    }
+    const prev = numbered[i - 1];
+    if (
+      prev?.lap != null &&
+      prev.lap === l.lap - 1 &&
+      (inLaps.has(prev.lap) || prev.onPit)
+    ) {
+      marks.set(l.lap, "out");
+      continue;
+    }
+    if (
+      end != null &&
+      start != null &&
+      cautions.some((w) => end > w.from && start < w.to)
+    ) {
+      marks.set(l.lap, "fcy");
+      continue;
+    }
+    if (restartLaps.has(l.lap)) marks.set(l.lap, "restart");
+  }
+  return marks;
+}
 
 export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog {
   const empty: ParsedRaceLog = {
@@ -104,6 +246,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     drivers: [],
     laps: [],
     stints: [],
+    exclV: PARSER_EXCLUSION_GENERATION,
   };
   if (!text || text.trim() === "") return { ...empty, error: "empty log file" };
 
@@ -116,6 +259,10 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
   let trackTempC: number | null = null;
   let airTempC: number | null = null;
   let sawAnyEvent = false;
+  /** Race-control flags with their session clock, in the order they came. */
+  const flagEvents: { flag: string; t: number }[] = [];
+  /** Session clock of the last event of any kind — the end of the log. */
+  let lastEventT = 0;
 
   const carKey = (o: any): string =>
     o?.car_number != null && String(o.car_number).trim() !== ""
@@ -151,6 +298,9 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     }
     if (!o || typeof o !== "object") continue;
     sawAnyEvent = true;
+    if (typeof o.t_session === "number" && Number.isFinite(o.t_session)) {
+      if (o.t_session > lastEventT) lastEventT = o.t_session;
+    }
 
     switch (o.type) {
       case "session_start": {
@@ -167,6 +317,15 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
         if (typeof o.official === "boolean") official = o.official;
         break;
       }
+      case "flag": {
+        const t =
+          typeof o.t_session === "number" && Number.isFinite(o.t_session)
+            ? o.t_session
+            : null;
+        const f = typeof o.flag === "string" ? o.flag : null;
+        if (t != null && f) flagEvents.push({ flag: f, t });
+        break;
+      }
       case "lap": {
         const sec = numOrNull(o.lap_time);
         if (sec == null) break;
@@ -179,6 +338,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
             typeof o.t_session === "number" && Number.isFinite(o.t_session)
               ? o.t_session
               : null,
+          onPit: o.on_pit === true,
         });
         if (sec < car.best) car.best = sec;
         break;
@@ -296,17 +456,26 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
       .map((p) => p.entryLap)
       .filter((n): n is number => typeof n === "number")
   );
+  // Which laps are not racing laps. `inLaps` is the pit-event view widened by
+  // the logger's own on_pit marker — either one is proof enough that the lap
+  // ended in the box.
+  const inLaps = new Set<number>(pitLaps);
+  for (const l of numbered) if (l.onPit && l.lap != null) inLaps.add(l.lap);
+  const greenAtSec = flagEvents.find((f) => f.flag === "green")?.t ?? null;
+  const cautions = cautionWindows(flagEvents, lastEventT);
+  const excluded = markExcludedLaps(numbered, inLaps, greenAtSec, cautions);
+
   const laps: RaceLogLap[] = numbered.map((l) => ({
     lap: l.lap as number,
     sec: round3(l.sec) as number,
     d: driverIndex.get(norm(l.driver)) ?? 0,
     ...(l.t != null ? { t: Math.round(l.t * 10) / 10 } : {}),
     ...(pitLaps.has(l.lap as number) ? { pit: true } : {}),
+    ...(excluded.has(l.lap as number) ? { x: excluded.get(l.lap as number)! } : {}),
   }));
 
   // --- stints of our car ---------------------------------------------------
   const stints: RaceLogStintRow[] = [];
-  const carBest = numbered.length ? Math.min(...numbered.map((l) => l.sec)) : null;
   const stops = ownCar.pits
     .filter((p) => p.entryLap != null)
     .sort((a, b) => (a.entryLap ?? 0) - (b.entryLap ?? 0));
@@ -325,7 +494,13 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     );
     from = b.end;
     if (inStint.length === 0) continue;
-    const clean = carBest ? inStint.filter((l) => l.sec <= carBest * 1.05) : inStint;
+    // The stint average runs on the SAME rule as the driver average — no
+    // formation/start lap, no in/out lap, nothing under a full-course yellow
+    // and no restart lap. (It used to be "within +5% of the car's best", a
+    // heuristic that quietly disagreed with the driver figures next to it.)
+    // A stint that is nothing but excluded laps keeps its raw mean rather than
+    // showing a blank.
+    const clean = inStint.filter((l) => l.lap == null || !excluded.has(l.lap));
     const base = clean.length ? clean : inStint;
     // The driver with the most laps in this stint owns it (and its colour).
     const counts = new Map<string, number>();
@@ -374,5 +549,6 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     drivers,
     laps,
     stints,
+    exclV: PARSER_EXCLUSION_GENERATION,
   };
 }

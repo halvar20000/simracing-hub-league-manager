@@ -119,20 +119,34 @@ export async function uploadStintPlanEventResult(
   const ownTeam = (race?.teams ?? []).find((t) =>
     t.driverNames.some((n) => roster.has(norm(n)))
   );
+  const toStat = (d: (typeof race.drivers)[number]): TeamDriverStat => ({
+    name: d.displayName,
+    custId: d.custId,
+    laps: d.lapsComplete,
+    bestSec: d.bestLapMs == null ? null : d.bestLapMs / 1000,
+    bestLapNum: d.bestLapNum,
+    avgSec: d.avgLapMs == null ? null : d.avgLapMs / 1000,
+    incidents: d.incidents,
+    // Pre-race rating, falling back to the post-race one when the file only
+    // carries that. A target lap time is what the driver was worth going in.
+    iRating: d.iRatingBefore ?? d.iRating,
+  });
+
+  // A team event names our car through the team row. A SOLO official race has
+  // no team row at all, and there the plan's roster IS the entry — matching
+  // the driver rows by name gets us the same per-driver numbers (and the
+  // iRating the target lap times are built on).
   const ownDrivers: TeamDriverStat[] = ownTeam
     ? (race?.drivers ?? [])
         .filter((d) => ownTeam.driverCustIds.includes(d.custId))
-        .map((d) => ({
-          name: d.displayName,
-          custId: d.custId,
-          laps: d.lapsComplete,
-          bestSec: d.bestLapMs == null ? null : d.bestLapMs / 1000,
-          bestLapNum: d.bestLapNum,
-          avgSec: d.avgLapMs == null ? null : d.avgLapMs / 1000,
-          incidents: d.incidents,
-        }))
+        .map(toStat)
         .sort((a, b) => b.laps - a.laps)
-    : [];
+    : roster.size > 0
+      ? (race?.drivers ?? [])
+          .filter((d) => roster.has(norm(d.displayName)))
+          .map(toStat)
+          .sort((a, b) => b.laps - a.laps)
+      : [];
 
   let url: string;
   try {

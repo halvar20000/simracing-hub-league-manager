@@ -40,6 +40,7 @@ import {
   stateToInput,
   uid,
   planPitModel,
+  fullServiceStopSec,
   planLapTarget,
   parseTypedNumber,
   isDeltaSaving,
@@ -81,6 +82,11 @@ import RaceLogDashboard from "@/components/RaceLogDashboard";
 import RaceGallery from "@/components/RaceGallery";
 import { uploadStintPlanImages } from "@/lib/actions/stint-plan-images";
 import { matchPitReference, type PitReferenceRow } from "@/lib/pit-references";
+import {
+  suggestPaceReference,
+  type PaceReferenceRow,
+} from "@/lib/pace-references";
+import { fmtPaceSec, parseLapInput, targetLapSec } from "@/lib/pace-reference";
 import {
   scanPitStops,
   derivePitConstants,
@@ -281,6 +287,7 @@ export default function StintPlanner({
   tracks,
   cars,
   pitReferences = [],
+  paceReferences = [],
 }: {
   initial: PlannerState;
   planId?: string | null;
@@ -296,9 +303,18 @@ export default function StintPlanner({
   cars: ClsCarOption[];
   /** Measured pit constants per car/track (admin-curated shared library). */
   pitReferences?: PitReferenceRow[];
+  /** iRating → lap time curves (admin-curated shared library). Only used by a
+   *  plan set to "Official race" — see the Event card. */
+  paceReferences?: PaceReferenceRow[];
 }) {
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
+  /** "Per driver" mode keeps the two profile rows collapsed — there they are
+   *  only the fallback for a driver who carries no numbers of their own, and
+   *  an open editor full of figures that mostly do not apply reads as if it
+   *  did. Legacy ("Profile only") plans always show them: there they ARE the
+   *  numbers. */
+  const [showFuelProfiles, setShowFuelProfiles] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -411,6 +427,22 @@ export default function StintPlanner({
   const result = useMemo(() => buildSchedule(stateToInput(s)), [s]);
   /** True when this plan prices its stops from measured constants. */
   const pitOn = planPitModel(s) !== null;
+  /** An OFFICIAL race is measured against what each driver's iRating was worth,
+   *  not against the fastest man in class — see the Event card. */
+  const official = s.event.raceKind === "official";
+  /** The pace curve this plan compares against, and the library's own
+   *  suggestion for this track + car when nothing is chosen yet. */
+  const paceCurve =
+    paceReferences.find((r) => r.id === s.event.paceCurveId) ?? null;
+  const paceSuggestion = suggestPaceReference(
+    paceReferences,
+    s.event.car,
+    s.event.track
+  );
+  /** The typed 10k yardstick in seconds, or the curve's own value at 10k. */
+  const refLapSec =
+    parseLapInput(s.event.refLap) ??
+    (paceCurve ? (targetLapSec(paceCurve.points, 10000)?.sec ?? null) : null);
   /** Lap target of a distance race (null = the race ends on the clock). */
   const lapTarget = planLapTarget(s);
 
@@ -558,6 +590,10 @@ export default function StintPlanner({
    *  saved before the delta model open in the legacy mode and stay there until
    *  someone flips this switch. */
   const deltaSaving = isDeltaSaving(s);
+  /** Show the Standard / Fuel-saving editors? Always in the legacy model,
+   *  where they are the numbers; on request in "Per driver", where they are
+   *  only the fallback. */
+  const profilesOpen = !deltaSaving || showFuelProfiles;
   /** The plan-wide fuel-save effort — the gap between the two profiles. It is
    *  what a driver without their own delta columns gives up and saves. */
   const planDelta = savingDeltas(s);
@@ -942,10 +978,16 @@ export default function StintPlanner({
 
   /** An older parse that predates lap timestamps: the plan's driver order
    *  cannot be applied to it until the archived file is read again. */
-  const raceLogNeedsReparse =
+  const raceLogNoTimestamps =
     s.raceLog != null &&
     s.raceLog.stints.length > 0 &&
     !s.raceLog.stints.some((st) => st.startSec != null);
+  /** A parse from before the average learned to drop the formation and start
+   *  laps, the caution laps and the restart lap. The archived .jsonl still has
+   *  the flag events, so one click brings the whole analysis up to date. */
+  const raceLogOldExclusions =
+    s.raceLog != null && (s.raceLog.exclV ?? 1) < 2;
+  const raceLogNeedsReparse = raceLogNoTimestamps || raceLogOldExclusions;
 
   /** Team event = rows carry a driver line-up (endurance). */
   const resultIsTeamEvent = useMemo(
@@ -2877,9 +2919,42 @@ export default function StintPlanner({
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Event config */}
         <div className={card}>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Event
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              Event
+            </h2>
+            {/* League or official. This changes NOTHING about the plan itself —
+                it only decides what the post-race debrief measures against. In
+                a league everybody runs the same car at a similar level, so the
+                fastest man in class is a fair yardstick. In an official race
+                the grid is whatever iRating turned up, and the class best then
+                says nothing about how a 1500 iR driver drove. */}
+            <div className="flex gap-1 print:hidden">
+              {(
+                [
+                  ["league", "League race"],
+                  ["official", "Official race"],
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  onClick={() => patchEvent("raceKind", kind)}
+                  className={`rounded px-2.5 py-1 text-xs font-semibold ${
+                    s.event.raceKind === kind
+                      ? "bg-[#ff6b35] text-zinc-950"
+                      : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  }`}
+                  title={
+                    kind === "league"
+                      ? "Debrief compares every driver against the fastest lap in class."
+                      : "Debrief compares every driver against the lap time his own iRating was worth, plus a fixed 10k reference."
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Track</label>
@@ -3039,26 +3114,50 @@ export default function StintPlanner({
               <input className={inp} value={s.event.greenFlagOffset}
                 onChange={(e) => patchEvent("greenFlagOffset", e.target.value)} />
             </div>
-            <div>
-              <label className={lbl}>Pit time loss (s)</label>
-              <input className={inp} value={s.event.pitLoss}
-                onChange={(e) => patchEvent("pitLoss", e.target.value)}
-                title="Total time lost at a normal (driver-change) pit stop." />
-            </div>
+            {/* The flat pit loss and the flat refuel time are what the SIMPLE
+                model runs on. Once the pit-stop model actually computes (the
+                box is ticked AND a pit lane loss is entered — `pitOn`), both
+                are dead numbers, so they come off the screen rather than sit
+                there inviting someone to tune a figure that changes nothing.
+                Driver swap stays: the detailed model uses it as
+                `driverChangeSec`. If the lane loss is cleared again, `pitOn`
+                goes false and the fields come straight back with their
+                values — nothing is thrown away. */}
+            {!pitOn && (
+              <div>
+                <label className={lbl}>Pit time loss (s)</label>
+                <input className={inp} value={s.event.pitLoss}
+                  onChange={(e) => patchEvent("pitLoss", e.target.value)}
+                  title="Total time lost at a normal (driver-change) pit stop." />
+              </div>
+            )}
             <div>
               <label className={lbl}>Driver swap (s)</label>
               <input className={inp} value={s.event.driverSwapSec}
                 onChange={(e) => patchEvent("driverSwapSec", e.target.value)}
                 placeholder="30"
-                title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this." />
+                title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this. Used by the detailed pit-stop model too." />
             </div>
-            <div>
-              <label className={lbl}>Refuel time (s)</label>
-              <input className={inp} value={s.event.refuelSec}
-                onChange={(e) => patchEvent("refuelSec", e.target.value)}
-                placeholder="e.g. 40"
-                title="How long fuelling takes at a full stop. If ≥ driver swap, a swap is hidden under fuelling (free) and double-stinting saves no time." />
-            </div>
+            {!pitOn && (
+              <div>
+                <label className={lbl}>Refuel time (s)</label>
+                <input className={inp} value={s.event.refuelSec}
+                  onChange={(e) => patchEvent("refuelSec", e.target.value)}
+                  placeholder="e.g. 40"
+                  title="How long fuelling takes at a full stop. If ≥ driver swap, a swap is hidden under fuelling (free) and double-stinting saves no time." />
+              </div>
+            )}
+            {pitOn && (
+              <p className="col-span-2 -mt-1 rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-[11px] leading-snug text-zinc-500">
+                Pit loss and refuel time are computed per stop — a full service
+                costs{" "}
+                <strong className="text-zinc-300">
+                  {fullServiceStopSec(s).toFixed(1)} s
+                </strong>{" "}
+                here. Change the lane loss, refuel rate and tyre time under{" "}
+                <span className="text-orange-300">Pit-stop model</span>.
+              </p>
+            )}
             <div>
               <label className={lbl}>Fuel tank (L)</label>
               <input className={inp} value={s.event.tankSize}
@@ -3078,6 +3177,74 @@ export default function StintPlanner({
                 placeholder="e.g. 1.6"
                 title="Fuel burned between leaving the box and the green flag — the lap to the grid plus the laps behind the pace car. It is gone before the race starts, so it comes off the FIRST stint only." />
             </div>
+            {official && (
+              <>
+                <div className="col-span-2 -mb-1 mt-1 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
+                  Official race — comparison basis
+                </div>
+                <div>
+                  <label className={lbl}>Reference lap (10k)</label>
+                  <input
+                    className={inp}
+                    value={s.event.refLap}
+                    onChange={(e) => patchEvent("refLap", e.target.value)}
+                    placeholder={
+                      paceCurve
+                        ? fmtPaceSec(targetLapSec(paceCurve.points, 10000)?.sec ?? null)
+                        : "1:58.775"
+                    }
+                    title="The lap a very strong (≈10k iRating) driver sets here. Replaces the class best as the yardstick, so the number stays comparable across races instead of moving with whoever showed up. Leave empty to read it off the pace curve."
+                  />
+                </div>
+                <div>
+                  <label className={lbl}>Pace curve (iRating → lap)</label>
+                  <select
+                    className={inp}
+                    value={s.event.paceCurveId}
+                    onChange={(e) => patchEvent("paceCurveId", e.target.value)}
+                  >
+                    <option value="">— none —</option>
+                    {paceReferences.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.label} ({r.sessionType})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="col-span-2 -mt-1 text-[11px] leading-snug text-zinc-500">
+                  {paceCurve ? (
+                    <>
+                      Each driver is measured against the lap his own iRating was
+                      worth here — {paceCurve.points.length} points,{" "}
+                      {fmtPaceSec(targetLapSec(paceCurve.points, 1000)?.sec ?? null)} at
+                      1000 iR to{" "}
+                      <span className="text-cyan-300">
+                        {fmtPaceSec(targetLapSec(paceCurve.points, 10000)?.sec ?? null)}
+                      </span>{" "}
+                      at 10k. Their iRating comes out of the uploaded{" "}
+                      <span className="font-mono">eventresult.json</span>.
+                    </>
+                  ) : paceSuggestion ? (
+                    <>
+                      The library has{" "}
+                      <button
+                        onClick={() => patchEvent("paceCurveId", paceSuggestion.id)}
+                        className="text-[#ff6b35] underline print:hidden"
+                      >
+                        {paceSuggestion.label}
+                      </button>{" "}
+                      for this track — pick it to get per-driver target lap times.
+                    </>
+                  ) : (
+                    <>
+                      No curve for this track yet. An admin can paste one in under
+                      Admin → Pace references; without it only the reference lap above
+                      is used.
+                    </>
+                  )}
+                </p>
+              </>
+            )}
             <div>
               <label className={lbl}>Track temp (°C)</label>
               <input className={inp} value={s.event.trackTempC}
@@ -3668,20 +3835,54 @@ export default function StintPlanner({
 
         {/* Fuel profiles */}
         <div className={card}>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Fuel profiles
-          </h2>
-          <ProfileRow
-            title={deltaSaving ? "Standard (roster fallback)" : "Standard"}
-            laptime={s.standard.laptime}
-            fuelPerLap={s.standard.fuelPerLap}
-            onLaptime={(v) => patchStd("laptime", v)}
-            onFuel={(v) => patchStd("fuelPerLap", v)}
-            laps={std.laps}
-            green={std.greenTimeSec}
-            total={std.totalTimeSec}
-            fuel={std.fuelPerStint}
-          />
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              Fuel profiles
+            </h2>
+            {deltaSaving && (
+              <button
+                onClick={() => setShowFuelProfiles((v) => !v)}
+                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-800 print:hidden"
+              >
+                {showFuelProfiles ? "Hide fallback profiles" : "Edit fallback profiles"}
+              </button>
+            )}
+          </div>
+
+          {profilesOpen ? (
+            <ProfileRow
+              title={deltaSaving ? "Standard (roster fallback)" : "Standard"}
+              laptime={s.standard.laptime}
+              fuelPerLap={s.standard.fuelPerLap}
+              onLaptime={(v) => patchStd("laptime", v)}
+              onFuel={(v) => patchStd("fuelPerLap", v)}
+              laps={std.laps}
+              green={std.greenTimeSec}
+              total={std.totalTimeSec}
+              fuel={std.fuelPerStint}
+            />
+          ) : (
+            <p className="rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-xs leading-snug text-zinc-500">
+              Every stint runs on the driver&rsquo;s own pace and fuel. Only a driver
+              with no numbers of their own falls back to{" "}
+              <strong className="text-zinc-300">
+                {s.standard.laptime || "—"}
+              </strong>{" "}
+              /{" "}
+              <strong className="text-zinc-300">
+                {s.standard.fuelPerLap || "—"} L
+              </strong>
+              {s.savingEnabled && (
+                <>
+                  , and to the plan&rsquo;s fuel-save default of{" "}
+                  <strong className="text-cyan-300">
+                    +{planDelta.sec.toFixed(1)} s / &minus;{planDelta.litres.toFixed(2)} L
+                  </strong>
+                </>
+              )}
+              .
+            </p>
+          )}
 
           {/* How a stint gets its pace and fuel. The old model let the profile
               decide for everyone, which meant a driver's own averages either
@@ -3736,7 +3937,7 @@ export default function StintPlanner({
               onChange={(e) => setS((p) => ({ ...p, savingEnabled: e.target.checked }))} />
             Enable a fuel-saving profile
           </label>
-          {s.savingEnabled && sav && (
+          {s.savingEnabled && sav && profilesOpen && (
             <div className="mt-2">
               <ProfileRow
                 title={deltaSaving ? "Fuel-saving (roster default)" : "Fuel-saving"}
@@ -5159,10 +5360,9 @@ export default function StintPlanner({
             {raceLogNeedsReparse && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
                 <span>
-                  This log was analysed before lap timestamps were stored, so it
-                  can&apos;t be matched to the driver order in your stint
-                  schedule — the dashboard is falling back to a reconstruction.
-                  The raw file is still archived; one click fixes it.
+                  {raceLogNoTimestamps
+                    ? "This log was analysed before lap timestamps were stored, so it can't be matched to the driver order in your stint schedule — the dashboard is falling back to a reconstruction. The raw file is still archived; one click fixes it."
+                    : "This log was analysed before the average learned to leave out the formation and start laps, the laps under a full-course yellow and the restart lap — right now only the in and out laps are dropped. The raw file is still archived; one click re-runs the whole analysis."}
                 </span>
                 <button
                   onClick={reanalyseRaceLog}
@@ -5189,6 +5389,9 @@ export default function StintPlanner({
                 endSec: st.endSec,
                 driverName: st.driverName,
               }))}
+              official={official}
+              paceCurve={paceCurve?.points ?? null}
+              refLapSec={refLapSec}
             />
 
           </div>

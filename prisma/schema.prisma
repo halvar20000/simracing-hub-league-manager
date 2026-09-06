@@ -43,6 +43,7 @@ model User {
   driverOfTheDayWins    RoundDriverOfTheDay[]    @relation("DotdWinner")
   raceLogUploads        RaceLogUpload[]          @relation("RaceLogUploader")
   pitReferences         PitReference[]           @relation("PitReferenceUpdatedBy")
+  paceReferences        PaceReference[]          @relation("PaceReferenceUpdatedBy")
 
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -1449,4 +1450,65 @@ model PitReference {
 
   @@unique([car, track])
   @@index([car])
+}
+
+/// A pace curve: what lap time a given iRating is worth on one car class at
+/// one track, as iRacing's own Series Insights "Pace Analysis" fits it.
+///
+/// WHY THIS EXISTS: comparing a driver against the class best is the right
+/// yardstick in a league, where everyone runs the same car and roughly the
+/// same level. In an OFFICIAL race the field is a lottery of iRatings, so the
+/// class best says nothing about whether a 1500 iR driver drove well. This
+/// curve turns his own iRating into the lap time he was expected to set, and
+/// the gap to THAT is his real performance.
+///
+/// The points come out of the members site by hand (the source file sits in a
+/// private bucket behind a one-hour signed URL — CLS never fetches it): the
+/// admin pastes the JSON, we keep the fitted line. See
+/// src/lib/pace-reference.ts for the interpolation and docs/pace-reference.md
+/// for the export bookmarklet.
+model PaceReference {
+  id String @id @default(cuid())
+
+  /// Free-text label for the humans (e.g. "GT Sprint · Spa · 2026 S3 W12").
+  label String
+
+  /// Car class as CLS names it (e.g. "GT3 Class") and the track it was
+  /// measured at. Both are matched loosely against a plan's event fields.
+  carClass String
+  track    String
+
+  /// Which session type the curve was taken from. RACE is the one that
+  /// matters for a race debrief; the others are kept because the source
+  /// offers them and a qualifying curve is a fair reference for a quali lap.
+  sessionType PaceSessionType @default(RACE)
+
+  /// Where it came from, so a stale curve is recognisable: iRacing season id,
+  /// race week (0-based, as the source numbers it) and car class id.
+  iracingSeasonId   Int?
+  iracingRaceWeek   Int?
+  iracingCarClassId Int?
+
+  /// The fitted curve: [{ "irating": 200, "lapSec": 125.066 }, …] sorted by
+  /// iRating. Stored as JSON because it is read whole and never queried into.
+  points Json
+
+  /// Free text: where the numbers came from and when.
+  source String?
+  notes  String?
+
+  updatedById String?
+  updatedBy   User?   @relation("PaceReferenceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carClass, track])
+}
+
+enum PaceSessionType {
+  RACE
+  QUALIFY
+  PRACTICE
+  TIME_TRIAL
 }

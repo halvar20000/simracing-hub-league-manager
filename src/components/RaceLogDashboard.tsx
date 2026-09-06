@@ -1,11 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { PlannerRaceLog, TeamDriverStat } from "@/lib/stint-plan-state";
+import type {
+  LapExclusion,
+  PlannerRaceLog,
+  TeamDriverStat,
+} from "@/lib/stint-plan-state";
+import { targetLapSec, fmtPaceSec, type PacePoint } from "@/lib/pace-reference";
 import {
   attributeByPlan,
   attributeStints,
   cleanLapStats,
+  describeExclusions,
   type PlanStintWindow,
 } from "@/lib/race-log-attribution";
 
@@ -92,6 +98,10 @@ type Row = {
   /** How many laps that mean is built on, and how many were dropped. */
   cleanLaps: number;
   cleanDropped: number;
+  /** Why they were dropped, when the trace is marked (parser gen 2+). */
+  cleanByReason: Partial<Record<LapExclusion, number>>;
+  /** The rating this driver started the race with, from the results file. */
+  iRating: number | null;
 };
 
 const normName = (s: string) => s.trim().toLowerCase();
@@ -100,18 +110,31 @@ export default function RaceLogDashboard({
   log,
   teamDrivers,
   planStints,
+  official = false,
+  paceCurve = null,
+  refLapSec = null,
 }: {
   log: PlannerRaceLog;
   /** Our drivers from the uploaded event result — the authoritative stats. */
   teamDrivers?: TeamDriverStat[];
   /** This plan's own stint order — the best source for who drove when. */
   planStints?: PlanStintWindow[];
+  /** Official race: measure each driver against his own iRating, not against
+   *  the fastest man on a grid he did not choose. */
+  official?: boolean;
+  /** iRating → lap time for this track and car class. */
+  paceCurve?: PacePoint[] | null;
+  /** The fixed yardstick (a ≈10k iRating lap), when the plan carries one. */
+  refLapSec?: number | null;
 }) {
   const laps = useMemo(() => log.laps ?? [], [log.laps]);
   const logDrivers = useMemo(() => log.drivers ?? [], [log.drivers]);
   const stints = useMemo(() => log.stints ?? [], [log.stints]);
   /** Which average the gap chart shows: the clean one by default. */
   const [cleanAvg, setCleanAvg] = useState(true);
+  /** Did the parser mark WHY each lap is out? Logs uploaded before that only
+   *  support the in/out fallback and can be brought up to date by re-analysing. */
+  const marked = (log.exclV ?? 1) >= 2;
 
   const model = useMemo(() => {
     const team = teamDrivers ?? [];
@@ -140,7 +163,8 @@ export default function RaceLogDashboard({
         rows: logDrivers.map<Row>((d, di) => {
           const clean = cleanLapStats(
             laps,
-            laps.map((_, li) => li).filter((li) => laps[li].d === di)
+            laps.map((_, li) => li).filter((li) => laps[li].d === di),
+            marked
           );
           return {
             name: d.driver,
@@ -152,9 +176,12 @@ export default function RaceLogDashboard({
             greenSec: d.greenSec,
             spreadSec: d.spreadSec,
             stints: d.stints,
+            // The log has no ratings — only the results file does.
+            iRating: null,
             cleanSec: clean.avg,
             cleanLaps: clean.laps,
             cleanDropped: clean.dropped,
+            cleanByReason: clean.byReason,
           };
         }),
         lapRow: laps.map((l) => l.d),
@@ -191,11 +218,12 @@ export default function RaceLogDashboard({
       const best = mine.length ? Math.min(...mine) : null;
       const green = best ? mine.filter((s) => s <= best * 1.05) : [];
       const p90 = percentile(green, 0.9);
-      const clean = cleanLapStats(laps, mineIdx);
+      const clean = cleanLapStats(laps, mineIdx, marked);
       return {
         cleanSec: clean.avg,
         cleanLaps: clean.laps,
         cleanDropped: clean.dropped,
+        cleanByReason: clean.byReason,
         name,
         slot: i,
         // iRacing's numbers when we have them; otherwise what the log shows
@@ -206,6 +234,7 @@ export default function RaceLogDashboard({
           stat?.avgSec ??
           (mine.length ? mine.reduce((a, b) => a + b, 0) / mine.length : null),
         incidents: stat?.incidents ?? null,
+        iRating: stat?.iRating ?? null,
         greenSec: median(green),
         spreadSec: p90 != null && best != null ? p90 - best : null,
         stints: stintRow.filter((r) => r === i).length,
@@ -219,7 +248,7 @@ export default function RaceLogDashboard({
       source,
       confident: att?.confident ?? false,
     };
-  }, [teamDrivers, planStints, logDrivers, laps, stints]);
+  }, [teamDrivers, planStints, logDrivers, laps, stints, marked]);
 
   const { rows, lapRow, stintRow, source, confident } = model;
   const inferred = source === "inferred";
@@ -236,12 +265,51 @@ export default function RaceLogDashboard({
   // and someone will always want to reconcile the two.
   const haveClean = rows.some((r) => r.cleanSec != null);
   const droppedTotal = rows.reduce((a, r) => a + r.cleanDropped, 0);
+  /** All drivers' exclusion reasons added up, for the note under the chart. */
+  const droppedByReason = rows.reduce<Partial<Record<LapExclusion, number>>>(
+    (acc, r) => {
+      for (const [k, n] of Object.entries(r.cleanByReason)) {
+        const key = k as LapExclusion;
+        acc[key] = (acc[key] ?? 0) + (n ?? 0);
+      }
+      return acc;
+    },
+    {}
+  );
+  const droppedNote = describeExclusions(droppedByReason);
 
   const teamBest = (() => {
     const xs = rows.map((r) => r.bestSec).filter((n): n is number => n != null);
     return xs.length ? Math.min(...xs) : null;
   })();
-  const reference = log.classBestSec ?? teamBest;
+  const classReference = log.classBestSec ?? teamBest;
+
+  // ---- what each driver is measured against ------------------------------
+  // League: the fastest lap in class — everyone runs the same car at a similar
+  // level, so it is a fair yardstick and it is what the team recognises.
+  // Official: the lap THIS driver's iRating was worth here. A 1500 iR driver
+  // and a 6000 iR driver on the same grid are not doing the same job, and
+  // measuring both against the fastest man tells you their pedigree, not their
+  // performance. Falls back to the fixed 10k reference for a driver whose
+  // rating the results file does not carry, and to the class best beyond that.
+  const targets = rows.map((r) =>
+    official && paceCurve && paceCurve.length > 0 && r.iRating != null
+      ? (targetLapSec(paceCurve, r.iRating)?.sec ?? null)
+      : null
+  );
+  const haveTargets = targets.some((t) => t != null);
+  const baselineOf = (i: number): number | null =>
+    targets[i] ?? (official ? (refLapSec ?? classReference) : classReference);
+  /** How the row was measured, for the tooltip — a gap is meaningless without
+   *  saying what it is a gap TO. */
+  const baselineLabelOf = (i: number): string => {
+    if (targets[i] != null) {
+      return `target for ${rows[i].iRating} iR (${fmtPaceSec(targets[i])})`;
+    }
+    if (official && refLapSec != null) return `10k reference (${fmtPaceSec(refLapSec)})`;
+    return `class best (${fmtPaceSec(classReference)})`;
+  };
+  const reference = classReference;
 
   return (
     <div className="space-y-5">
@@ -278,7 +346,7 @@ export default function RaceLogDashboard({
 
       {/* Per-driver summary — also the table view for the charts */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {rows.map((d) => (
+        {rows.map((d, di) => (
           <div
             key={d.name}
             className="rounded border border-zinc-800 bg-zinc-950/60 p-3"
@@ -311,7 +379,11 @@ export default function RaceLogDashboard({
                 className="text-right text-zinc-200"
                 title={
                   d.cleanLaps
-                    ? `${d.cleanLaps} racing laps, ${d.cleanDropped} in/out laps ignored`
+                    ? `${d.cleanLaps} racing laps, ${d.cleanDropped} ignored${
+                        describeExclusions(d.cleanByReason)
+                          ? ` (${describeExclusions(d.cleanByReason)})`
+                          : ""
+                      }`
                     : "No racing laps left after removing the in/out laps"
                 }
               >
@@ -329,6 +401,16 @@ export default function RaceLogDashboard({
                 Green pace{source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd className="text-right text-zinc-200">{fmtLapSec(d.greenSec)}</dd>
+              {official && targets[di] != null && (
+                <>
+                  <dt className="text-zinc-500" title={`Read off the pace curve at this driver's own ${d.iRating} iRating.`}>
+                    Target ({d.iRating} iR)
+                  </dt>
+                  <dd className="text-right text-cyan-300">
+                    {fmtPaceSec(targets[di])}
+                  </dd>
+                </>
+              )}
               <dt className="text-zinc-500">
                 Spread{source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
@@ -369,12 +451,24 @@ export default function RaceLogDashboard({
           absolutes={rows.map((r) => r.bestSec)}
         />
         <GapBars
-          title="Average lap — gap to class best"
+          title={
+            official && haveTargets
+              ? "Average lap — gap to your own iRating's target"
+              : official && refLapSec != null
+                ? "Average lap — gap to the 10k reference"
+                : "Average lap — gap to class best"
+          }
           note={
             cleanAvg
-              ? `Average over racing laps only: the lap into the pits and the lap back out are ignored${
-                  droppedTotal > 0 ? ` (${droppedTotal} laps)` : ""
-                }, so a double stint and a repair stop don't count against the driver.`
+              ? marked
+                ? `Average over racing laps only — the formation and start laps, the lap into the pits and the lap back out, every lap under a full-course yellow and the restart lap after it are all left out${
+                    droppedTotal > 0
+                      ? ` (${droppedTotal} laps${droppedNote ? `: ${droppedNote}` : ""})`
+                      : ""
+                  }. A local waved yellow is not a caution and does not remove a lap.`
+                : `Average over racing laps: the lap into the pits and the lap back out are ignored${
+                    droppedTotal > 0 ? ` (${droppedTotal} laps)` : ""
+                  }. This log was analysed before the formation, start and full-course-yellow laps were recognised — press Re-analyse above to apply those too.`
               : "iRacing's average over every lap the driver completed, so pit, caution and repair laps are in it."
           }
           action={
@@ -390,11 +484,26 @@ export default function RaceLogDashboard({
             )
           }
           rows={rows}
-          values={rows.map((r) => {
+          values={rows.map((r, i) => {
             const v = cleanAvg ? (r.cleanSec ?? r.avgSec) : r.avgSec;
-            return v != null && reference != null ? v - reference : null;
+            const base = baselineOf(i);
+            return v != null && base != null ? v - base : null;
           })}
           absolutes={rows.map((r) => (cleanAvg ? (r.cleanSec ?? r.avgSec) : r.avgSec))}
+          baselineLabels={rows.map((_, i) => baselineLabelOf(i))}
+          extraNote={
+            official
+              ? haveTargets
+                ? `Each bar is that driver's own yardstick: the lap his iRating was worth here, read off the pace curve. A short bar means he drove above his rating${
+                    refLapSec != null
+                      ? `; the fixed 10k reference for this track is ${fmtPaceSec(refLapSec)}`
+                      : ""
+                  }.`
+                : paceCurve && paceCurve.length > 0
+                  ? "No iRatings in the results file yet — upload the eventresult.json and every driver gets his own target. Until then the fixed reference (or the class best) is used for everyone."
+                  : "No pace curve chosen for this plan, so everyone is measured against the same number. Pick one in the Event card to get per-driver targets."
+              : undefined
+          }
         />
         <CountBars
           title="Laps driven"
@@ -402,9 +511,20 @@ export default function RaceLogDashboard({
           values={rows.map((r) => r.laps ?? 0)}
         />
         <CountBars
-          title="Incidents"
+          title="Incidents per stint"
+          note="Bar length is incidents ÷ stints. Comparing raw totals punishes whoever was in the car longest — a driver with four stints and 4x is as clean as one with two stints and 2x."
           rows={rows}
-          values={rows.map((r) => r.incidents ?? 0)}
+          values={rows.map((r) =>
+            r.stints > 0 ? (r.incidents ?? 0) / r.stints : (r.incidents ?? 0)
+          )}
+          labels={rows.map((r) => {
+            const inc = r.incidents ?? 0;
+            if (r.stints <= 0) return `${inc}x — stints unknown`;
+            const rate = inc / r.stints;
+            return `${rate.toFixed(1)}/stint — ${inc}x in ${r.stints} stint${
+              r.stints === 1 ? "" : "s"
+            }`;
+          })}
           emptyNote="No incidents — clean race."
         />
       </div>
@@ -707,18 +827,25 @@ function LapTrace({
 function GapBars({
   title,
   note,
+  extraNote,
   action,
   rows,
   values,
   absolutes,
+  baselineLabels,
 }: {
   title: string;
   note?: string;
+  /** A second line under the note — what the bars are measured against. */
+  extraNote?: string;
   /** Optional control shown next to the title (e.g. a metric switch). */
   action?: React.ReactNode;
   rows: Row[];
   values: (number | null)[];
   absolutes: (number | null)[];
+  /** Per row: what its gap is a gap TO. A gap without its yardstick named is
+   *  a number nobody can check. */
+  baselineLabels?: string[];
 }) {
   const usable = values.filter((v): v is number => v != null);
   const max = Math.max(0.001, ...usable);
@@ -728,7 +855,10 @@ function GapBars({
         <span>{title}</span>
         {action}
       </figcaption>
-      {note && <p className="mb-3 text-xs text-zinc-500">{note}</p>}
+      {note && (
+        <p className={`${extraNote ? "mb-1" : "mb-3"} text-xs text-zinc-500`}>{note}</p>
+      )}
+      {extraNote && <p className="mb-3 text-xs text-cyan-300/80">{extraNote}</p>}
       {usable.length === 0 ? (
         <p className="text-xs text-zinc-500">No comparable lap times.</p>
       ) : (
@@ -758,7 +888,9 @@ function GapBars({
                         : `${Math.max(2, (values[i]! / max) * 100)}%`,
                     backgroundColor: colorFor(r.slot),
                   }}
-                  title={`${r.name}: ${fmtGap(values[i])} s off class best`}
+                  title={`${r.name}: ${fmtGap(values[i])} s off ${
+                    baselineLabels?.[i] ?? "class best"
+                  }`}
                 />
               </div>
             </li>
@@ -771,13 +903,19 @@ function GapBars({
 
 function CountBars({
   title,
+  note,
   rows,
   values,
+  labels,
   emptyNote,
 }: {
   title: string;
+  note?: string;
   rows: Row[];
+  /** What the bar LENGTH means — the number the comparison is made on. */
   values: number[];
+  /** What to print next to the bar; defaults to the value itself. */
+  labels?: string[];
   emptyNote?: string;
 }) {
   const max = Math.max(...values, 0);
@@ -785,6 +923,11 @@ function CountBars({
     <figure className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
       <figcaption className="mb-3 text-sm font-semibold text-zinc-200">
         {title}
+        {note && (
+          <span className="mt-1 block text-[11px] font-normal leading-snug text-zinc-500">
+            {note}
+          </span>
+        )}
       </figcaption>
       {max === 0 && emptyNote ? (
         <p className="text-xs text-emerald-300">{emptyNote}</p>
@@ -800,7 +943,9 @@ function CountBars({
                   />
                   {r.name}
                 </span>
-                <span className="tabular-nums text-zinc-400">{values[i]}</span>
+                <span className="tabular-nums text-zinc-400">
+                  {labels?.[i] ?? values[i]}
+                </span>
               </div>
               <div className="h-3 w-full rounded-sm bg-zinc-900">
                 <div
@@ -809,7 +954,7 @@ function CountBars({
                     width: `${max > 0 ? Math.max(2, (values[i] / max) * 100) : 2}%`,
                     backgroundColor: colorFor(r.slot),
                   }}
-                  title={`${r.name}: ${values[i]}`}
+                  title={`${r.name}: ${labels?.[i] ?? values[i]}`}
                 />
               </div>
             </li>

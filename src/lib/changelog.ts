@@ -19,6 +19,23 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.5.0",
+    date: "2026-09-06",
+    changes: [
+      "Stint planner, race preparation: fields that no longer do anything now disappear instead of sitting there inviting you to tune them. Switch the pit-stop model on and the flat “Pit time loss” and “Refuel time” go away, replaced by a line telling you what a full service actually costs here and where to change it. “Driver swap” stays — the detailed model still uses it. Clear the pit lane loss and both fields come straight back with their values.",
+      "Fuel profiles: in “Per driver” mode the two profile editors are folded away behind an “Edit fallback profiles” button. There they are only the fallback for a driver who carries no numbers of his own, and the summary line now says exactly that, with the numbers. The legacy “Profile only” mode still shows them — there they ARE the numbers.",
+      "Race analysis: the average lap now leaves out the laps that were never racing laps — the formation lap, the lap with the start on it, the lap into the pits and the lap back out, every lap under a full-course yellow, and the restart lap after one. The chart says how many laps went and why, so nothing disappears quietly.",
+      "A local waved yellow is deliberately NOT treated as a caution. iRacing throws one at a single corner for one incident and often never follows it with a green — the Le Mans log has one waved yellow and no green after it, and counting it would have deleted the rest of the race. Only a real full-course caution removes laps.",
+      "The stint table's average now runs on the same rule as the driver average. It used to use its own “within 5% of the car's best” heuristic and quietly disagree with the figure printed next to it.",
+      "A log uploaded before today keeps its old numbers until you press “Re-analyse log” — the raw file is still archived, and the banner above the dashboard now offers exactly that.",
+      "Incidents are shown per stint. Comparing raw totals punished whoever sat in the car longest: four stints and 4x is exactly as clean as two stints and 2x. The bar is now incidents ÷ stints and the label carries both, so the absolute number is still there.",
+      "New: a plan can be marked “Official race”. In a league the fastest lap in class is a fair yardstick — everyone runs the same car at a similar level. In an official race the grid is whatever iRating registered, and the class best then measures pedigree rather than performance: a 1500 iR driver is always slower than the fastest man there, however well he drove.",
+      "An official plan gets two fields: a fixed reference lap (what a ≈10k iRating driver does here — a yardstick that does not move with the day's entry list, so it stays comparable across races) and a pace curve. The debrief then measures every driver against the lap HIS OWN iRating was worth, interpolated to his exact rating. That rating comes from the uploaded eventresult.json, and it is the one he STARTED the race with, so a good or bad result cannot move his own yardstick after the fact.",
+      "The curves live in a shared library under Admin → Pace references — one per car class, track and session type, so one import serves every plan. They come out of iRacing's own Series Insights “Pace Analysis” by hand: that file sits in a private bucket behind a one-hour signed URL, so CLS never fetches it itself. The admin page carries a bookmarklet that copies the curve you are looking at in one click, and docs/pace-reference.md explains the whole route.",
+      "Every bar names what it was measured against, and a driver whose rating is not in the results file falls back to the fixed reference and then to the class best — a gap without its yardstick is a number nobody can check.",
+    ],
+  },
+  {
     version: "2.4.0",
     date: "2026-09-06",
     changes: [
