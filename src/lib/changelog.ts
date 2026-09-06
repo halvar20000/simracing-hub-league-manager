@@ -19,6 +19,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.9.0",
+    date: "2026-09-06",
+    changes: [
+      "Stint Planner: after a race there is now a De-briefing — the summary a team lead would otherwise build by hand in PowerPoint, computed from the plan instead of typed. It opens from the plan page as soon as a race log is uploaded: five awards, a metric table per driver, the raw numbers behind them, and the trend over the season.",
+      "The metrics are the ones Johann Solowej has been keeping by hand, with the same definitions: Relativperformance is the lap your own iRating was worth here divided by the lap you actually set (over 100 % = quicker than your rating), 10k-Performance measures the same against the fixed 10k reference so it stays comparable across races, and Konstanz is 1 − σ ÷ Ø over your clean laps — always each driver against their own laps, never driver against driver.",
+      "Incidents are counted per hour driven rather than as a total. A raw total punishes whoever took the most stints, which is the opposite of what a de-briefing should reward.",
+      "Also exports as an editable .pptx, so the deck can still be presented and extended with your own slides. The season trend is drawn as one small chart per driver rather than eleven lines on one frame — past about four lines nobody can follow a single driver, and the palette has six colours.",
+      "The figures are frozen into a history table when a plan is marked completed (or on demand), so a correction made six weeks later cannot silently redraw an old season trend.",
+      "Under the hood the race-log dashboard, the de-briefing page and the .pptx now read the same model out of one module. A metric computed twice is a metric that will one day disagree with itself in front of the team.",
+    ],
+  },
+  {
     version: "2.8.2",
     date: "2026-09-06",
     changes: [

@@ -8,14 +8,15 @@ import type {
 } from "@/lib/stint-plan-state";
 import { targetLapSec, fmtPaceSec, type PacePoint } from "@/lib/pace-reference";
 import {
-  attributeByPlan,
-  attributeStints,
-  cleanLapStats,
-  planMatchesResults,
   describeExclusions,
   type TempCorrection,
   type PlanStintWindow,
 } from "@/lib/race-log-attribution";
+import {
+  buildRaceLogModel,
+  percentile,
+  type RaceLogRow,
+} from "@/lib/race-log-model";
 
 /**
  * Team-performance dashboard for an uploaded race-logger JSONL.
@@ -65,54 +66,10 @@ const fmtGap = (sec: number | null | undefined): string =>
     ? "—"
     : `${sec >= 0 ? "+" : "−"}${Math.abs(sec).toFixed(3)}`;
 
-function median(xs: number[]): number | null {
-  if (xs.length === 0) return null;
-  const a = xs.slice().sort((x, y) => x - y);
-  const m = Math.floor(a.length / 2);
-  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
-}
+/** The dashboard's row IS the shared model's row — see race-log-model.ts.
+ *  Keeping the alias means the chart components below read unchanged. */
+type Row = RaceLogRow;
 
-function percentile(xs: number[], p: number): number | null {
-  if (xs.length === 0) return null;
-  const a = xs.slice().sort((x, y) => x - y);
-  const i = Math.min(a.length - 1, Math.max(0, Math.round((a.length - 1) * p)));
-  return a[i];
-}
-
-/** One driver row on the dashboard: hard numbers + reconstructed ones. */
-type Row = {
-  name: string;
-  slot: number;
-  /** From the event result in team events, from the log in solo races. */
-  laps: number | null;
-  bestSec: number | null;
-  avgSec: number | null;
-  incidents: number | null;
-  /** Derived from the log (reconstructed stints in team events). */
-  greenSec: number | null;
-  spreadSec: number | null;
-  stints: number;
-  /** Mean lap over this driver's RACING laps: pit in-laps and the out-laps
-   *  after them removed. iRacing's own average counts them, which is why a
-   *  double-stinter or anyone who sat in the box for repairs looks slower than
-   *  they drove. */
-  cleanSec: number | null;
-  /** How many laps that mean is built on, and how many were dropped. */
-  cleanLaps: number;
-  cleanDropped: number;
-  /** Why they were dropped, when the trace is marked (parser gen 2+). */
-  cleanByReason: Partial<Record<LapExclusion, number>>;
-  /** The rating this driver started the race with, from the results file. */
-  iRating: number | null;
-  /** Mean racing lap shifted to the plan's reference temperature, and how
-   *  many laps carried a temperature to do it with. Null when no measured
-   *  slope exists — see the tempSlopePerC prop. */
-  tempSec: number | null;
-  tempLaps: number;
-  tempSkipped: number;
-};
-
-const normName = (s: string) => s.trim().toLowerCase();
 
 export default function RaceLogDashboard({
   log,
@@ -197,200 +154,32 @@ export default function RaceLogDashboard({
     return { slopePerC: tempSlopePerC, baseC: baseTempC, tempOf };
   }, [tempSlopePerC, baseTempC, planTemps]);
 
-  const model = useMemo(() => {
-    const team = teamDrivers ?? [];
-    const plan = planStints ?? [];
-    const planNames: string[] = [];
-    for (const p of plan) {
-      if (p.driverName && !planNames.some((n) => normName(n) === normName(p.driverName!)))
-        planNames.push(p.driverName);
-    }
-
-    // Who the dashboard has a row for: the event result's line-up (it carries
-    // iRacing's own numbers), plus anyone the plan lists who isn't in it.
-    const names: { name: string; stat?: TeamDriverStat }[] = team.map((d) => ({
-      name: d.name,
-      stat: d,
-    }));
-    for (const n of planNames) {
-      if (!names.some((r) => normName(r.name) === normName(n))) names.push({ name: n });
-    }
-    const rowIndexOf = (name: string) =>
-      names.findIndex((r) => normName(r.name) === normName(name));
-
-    // --- solo race with neither a plan line-up nor an event result --------
-    if (names.length === 0) {
-      return {
-        rows: logDrivers.map<Row>((d, di) => {
-          const soloIdx = laps.map((_, li) => li).filter((li) => laps[li].d === di);
-          const clean = cleanLapStats(laps, soloIdx, marked);
-          const temp = tempCorrection
-            ? cleanLapStats(laps, soloIdx, marked, tempCorrection)
-            : null;
-          return {
-            name: d.driver,
-            slot: d.slot,
-            laps: d.laps,
-            bestSec: d.bestSec,
-            avgSec: d.avgSec,
-            incidents: d.incidents,
-            greenSec: d.greenSec,
-            spreadSec: d.spreadSec,
-            stints: d.stints,
-            // The log has no ratings — only the results file does.
-            iRating: null,
-            cleanSec: clean.avg,
-            cleanLaps: clean.laps,
-            cleanDropped: clean.dropped,
-            cleanByReason: clean.byReason,
-            tempSec: temp?.avg ?? null,
-            tempLaps: temp?.corrected ?? 0,
-            tempSkipped: temp?.uncorrectable ?? 0,
-          };
-        }),
-        lapRow: laps.map((l) => l.d),
-        stintRow: stints.map((s) => s.d),
-        source: "log" as const,
-        confident: true,
-        planCheck: null,
-        planDisagrees: false,
-        overridden: 0,
-        autoStintRow: stints.map((st) => st.d),
-      };
-    }
-
-    // --- who drove which stint -------------------------------------------
-    // In order of how much the source actually KNOWS:
-    //
-    //   1. a hand correction someone typed into the stint table — a human who
-    //      was there beats every automatic source and is never overruled;
-    //   2. the log itself, when it names more than one driver for our car.
-    //      Only a logger that follows team swaps does that, and then the log
-    //      is a record of who sat in the car rather than an inference;
-    //   3. the plan's driver order — BUT only if it can be squared with the
-    //      laps iRacing scored. The plan is an intention typed before the
-    //      race: when a driver steps in for a team mate it still names the
-    //      man who was supposed to drive, and a whole stint lands on the
-    //      wrong person;
-    //   4. the reconstruction from the results' fastest-lap anchors.
-    const logSplitsDrivers = logDrivers.length > 1;
-    const planAtt = attributeByPlan(stints, plan, rowIndexOf);
-    const planCheck =
-      planAtt && team.length > 0
-        ? planMatchesResults(planAtt, team, rowIndexOf)
-        : null;
-    const planDisagrees = planCheck != null && !planCheck.ok;
-    const inferredAtt = attributeStints(stints, team);
-    const att = planDisagrees ? (inferredAtt ?? planAtt) : (planAtt ?? inferredAtt);
-
-    /** Stint → row from the log's own driver names (source 2). */
-    const logStintRowRaw = logSplitsDrivers
-      ? stints.map((st) => {
-          // The stint row already names everyone who appeared in it; the one
-          // with the most laps owns it, exactly as the parser decided.
-          const own = logDrivers[st.d]?.driver ?? st.drivers[0] ?? "";
-          return rowIndexOf(own);
-        })
-      : null;
-    // Only trust it if every name in the log also exists in the results
-    // line-up. If iRacing's display names and the log's disagree even once we
-    // would be drawing blanks, and a reconstruction beats a hole.
-    const logStintRow =
-      logStintRowRaw && logStintRowRaw.every((r) => r >= 0) ? logStintRowRaw : null;
-
-    const baseStintRow =
-      logStintRow ?? (att ? att.byStint : stints.map(() => -1));
-
-    // Hand corrections last, so they win over everything above.
-    const stintRow = baseStintRow.map((r, i) => {
-      const forced = overrides[i];
-      if (!forced) return r;
-      const idx = rowIndexOf(forced);
-      return idx >= 0 ? idx : r;
-    });
-    const overridden = baseStintRow.filter((r, i) => {
-      const forced = overrides[i];
-      return !!forced && rowIndexOf(forced) >= 0 && rowIndexOf(forced) !== r;
-    }).length;
-
-    const source: "plan" | "inferred" | "log" = logStintRow
-      ? "log"
-      : planDisagrees
-        ? inferredAtt
-          ? "inferred"
-          : "plan"
-        : planAtt
-          ? "plan"
-          : att
-            ? "inferred"
-            : "log";
-    // lap → row index: the first stint that has not ended yet. A lap inside a
-    // stint maps to that stint; a lap in the gap between two stints is the
-    // out-lap of the driver taking over, so it maps to the following stint;
-    // anything past the last stint stays with the last driver.
-    const lapRow = laps.map((l) => {
-      const si = stints.findIndex((s) => s.endLap != null && l.lap <= s.endLap);
-      return si >= 0 ? stintRow[si] : stintRow[stintRow.length - 1] ?? -1;
-    });
-
-    const rows = names.map<Row>(({ name, stat }, i) => {
-      const mineIdx = laps.map((_, li) => li).filter((li) => lapRow[li] === i);
-      const mine = mineIdx.map((li) => laps[li].sec);
-      const best = mine.length ? Math.min(...mine) : null;
-      const green = best ? mine.filter((s) => s <= best * 1.05) : [];
-      const p90 = percentile(green, 0.9);
-      const clean = cleanLapStats(laps, mineIdx, marked);
-      const temp = tempCorrection
-        ? cleanLapStats(laps, mineIdx, marked, tempCorrection)
-        : null;
-      return {
-        cleanSec: clean.avg,
-        cleanLaps: clean.laps,
-        cleanDropped: clean.dropped,
-        cleanByReason: clean.byReason,
-        tempSec: temp?.avg ?? null,
-        tempLaps: temp?.corrected ?? 0,
-        tempSkipped: temp?.uncorrectable ?? 0,
-        name,
-        slot: i,
-        // iRacing's numbers when we have them; otherwise what the log shows
-        // for the laps attributed to this driver.
-        laps: stat?.laps ?? (mine.length || null),
-        bestSec: stat?.bestSec ?? best,
-        avgSec:
-          stat?.avgSec ??
-          (mine.length ? mine.reduce((a, b) => a + b, 0) / mine.length : null),
-        incidents: stat?.incidents ?? null,
-        iRating: stat?.iRating ?? null,
-        greenSec: median(green),
-        spreadSec: p90 != null && best != null ? p90 - best : null,
-        stints: stintRow.filter((r) => r === i).length,
-      };
-    });
-
-    return {
-      rows,
-      lapRow,
-      stintRow,
-      source,
-      confident: logStintRow ? true : (att?.confident ?? false),
-      planCheck,
-      planDisagrees,
-      overridden,
-      /** What the automatic sources said, before hand corrections — so the
-       *  picker can offer "back to automatic" and name who that would be. */
-      autoStintRow: baseStintRow,
-    };
-  }, [
-    teamDrivers,
-    planStints,
-    logDrivers,
-    laps,
-    stints,
-    marked,
-    tempCorrection,
-    overrides,
-  ]);
+  // The whole model — who drove which stint, and every per-driver figure —
+  // lives in src/lib/race-log-model.ts so that this dashboard, the debriefing
+  // page and the .pptx export cannot drift apart.
+  const model = useMemo(
+    () =>
+      buildRaceLogModel({
+        laps,
+        logDrivers,
+        stints,
+        teamDrivers,
+        planStints,
+        marked,
+        tempCorrection,
+        overrides,
+      }),
+    [
+      teamDrivers,
+      planStints,
+      logDrivers,
+      laps,
+      stints,
+      marked,
+      tempCorrection,
+      overrides,
+    ]
+  );
 
   const {
     rows,

@@ -243,7 +243,7 @@ model Season {
   /// (standings, roster, rounds) keep working so old links survive.
   /// Deliberately a flag, not a SeasonStatus value, so status keeps its
   /// scoring meaning. Toggle on the admin season-edit page.
-  isArchived   Boolean      @default(false)
+  isArchived Boolean @default(false)
 
   /// Penalty pool (FULL mode only): when true, NO_RSVP_NO_SHOW penalties take
   /// part in the auto-forgiveness cycle exactly like incident penalties —
@@ -390,12 +390,12 @@ model Round {
   /// (src/lib/match-twitch.ts) from League.twitchChannelLogin, or pasted /
   /// cleared manually by an admin. Like the YouTube one, the cron only fills
   /// rounds where this is null, so a manual value is never overwritten.
-  twitchVideoId    String?
+  twitchVideoId      String?
   /// Twitch video kind: "archive" (a past broadcast — Twitch DELETES these
   /// after 7-60 days depending on the broadcaster's status), "highlight" or
   /// "upload" (both permanent). Drives the "VOD may have expired" warning on
   /// the round page. Null when the kind is unknown (manually pasted link).
-  twitchVideoType  String?
+  twitchVideoType    String?
   /// Resolved Twitch thumbnail URL (Twitch's %{width}x%{height} template is
   /// already filled in) for the /streams grid. Null for manually pasted links
   /// and for VODs whose thumbnail Twitch hadn't generated yet; the grid falls
@@ -403,7 +403,7 @@ model Round {
   /// dead thumbnail degrades to.
   twitchThumbnailUrl String?
   /// When the Twitch VOD was linked (auto-match run or manual save).
-  twitchMatchedAt  DateTime?
+  twitchMatchedAt    DateTime?
 
   /// Public Vercel Blob URL of the raw iRacing eventresult JSON last imported
   /// for this round via the "Import iRacing JSON" admin flow. Surfaced as a
@@ -528,14 +528,14 @@ model RaceResult {
 }
 
 model ScoringSystem {
-  id                          String  @id @default(cuid())
-  name                        String  @unique
-  description                 String?
-  pointsTable                 Json
-  classPointsTable            Json?
-  gdcPointsTable              Json?
-  participationPoints         Int     @default(0)
-  participationMinDistancePct Int     @default(75)
+  id                            String  @id @default(cuid())
+  name                          String  @unique
+  description                   String?
+  pointsTable                   Json
+  classPointsTable              Json?
+  gdcPointsTable                Json?
+  participationPoints           Int     @default(0)
+  participationMinDistancePct   Int     @default(75)
   /// How `participationMinDistancePct` is measured on a multi-race round.
   /// false (default): per race — any single race that reaches the threshold on
   /// its own distance earns the points. true: across the whole round — the
@@ -544,14 +544,14 @@ model ScoringSystem {
   /// Gesamt-Rundenzahl in der kombinierten Wertung"); every other league keeps
   /// the per-race reading.
   participationCombinedDistance Boolean @default(false)
-  racePointsMinDistancePct    Int     @default(50)
-  bonusFastestLap             Int?
-  bonusPole                   Int?
-  bonusMostLapsLed            Int?
-  dropWorstNRounds            Int?
-  fprEnabled                  Boolean @default(false)
-  fprTiers                    Json?
-  fprMode                     FprMode @default(ALL_TEAMS_TIERED)
+  racePointsMinDistancePct      Int     @default(50)
+  bonusFastestLap               Int?
+  bonusPole                     Int?
+  bonusMostLapsLed              Int?
+  dropWorstNRounds              Int?
+  fprEnabled                    Boolean @default(false)
+  fprTiers                      Json?
+  fprMode                       FprMode @default(ALL_TEAMS_TIERED)
 
   seasons                 Season[]
   participationInCombined Boolean  @default(true)
@@ -614,9 +614,9 @@ model CsvImport {
 // ==========================================
 
 model IncidentReport {
-  id                     String       @id @default(cuid())
+  id                     String        @id @default(cuid())
   roundId                String
-  round                  Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  round                  Round         @relation(fields: [roundId], references: [id], onDelete: Cascade)
   reporterUserId         String
   reporterUser           User          @relation(fields: [reporterUserId], references: [id])
   // Null ONLY for steward-initiated reports (stewardInitiated = true): the
@@ -624,7 +624,9 @@ model IncidentReport {
   // driver-filed report still carries the reporter's registration.
   reporterRegistrationId String?
   reporterRegistration   Registration? @relation("IncidentReporter", fields: [reporterRegistrationId], references: [id])
-  /** Filed by a steward/admin on behalf of the league, not by a driver. */
+  /**
+   * Filed by a steward/admin on behalf of the league, not by a driver.
+   */
   stewardInitiated       Boolean       @default(false)
 
   lapNumber    Int?
@@ -730,7 +732,7 @@ model Penalty {
   /// Free-text "Sondermaßnahme" typed by the steward for penalty category 4.
   /// Category 4 never deducts points (type = SPECIAL_MEASURE, pointsValue null),
   /// so these rows stay out of the standings and the penalty pool.
-  specialMeasure     String?
+  specialMeasure String?
 }
 
 // ==========================================
@@ -1348,8 +1350,74 @@ model StintPlan {
   /// anyone with the plan's edit token (or an admin) can flip it back.
   archivedAt DateTime?
 
+  /// Frozen debriefing figures, one row per driver — see DebriefMetric.
+  debriefMetrics DebriefMetric[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// One driver's measured performance in ONE race, written when the team
+/// generates the debriefing for a stint plan.
+///
+/// Why a table and not a recomputation: the numbers come from the plan's
+/// payload (schedule + race-logger trace + event result), and a plan can be
+/// edited, re-analysed or archived afterwards. The season trend must not
+/// silently change under the team's feet because somebody corrected a stint
+/// six weeks later — so the figures are frozen at the moment the debriefing is
+/// made, and re-generating the same plan overwrites its own rows and nobody
+/// else's.
+///
+/// Deliberately NOT tied to Round: most of these races are iRacing specials
+/// and open practice, not CLS league rounds. The plan is the unit.
+model DebriefMetric {
+  id String @id @default(cuid())
+
+  /// The plan this came from. The pair (planId, driverKey) is the identity,
+  /// so re-generating a debriefing updates in place.
+  planId     String
+  plan       StintPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  /// Lower-cased driver name — the only key the log, the plan and the event
+  /// result reliably share. `driverName` keeps the spelling for display.
+  driverKey  String
+  driverName String
+
+  /// What the race was, for the axis of the trend chart.
+  raceTitle String
+  track     String?
+  car       String?
+  /// When the race ran (session start when the plan has one, else the upload).
+  racedAt   DateTime
+
+  /// The iRating this driver started the race with, when known.
+  iRating Int?
+
+  /// Lap times in MILLISECONDS — integers, so a trend never drifts on
+  /// floating-point noise. Null where the race could not supply the figure.
+  avgAllMs     Int?
+  avgCleanMs   Int?
+  planMs       Int?
+  bestMs       Int?
+  /// The lap this driver's own iRating was worth here, and the fixed 10k lap.
+  refIRatingMs Int?
+  ref10kMs     Int?
+
+  /// The three ratios, stored as parts per million (100.991 % = 1009910), for
+  /// the same reason as the milliseconds above.
+  relPerfPpm     Int?
+  perf10kPpm     Int?
+  consistencyPpm Int?
+
+  laps      Int?
+  stints    Int?
+  driveSec  Int?
+  incidents Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, driverKey])
+  @@index([driverKey, racedAt])
 }
 
 /// A race-logger `.jsonl` uploaded straight from a driver's PC by the

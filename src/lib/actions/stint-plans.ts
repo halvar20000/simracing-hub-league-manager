@@ -5,6 +5,11 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/auth-helpers";
 import { gateStintPlan, getStintPlanViewer } from "@/lib/stint-plan-access";
+import {
+  debriefForPlan,
+  racedAtOf,
+  writeDebriefHistory,
+} from "@/lib/debrief-server";
 
 // Save/share actions for the stint planner.
 //
@@ -202,6 +207,26 @@ export async function setStintPlanArchived(
     data: { archivedAt: archived ? new Date() : null },
     select: { archivedAt: true },
   });
+  // Marking a plan completed IS the moment the race is over and the debriefing
+  // numbers stop moving, so that is when they are frozen into the history the
+  // season trend is drawn from. Best-effort: a plan must still be completable
+  // when it carries no race log, or when the history write trips over
+  // something — losing a trend point must never block the freeze itself.
+  if (archived) {
+    try {
+      const plan = await prisma.stintPlan.findUnique({
+        where: { id },
+        select: { id: true, title: true, payload: true, updatedAt: true },
+      });
+      if (plan) {
+        const built = await debriefForPlan(plan);
+        if (built)
+          await writeDebriefHistory(plan, built.data, racedAtOf(built.state, plan));
+      }
+    } catch (err) {
+      console.error("[stint-plans] debrief history write failed", err);
+    }
+  }
   revalidatePath("/stint-planner");
   revalidatePath(`/stint-planner/${id}`);
   return { ok: true, archivedAt: updated.archivedAt ? updated.archivedAt.getTime() : null };

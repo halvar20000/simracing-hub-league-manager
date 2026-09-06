@@ -96,6 +96,8 @@ export default async function SavedStintPlanPage({
 
   const canManage = canManageStintPlan(plan, viewer);
   const initial = hydratePlanState(plan.payload, plan.title);
+  // The de-briefing only exists once there is something to brief on.
+  const hasRaceLog = initial.raceLog != null;
   const [clsDrivers, tracks, cars, pitReferences, paceReferences, people] =
     await Promise.all([
       getClsDrivers(),
@@ -108,10 +110,18 @@ export default async function SavedStintPlanPage({
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-4 text-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
         <Link href="/stint-planner" className="text-zinc-400 hover:text-[#ff6b35]">
           ← All stint plans
         </Link>
+        {hasRaceLog && (
+          <Link
+            href={`/stint-planner/${plan.id}/debriefing`}
+            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800"
+          >
+            De-briefing für das Team →
+          </Link>
+        )}
       </div>
       <h1 className="mb-1 text-2xl font-bold">Endurance Stint Planner</h1>
       <p className="mb-6 max-w-2xl text-sm text-zinc-400">
