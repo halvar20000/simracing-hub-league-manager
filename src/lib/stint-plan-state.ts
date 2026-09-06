@@ -199,6 +199,15 @@ export type PlannerRaceLog = {
    *  Empty when the log carries only the single session_start reading. */
   temps?: { t: number; c: number }[];
   /**
+   * Hand corrections to who drove which stint, by stint index → driver name.
+   *
+   * The automatic sources can both be wrong: the plan is an intention typed
+   * before the race, and the reconstruction from the results is an inference.
+   * Somebody who was on the pit wall knows. These beat both, and they are
+   * saved with the plan so the debrief keeps reading correctly.
+   */
+  stintDrivers?: (string | null)[];
+  /**
    * Which generation of the parser produced this trace.
    *
    * Absent/1 = the original parser: laps carry no `x` marks, so the dashboard

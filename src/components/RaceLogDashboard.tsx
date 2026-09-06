@@ -11,6 +11,7 @@ import {
   attributeByPlan,
   attributeStints,
   cleanLapStats,
+  planMatchesResults,
   describeExclusions,
   type TempCorrection,
   type PlanStintWindow,
@@ -122,6 +123,8 @@ export default function RaceLogDashboard({
   refLapSec = null,
   tempSlopePerC = null,
   baseTempC = null,
+  stintDriverOverrides,
+  onStintDriverChange,
 }: {
   log: PlannerRaceLog;
   /** Our drivers from the uploaded event result — the authoritative stats. */
@@ -145,10 +148,19 @@ export default function RaceLogDashboard({
   tempSlopePerC?: number | null;
   /** The temperature laps are corrected TO — the plan's own Track temp. */
   baseTempC?: number | null;
+  /** Hand corrections: stint index → driver name, for the stints where the
+   *  automatic answer was wrong. Saved with the plan. */
+  stintDriverOverrides?: (string | null)[];
+  /** Called when someone corrects a stint's driver. Absent = read-only. */
+  onStintDriverChange?: (stintIndex: number, driverName: string | null) => void;
 }) {
   const laps = useMemo(() => log.laps ?? [], [log.laps]);
   const logDrivers = useMemo(() => log.drivers ?? [], [log.drivers]);
   const stints = useMemo(() => log.stints ?? [], [log.stints]);
+  const overrides = useMemo(
+    () => stintDriverOverrides ?? [],
+    [stintDriverOverrides]
+  );
   /** Which average the gap chart shows. "clean" leads; "temp" appears only
    *  when a measured slope and real temperatures exist; "iracing" is the raw
    *  figure the results page shows, kept because someone always wants to
@@ -240,21 +252,78 @@ export default function RaceLogDashboard({
         stintRow: stints.map((s) => s.d),
         source: "log" as const,
         confident: true,
+        planCheck: null,
+        planDisagrees: false,
+        overridden: 0,
+        autoStintRow: stints.map((st) => st.d),
       };
     }
 
     // --- who drove which stint -------------------------------------------
-    // 1. the plan's own driver order, matched to the real stints by time —
-    //    this is a fact the team typed in, not a guess;
-    // 2. otherwise reconstruct from the event result's fastest-lap anchors.
+    // In order of how much the source actually KNOWS:
+    //
+    //   1. a hand correction someone typed into the stint table — a human who
+    //      was there beats every automatic source and is never overruled;
+    //   2. the log itself, when it names more than one driver for our car.
+    //      Only a logger that follows team swaps does that, and then the log
+    //      is a record of who sat in the car rather than an inference;
+    //   3. the plan's driver order — BUT only if it can be squared with the
+    //      laps iRacing scored. The plan is an intention typed before the
+    //      race: when a driver steps in for a team mate it still names the
+    //      man who was supposed to drive, and a whole stint lands on the
+    //      wrong person;
+    //   4. the reconstruction from the results' fastest-lap anchors.
+    const logSplitsDrivers = logDrivers.length > 1;
     const planAtt = attributeByPlan(stints, plan, rowIndexOf);
-    const att = planAtt ?? attributeStints(stints, team);
-    const source: "plan" | "inferred" | "log" = planAtt
-      ? "plan"
-      : att
-        ? "inferred"
-        : "log";
-    const stintRow = att ? att.byStint : stints.map(() => -1);
+    const planCheck =
+      planAtt && team.length > 0
+        ? planMatchesResults(planAtt, team, rowIndexOf)
+        : null;
+    const planDisagrees = planCheck != null && !planCheck.ok;
+    const inferredAtt = attributeStints(stints, team);
+    const att = planDisagrees ? (inferredAtt ?? planAtt) : (planAtt ?? inferredAtt);
+
+    /** Stint → row from the log's own driver names (source 2). */
+    const logStintRowRaw = logSplitsDrivers
+      ? stints.map((st) => {
+          // The stint row already names everyone who appeared in it; the one
+          // with the most laps owns it, exactly as the parser decided.
+          const own = logDrivers[st.d]?.driver ?? st.drivers[0] ?? "";
+          return rowIndexOf(own);
+        })
+      : null;
+    // Only trust it if every name in the log also exists in the results
+    // line-up. If iRacing's display names and the log's disagree even once we
+    // would be drawing blanks, and a reconstruction beats a hole.
+    const logStintRow =
+      logStintRowRaw && logStintRowRaw.every((r) => r >= 0) ? logStintRowRaw : null;
+
+    const baseStintRow =
+      logStintRow ?? (att ? att.byStint : stints.map(() => -1));
+
+    // Hand corrections last, so they win over everything above.
+    const stintRow = baseStintRow.map((r, i) => {
+      const forced = overrides[i];
+      if (!forced) return r;
+      const idx = rowIndexOf(forced);
+      return idx >= 0 ? idx : r;
+    });
+    const overridden = baseStintRow.filter((r, i) => {
+      const forced = overrides[i];
+      return !!forced && rowIndexOf(forced) >= 0 && rowIndexOf(forced) !== r;
+    }).length;
+
+    const source: "plan" | "inferred" | "log" = logStintRow
+      ? "log"
+      : planDisagrees
+        ? inferredAtt
+          ? "inferred"
+          : "plan"
+        : planAtt
+          ? "plan"
+          : att
+            ? "inferred"
+            : "log";
     // lap → row index: the first stint that has not ended yet. A lap inside a
     // stint maps to that stint; a lap in the gap between two stints is the
     // out-lap of the driver taking over, so it maps to the following stint;
@@ -304,11 +373,36 @@ export default function RaceLogDashboard({
       lapRow,
       stintRow,
       source,
-      confident: att?.confident ?? false,
+      confident: logStintRow ? true : (att?.confident ?? false),
+      planCheck,
+      planDisagrees,
+      overridden,
+      /** What the automatic sources said, before hand corrections — so the
+       *  picker can offer "back to automatic" and name who that would be. */
+      autoStintRow: baseStintRow,
     };
-  }, [teamDrivers, planStints, logDrivers, laps, stints, marked, tempCorrection]);
+  }, [
+    teamDrivers,
+    planStints,
+    logDrivers,
+    laps,
+    stints,
+    marked,
+    tempCorrection,
+    overrides,
+  ]);
 
-  const { rows, lapRow, stintRow, source, confident } = model;
+  const {
+    rows,
+    lapRow,
+    stintRow,
+    source,
+    confident,
+    planCheck,
+    planDisagrees,
+    overridden,
+    autoStintRow,
+  } = model;
   const inferred = source === "inferred";
   const fromPlan = source === "plan";
 
@@ -388,6 +482,26 @@ export default function RaceLogDashboard({
 
   return (
     <div className="space-y-5">
+      {planDisagrees && (
+        <p className="rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+          <span className="font-semibold">
+            The stint plan does not match what iRacing scored.
+          </span>{" "}
+          Going by the plan,{" "}
+          <span className="text-amber-100">{planCheck?.worstDriver ?? "a driver"}</span>{" "}
+          would have {planCheck?.worstDelta} laps more or fewer than the results
+          credit him with — which is what a swapped stint looks like when someone
+          stepped in for a team mate and the plan was never changed. The drivers
+          below therefore come from the RESULTS, not from the plan. If that is
+          still wrong, set the driver by hand in the stint table.
+        </p>
+      )}
+      {overridden > 0 && (
+        <p className="rounded border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
+          {overridden} stint{overridden === 1 ? "" : "s"} assigned by hand — those
+          beat both the plan and the reconstruction.
+        </p>
+      )}
       {(fromPlan || inferred) && (
         <p className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
           <span className="font-semibold text-zinc-300">Team event.</span> Laps,
@@ -633,7 +747,15 @@ export default function RaceLogDashboard({
       </div>
 
       {stints.length > 0 && (
-        <StintTable log={log} rows={rows} stintRow={stintRow} source={source} />
+        <StintTable
+          log={log}
+          rows={rows}
+          stintRow={stintRow}
+          autoStintRow={autoStintRow}
+          source={source}
+          overrides={overrides}
+          onStintDriverChange={onStintDriverChange}
+        />
       )}
     </div>
   );
@@ -1073,12 +1195,19 @@ function StintTable({
   log,
   rows,
   stintRow,
+  autoStintRow,
   source,
+  overrides,
+  onStintDriverChange,
 }: {
   log: PlannerRaceLog;
   rows: Row[];
   stintRow: number[];
+  /** What the automatic sources said, before hand corrections. */
+  autoStintRow: number[];
   source: "plan" | "inferred" | "log";
+  overrides: (string | null)[];
+  onStintDriverChange?: (stintIndex: number, driverName: string | null) => void;
 }) {
   const stints = log.stints ?? [];
   const paces = stints.map((s) => s.avgSec).filter((n): n is number => n != null);
@@ -1093,7 +1222,7 @@ function StintTable({
           Stint by stint{log.ownCarNumber ? ` — car #${log.ownCarNumber}` : ""}
           {source !== "log" && (
             <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
-              {source === "plan" ? "drivers from the plan" : "driver reconstructed"}
+              {source === "plan" ? "drivers from the plan" : "drivers reconstructed"}
             </span>
           )}
         </span>
@@ -1132,10 +1261,36 @@ function StintTable({
                   <td className="py-1.5 pr-2">
                     <span className="flex items-center gap-1.5">
                       <span
-                        className="inline-block h-2 w-2 rounded-full"
+                        className="inline-block h-2 w-2 shrink-0 rounded-full"
                         style={{ backgroundColor: colorFor(row?.slot ?? -1) }}
                       />
-                      {row?.name ?? "—"}
+                      {onStintDriverChange ? (
+                        <select
+                          value={overrides[i] ?? ""}
+                          onChange={(e) =>
+                            onStintDriverChange(i, e.target.value || null)
+                          }
+                          title="Who actually drove this stint. Set it only when the automatic answer is wrong — a hand correction beats the plan and the reconstruction, and it is saved with the plan."
+                          className={`max-w-[12rem] rounded border bg-transparent px-1 py-0.5 text-sm print:appearance-none print:border-0 ${
+                            overrides[i]
+                              ? "border-[#ff6b35]/60 text-zinc-100"
+                              : "border-transparent text-zinc-200 hover:border-zinc-700"
+                          }`}
+                        >
+                          <option value="">
+                            {rows[autoStintRow[i] ?? -1]
+                              ? `automatic — ${rows[autoStintRow[i]].name}`
+                              : "automatic — unknown"}
+                          </option>
+                          {rows.map((r) => (
+                            <option key={r.name} value={r.name}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        (row?.name ?? "—")
+                      )}
                     </span>
                   </td>
                   <td className="py-1.5 pr-2">

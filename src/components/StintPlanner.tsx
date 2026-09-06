@@ -5397,6 +5397,25 @@ export default function StintPlanner({
               // its own stint maths, but a debrief number built on a
               // placeholder would read as measurement — so pass null and the
               // dashboard simply does not offer the corrected average.
+              stintDriverOverrides={s.raceLog.stintDrivers ?? []}
+              onStintDriverChange={(i, name) =>
+                setS((p) => {
+                  if (!p.raceLog) return p;
+                  const next = [...(p.raceLog.stintDrivers ?? [])];
+                  while (next.length <= i) next.push(null);
+                  next[i] = name;
+                  // All-null means nobody corrected anything — drop the array
+                  // rather than saving a row of holes into every plan.
+                  const any = next.some((n) => n);
+                  return {
+                    ...p,
+                    raceLog: {
+                      ...p.raceLog,
+                      stintDrivers: any ? next : undefined,
+                    },
+                  };
+                })
+              }
               tempSlopePerC={s.tempModel?.slopePerC ?? null}
               baseTempC={
                 s.event.trackTempC.trim() !== "" &&

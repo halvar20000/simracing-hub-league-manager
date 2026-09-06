@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.7.0",
+    date: "2026-09-06",
+    changes: [
+      "The race analysis no longer takes the stint plan's word for who drove. If a driver steps into the car for a team mate and nobody edits the plan, the debrief used to paint that stint in the wrong colour and credit the laps to the man who was supposed to drive — because the plan is an intention typed before the race, and it was the only source the dashboard had.",
+      "It now checks the plan against what iRacing actually scored. Every driver's completed laps are in the results file, and a swapped stint moves a stint's worth of laps between two of them. When the two cannot be squared, the drivers come from the RESULTS instead, and a banner says which driver the numbers disagreed about and by how many laps.",
+      "Every stint's driver can also be set by hand in the stint table. A human who was on the pit wall beats both the plan and the reconstruction, the correction is saved with the plan, and the picker still shows what the automatic answer would have been.",
+      "The race logger now follows team driver swaps. It read the line-up once, when it opened the log, so every lap for the rest of the race carried whoever was in the car at the green flag — three drivers over 7,848 laps of a six-hour race, one name. It now re-reads the driver of each car every five seconds and writes a driver_change event when it changes, so who drove which stint becomes a record instead of a reconstruction. Drivers need the new RaceLogger.exe for this.",
+      "A log that does name more than one driver for our car is believed over everything except a hand correction — but only when every name in it also appears in the results line-up, because a reconstruction beats a row of blanks.",
+    ],
+  },
+  {
     version: "2.6.0",
     date: "2026-09-06",
     changes: [

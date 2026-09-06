@@ -239,6 +239,46 @@ export function attributeByPlan(
   };
 }
 
+/**
+ * Does the plan's driver order actually match what iRacing scored?
+ *
+ * The plan is an INTENTION typed before the race. When driver B steps into the
+ * car for driver A's last stint, the plan still says A — and the debrief then
+ * paints a whole stint in the wrong colour and credits the wrong man. iRacing
+ * scored the truth: every driver's completed laps are in the results file, and
+ * a swapped stint moves a stint's worth of laps between two of them.
+ *
+ * So compare the two. `worstDelta` is the largest gap between the laps the
+ * plan attribution hands a driver and the laps iRacing actually gave him;
+ * anything past LAP_TOLERANCE means the plan is describing a race that did not
+ * happen.
+ */
+export function planMatchesResults(
+  att: StintAttribution,
+  team: TeamDriverStat[],
+  rowIndexOf: (name: string) => number
+): { ok: boolean; worstDelta: number; worstDriver: string | null } {
+  let worstDelta = 0;
+  let worstDriver: string | null = null;
+  let compared = 0;
+  for (const d of team) {
+    const i = rowIndexOf(d.name);
+    if (i < 0) continue;
+    // A driver the attribution never placed has 0 laps there; that is exactly
+    // the case worth catching, so it is compared like any other.
+    const got = att.lapsByDriver[i] ?? 0;
+    const delta = Math.abs(got - d.laps);
+    compared += 1;
+    if (delta > worstDelta) {
+      worstDelta = delta;
+      worstDriver = d.name;
+    }
+  }
+  // Nothing to compare against: say nothing rather than crying wolf.
+  if (compared === 0) return { ok: true, worstDelta: 0, worstDriver: null };
+  return { ok: worstDelta <= LAP_TOLERANCE, worstDelta, worstDriver };
+}
+
 export interface StintAttribution {
   /** driverIndex per stint (index into the drivers array), −1 = unknown. */
   byStint: number[];
