@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.8.1",
+    date: "2026-09-06",
+    changes: [
+      "The three notes fields on a stint plan — Pre-Race, During-Race, Post-Race — now have an ⤢ Enlarge button that opens the field over the whole page, with Escape to close. The small field stays exactly as it was for a quick line; the big one is for a race that is actually running. It is the same text either way, saved as you type.",
+      "Printing a plan no longer loses the notes. A text box only prints what happens to be scrolled into view, so anything past the first few lines was silently missing from the paper — on a pit-wall note the worst thing that can go missing. The print version now carries the whole text, wrapped over as many pages as it needs, with the line breaks you typed. An empty notes field prints nothing at all instead of an empty box.",
+    ],
+  },
+  {
     version: "2.8.0",
     date: "2026-09-06",
     changes: [

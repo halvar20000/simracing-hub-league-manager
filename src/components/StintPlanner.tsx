@@ -203,6 +203,113 @@ const inp =
 const lbl = "block text-[11px] font-medium uppercase tracking-wider text-zinc-500";
 const card = "rounded-lg border border-zinc-800 bg-zinc-900/40 p-4";
 
+/**
+ * One of the three free-text notes blocks (pre / during / post).
+ *
+ * TWO things the plain textarea got wrong.
+ *
+ * PRINTING: a textarea only ever prints what is scrolled into view — the rest
+ * of the text is silently missing from the paper, which for a pit-wall note is
+ * the worst possible failure. So the textarea is hidden in print and a plain
+ * block carrying the SAME text is printed instead, wrapping over as many pages
+ * as it needs.
+ *
+ * ROOM TO WRITE: h-32 is fine for a line or two and hopeless once a race is
+ * running. The ⤢ button opens the field over the whole page; Escape or the
+ * button closes it again. The plan underneath is untouched, and the same value
+ * is edited either way — there is one piece of state, not two.
+ */
+function NotesField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const [big, setBig] = useState(false);
+
+  // Escape closes it. Bound only while open, so it cannot swallow Escape from
+  // anything else on the page.
+  useEffect(() => {
+    if (!big) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBig(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [big]);
+
+  const field = (cls: string, focus = false) => (
+    <textarea
+      className={`${inp} ${cls} resize-y`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={`${label}…`}
+      disabled={disabled}
+      autoFocus={focus}
+    />
+  );
+
+  return (
+    <div className={card}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className={lbl}>{label}</span>
+        <button
+          type="button"
+          onClick={() => setBig(true)}
+          className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-800 print:hidden"
+          title="Open this field over the whole page — Escape closes it."
+        >
+          ⤢ Enlarge
+        </button>
+      </div>
+
+      <div className="print:hidden">{field("mt-1 h-32")}</div>
+
+      {/* What actually reaches the paper. `whitespace-pre-wrap` keeps the
+          line breaks the author typed; `break-words` stops a pasted URL from
+          running off the sheet. Empty notes print nothing at all rather than
+          an empty labelled box. */}
+      {value.trim() !== "" && (
+        <div className="hidden print:block">
+          <p className="whitespace-pre-wrap break-words text-sm text-zinc-100">
+            {value}
+          </p>
+        </div>
+      )}
+
+      {big && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-zinc-950/95 p-4 print:hidden sm:p-8"
+          role="dialog"
+          aria-label={label}
+        >
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              {label}
+            </span>
+            <button
+              type="button"
+              onClick={() => setBig(false)}
+              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-sm text-zinc-200 hover:bg-zinc-800"
+            >
+              Done (Esc)
+            </button>
+          </div>
+          {field("flex-1 min-h-0", true)}
+          <p className="mt-2 text-[11px] text-zinc-500">
+            Saves as you type, exactly like the small field.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // localStorage never notifies us of its own changes; we re-read on re-render.
 // How to drive a session that measures every pit constant. The fuel-ONLY stop
 // is the one that matters most: without it, a fill and a tyre change cannot be
@@ -5123,15 +5230,11 @@ export default function StintPlanner({
       )}
 
       {/* Pre-Race notes */}
-      <div className={card}>
-        <label className={lbl}>Pre-Race notes</label>
-        <textarea
-          className={`${inp} mt-1 h-32 resize-y`}
-          value={s.notes["pre"]}
-          onChange={(e) => patchNote("pre", e.target.value)}
-          placeholder={"Pre-Race notes…"}
-        />
-      </div>
+      <NotesField
+        label="Pre-Race notes"
+        value={s.notes["pre"]}
+        onChange={(v) => patchNote("pre", v)}
+      />
       </fieldset>
       </div>
       {/* ===== DURING ===== */}
@@ -5226,15 +5329,11 @@ export default function StintPlanner({
       )}
 
       {/* During-Race notes */}
-      <div className={card}>
-        <label className={lbl}>During-Race notes</label>
-        <textarea
-          className={`${inp} mt-1 h-32 resize-y`}
-          value={s.notes["during"]}
-          onChange={(e) => patchNote("during", e.target.value)}
-          placeholder={"During-Race notes…"}
-        />
-      </div>
+      <NotesField
+        label="During-Race notes"
+        value={s.notes["during"]}
+        onChange={(v) => patchNote("during", v)}
+      />
       </fieldset>
       </div>
       {/* ===== POST ===== */}
@@ -5564,15 +5663,11 @@ export default function StintPlanner({
       </div>
 
       {/* Post-Race notes */}
-      <div className={card}>
-        <label className={lbl}>Post-Race notes</label>
-        <textarea
-          className={`${inp} mt-1 h-32 resize-y`}
-          value={s.notes["post"]}
-          onChange={(e) => patchNote("post", e.target.value)}
-          placeholder={"Post-Race notes…"}
-        />
-      </div>
+      <NotesField
+        label="Post-Race notes"
+        value={s.notes["post"]}
+        onChange={(v) => patchNote("post", v)}
+      />
       </div>
     </div>
     </>
