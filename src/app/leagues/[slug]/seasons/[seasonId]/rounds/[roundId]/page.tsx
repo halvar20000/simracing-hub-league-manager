@@ -17,6 +17,7 @@ import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { RaceCenterView } from "@/components/RaceCenterView";
 import { DriverOfTheDayHero } from "@/components/DriverOfTheDayHero";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
+import { computeTeamOfTheDay } from "@/lib/team-of-the-day";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { isExpiringVodType, twitchVideoUrl } from "@/lib/twitch";
 import { RaceStreamEmbed } from "@/components/RaceStreamEmbed";
@@ -229,6 +230,25 @@ export default async function PublicRoundResults({
     orderBy: [{ classPosition: "asc" }, { finishPosition: "asc" }],
   });
   const hasTeamData = teamResultsForRound.length > 0;
+
+  // Team of the Day — computed live from the result rows rather than stored, so
+  // it can never contradict a corrected result (see src/lib/team-of-the-day.ts).
+  const teamOfTheDay = hasTeamData
+    ? computeTeamOfTheDay(
+        teamResultsForRound.map((tr) => ({
+          teamId: tr.teamId,
+          teamName: tr.team.name,
+          carClassId: tr.carClass?.id ?? null,
+          carClassName: tr.carClass?.name ?? "",
+          carClassShortCode: tr.carClass?.shortCode ?? "",
+          startPosition: tr.startPosition,
+          classPosition: tr.classPosition,
+          lapsCompleted: tr.lapsCompleted,
+          totalIncidents: tr.totalIncidents,
+          finishStatus: String(tr.finishStatus),
+        }))
+      )
+    : null;
   // Publish gate: results + standings impact only go public once the round is
   // marked COMPLETED. Admins/stewards see a preview before that; the public
   // sees a "being reviewed" note instead of the tables.
@@ -981,6 +1001,36 @@ export default async function PublicRoundResults({
             description="Once race results are imported, they will appear here."
           />
         ) : cls === "teams" && selectedTeamClass ? (
+          <>
+          {(() => {
+            const w = teamOfTheDay?.winners.find(
+              (x) => x.carClassShortCode === selectedTeamClass.shortCode
+            );
+            if (!w) return null;
+            return (
+              <section className="mb-4 rounded border border-[#ff6b35]/40 bg-[#ff6b35]/[0.07] p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs uppercase tracking-widest text-[#ff6b35]">
+                      Team of the Day
+                    </span>
+                    <span className="font-display text-lg font-semibold">{w.teamName}</span>
+                  </div>
+                  <span className="text-xs text-zinc-400">{w.carClassName}</span>
+                </div>
+                <p className="mt-1 text-sm text-zinc-300">{w.reason}</p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  {w.metrics.classStartPosition != null && w.metrics.classFinishPosition != null
+                    ? `Klassenrang ${w.metrics.classStartPosition} → ${w.metrics.classFinishPosition} · `
+                    : ""}
+                  {w.metrics.laps} Runden · {w.metrics.incidents} Incidents
+                  {w.metrics.incidentsPerLap != null
+                    ? ` (${w.metrics.incidentsPerLap.toFixed(2)} pro Runde)`
+                    : ""}
+                </p>
+              </section>
+            );
+          })()}
           <RoundTeamRaceTable
             teamResults={teamResultsForRound.filter(
               (tr) => tr.carClass?.id === selectedTeamClass.id
@@ -991,6 +1041,7 @@ export default async function PublicRoundResults({
             pointsTable={seasonPointsTable}
             scoring={teamScoringFlags}
           />
+          </>
         ) : cls === "teams" ? (
           <RoundTeamSection teamResults={teamResultsForRound} />
         ) : cls === "quali" ? (

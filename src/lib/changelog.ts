@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.4.0",
+    date: "2026-09-06",
+    changes: [
+      "Neu: Team of the Day. Auf jeder Klassenansicht eines Team-Rennens steht jetzt oben, welches Team an diesem Tag herausgestochen ist — mit einem Satz, der sagt warum, und den Zahlen dahinter. Ein Sieger je Klasse; wo nur ein Auto in einer Klasse steht, gibt es keinen, denn „Bester von einem\" sagt nichts.",
+      "Gewertet werden drei Dinge, die ein Team über eine lange Distanz ausmachen: die Aufholjagd in der eigenen Klasse (der Startrang wird innerhalb der Klasse gebildet, ein GT3 wird also nie am LMP2-Feld gemessen), die Fehlerfreiheit gemessen an Incidents pro gefahrener Runde statt absolut, und die Zuverlässigkeit aus zurückgelegter Distanz und Zieleinlauf.",
+      "Anders als der Driver of the Day wird nichts gespeichert und nichts hochgeladen: Der Preis wird bei jedem Aufruf aus den Ergebnissen selbst gerechnet. Korrigieren die Sportwarte eine Position, stimmt er sofort mit — er kann dem Ergebnis gar nicht widersprechen.",
+    ],
+  },
+  {
     version: "2.3.1",
     date: "2026-09-05",
     changes: [
