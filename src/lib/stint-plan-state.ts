@@ -151,6 +151,11 @@ export type RaceLogLap = {
    *  proper racing lap. Only written by parser generation 2 and later — see
    *  PlannerRaceLog.exclV. */
   x?: LapExclusion;
+  /** Track temperature (°C) while this lap ran, from the logger's periodic
+   *  weather samples. Absent when the log predates that sampling — a lap with
+   *  no temperature is simply left out of a temperature-corrected average
+   *  rather than corrected by a guess. */
+  tc?: number;
 };
 
 /** One stint of the plan's own car, derived from the log's pit events. */
@@ -190,6 +195,9 @@ export type PlannerRaceLog = {
   drivers: RaceLogDriverRow[];
   laps: RaceLogLap[];
   stints: RaceLogStintRow[];
+  /** Track temperature (°C) samples over the race, `t` = session clock.
+   *  Empty when the log carries only the single session_start reading. */
+  temps?: { t: number; c: number }[];
   /**
    * Which generation of the parser produced this trace.
    *

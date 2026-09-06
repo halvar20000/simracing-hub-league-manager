@@ -5388,10 +5388,22 @@ export default function StintPlanner({
                 startSec: st.startSec,
                 endSec: st.endSec,
                 driverName: st.driverName,
+                trackTempC: st.trackTempC,
               }))}
               official={official}
               paceCurve={paceCurve?.points ?? null}
               refLapSec={refLapSec}
+              // MEASURED slope only. The planner falls back to 0.1 s/°C for
+              // its own stint maths, but a debrief number built on a
+              // placeholder would read as measurement — so pass null and the
+              // dashboard simply does not offer the corrected average.
+              tempSlopePerC={s.tempModel?.slopePerC ?? null}
+              baseTempC={
+                s.event.trackTempC.trim() !== "" &&
+                Number.isFinite(Number(s.event.trackTempC))
+                  ? Number(s.event.trackTempC)
+                  : null
+              }
             />
 
           </div>

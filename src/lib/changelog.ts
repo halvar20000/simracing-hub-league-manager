@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.6.0",
+    date: "2026-09-06",
+    changes: [
+      "The race analysis can now take the track temperature out of a lap time. A long race cools — an evening enduro sheds fifteen degrees between the green flag and the finish — and at a tenth of a second per degree that is a second and a half of lap time that has nothing to do with the driver. The average-lap chart has a third setting, “Ø temp-corrected”, that shifts every lap back to one temperature, so the man who drove the hot opening stint can be compared with the man who had the cool night.",
+      "It only appears when the plan carries a MEASURED seconds-per-degree figure from its Garage 61 temperature fit. The planner's own 0.1 s/°C fallback is a placeholder, and a corrected lap time built on a placeholder would read as a measurement while being a guess — so without a real fit the setting simply is not offered.",
+      "The race logger now writes the track and air temperature every 30 seconds instead of once at the green flag. It always read them — they are on the live monitor — it just never wrote them down, and a single reading at the start can label a race but cannot correct a lap. Drivers need the new RaceLogger.exe for this; until then the correction falls back to the per-stint temperatures typed on the pit wall, which the plan already stores.",
+      "A lap that carries no temperature is left OUT of the corrected average rather than corrected by nothing — quietly mixing corrected and uncorrected laps into one figure gives a number that is neither. The chart says how many laps were corrected, how many were left out, and whether the temperatures came from the logger or from the pit wall.",
+      "Each lap is corrected on the temperature in the MIDDLE of it, not at the line: a three-minute Le Mans lap starts at a measurably different temperature than it ends at.",
+    ],
+  },
+  {
     version: "2.5.0",
     date: "2026-09-06",
     changes: [

@@ -50,6 +50,9 @@ export interface ParsedRaceLog {
   drivers: RaceLogDriverRow[];
   laps: RaceLogLap[];
   stints: RaceLogStintRow[];
+  /** Periodic track-temperature samples, `t` = session clock. Empty for a log
+   *  written before the logger sampled them. */
+  temps: { t: number; c: number }[];
   /** See PlannerRaceLog.exclV. */
   exclV: number;
 }
@@ -135,6 +138,42 @@ function cautionWindows(
   }
   if (open != null && endT > open) out.push({ from: open, to: endT });
   return out;
+}
+
+/**
+ * Track temperature while a lap ran, from the periodic samples.
+ *
+ * The lap spans [t − sec, t], so the temperature that matters is the one in
+ * the middle of it. Samples are 30 s apart and a track moves a couple of
+ * degrees an HOUR, so linear interpolation between the two neighbouring
+ * samples is well inside the noise. Outside the sampled window the nearest
+ * sample is used — but only within CLAMP_SEC, because a log that stopped
+ * sampling an hour before the flag knows nothing about the flag.
+ */
+const TEMP_CLAMP_SEC = 15 * 60;
+
+function tempAt(
+  samples: { t: number; c: number }[],
+  atSec: number | null
+): number | null {
+  if (samples.length === 0 || atSec == null || !Number.isFinite(atSec)) return null;
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  if (atSec <= first.t) {
+    return atSec >= first.t - TEMP_CLAMP_SEC ? first.c : null;
+  }
+  if (atSec >= last.t) {
+    return atSec <= last.t + TEMP_CLAMP_SEC ? last.c : null;
+  }
+  for (let i = 1; i < samples.length; i += 1) {
+    const b = samples[i];
+    if (b.t < atSec) continue;
+    const a = samples[i - 1];
+    if (b.t === a.t) return b.c;
+    const f = (atSec - a.t) / (b.t - a.t);
+    return Math.round((a.c + f * (b.c - a.c)) * 10) / 10;
+  }
+  return last.c;
 }
 
 /**
@@ -246,6 +285,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     drivers: [],
     laps: [],
     stints: [],
+    temps: [],
     exclV: PARSER_EXCLUSION_GENERATION,
   };
   if (!text || text.trim() === "") return { ...empty, error: "empty log file" };
@@ -261,6 +301,8 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
   let sawAnyEvent = false;
   /** Race-control flags with their session clock, in the order they came. */
   const flagEvents: { flag: string; t: number }[] = [];
+  /** Track-temperature samples, in the order they came. */
+  const tempSamples: { t: number; c: number }[] = [];
   /** Session clock of the last event of any kind — the end of the log. */
   let lastEventT = 0;
 
@@ -315,6 +357,21 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
       }
       case "session_end": {
         if (typeof o.official === "boolean") official = o.official;
+        break;
+      }
+      case "weather": {
+        const t =
+          typeof o.t_session === "number" && Number.isFinite(o.t_session)
+            ? o.t_session
+            : null;
+        const c =
+          typeof o.track_temp_c === "number" && Number.isFinite(o.track_temp_c)
+            ? o.track_temp_c
+            : null;
+        // A track at 0 °C is the sim before it has data, not a cold night.
+        if (t != null && c != null && c > 0) {
+          tempSamples.push({ t: Math.round(t * 10) / 10, c: Math.round(c * 10) / 10 });
+        }
         break;
       }
       case "flag": {
@@ -465,14 +522,23 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
   const cautions = cautionWindows(flagEvents, lastEventT);
   const excluded = markExcludedLaps(numbered, inLaps, greenAtSec, cautions);
 
-  const laps: RaceLogLap[] = numbered.map((l) => ({
-    lap: l.lap as number,
-    sec: round3(l.sec) as number,
-    d: driverIndex.get(norm(l.driver)) ?? 0,
-    ...(l.t != null ? { t: Math.round(l.t * 10) / 10 } : {}),
-    ...(pitLaps.has(l.lap as number) ? { pit: true } : {}),
-    ...(excluded.has(l.lap as number) ? { x: excluded.get(l.lap as number)! } : {}),
-  }));
+  const temps = tempSamples.sort((a, b) => a.t - b.t);
+
+  const laps: RaceLogLap[] = numbered.map((l) => {
+    // Mid-lap, not lap end: a 3-minute Le Mans lap started at a measurably
+    // different temperature than it finished at.
+    const midSec = l.t == null ? null : l.t - l.sec / 2;
+    const tc = tempAt(temps, midSec);
+    return {
+      lap: l.lap as number,
+      sec: round3(l.sec) as number,
+      d: driverIndex.get(norm(l.driver)) ?? 0,
+      ...(l.t != null ? { t: Math.round(l.t * 10) / 10 } : {}),
+      ...(pitLaps.has(l.lap as number) ? { pit: true } : {}),
+      ...(excluded.has(l.lap as number) ? { x: excluded.get(l.lap as number)! } : {}),
+      ...(tc != null ? { tc } : {}),
+    };
+  });
 
   // --- stints of our car ---------------------------------------------------
   const stints: RaceLogStintRow[] = [];
@@ -549,6 +615,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     drivers,
     laps,
     stints,
+    temps,
     exclV: PARSER_EXCLUSION_GENERATION,
   };
 }

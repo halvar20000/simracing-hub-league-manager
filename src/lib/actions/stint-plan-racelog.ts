@@ -79,6 +79,7 @@ export async function reparseStintPlanRaceLog(
       drivers: parsed.drivers,
       laps: parsed.laps,
       stints: parsed.stints,
+      temps: parsed.temps,
       exclV: parsed.exclV,
     },
   };
@@ -153,6 +154,7 @@ export async function uploadStintPlanRaceLog(
       drivers: parsed.drivers,
       laps: parsed.laps,
       stints: parsed.stints,
+      temps: parsed.temps,
       exclV: parsed.exclV,
     },
   };

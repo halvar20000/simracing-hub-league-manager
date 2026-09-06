@@ -12,6 +12,7 @@ import {
   attributeStints,
   cleanLapStats,
   describeExclusions,
+  type TempCorrection,
   type PlanStintWindow,
 } from "@/lib/race-log-attribution";
 
@@ -102,6 +103,12 @@ type Row = {
   cleanByReason: Partial<Record<LapExclusion, number>>;
   /** The rating this driver started the race with, from the results file. */
   iRating: number | null;
+  /** Mean racing lap shifted to the plan's reference temperature, and how
+   *  many laps carried a temperature to do it with. Null when no measured
+   *  slope exists — see the tempSlopePerC prop. */
+  tempSec: number | null;
+  tempLaps: number;
+  tempSkipped: number;
 };
 
 const normName = (s: string) => s.trim().toLowerCase();
@@ -113,6 +120,8 @@ export default function RaceLogDashboard({
   official = false,
   paceCurve = null,
   refLapSec = null,
+  tempSlopePerC = null,
+  baseTempC = null,
 }: {
   log: PlannerRaceLog;
   /** Our drivers from the uploaded event result — the authoritative stats. */
@@ -126,15 +135,55 @@ export default function RaceLogDashboard({
   paceCurve?: PacePoint[] | null;
   /** The fixed yardstick (a ≈10k iRating lap), when the plan carries one. */
   refLapSec?: number | null;
+  /**
+   * Seconds of lap time per °C, MEASURED — the plan's Garage 61 temperature
+   * fit. Null when there is none, and then no temperature correction is
+   * offered at all: the planner's 0.1 s/°C default is a placeholder, and a
+   * corrected lap time built on a placeholder is a guess that looks like a
+   * measurement.
+   */
+  tempSlopePerC?: number | null;
+  /** The temperature laps are corrected TO — the plan's own Track temp. */
+  baseTempC?: number | null;
 }) {
   const laps = useMemo(() => log.laps ?? [], [log.laps]);
   const logDrivers = useMemo(() => log.drivers ?? [], [log.drivers]);
   const stints = useMemo(() => log.stints ?? [], [log.stints]);
-  /** Which average the gap chart shows: the clean one by default. */
-  const [cleanAvg, setCleanAvg] = useState(true);
+  /** Which average the gap chart shows. "clean" leads; "temp" appears only
+   *  when a measured slope and real temperatures exist; "iracing" is the raw
+   *  figure the results page shows, kept because someone always wants to
+   *  reconcile the two. */
+  const [avgMode, setAvgMode] = useState<"clean" | "temp" | "iracing">("clean");
   /** Did the parser mark WHY each lap is out? Logs uploaded before that only
    *  support the in/out fallback and can be brought up to date by re-analysing. */
   const marked = (log.exclV ?? 1) >= 2;
+
+  /**
+   * Track temperature for one lap: the logger's own sample when the log has
+   * them, otherwise the temperature the pit wall typed for the stint that lap
+   * ran in. The second source is coarser — one figure per stint — but it is
+   * what every log written before the logger sampled weather can offer, and
+   * it is a real observation rather than an interpolation of nothing.
+   */
+  const planTemps = useMemo(
+    () =>
+      (planStints ?? []).filter(
+        (p) => p.trackTempC != null && p.endSec > p.startSec
+      ),
+    [planStints]
+  );
+  const tempCorrection = useMemo<TempCorrection | null>(() => {
+    if (tempSlopePerC == null || !Number.isFinite(tempSlopePerC)) return null;
+    if (baseTempC == null || !Number.isFinite(baseTempC)) return null;
+    const tempOf = (l: { tc?: number; t?: number }): number | null => {
+      if (l.tc != null) return l.tc;
+      if (l.t == null) return null;
+      const lt = l.t;
+      const w = planTemps.find((p) => lt >= p.startSec && lt <= p.endSec);
+      return w?.trackTempC ?? null;
+    };
+    return { slopePerC: tempSlopePerC, baseC: baseTempC, tempOf };
+  }, [tempSlopePerC, baseTempC, planTemps]);
 
   const model = useMemo(() => {
     const team = teamDrivers ?? [];
@@ -161,11 +210,11 @@ export default function RaceLogDashboard({
     if (names.length === 0) {
       return {
         rows: logDrivers.map<Row>((d, di) => {
-          const clean = cleanLapStats(
-            laps,
-            laps.map((_, li) => li).filter((li) => laps[li].d === di),
-            marked
-          );
+          const soloIdx = laps.map((_, li) => li).filter((li) => laps[li].d === di);
+          const clean = cleanLapStats(laps, soloIdx, marked);
+          const temp = tempCorrection
+            ? cleanLapStats(laps, soloIdx, marked, tempCorrection)
+            : null;
           return {
             name: d.driver,
             slot: d.slot,
@@ -182,6 +231,9 @@ export default function RaceLogDashboard({
             cleanLaps: clean.laps,
             cleanDropped: clean.dropped,
             cleanByReason: clean.byReason,
+            tempSec: temp?.avg ?? null,
+            tempLaps: temp?.corrected ?? 0,
+            tempSkipped: temp?.uncorrectable ?? 0,
           };
         }),
         lapRow: laps.map((l) => l.d),
@@ -219,11 +271,17 @@ export default function RaceLogDashboard({
       const green = best ? mine.filter((s) => s <= best * 1.05) : [];
       const p90 = percentile(green, 0.9);
       const clean = cleanLapStats(laps, mineIdx, marked);
+      const temp = tempCorrection
+        ? cleanLapStats(laps, mineIdx, marked, tempCorrection)
+        : null;
       return {
         cleanSec: clean.avg,
         cleanLaps: clean.laps,
         cleanDropped: clean.dropped,
         cleanByReason: clean.byReason,
+        tempSec: temp?.avg ?? null,
+        tempLaps: temp?.corrected ?? 0,
+        tempSkipped: temp?.uncorrectable ?? 0,
         name,
         slot: i,
         // iRacing's numbers when we have them; otherwise what the log shows
@@ -248,7 +306,7 @@ export default function RaceLogDashboard({
       source,
       confident: att?.confident ?? false,
     };
-  }, [teamDrivers, planStints, logDrivers, laps, stints, marked]);
+  }, [teamDrivers, planStints, logDrivers, laps, stints, marked, tempCorrection]);
 
   const { rows, lapRow, stintRow, source, confident } = model;
   const inferred = source === "inferred";
@@ -264,6 +322,23 @@ export default function RaceLogDashboard({
   // average stays one click away, because that is what the results page shows
   // and someone will always want to reconcile the two.
   const haveClean = rows.some((r) => r.cleanSec != null);
+  /** A temperature-corrected average is only offered when there is a measured
+   *  slope AND laps that actually carry a temperature. */
+  const haveTemp = tempCorrection != null && rows.some((r) => r.tempLaps > 0);
+  /** A mode that is not available falls back rather than showing blanks. */
+  const mode: "clean" | "temp" | "iracing" =
+    avgMode === "temp" && !haveTemp ? "clean" : avgMode;
+  const tempCorrectedTotal = rows.reduce((a, r) => a + r.tempLaps, 0);
+  const tempSkippedTotal = rows.reduce((a, r) => a + r.tempSkipped, 0);
+  /** Where each lap's temperature came from — worth naming, because one is
+   *  measured every 30 s and the other is one figure typed per stint. */
+  const tempFromLog = laps.some((l) => l.tc != null);
+  const avgOf = (r: Row): number | null =>
+    mode === "iracing"
+      ? r.avgSec
+      : mode === "temp"
+        ? (r.tempSec ?? r.cleanSec ?? r.avgSec)
+        : (r.cleanSec ?? r.avgSec);
   const droppedTotal = rows.reduce((a, r) => a + r.cleanDropped, 0);
   /** All drivers' exclusion reasons added up, for the note under the chart. */
   const droppedByReason = rows.reduce<Partial<Record<LapExclusion, number>>>(
@@ -459,7 +534,17 @@ export default function RaceLogDashboard({
                 : "Average lap — gap to class best"
           }
           note={
-            cleanAvg
+            mode === "temp"
+              ? `Racing laps only, then every lap shifted to ${baseTempC}\u00a0°C at the plan's measured ${tempSlopePerC}\u00a0s per degree — so the man who drove the hot opening stint can be compared with the man who had the cool night. ${tempCorrectedTotal} laps corrected${
+                  tempSkippedTotal > 0
+                    ? `, ${tempSkippedTotal} left out for carrying no temperature`
+                    : ""
+                }. Temperatures come from ${
+                  tempFromLog
+                    ? "the race logger's own samples"
+                    : "the per-stint figures typed on the pit wall"
+                }.`
+              : mode === "clean"
               ? marked
                 ? `Average over racing laps only — the formation and start laps, the lap into the pits and the lap back out, every lap under a full-course yellow and the restart lap after it are all left out${
                     droppedTotal > 0
@@ -475,21 +560,39 @@ export default function RaceLogDashboard({
             haveClean && (
               <button
                 type="button"
-                onClick={() => setCleanAvg((v) => !v)}
+                onClick={() =>
+                  setAvgMode((m) =>
+                    m === "clean"
+                      ? haveTemp
+                        ? "temp"
+                        : "iracing"
+                      : m === "temp"
+                        ? "iracing"
+                        : "clean"
+                  )
+                }
                 className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800"
-                title="Switch between the clean average (in/out laps removed) and iRacing's own average."
+                title={
+                  haveTemp
+                    ? "Cycle: clean average → corrected to one track temperature → iRacing's own average."
+                    : "Switch between the clean average (in/out laps removed) and iRacing's own average. A temperature-corrected average needs a measured °C slope on the plan."
+                }
               >
-                {cleanAvg ? "Ø clean" : "iRacing Ø"}
+                {mode === "clean"
+                  ? "Ø clean"
+                  : mode === "temp"
+                    ? "Ø temp-corrected"
+                    : "iRacing Ø"}
               </button>
             )
           }
           rows={rows}
           values={rows.map((r, i) => {
-            const v = cleanAvg ? (r.cleanSec ?? r.avgSec) : r.avgSec;
+            const v = avgOf(r);
             const base = baselineOf(i);
             return v != null && base != null ? v - base : null;
           })}
-          absolutes={rows.map((r) => (cleanAvg ? (r.cleanSec ?? r.avgSec) : r.avgSec))}
+          absolutes={rows.map((r) => avgOf(r))}
           baselineLabels={rows.map((_, i) => baselineLabelOf(i))}
           extraNote={
             official

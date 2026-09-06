@@ -36,6 +36,36 @@ export type CleanLapStats = {
   dropped: number;
   /** How many laps each reason accounted for (only when the trace is marked). */
   byReason: Partial<Record<LapExclusion, number>>;
+  /** Laps whose time was shifted to the reference temperature. */
+  corrected: number;
+  /** Racing laps left out because they carry no measured temperature. */
+  uncorrectable: number;
+};
+
+/**
+ * Shift lap times to a common track temperature.
+ *
+ * A long race cools: an evening enduro can shed 15 °C between the green flag
+ * and the finish, and at a tenth of a second per degree that is a second and
+ * a half of lap time that has nothing to do with the driver. Correcting for
+ * it lets the man who drove the hot opening stint be compared with the man
+ * who had the cool night.
+ *
+ * `slopePerC` must be a MEASURED figure (the plan's Garage 61 temperature
+ * fit). The planner's 0.1 s/°C default is a placeholder, and a correction
+ * built on a placeholder is a guess wearing a measurement's clothes — the
+ * caller is expected to pass null rather than a default.
+ */
+export type TempCorrection = {
+  /** Seconds of lap time per °C — measured, never a default. */
+  slopePerC: number;
+  /** The temperature every lap is corrected TO. */
+  baseC: number;
+  /** Where a lap's own temperature comes from. Defaults to the measured
+   *  sample the logger wrote onto the lap; the dashboard passes a resolver
+   *  that falls back to the temperature the pit wall typed for that stint,
+   *  so a log from before the logger sampled weather is still usable. */
+  tempOf?: (lap: RaceLogLap) => number | null;
 };
 
 /**
@@ -65,11 +95,14 @@ export type CleanLapStats = {
 export function cleanLapStats(
   all: RaceLogLap[],
   mine: number[],
-  marked = false
+  marked = false,
+  temp?: TempCorrection | null
 ): CleanLapStats {
   const kept: number[] = [];
   const byReason: Partial<Record<LapExclusion, number>> = {};
   let dropped = 0;
+  let corrected = 0;
+  let uncorrectable = 0;
   for (const li of mine) {
     const l = all[li];
     if (!l) continue;
@@ -88,6 +121,21 @@ export function cleanLapStats(
       byReason[reason] = (byReason[reason] ?? 0) + 1;
       continue;
     }
+
+    if (temp) {
+      // Correct the lap back to the reference temperature. A lap with no
+      // measured temperature is LEFT OUT rather than corrected by zero:
+      // silently mixing corrected and uncorrected laps into one average is
+      // how you end up with a number that is neither.
+      const tc = temp.tempOf ? temp.tempOf(l) : (l.tc ?? null);
+      if (tc == null) {
+        uncorrectable += 1;
+        continue;
+      }
+      kept.push(l.sec - temp.slopePerC * (tc - temp.baseC));
+      corrected += 1;
+      continue;
+    }
     kept.push(l.sec);
   }
   return {
@@ -95,6 +143,8 @@ export function cleanLapStats(
     laps: kept.length,
     dropped,
     byReason,
+    corrected,
+    uncorrectable,
   };
 }
 
@@ -120,6 +170,9 @@ export interface PlanStintWindow {
   startSec: number;
   endSec: number;
   driverName: string | null;
+  /** Track temperature the pit wall entered for this stint, when it did.
+   *  The fallback source for a log that predates weather sampling. */
+  trackTempC?: number | null;
 }
 
 /**
