@@ -217,6 +217,16 @@ export type PlannerRaceLog = {
    * "Re-analyse" button — the raw .jsonl is still in the archive.
    */
   exclV?: number;
+  /**
+   * Where the log's incidents came from, when the logger said so.
+   *
+   * "dashboard" — the broadcast dashboard's feed; "sdk" — iRacing's own
+   * per-driver counter, which the standalone logger reads by itself;
+   * "none" — neither was available. ABSENT means the log predates the logger
+   * saying at all, and then zero incidents is NOT evidence of a clean race:
+   * a standalone logger running without a dashboard recorded none either way.
+   */
+  incidentSource?: "dashboard" | "sdk" | "none";
 };
 
 /** One of OUR drivers as iRacing scored them. In a team event this is the

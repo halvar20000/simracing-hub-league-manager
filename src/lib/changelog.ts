@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.8.0",
+    date: "2026-09-06",
+    changes: [
+      "The race analysis no longer claims a clean race when nobody counted. The race logger takes its incidents from the broadcast dashboard on the same machine — and a driver running the standalone RaceLogger at home has no dashboard, so that log carries no incidents whether the race was spotless or a demolition derby. All three logs in the archive from the standalone logger have zero incident events against 589, 790 and 505 laps; a log recorded with the dashboard running has 58.",
+      "Where nothing measured, the chart now says “not recorded” and explains why, instead of “No incidents — clean race”. A race is only called clean when something actually looked: the uploaded eventresult.json, which carries iRacing's own per-driver count, or a logger that recorded which source it used.",
+      "The race logger can now count incidents by itself, with no dashboard. iRacing scores them and publishes the running count per driver; the logger watches it for jumps and writes the same events with the same severities. It stands down the moment the dashboard answers, so the two can never double-count, and it notes in the log which source was used — without that, a clean race and an unmeasured one look identical. Drivers need the new RaceLogger.exe.",
+      "Driver of the Day is unaffected and always was: it takes start, finish and incidents from the eventresult, and only overtakes and the worst position from the log.",
+    ],
+  },
+  {
     version: "2.7.0",
     date: "2026-09-06",
     changes: [

@@ -55,6 +55,8 @@ export interface ParsedRaceLog {
   temps: { t: number; c: number }[];
   /** See PlannerRaceLog.exclV. */
   exclV: number;
+  /** See PlannerRaceLog.incidentSource. */
+  incidentSource: "dashboard" | "sdk" | "none" | null;
 }
 
 const norm = (s: unknown) => String(s ?? "").trim().toLowerCase();
@@ -287,6 +289,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     stints: [],
     temps: [],
     exclV: PARSER_EXCLUSION_GENERATION,
+    incidentSource: null,
   };
   if (!text || text.trim() === "") return { ...empty, error: "empty log file" };
 
@@ -303,6 +306,8 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
   const flagEvents: { flag: string; t: number }[] = [];
   /** Track-temperature samples, in the order they came. */
   const tempSamples: { t: number; c: number }[] = [];
+  /** What the logger said about where its incidents came from. */
+  let incidentSource: "dashboard" | "sdk" | "none" | null = null;
   /** Session clock of the last event of any kind — the end of the log. */
   let lastEventT = 0;
 
@@ -357,6 +362,15 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
       }
       case "session_end": {
         if (typeof o.official === "boolean") official = o.official;
+        break;
+      }
+      case "incident_source": {
+        const v = o.source;
+        if (v === "dashboard" || v === "sdk" || v === "none") {
+          // A run that starts without a dashboard and finds one later reports
+          // both; the stronger source is the one that actually measured.
+          if (v !== "none" || incidentSource == null) incidentSource = v;
+        }
         break;
       }
       case "weather": {
@@ -617,5 +631,6 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     stints,
     temps,
     exclV: PARSER_EXCLUSION_GENERATION,
+    incidentSource,
   };
 }

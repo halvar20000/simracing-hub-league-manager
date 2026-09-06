@@ -427,6 +427,21 @@ export default function RaceLogDashboard({
   /** Where each lap's temperature came from — worth naming, because one is
    *  measured every 30 s and the other is one figure typed per stint. */
   const tempFromLog = laps.some((l) => l.tc != null);
+  /**
+   * Were incidents ever actually measured?
+   *
+   * The race logger takes them from the broadcast dashboard, and a driver
+   * running the standalone logger at home has none — so the log carries zero
+   * incidents whether the race was clean or a demolition derby. Only claim a
+   * clean race when something says it looked: the results file (iRacing's own
+   * scoring) or a logger that recorded which source it used.
+   */
+  const incidentsMeasured =
+    // The eventresult carries iRacing's own per-driver incident count, so its
+    // presence IS the measurement.
+    (teamDrivers ?? []).length > 0 ||
+    log.incidentSource === "dashboard" ||
+    log.incidentSource === "sdk";
   const avgOf = (r: Row): number | null =>
     mode === "iracing"
       ? r.avgSec
@@ -742,7 +757,11 @@ export default function RaceLogDashboard({
               r.stints === 1 ? "" : "s"
             }`;
           })}
-          emptyNote="No incidents — clean race."
+          emptyNote={
+            incidentsMeasured
+              ? "No incidents — clean race."
+              : "Not recorded. This log carries no incident data — the race logger takes incidents from the broadcast dashboard, and it was not running. Upload the eventresult.json for iRacing's own count, or use a newer RaceLogger, which reads the count itself."
+          }
         />
       </div>
 

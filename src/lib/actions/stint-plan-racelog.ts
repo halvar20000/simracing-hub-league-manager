@@ -81,6 +81,7 @@ export async function reparseStintPlanRaceLog(
       stints: parsed.stints,
       temps: parsed.temps,
       exclV: parsed.exclV,
+      incidentSource: parsed.incidentSource ?? undefined,
     },
   };
 }
@@ -156,6 +157,7 @@ export async function uploadStintPlanRaceLog(
       stints: parsed.stints,
       temps: parsed.temps,
       exclV: parsed.exclV,
+      incidentSource: parsed.incidentSource ?? undefined,
     },
   };
 }
