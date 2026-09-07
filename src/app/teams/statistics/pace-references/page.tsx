@@ -246,8 +246,17 @@ export default async function PaceReferencesPage({
                     <span className="text-zinc-300">{at(5000)}</span> · 10000 →{" "}
                     <span className="text-cyan-300">{at(10000)}</span>
                   </p>
-                  {r.source && (
-                    <p className="mt-1 text-[11px] text-zinc-600">{r.source}</p>
+                  {(r.source || r.updatedByName) && (
+                    <p className="mt-1 text-[11px] text-zinc-600">
+                      {r.source}
+                      {r.source && r.updatedByName && " · "}
+                      {r.updatedByName && (
+                        <>
+                          zuletzt {r.updatedByName},{" "}
+                          {r.updatedAt.toLocaleDateString("de-DE")}
+                        </>
+                      )}
+                    </p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <a
@@ -257,15 +266,128 @@ export default async function PaceReferencesPage({
                     >
                       ⬇ .xlsx
                     </a>
-                    {canEdit && (
-                      <form action={deletePaceReference}>
-                        <input type="hidden" name="id" value={r.id} />
-                        <button className="rounded border border-red-900/60 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40">
-                          Löschen
-                        </button>
-                      </form>
-                    )}
                   </div>
+
+                  {/* Editing lives behind one click, and the delete button
+                      lives inside it: a row in a shared library should not
+                      offer "Löschen" next to "Download". */}
+                  {canEdit && (
+                    <details className="mt-2 rounded border border-zinc-800 bg-zinc-950/60">
+                      <summary className="cursor-pointer px-3 py-1.5 text-xs text-zinc-400 hover:text-orange-300">
+                        Bearbeiten
+                      </summary>
+                      <div className="border-t border-zinc-800 p-3">
+                        <form action={savePaceReference} className="space-y-3">
+                          <input type="hidden" name="id" value={r.id} />
+                          <div className="grid gap-3 sm:grid-cols-4">
+                            <div className="sm:col-span-2">
+                              <label className={lbl}>Fahrzeugklasse *</label>
+                              <input
+                                name="carClass"
+                                required
+                                defaultValue={r.carClass}
+                                className={inp}
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className={lbl}>Strecke *</label>
+                              <input
+                                name="track"
+                                required
+                                defaultValue={r.track}
+                                className={inp}
+                              />
+                            </div>
+                            <div className="sm:col-span-3">
+                              <label className={lbl}>Bezeichnung</label>
+                              <input
+                                name="label"
+                                defaultValue={r.label}
+                                className={inp}
+                              />
+                            </div>
+                            <div>
+                              <label className={lbl}>Session</label>
+                              <select
+                                name="sessionType"
+                                className={inp}
+                                defaultValue={r.sessionType}
+                              >
+                                <option value="RACE">Race</option>
+                                <option value="QUALIFY">Qualifying</option>
+                                <option value="PRACTICE">Practice</option>
+                                <option value="TIME_TRIAL">Time trial</option>
+                              </select>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className={lbl}>Quelle</label>
+                              <input
+                                name="source"
+                                defaultValue={r.source ?? ""}
+                                className={inp}
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className={lbl}>Notiz</label>
+                              <input
+                                name="notes"
+                                defaultValue={r.notes ?? ""}
+                                className={inp}
+                              />
+                            </div>
+                            <div>
+                              <label className={lbl}>Saison-ID</label>
+                              <input
+                                name="iracingSeasonId"
+                                defaultValue={r.iracingSeasonId ?? ""}
+                                className={inp}
+                              />
+                            </div>
+                            <div>
+                              <label className={lbl}>Rennwoche (0-basiert)</label>
+                              <input
+                                name="iracingRaceWeek"
+                                defaultValue={r.iracingRaceWeek ?? ""}
+                                className={inp}
+                              />
+                            </div>
+                            <div>
+                              <label className={lbl}>Klassen-ID</label>
+                              <input
+                                name="iracingCarClassId"
+                                defaultValue={r.iracingCarClassId ?? ""}
+                                className={inp}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className={lbl}>Kurve ersetzen (optional)</label>
+                            <textarea
+                              name="points"
+                              rows={3}
+                              className={`${inp} font-mono text-xs`}
+                              placeholder={`Leer lassen — dann bleiben die ${r.points.length} vorhandenen Punkte unverändert. Nur einfügen, wenn die Kurve selbst neu gemessen wurde.`}
+                            />
+                          </div>
+                          <SubmitWithSpinner label="Änderungen speichern" />
+                        </form>
+
+                        <form
+                          action={deletePaceReference}
+                          className="mt-3 border-t border-zinc-800 pt-3"
+                        >
+                          <input type="hidden" name="id" value={r.id} />
+                          <button className="rounded border border-red-900/60 px-2 py-1 text-xs text-red-300 hover:bg-red-950/40">
+                            Kurve löschen
+                          </button>
+                          <span className="ml-2 text-[11px] text-zinc-600">
+                            Stintpläne, die auf sie zeigen, verlieren ihre
+                            Referenz.
+                          </span>
+                        </form>
+                      </div>
+                    </details>
+                  )}
                 </li>
               );
             })}

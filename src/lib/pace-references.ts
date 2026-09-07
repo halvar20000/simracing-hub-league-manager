@@ -25,6 +25,9 @@ export type PaceReferenceRow = {
   source: string | null;
   notes: string | null;
   updatedAt: Date;
+  /** Who last touched the row — a shared library that anyone may add to and
+   *  an admin may rewrite needs a name against each curve. */
+  updatedByName: string | null;
 };
 
 export async function getPaceReferences(): Promise<PaceReferenceRow[]> {
@@ -43,10 +46,15 @@ export async function getPaceReferences(): Promise<PaceReferenceRow[]> {
       source: true,
       notes: true,
       updatedAt: true,
+      updatedBy: { select: { firstName: true, lastName: true, name: true } },
     },
   });
-  return rows.map((r) => ({
+  return rows.map(({ updatedBy, ...r }) => ({
     ...r,
+    updatedByName:
+      [updatedBy?.firstName, updatedBy?.lastName].filter(Boolean).join(" ").trim() ||
+      updatedBy?.name ||
+      null,
     sessionType: r.sessionType as PaceSessionType,
     // Stored as JSON; re-clean on the way out so one bad row cannot poison a
     // page that only wanted to list the library.

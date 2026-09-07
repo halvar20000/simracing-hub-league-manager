@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.14.1",
+    date: "2026-09-07",
+    changes: [
+      "Pace references can be edited. The library could be added to and deleted from, but a typo in a label — a season written as S4 when it was S3 — could only be fixed by deleting the curve and pasting all hundred points again. Every field is editable now: label, car class, track, session type, source, note and the iRacing ids.",
+      "Replacing the curve itself is optional and separate. Leave the paste box empty and the existing points stay exactly as they are; only paste when the curve was actually re-measured. A label is a label, a measurement is a measurement, and fixing the first must not risk the second.",
+      "Editing sits behind one click per row, and the delete button moved inside it — a shared library should not offer \"delete\" next to \"download\".",
+      "Each curve now shows who last touched it and when. Anyone on a team roster may add one and an admin may rewrite one, and a shared reference that de-briefings are measured against needs a name against it.",
+    ],
+  },
+  {
     version: "2.14.0",
     date: "2026-09-07",
     changes: [
