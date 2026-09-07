@@ -163,18 +163,10 @@ export default function TeamStatsView({ stats }: { stats: TeamStatsProp }) {
                     </span>
                   </th>
                 ))}
-                <th className={`${th} text-right`}>Ø</th>
               </tr>
             </thead>
             <tbody>
-              {stats.drivers.map((d, i) => {
-                const avg =
-                  metric === "relPerf"
-                    ? d.avgRelPerf
-                    : metric === "consistency"
-                      ? d.avgConsistency
-                      : d.avgIncPerHour;
-                return (
+              {stats.drivers.map((d, i) => (
                   <tr
                     key={d.key}
                     className="border-b border-zinc-900 last:border-0 print:border-zinc-200"
@@ -203,12 +195,8 @@ export default function TeamStatsView({ stats }: { stats: TeamStatsProp }) {
                         {active.fmt(valueOf(c))}
                       </td>
                     ))}
-                    <td className={`${td} text-right font-medium tabular-nums`}>
-                      {active.fmt(avg)}
-                    </td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>

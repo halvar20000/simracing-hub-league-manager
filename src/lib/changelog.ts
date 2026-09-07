@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.12.1",
+    date: "2026-09-07",
+    changes: [
+      "Team statistics: dropped the Ø column from the per-race matrix. A driver's average over races they did not all share is not a comparison — Marco with four races and Florian with one sat in the same column looking rankable. The per-driver averages stay where they belong, on the totals table and on the driver's own page, where the number of races they rest on is visible.",
+    ],
+  },
+  {
     version: "2.12.0",
     date: "2026-09-07",
     changes: [
