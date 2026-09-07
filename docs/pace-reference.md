@@ -55,7 +55,7 @@ is not allowed to hand you a script bookmark, so this one step is manual). The
 same text is on the admin page, ready to copy.
 
 ```
-javascript:(async()=>{const e=performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('pace_analysis')).pop();if(!e){alert('Open the Pace Analysis chart first (scroll to it), then click again.');return}const j=await fetch(e).then(r=>r.json());await navigator.clipboard.writeText(JSON.stringify(j));alert('Copied: '+(j.line||[]).length+' points, event_type '+j.event_type+', week '+j.race_week_num);})()
+javascript:(async()=>{const e=performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('pace_analysis')).pop();if(!e){alert('Open the Pace Analysis chart first (scroll to it), then click again.');return}const j=await fetch(e).then(r=>r.json());j._cls={grabbed_at:new Date().toISOString(),page_title:document.title,url:location.href};await navigator.clipboard.writeText(JSON.stringify(j));alert('Copied: '+(j.line||[]).length+' points, event_type '+j.event_type+', week '+j.race_week_num);})()
 ```
 
 Then:

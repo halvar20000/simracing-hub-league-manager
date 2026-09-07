@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.14.2",
+    date: "2026-09-07",
+    changes: [
+      "A pace curve now names itself. Leave the label empty and it composes as class · track · season · race week · session — \"GT3 Class · Fuji International Speedway · 2026 S3 W8 · Race\". The race week and the session type come straight out of the pasted file; nothing about the name has to be remembered.",
+      "The season is derived, not typed. iRacing's export carries only an internal season id (6301, 6312 — different per series and meaningless outside their database), so the season was the one thing that had to be typed by hand, and four curves in a row ended up saying S4 when it was S3. Seasons run exactly 13 weeks without a gap, so one verified anchor — the 2026 S3 build of 9 June 2026 — fixes every season before and after it. The arithmetic reproduces iRacing's published build dates to the day.",
+      "The bookmarklet now stamps the copied file with the moment you took the curve. That date decides the season, so re-generating a label in October for a curve pulled in August still says S3 rather than whatever season happens to be running. An older bookmarklet keeps working — the label then falls back to the day the curve was saved.",
+      "Curves with no source line get one written for them: Series Insights, the page it came from and the day it was taken.",
+      "Clearing the label of an existing curve and saving re-generates it — which is how the four mislabelled ones get fixed without pasting a hundred points again.",
+    ],
+  },
+  {
     version: "2.14.1",
     date: "2026-09-07",
     changes: [

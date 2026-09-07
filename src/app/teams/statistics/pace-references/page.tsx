@@ -28,7 +28,11 @@ const lbl =
   "block text-[11px] font-medium uppercase tracking-wider text-zinc-500";
 const card = "rounded border border-zinc-800 bg-zinc-900 p-4";
 
-const BOOKMARKLET = `javascript:(async()=>{const e=performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('pace_analysis')).pop();if(!e){alert('Open the Pace Analysis chart first (scroll to it), then click again.');return}const j=await fetch(e).then(r=>r.json());await navigator.clipboard.writeText(JSON.stringify(j));alert('Copied: '+(j.line||[]).length+' points, event_type '+j.event_type+', week '+j.race_week_num);})()`;
+// Stamps `_cls` on the copied file: WHEN the curve was taken (which is what
+// decides its season — the file itself only carries an internal season_id)
+// and which page it came from. An older bookmarklet still works; the label
+// then falls back to today's date instead.
+const BOOKMARKLET = `javascript:(async()=>{const e=performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('pace_analysis')).pop();if(!e){alert('Open the Pace Analysis chart first (scroll to it), then click again.');return}const j=await fetch(e).then(r=>r.json());j._cls={grabbed_at:new Date().toISOString(),page_title:document.title,url:location.href};await navigator.clipboard.writeText(JSON.stringify(j));alert('Copied: '+(j.line||[]).length+' points, event_type '+j.event_type+', week '+j.race_week_num);})()`;
 
 export default async function PaceReferencesPage({
   searchParams,
@@ -128,7 +132,8 @@ export default async function PaceReferencesPage({
           deiner. Dann auf dem Pace-Analysis-Diagramm, nachdem du dorthin
           gescrollt hast und es geladen ist, einmal auf das Lesezeichen klicken:
           die ganze Kurve liegt in der Zwischenablage, bereit für den Kasten
-          weiter unten.
+          weiter unten — mitsamt dem Datum, an dem du sie geholt hast, woraus
+          sich Saison und Rennwoche der Bezeichnung ergeben.
         </p>
         <textarea
           readOnly
@@ -162,8 +167,13 @@ export default async function PaceReferencesPage({
               <input
                 name="label"
                 className={inp}
-                placeholder="GT Sprint · Spa · 2026 S3 W12"
+                placeholder="Leer lassen — schreibt sich selbst"
               />
+              <p className="mt-1 text-[11px] text-zinc-500">
+                Leer gelassen setzt sie sich aus Klasse, Strecke, Saison,
+                Rennwoche und Session zusammen — Saison und Woche aus der
+                eingefügten Datei, nicht aus dem Gedächtnis.
+              </p>
             </div>
             <div>
               <label className={lbl}>Session</label>
@@ -305,6 +315,11 @@ export default async function PaceReferencesPage({
                                 defaultValue={r.label}
                                 className={inp}
                               />
+                              <p className="mt-1 text-[11px] text-zinc-500">
+                                Feld leeren und speichern → wird neu
+                                zusammengesetzt, mit der Saison des Tages, an
+                                dem die Kurve angelegt wurde.
+                              </p>
                             </div>
                             <div>
                               <label className={lbl}>Session</label>

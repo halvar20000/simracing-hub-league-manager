@@ -19,6 +19,8 @@
  * Pure module: no DB, no "use server", no React.
  */
 
+import { iracingSeasonLabel } from "@/lib/iracing-season";
+
 /** One point of a fitted curve. */
 export type PacePoint = { irating: number; lapSec: number };
 
@@ -29,6 +31,94 @@ export const IRACING_EVENT_TYPE = {
   4: "TIME_TRIAL",
   5: "RACE",
 } as const;
+
+/** Session types as the library stores them. */
+export type PaceSessionTypeKey = "RACE" | "QUALIFY" | "PRACTICE" | "TIME_TRIAL";
+
+/** How each one reads in a label. */
+const SESSION_LABEL: Record<PaceSessionTypeKey, string> = {
+  RACE: "Race",
+  QUALIFY: "Qualifying",
+  PRACTICE: "Practice",
+  TIME_TRIAL: "Time trial",
+};
+
+/**
+ * Everything the pasted Series Insights file knows about itself.
+ *
+ * `_cls` is the block the library's bookmarklet stamps on while copying —
+ * when the curve was taken and off which page. iRacing's own file carries
+ * neither, and both are what turns an internal `season_id` into something a
+ * human can read a year later. A file pasted from an older bookmarklet simply
+ * has no `_cls`, so every field here is optional by design.
+ */
+export type PaceFileMeta = {
+  seasonId: number | null;
+  /** 0-based, exactly as the source numbers it. */
+  raceWeek: number | null;
+  carClassId: number | null;
+  sessionType: PaceSessionTypeKey | null;
+  grabbedAt: Date | null;
+  pageTitle: string | null;
+};
+
+export function paceFileMeta(raw: unknown): PaceFileMeta {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const cls = (o._cls && typeof o._cls === "object" ? o._cls : {}) as Record<
+    string,
+    unknown
+  >;
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const evt = num(o.event_type);
+  const grabbed = typeof cls.grabbed_at === "string" ? new Date(cls.grabbed_at) : null;
+  const title = typeof cls.page_title === "string" ? cls.page_title.trim() : "";
+  return {
+    seasonId: num(o.season_id),
+    raceWeek: num(o.race_week_num),
+    carClassId: num(o.car_class_id),
+    sessionType:
+      evt != null
+        ? ((IRACING_EVENT_TYPE as Record<number, PaceSessionTypeKey | undefined>)[
+            evt
+          ] ?? null)
+        : null,
+    grabbedAt: grabbed && !Number.isNaN(grabbed.getTime()) ? grabbed : null,
+    pageTitle: title === "" ? null : title.slice(0, 80),
+  };
+}
+
+/**
+ * The name a curve gives itself.
+ *
+ * "GT3 Class · Fuji International Speedway · 2026 S3 W8 · Race" — car class
+ * and track come from the form, the race week straight out of the file, the
+ * session type from its `event_type`, and the season from the DATE the curve
+ * was taken (see src/lib/iracing-season.ts). The season is the only part
+ * nobody can read out of the file, and the only part that was ever typed
+ * wrong.
+ *
+ * `at` must be when the curve was TAKEN, not when this runs: re-generating a
+ * label in October for a curve pulled in August must still say S3.
+ */
+export function composePaceLabel(input: {
+  carClass: string;
+  track: string;
+  sessionType: PaceSessionTypeKey;
+  /** 0-based race week from the file, when it had one. */
+  raceWeek: number | null;
+  at: Date;
+}): string {
+  const parts = [input.carClass.trim(), input.track.trim()].filter(
+    (x) => x !== ""
+  );
+  const season = iracingSeasonLabel(input.at);
+  parts.push(
+    input.raceWeek != null ? `${season} W${input.raceWeek + 1}` : season
+  );
+  parts.push(SESSION_LABEL[input.sessionType] ?? String(input.sessionType));
+  return parts.join(" · ");
+}
 
 /** Accept and clean whatever came out of the paste box. */
 export function parsePacePoints(raw: unknown): PacePoint[] {

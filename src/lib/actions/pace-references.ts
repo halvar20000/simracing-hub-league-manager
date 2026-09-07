@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { parsePacePoints, IRACING_EVENT_TYPE } from "@/lib/pace-reference";
+import {
+  parsePacePoints,
+  paceFileMeta,
+  composePaceLabel,
+  IRACING_EVENT_TYPE,
+} from "@/lib/pace-reference";
 import {
   getPaceViewer,
   canAddPaceReference,
@@ -93,6 +98,7 @@ export async function savePaceReference(formData: FormData): Promise<void> {
 
   // Provenance out of the pasted file, when it was the whole file.
   const file = (parsedJson ?? {}) as Record<string, unknown>;
+  const meta = paceFileMeta(parsedJson);
   const evt = typeof file.event_type === "number" ? file.event_type : null;
   const fromFile =
     evt != null
@@ -103,21 +109,58 @@ export async function savePaceReference(formData: FormData): Promise<void> {
     ? chosen
     : (fromFile ?? "RACE");
 
+  const raceWeek =
+    optInt(formData.get("iracingRaceWeek")) ?? meta.raceWeek;
+
+  // When the curve was TAKEN — that is what decides its season, never "now".
+  // The bookmarklet stamps it; an edit falls back to the day the row was
+  // created, so re-generating a label in October for a curve pulled in August
+  // still says S3. Only a hand-pasted file with neither leaves today's date,
+  // and then the composed label is right in front of the person saving it.
+  let takenAt = meta.grabbedAt;
+  if (!takenAt && id) {
+    const row = await prisma.paceReference.findUnique({
+      where: { id },
+      select: { createdAt: true },
+    });
+    takenAt = row?.createdAt ?? null;
+  }
+
   const data = {
-    label: str(formData.get("label")) || `${carClass} · ${track}`,
+    // An empty box means "name yourself" — on a new curve and on an edit
+    // alike, so a label typed wrong is fixed by clearing it.
+    label:
+      str(formData.get("label")) ||
+      composePaceLabel({
+        carClass,
+        track,
+        sessionType,
+        raceWeek,
+        at: takenAt ?? new Date(),
+      }),
     carClass,
     track,
     sessionType,
     iracingSeasonId:
       optInt(formData.get("iracingSeasonId")) ??
       (typeof file.season_id === "number" ? file.season_id : null),
-    iracingRaceWeek:
-      optInt(formData.get("iracingRaceWeek")) ??
-      (typeof file.race_week_num === "number" ? file.race_week_num : null),
+    iracingRaceWeek: raceWeek,
     iracingCarClassId:
       optInt(formData.get("iracingCarClassId")) ??
       (typeof file.car_class_id === "number" ? file.car_class_id : null),
-    source: str(formData.get("source")) || null,
+    // A curve with no source line gets one written for it: where it came
+    // from and the day it was taken beat an empty field months later.
+    source:
+      str(formData.get("source")) ||
+      (meta.grabbedAt
+        ? [
+            "Series Insights",
+            meta.pageTitle,
+            meta.grabbedAt.toLocaleDateString("de-DE"),
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : null),
     notes: str(formData.get("notes")) || null,
     // Who last touched the curve — a shared library needs a name on each row.
     updatedById: viewer!.userId,
