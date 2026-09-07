@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.14.3",
+    date: "2026-09-07",
+    changes: [
+      "Corrected the season arithmetic behind the self-writing pace-reference labels: it was anchored on iRacing's BUILD date, but a season starts the Tuesday AFTER its build, so every season sat a week early. Checked against the live members site, which reads Season 3 Week 12 of 13 today and announces Season 4 Week 1 for 14 September — the corrected anchor (2026 S3 race week 1 = 16 June 2026) reproduces both.",
+      "A week-early anchor is the kind of error that looks right all season and is wrong exactly in the week a season turns over: a curve pulled between 8 and 14 September would have been labelled S4 while iRacing still called it S3. Existing labels are unaffected — the four curves saved so far were taken inside week 12 either way.",
+    ],
+  },
+  {
     version: "2.14.2",
     date: "2026-09-07",
     changes: [
