@@ -6,6 +6,7 @@ import {
 } from "@/lib/stint-plan-access";
 import { debriefForPlan, readDebriefHistory } from "@/lib/debrief-server";
 import { buildDebriefPptx, debriefFileName } from "@/lib/debrief-pptx";
+import { loadDebriefPictures } from "@/lib/debrief-images";
 
 /**
  * The post-race de-briefing as an editable PowerPoint.
@@ -80,7 +81,17 @@ export async function GET(req: Request) {
         ),
       })),
     },
-    built.state.notes.post ?? ""
+    {
+      pre: built.state.notes.pre ?? "",
+      during: built.state.notes.during ?? "",
+      post: built.state.notes.post ?? "",
+    },
+    // Best-effort: loadDebriefPictures never throws, it just returns fewer
+    // pictures. A de-briefing must not fail because a blob is slow.
+    await loadDebriefPictures(
+      built.state.poster,
+      built.state.impressions ?? []
+    )
   );
 
   return new NextResponse(new Uint8Array(buf), {

@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.10.1",
+    date: "2026-09-07",
+    changes: [
+      "The de-briefing PowerPoint now carries the pictures and the notes from the plan. The title slide is built around the event poster and a shot from the race, and every other picture goes on an Impressionen slide — the same thing a team lead does by hand, from material that was already sitting in the plan.",
+      "New slide for the plan's own notes, all three fields. The pit wall types into the during-race box for hours; that is the closest thing to a race log the team has, and an export that carried only the post-race line was throwing it away. A long log runs on to a second slide rather than being cut off.",
+      "Pictures are shrunk to 1600 px before they go in — eight 4K screenshots straight from iRacing make a deck nobody can mail. A picture that cannot be fetched is skipped rather than failing the export.",
+      "Fixed: a league round has no pace curve, so nobody has a Relativperformance, and the chart slide was left with an empty half. It now draws whatever metric exists across the full width and says why the other is missing.",
+    ],
+  },
+  {
     version: "2.10.0",
     date: "2026-09-06",
     changes: [

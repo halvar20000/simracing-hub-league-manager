@@ -1,6 +1,7 @@
 import PptxGenJS from "pptxgenjs";
 import type { DebriefData, DebriefDriver } from "@/lib/debrief";
 import { fmtLap, fmtDelta, fmtPct } from "@/lib/debrief";
+import type { DebriefPicture, DebriefPictures } from "@/lib/debrief-images";
 
 /**
  * The de-briefing as an editable PowerPoint.
@@ -31,6 +32,35 @@ export type DebriefTrend = {
   races: string[];
   series: { name: string; slot: number; values: (number | null)[] }[];
 };
+
+/** The three free-text fields the team keeps on the plan. */
+export type DebriefNotes = {
+  pre: string;
+  during: string;
+  post: string;
+};
+
+/**
+ * Centre a picture inside a box without distorting it.
+ *
+ * pptxgenjs will happily stretch an image to whatever w/h it is given, and a
+ * squashed screenshot of somebody's car is the one thing on a debrief slide
+ * that everybody notices.
+ */
+function fitBox(
+  pic: DebriefPicture,
+  box: { x: number; y: number; w: number; h: number }
+): { x: number; y: number; w: number; h: number } {
+  const scale = Math.min(box.w / pic.w, box.h / pic.h);
+  const w = pic.w * scale;
+  const h = pic.h * scale;
+  return {
+    x: box.x + (box.w - w) / 2,
+    y: box.y + (box.h - h) / 2,
+    w,
+    h,
+  };
+}
 
 const NBSP = " ";
 const dash = (s: string) => (s === "—" ? "–" : s);
@@ -75,7 +105,8 @@ function headerRow(labels: string[]): Cell[] {
 export async function buildDebriefPptx(
   data: DebriefData,
   trend: DebriefTrend,
-  postNotes: string
+  notes: DebriefNotes,
+  pictures: DebriefPictures = { poster: null, impressions: [], skipped: 0 }
 ): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: "CLS16x9", width: 13.333, height: 7.5 });
@@ -87,6 +118,9 @@ export async function buildDebriefPptx(
   const d = data.drivers;
 
   // ---- 1. title ---------------------------------------------------------
+  // Built around the pictures when there are any, the way a team lead builds
+  // it by hand: the event poster on the right, a shot from the race on the
+  // left, the title underneath.
   {
     const s = pptx.addSlide();
     s.addShape("rect", {
@@ -96,36 +130,68 @@ export async function buildDebriefPptx(
       h: 7.5,
       fill: { color: "0F172A" },
     });
+
+    const poster = pictures.poster;
+    const shot = pictures.impressions[0] ?? null;
+
+    if (poster) {
+      // Posters come both ways — iRacing's event art is portrait, a league's
+      // own banner is wide — so the box follows the picture instead of
+      // stranding a wide one in a tall hole.
+      const wide = poster.w / poster.h > 1.2;
+      const box = fitBox(
+        poster,
+        wide
+          ? { x: 7.6, y: 0.7, w: 5.2, h: 3.2 }
+          : { x: 8.1, y: 0.6, w: 4.7, h: 6.3 }
+      );
+      s.addImage({ data: poster.data, ...box });
+    }
+    if (shot) {
+      const box = fitBox(shot, {
+        x: 0.9,
+        y: 0.6,
+        w: poster ? 6.9 : 11.5,
+        h: 3.5,
+      });
+      s.addImage({ data: shot.data, ...box });
+    }
+
+    const textY = shot ? 4.5 : 2.5;
     s.addText("De-briefing", {
       x: 0.9,
-      y: 2.5,
-      w: 11.5,
-      h: 1.1,
-      fontSize: 54,
+      y: textY,
+      w: poster ? 7.0 : 11.5,
+      h: shot ? 0.9 : 1.1,
+      fontSize: shot ? 40 : 54,
       bold: true,
       color: "FFFFFF",
     });
     s.addText(data.title, {
       x: 0.9,
-      y: 3.6,
-      w: 11.5,
-      h: 0.6,
-      fontSize: 26,
+      y: textY + (shot ? 0.9 : 1.1),
+      w: poster ? 7.0 : 11.5,
+      h: 0.55,
+      fontSize: shot ? 22 : 26,
       color: "F97316",
     });
     if (subtitle)
       s.addText(subtitle, {
         x: 0.9,
-        y: 4.2,
-        w: 11.5,
+        y: textY + (shot ? 1.45 : 1.7),
+        w: poster ? 7.0 : 11.5,
         h: 0.4,
-        fontSize: 16,
+        fontSize: 15,
         color: "94A3B8",
       });
-    s.addText(
-      data.official ? "iRacing Special Event" : "Liga-Rennen",
-      { x: 0.9, y: 4.7, w: 11.5, h: 0.35, fontSize: 13, color: "64748B" }
-    );
+    s.addText(data.official ? "iRacing Special Event" : "Liga-Rennen", {
+      x: 0.9,
+      y: textY + (shot ? 1.9 : 2.2),
+      w: poster ? 7.0 : 11.5,
+      h: 0.35,
+      fontSize: 12,
+      color: "64748B",
+    });
   }
 
   // ---- 2. awards --------------------------------------------------------
@@ -212,76 +278,79 @@ export async function buildDebriefPptx(
     );
   }
 
-  // ---- 4. the two headline metrics as charts ---------------------------
+  // ---- 4. the headline metrics as charts -------------------------------
+  // Which panels exist depends on the race. A league round carries no pace
+  // curve, so there is no Relativperformance for anybody — and half an empty
+  // slide is worse than one chart across the full width, so the panels are
+  // laid out from what actually has data and the missing one is named.
   {
-    const s = pptx.addSlide();
-    titleOn(s, "Relativperformance und Konstanz", "dieses Rennen");
-    const named = d.filter((x) => (x.relPerf ?? x.perf10k) != null);
-    if (named.length > 0) {
-      s.addChart(
-        pptx.ChartType.bar,
-        [
-          {
-            name: "Relativperformance",
-            labels: named.map((x) => x.name),
-            values: named.map((x) => ((x.relPerf ?? x.perf10k) as number) * 100),
-          },
-        ],
-        {
-          x: 0.5,
-          y: 1.4,
-          w: 6.0,
-          h: 5.4,
-          barDir: "bar",
-          chartColors: named.map((x) => colorFor(x.slot)),
-
-          showLegend: false,
-          showValue: true,
-          dataLabelFormatCode: '0.00"%"',
-          catAxisLabelFontSize: 10,
-          valAxisLabelFontSize: 10,
-          valAxisMinVal: Math.floor(
-            Math.min(...named.map((x) => ((x.relPerf ?? x.perf10k) as number) * 100)) - 0.5
-          ),
-        }
-      );
-    }
+    const panels: { title: string; rows: DebriefDriver[]; pick: (d: DebriefDriver) => number }[] = [];
+    const rel = d.filter((x) => (x.relPerf ?? x.perf10k) != null);
+    if (rel.length > 0)
+      panels.push({
+        title: "Relativperformance",
+        rows: rel,
+        pick: (x) => ((x.relPerf ?? x.perf10k) as number) * 100,
+      });
     const kon = d.filter((x) => x.consistency != null);
-    if (kon.length > 0) {
-      s.addChart(
-        pptx.ChartType.bar,
-        [
-          {
-            name: "Konstanz",
-            labels: kon.map((x) => x.name),
-            values: kon.map((x) => (x.consistency as number) * 100),
-          },
-        ],
-        {
-          x: 6.9,
-          y: 1.4,
-          w: 6.0,
-          h: 5.4,
-          barDir: "bar",
-          chartColors: kon.map((x) => colorFor(x.slot)),
+    if (kon.length > 0)
+      panels.push({
+        title: "Konstanz",
+        rows: kon,
+        pick: (x) => (x.consistency as number) * 100,
+      });
 
-          showLegend: false,
-          showValue: true,
-          dataLabelFormatCode: '0.00"%"',
-          catAxisLabelFontSize: 10,
-          valAxisLabelFontSize: 10,
-          valAxisMinVal: Math.floor(
-            Math.min(...kon.map((x) => (x.consistency as number) * 100)) - 0.5
-          ),
-        }
+    if (panels.length > 0) {
+      const s = pptx.addSlide();
+      titleOn(
+        s,
+        panels.map((p) => p.title).join(" und "),
+        "dieses Rennen"
       );
+      const W = panels.length === 1 ? 12.3 : 6.0;
+      panels.forEach((panel, i) => {
+        const x = panels.length === 1 ? 0.5 : i === 0 ? 0.5 : 6.9;
+        const vals = panel.rows.map(panel.pick);
+        s.addText(panel.title, {
+          x,
+          y: 1.15,
+          w: W,
+          h: 0.25,
+          fontSize: 11,
+          bold: true,
+          color: MUTED,
+        });
+        s.addChart(
+          pptx.ChartType.bar,
+          [
+            {
+              name: panel.title,
+              labels: panel.rows.map((x2) => x2.name),
+              values: vals,
+            },
+          ],
+          {
+            x,
+            y: 1.4,
+            w: W,
+            h: 5.4,
+            barDir: "bar",
+            chartColors: panel.rows.map((x2) => colorFor(x2.slot)),
+            showLegend: false,
+            showValue: true,
+            dataLabelFormatCode: '0.00"%"',
+            catAxisLabelFontSize: 10,
+            valAxisLabelFontSize: 10,
+            valAxisMinVal: Math.floor(Math.min(...vals) - 0.5),
+          }
+        );
+      });
+      if (!rel.length)
+        s.addText(
+          "Für dieses Rennen ist keine Pace-Kurve hinterlegt, deshalb gibt es keine Relativperformance je iRating.",
+          { x: 0.5, y: 6.95, w: 12.3, h: 0.3, fontSize: 9, color: MUTED }
+        );
     }
-    s.addText("Relativperformance", {
-      x: 0.5, y: 1.15, w: 6.0, h: 0.25, fontSize: 11, bold: true, color: MUTED,
-    });
-    s.addText("Konstanz", {
-      x: 6.9, y: 1.15, w: 6.0, h: 0.25, fontSize: 11, bold: true, color: MUTED,
-    });
   }
 
   // ---- 5. the trend over the season ------------------------------------
@@ -424,7 +493,72 @@ export async function buildDebriefPptx(
     });
   }
 
-  // ---- 7. discussion, as an empty scaffold ------------------------------
+  // ---- 7. what the team wrote during the race ---------------------------
+  // The plan's own three note fields. The pit wall types into "während" for
+  // hours; that is the closest thing to a race log the team has, and it was
+  // being thrown away by an export that only carried the post-race line.
+  {
+    const blocks: { label: string; text: string }[] = [
+      { label: "Vor dem Rennen", text: notes.pre.trim() },
+      { label: "Während des Rennens", text: notes.during.trim() },
+      { label: "Nach dem Rennen", text: notes.post.trim() },
+    ].filter((b) => b.text.length > 0);
+
+    // Text boxes, not a table: pptxgenjs's own table auto-paging throws on a
+    // long cell, and the pit wall types into "während" for hours. Blocks are
+    // measured and moved to a second slide when they no longer fit, so a long
+    // race log is carried in full instead of being silently cut off.
+    const CHARS_PER_LINE = 150; // ~10 pt across 12.2 in
+    const LINE_H = 0.17; // inches per rendered line at 10 pt
+    const HEAD_H = 0.34; // the block's heading plus its gap
+    const GAP = 0.28; // between blocks
+    const TOP = 1.4;
+    const BOTTOM = 7.15;
+
+    const linesOf = (t: string) =>
+      t
+        .split("\n")
+        .reduce(
+          (a, line) => a + Math.max(1, Math.ceil(line.length / CHARS_PER_LINE)),
+          0
+        );
+
+    // Blocks keep their natural height rather than a share of the slide —
+    // dividing the page proportionally leaves a short block floating in a sea
+    // of white when the neighbour is long.
+    let s2 = pptx.addSlide();
+    titleOn(s2, "Notizen aus dem Rennen", "wie sie im Stintplan stehen");
+    let y = TOP;
+    for (const b of blocks) {
+      const h = HEAD_H + linesOf(b.text) * LINE_H;
+      if (y > TOP && y + h > BOTTOM) {
+        s2 = pptx.addSlide();
+        titleOn(s2, "Notizen aus dem Rennen", "Fortsetzung");
+        y = TOP;
+      }
+      s2.addText(b.label, {
+        x: 0.55,
+        y,
+        w: 12.2,
+        h: 0.3,
+        fontSize: 12,
+        bold: true,
+        color: ACCENT,
+      });
+      s2.addText(b.text, {
+        x: 0.55,
+        y: y + HEAD_H,
+        w: 12.2,
+        h: Math.max(0.3, h - HEAD_H),
+        fontSize: 10,
+        color: INK,
+        valign: "top",
+      });
+      y += h + GAP;
+    }
+  }
+
+  // ---- 8. discussion, as an empty scaffold ------------------------------
   {
     const s = pptx.addSlide();
     titleOn(s, "Diskussion", null);
@@ -437,23 +571,12 @@ export async function buildDebriefPptx(
       "Fahrzeug",
     ];
     const rows: Cell[][] = [headerRow(["Stichwort", "Notizen"])];
-    // The six keywords stay EMPTY on purpose — this is the scaffold for the
-    // meeting, not a place to pretend the notes already answer them.
+    // Deliberately EMPTY: this is the scaffold for the meeting, not a place to
+    // pretend the notes above already answer it.
     for (const k of keywords) {
       rows.push([
         { text: k, options: { fontSize: 13, color: INK } },
         { text: "", options: { fontSize: 12 } },
-      ]);
-    }
-    // What the team actually wrote after the race gets its own row rather than
-    // being filed under a heading it was never written for.
-    if (postNotes.trim()) {
-      rows.push([
-        {
-          text: "Notizen aus dem Plan",
-          options: { fontSize: 12, color: MUTED, italic: true },
-        },
-        { text: postNotes.trim(), options: { fontSize: 11, color: MUTED } },
       ]);
     }
     s.addTable(rows, {
@@ -461,11 +584,50 @@ export async function buildDebriefPptx(
       y: 1.15,
       w: 12.1,
       colW: [3.2, 8.9],
-      rowH: postNotes.trim() ? 0.7 : 0.8,
+      rowH: 0.85,
       border: { type: "solid", color: RULE, pt: 1 },
       valign: "top",
       margin: 6,
     });
+  }
+
+  // ---- 9. the pictures --------------------------------------------------
+  // Everything except the one already on the title slide, six to a slide.
+  {
+    const rest = pictures.impressions.slice(1);
+    for (let page = 0; page * 6 < rest.length; page++) {
+      const batch = rest.slice(page * 6, page * 6 + 6);
+      const s = pptx.addSlide();
+      titleOn(
+        s,
+        "Impressionen",
+        page === 0 ? `${data.title}${data.track ? ` · ${data.track}` : ""}` : null
+      );
+      const COLS = 3;
+      const CW = 4.0;
+      const CH = 2.35;
+      const X0 = 0.55;
+      const Y0 = 1.45;
+      const ROW_GAP = 0.5; // leaves room for a caption under each picture
+      batch.forEach((pic, i) => {
+        const cx = X0 + (i % COLS) * (CW + 0.24);
+        const cy = Y0 + Math.floor(i / COLS) * (CH + ROW_GAP);
+        s.addImage({
+          data: pic.data,
+          ...fitBox(pic, { x: cx, y: cy, w: CW, h: CH }),
+        });
+        if (pic.caption)
+          s.addText(pic.caption, {
+            x: cx,
+            y: cy + CH + 0.04,
+            w: CW,
+            h: 0.3,
+            fontSize: 9,
+            color: MUTED,
+            align: "center",
+          });
+      });
+    }
   }
 
   const out = (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
