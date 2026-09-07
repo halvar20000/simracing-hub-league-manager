@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.15.1",
+    date: "2026-09-07",
+    changes: [
+      "Stint planner: everything a pit stop costs now lives in the pit-stop card. The flat pit loss, the refuel time and the driver swap sat in the Event card while the measured constants sat two cards below, so answering \"what does a stop cost\" meant reading two places. The Event card now answers what the race is; the pit card answers what a stop costs, and says which of the two models is running.",
+      "Johann Solowej's layout sketch is what prompted this. Almost everything in it already existed — the simple/detailed switch, measuring the constants from a session export, the whole event block — but he put his finger on the one grouping that was genuinely wrong.",
+      "The official-race fields (reference lap, pace curve) are boxed off now instead of running on as a sub-heading: they apply only to an official race, so they should look conditional.",
+      "Fixed a stale pointer while in there: the planner still sent people to \"Admin → Pace references\" for a missing curve. That library moved to the team statistics in 2.13.0 and is open to everyone on a team roster — it now links there.",
+    ],
+  },
+  {
     version: "2.15.0",
     date: "2026-09-07",
     changes: [

@@ -3221,50 +3221,34 @@ export default function StintPlanner({
               <input className={inp} value={s.event.greenFlagOffset}
                 onChange={(e) => patchEvent("greenFlagOffset", e.target.value)} />
             </div>
-            {/* The flat pit loss and the flat refuel time are what the SIMPLE
-                model runs on. Once the pit-stop model actually computes (the
-                box is ticked AND a pit lane loss is entered — `pitOn`), both
-                are dead numbers, so they come off the screen rather than sit
-                there inviting someone to tune a figure that changes nothing.
-                Driver swap stays: the detailed model uses it as
-                `driverChangeSec`. If the lane loss is cleared again, `pitOn`
-                goes false and the fields come straight back with their
-                values — nothing is thrown away. */}
-            {!pitOn && (
-              <div>
-                <label className={lbl}>Pit time loss (s)</label>
-                <input className={inp} value={s.event.pitLoss}
-                  onChange={(e) => patchEvent("pitLoss", e.target.value)}
-                  title="Total time lost at a normal (driver-change) pit stop." />
-              </div>
-            )}
-            <div>
-              <label className={lbl}>Driver swap (s)</label>
-              <input className={inp} value={s.event.driverSwapSec}
-                onChange={(e) => patchEvent("driverSwapSec", e.target.value)}
-                placeholder="30"
-                title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this. Used by the detailed pit-stop model too." />
-            </div>
-            {!pitOn && (
-              <div>
-                <label className={lbl}>Refuel time (s)</label>
-                <input className={inp} value={s.event.refuelSec}
-                  onChange={(e) => patchEvent("refuelSec", e.target.value)}
-                  placeholder="e.g. 40"
-                  title="How long fuelling takes at a full stop. If ≥ driver swap, a swap is hidden under fuelling (free) and double-stinting saves no time." />
-              </div>
-            )}
-            {pitOn && (
-              <p className="col-span-2 -mt-1 rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-[11px] leading-snug text-zinc-500">
-                Pit loss and refuel time are computed per stop — a full service
-                costs{" "}
-                <strong className="text-zinc-300">
-                  {fullServiceStopSec(s).toFixed(1)} s
-                </strong>{" "}
-                here. Change the lane loss, refuel rate and tyre time under{" "}
-                <span className="text-orange-300">Pit-stop model</span>.
-              </p>
-            )}
+            {/* Everything a STOP costs now lives in one card. It used to be
+                split — flat pit loss, refuel time and driver swap here, the
+                measured constants two cards down — which is exactly the
+                grouping Johann's layout sketch called out (07.09.2026). This
+                card answers "what is the race", the pit card answers "what
+                does a stop cost". */}
+            <p className="col-span-2 -mt-1 rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-[11px] leading-snug text-zinc-500">
+              {pitOn ? (
+                <>
+                  A stop is computed from the litres actually taken — a full
+                  service costs{" "}
+                  <strong className="text-zinc-300">
+                    {fullServiceStopSec(s).toFixed(1)} s
+                  </strong>{" "}
+                  here.
+                </>
+              ) : (
+                <>
+                  Every stop costs a flat{" "}
+                  <strong className="text-zinc-300">
+                    {s.event.pitLoss || "—"} s
+                  </strong>
+                  .
+                </>
+              )}{" "}
+              Pit times, driver swap and the measured constants are set under{" "}
+              <span className="text-orange-300">Pit-stop model</span>.
+            </p>
             <div>
               <label className={lbl}>Fuel tank (L)</label>
               <input className={inp} value={s.event.tankSize}
@@ -3285,10 +3269,14 @@ export default function StintPlanner({
                 title="Fuel burned between leaving the box and the green flag — the lap to the grid plus the laps behind the pace car. It is gone before the race starts, so it comes off the FIRST stint only." />
             </div>
             {official && (
-              <>
-                <div className="col-span-2 -mb-1 mt-1 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
+              /* Boxed, not just sub-headed: these two only exist for an
+                 official race, and a field that applies conditionally should
+                 look conditional. */
+              <div className="col-span-2 rounded border border-cyan-900/50 bg-cyan-950/10 p-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
                   Official race — comparison basis
                 </div>
+                <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={lbl}>Reference lap (10k)</label>
                   <input
@@ -3344,13 +3332,20 @@ export default function StintPlanner({
                     </>
                   ) : (
                     <>
-                      No curve for this track yet. An admin can paste one in under
-                      Admin → Pace references; without it only the reference lap above
-                      is used.
+                      No curve for this track yet. Anyone on a team roster can add
+                      one under{" "}
+                      <a
+                        href="/teams/statistics/pace-references"
+                        className="text-[#ff6b35] underline print:hidden"
+                      >
+                        Team statistics → Pace references
+                      </a>
+                      ; without it only the reference lap above is used.
                     </>
                   )}
                 </p>
-              </>
+                </div>
+              </div>
             )}
             <div>
               <label className={lbl}>Track temp (°C)</label>
@@ -3621,13 +3616,39 @@ export default function StintPlanner({
             </div>
           </div>
           {!s.event.pitModelOn ? (
-            <p className="text-xs text-zinc-500">
-              Every stop currently costs the same flat{" "}
-              <strong className="text-zinc-300">{s.event.pitLoss || "—"} s</strong>. Switch
-              this on to compute each stop from the litres actually taken, whether tyres are
-              changed and whether the driver changes — that is what makes a splash cheaper
-              than a full service, and it is measured once per car and track.
-            </p>
+            <>
+              {/* The two numbers the SIMPLE model runs on, plus the swap floor
+                  it shares with the detailed one. */}
+              <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3">
+                <div>
+                  <label className={lbl}>Pit time loss (s)</label>
+                  <input className={inp} value={s.event.pitLoss}
+                    onChange={(e) => patchEvent("pitLoss", e.target.value)}
+                    title="Total time lost at a normal (driver-change) pit stop." />
+                </div>
+                <div>
+                  <label className={lbl}>Refuel time (s)</label>
+                  <input className={inp} value={s.event.refuelSec}
+                    onChange={(e) => patchEvent("refuelSec", e.target.value)}
+                    placeholder="e.g. 40"
+                    title="How long fuelling takes at a full stop. If ≥ driver swap, a swap is hidden under fuelling (free) and double-stinting saves no time." />
+                </div>
+                <div>
+                  <label className={lbl}>Driver swap (s)</label>
+                  <input className={inp} value={s.event.driverSwapSec}
+                    onChange={(e) => patchEvent("driverSwapSec", e.target.value)}
+                    placeholder="30"
+                    title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this. Used by the detailed model too." />
+                </div>
+              </div>
+              <p className="text-xs text-zinc-500">
+                Every stop currently costs the same flat{" "}
+                <strong className="text-zinc-300">{s.event.pitLoss || "—"} s</strong>. Switch
+                this on to compute each stop from the litres actually taken, whether tyres are
+                changed and whether the driver changes — that is what makes a splash cheaper
+                than a full service, and it is measured once per car and track.
+              </p>
+            </>
           ) : (
             <>
               {/* Everything left in this card is a MEASURED value — the three
@@ -3679,6 +3700,18 @@ export default function StintPlanner({
                     />
                     tyres AFTER fuelling
                   </label>
+                </div>
+                {/* Not measured but part of the stop: the swap floor the
+                    detailed model uses as driverChangeSec. */}
+                <div>
+                  <label className={lbl}>Driver swap (s)</label>
+                  <input
+                    className={inp}
+                    value={s.event.driverSwapSec}
+                    onChange={(e) => patchEvent("driverSwapSec", e.target.value)}
+                    placeholder="30"
+                    title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this."
+                  />
                 </div>
               </div>
               {(() => {
