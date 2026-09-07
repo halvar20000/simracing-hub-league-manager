@@ -3,10 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth-helpers";
 import { parsePacePoints, IRACING_EVENT_TYPE } from "@/lib/pace-reference";
+import {
+  getPaceViewer,
+  canAddPaceReference,
+  canEditPaceReference,
+} from "@/lib/pace-reference-access";
 
-const PATH = "/admin/pace-references";
+const PATH = "/teams/statistics/pace-references";
 
 function str(v: FormDataEntryValue | null): string {
   return String(v ?? "").trim();
@@ -31,8 +35,29 @@ type SessionType = (typeof SESSION_TYPES)[number];
  * and a stale one is recognisable months later.
  */
 export async function savePaceReference(formData: FormData): Promise<void> {
-  const admin = await requireAdmin();
+  const viewer = await getPaceViewer();
+  if (!canAddPaceReference(viewer)) {
+    redirect(
+      PATH +
+        "?error=" +
+        encodeURIComponent(
+          "Nur Fahrer eines Teams können Kurven hinzufügen."
+        )
+    );
+  }
   const id = str(formData.get("id"));
+  // Adding is open to the whole team; overwriting an existing curve is not.
+  // A curve is pointed at by stint plans and by every de-briefing built from
+  // them, so replacing one silently changes analyses that are already out.
+  if (id && !canEditPaceReference(viewer)) {
+    redirect(
+      PATH +
+        "?error=" +
+        encodeURIComponent(
+          "Eine bestehende Kurve kann nur ein Admin ändern. Lege stattdessen eine neue an."
+        )
+    );
+  }
   const carClass = str(formData.get("carClass"));
   const track = str(formData.get("track"));
   const raw = str(formData.get("points"));
@@ -94,7 +119,8 @@ export async function savePaceReference(formData: FormData): Promise<void> {
       (typeof file.car_class_id === "number" ? file.car_class_id : null),
     source: str(formData.get("source")) || null,
     notes: str(formData.get("notes")) || null,
-    updatedById: admin.id,
+    // Who last touched the curve — a shared library needs a name on each row.
+    updatedById: viewer!.userId,
   };
 
   if (id) {
@@ -123,7 +149,14 @@ export async function savePaceReference(formData: FormData): Promise<void> {
 }
 
 export async function deletePaceReference(formData: FormData): Promise<void> {
-  await requireAdmin();
+  const viewer = await getPaceViewer();
+  if (!canEditPaceReference(viewer)) {
+    redirect(
+      PATH +
+        "?error=" +
+        encodeURIComponent("Kurven löschen kann nur ein Admin.")
+    );
+  }
   const id = str(formData.get("id"));
   if (id) await prisma.paceReference.delete({ where: { id } }).catch(() => null);
   revalidatePath(PATH);

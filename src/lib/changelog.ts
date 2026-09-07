@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.13.0",
+    date: "2026-09-07",
+    changes: [
+      "The pace-reference library moved out of the admin area and now lives with the team statistics: every driver on a team roster can open it, take the bookmarklet and add a curve. It was admin-only, which meant every new curve had to go through one person for no reason anybody could name.",
+      "Reading and adding are open to that audience; changing or deleting an existing curve stays with admins. A curve is pointed at by stint plans and by every de-briefing built from them, so replacing one silently changes analyses that are already out — that is a different kind of act from adding a row.",
+      "The library stays one shared collection rather than one per team: a curve for GT3 at Spa is the same curve whoever looks it up, and splitting it would mean the same hundred rows typed in three times. The .xlsx export follows the same rule.",
+      "The page is in German now, like the rest of the team-statistics area.",
+    ],
+  },
+  {
     version: "2.12.1",
     date: "2026-09-07",
     changes: [

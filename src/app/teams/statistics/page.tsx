@@ -35,6 +35,18 @@ export default async function TeamStatsIndex() {
         Admins.
       </p>
 
+      <p className="mb-6">
+        <Link
+          href="/teams/statistics/pace-references"
+          className="inline-flex items-center gap-2 rounded border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm hover:border-zinc-700 hover:bg-zinc-900"
+        >
+          <span className="font-medium">Pace-Referenzen</span>
+          <span className="text-xs text-zinc-500">
+            welche Rundenzeit ein iRating hier wert ist — teamübergreifend
+          </span>
+        </Link>
+      </p>
+
       {mine.length === 0 ? (
         <p className="rounded border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-400">
           Für dein Team gibt es noch keine ausgewerteten Rennen. Sie entstehen,

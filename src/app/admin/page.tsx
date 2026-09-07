@@ -109,9 +109,9 @@ async function FullAdminDashboard() {
           Pit references
         </Link>
         <Link
-          href="/admin/pace-references"
+          href="/teams/statistics/pace-references"
           className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800"
-          title="iRating → lap time curves per car class and track — what an official race is measured against."
+          title="iRating → lap time curves per car class and track — what an official race is measured against. Lives with the team statistics now: every driver on a team roster can read it and add to it."
         >
           Pace references
         </Link>
