@@ -14,7 +14,24 @@ import {
   type PacePoint,
 } from "@/lib/pace-reference";
 import { buildDebrief, type DebriefData } from "@/lib/debrief";
-import { normName } from "@/lib/race-log-model";
+/**
+ * The key a driver is filed under in the history.
+ *
+ * Deliberately harsher than the model's per-race name matching: iRacing, the
+ * stint plan and a spreadsheet somebody typed disagree about accents — "Andre"
+ * with and without the acute is one person, and a trend that splits them in
+ * two is worse than useless. Folding diacritics here (and not in the model)
+ * keeps the per-race matching exact while letting the season history join
+ * across sources.
+ */
+export function driverHistoryKey(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
 import type { TempCorrection } from "@/lib/race-log-attribution";
 
 /**
@@ -36,18 +53,27 @@ export type PlanRow = {
 
 /** One race in a driver's trend. */
 export type DebriefHistoryPoint = {
-  planId: string;
+  sourceKey: string;
   raceTitle: string;
   track: string | null;
   racedAt: Date;
+  /** "cls" = measured here, "import" = taken from the team's own sheet. */
+  source: string;
   relPerfPpm: number | null;
   perf10kPpm: number | null;
   consistencyPpm: number | null;
 };
 
+export type DebriefRace = {
+  sourceKey: string;
+  label: string;
+  racedAt: Date;
+  source: string;
+};
+
 export type DebriefHistory = {
-  /** Race labels in chronological order — the x axis. */
-  races: { planId: string; label: string; racedAt: Date }[];
+  /** Races in chronological order — the x axis. */
+  races: DebriefRace[];
   /** driver name -> one entry per race (null where they did not drive it). */
   byDriver: Map<string, (DebriefHistoryPoint | null)[]>;
 };
@@ -156,14 +182,20 @@ const ppmOf = (x: number | null | undefined): number | null =>
 export async function writeDebriefHistory(
   plan: PlanRow,
   data: DebriefData,
-  racedAt: Date
+  racedAt: Date,
+  team?: { teamGroup: string | null; teamName: string | null }
 ): Promise<number> {
   const keep: string[] = [];
   for (const d of data.drivers) {
-    const driverKey = normName(d.name);
+    const driverKey = driverHistoryKey(d.name);
     if (!driverKey) continue;
     keep.push(driverKey);
     const values = {
+      source: "cls",
+      sourceKey: plan.id,
+      teamGroup: team?.teamGroup ?? null,
+      teamName: team?.teamName ?? null,
+      planId: plan.id,
       driverName: d.name,
       raceTitle: data.title,
       track: data.track,
@@ -179,19 +211,23 @@ export async function writeDebriefHistory(
       relPerfPpm: ppmOf(d.relPerf),
       perf10kPpm: ppmOf(d.perf10k),
       consistencyPpm: ppmOf(d.consistency),
+      incPerHourPpm: ppmOf(d.incPerHour),
       laps: d.laps,
       stints: d.stints,
       driveSec: d.driveSec == null ? null : Math.round(d.driveSec),
       incidents: d.incidents,
     };
     await prisma.debriefMetric.upsert({
-      where: { planId_driverKey: { planId: plan.id, driverKey } },
-      create: { planId: plan.id, driverKey, ...values },
+      where: { sourceKey_driverKey: { sourceKey: plan.id, driverKey } },
+      create: { driverKey, ...values },
       update: values,
     });
   }
   await prisma.debriefMetric.deleteMany({
-    where: { planId: plan.id, driverKey: { notIn: keep.length ? keep : [" "] } },
+    where: {
+      sourceKey: plan.id,
+      driverKey: { notIn: keep.length ? keep : [" "] },
+    },
   });
   return keep.length;
 }
@@ -205,14 +241,15 @@ export async function writeDebriefHistory(
 export async function readDebriefHistory(
   driverNames: string[]
 ): Promise<DebriefHistory> {
-  const keys = driverNames.map(normName).filter(Boolean);
+  const keys = driverNames.map(driverHistoryKey).filter(Boolean);
   if (keys.length === 0) return { races: [], byDriver: new Map() };
 
   const rows = await prisma.debriefMetric.findMany({
     where: { driverKey: { in: keys } },
-    orderBy: [{ racedAt: "asc" }, { planId: "asc" }],
+    orderBy: [{ racedAt: "asc" }, { sourceKey: "asc" }],
     select: {
-      planId: true,
+      sourceKey: true,
+      source: true,
       driverKey: true,
       raceTitle: true,
       track: true,
@@ -223,29 +260,31 @@ export async function readDebriefHistory(
     },
   });
 
-  const races: { planId: string; label: string; racedAt: Date }[] = [];
+  const races: DebriefRace[] = [];
   for (const r of rows) {
-    if (races.some((x) => x.planId === r.planId)) continue;
+    if (races.some((x) => x.sourceKey === r.sourceKey)) continue;
     races.push({
-      planId: r.planId,
+      sourceKey: r.sourceKey,
       label: r.raceTitle || r.track || "Rennen",
       racedAt: r.racedAt,
+      source: r.source,
     });
   }
 
   const byDriver = new Map<string, (DebriefHistoryPoint | null)[]>();
   for (const name of driverNames) {
-    const key = normName(name);
+    const key = driverHistoryKey(name);
     const mine = races.map((race) => {
       const hit = rows.find(
-        (r) => r.planId === race.planId && r.driverKey === key
+        (r) => r.sourceKey === race.sourceKey && r.driverKey === key
       );
       return hit
         ? {
-            planId: hit.planId,
+            sourceKey: hit.sourceKey,
             raceTitle: hit.raceTitle,
             track: hit.track,
             racedAt: hit.racedAt,
+            source: hit.source,
             relPerfPpm: hit.relPerfPpm,
             perf10kPpm: hit.perf10kPpm,
             consistencyPpm: hit.consistencyPpm,

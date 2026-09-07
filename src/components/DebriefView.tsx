@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react";
 import type { DebriefData, DebriefDriver } from "@/lib/debrief";
 import { fmtLap, fmtDelta, fmtPct } from "@/lib/debrief";
-import { refreshDebriefHistory } from "@/lib/actions/debrief";
+import {
+  refreshDebriefHistory,
+  setStintPlanTeam,
+} from "@/lib/actions/debrief";
 
 /**
  * The post-race de-briefing, as the team reads it.
@@ -78,7 +81,13 @@ function rankTint(
 }
 
 export type DebriefHistoryProp = {
-  races: { planId: string; label: string; racedAtMs: number }[];
+  races: {
+    sourceKey: string;
+    label: string;
+    racedAtMs: number;
+    /** Taken from the team's own sheet rather than measured here. */
+    imported: boolean;
+  }[];
   byDriver: {
     name: string;
     points:
@@ -90,18 +99,33 @@ export type DebriefHistoryProp = {
   }[];
 };
 
+export type DebriefTeamProp = {
+  teamGroup: string | null;
+  teamGroupName: string | null;
+  teamName: string | null;
+  inferred: boolean;
+  votes: number;
+  matched: number;
+  slug: string | null;
+  currentTeamId: string | null;
+};
+
 export default function DebriefView({
   planId,
   data,
   history,
   postNotes,
   canManage,
+  team,
+  teamOptions,
 }: {
   planId: string;
   data: DebriefData;
   history: DebriefHistoryProp;
   postNotes: string;
   canManage: boolean;
+  team: DebriefTeamProp;
+  teamOptions: { id: string; name: string; label: string }[];
 }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -160,6 +184,14 @@ export default function DebriefView({
           {msg}
         </p>
       )}
+
+      {/* ---- which team this counts for ------------------------------- */}
+      <TeamBox
+        planId={planId}
+        team={team}
+        options={teamOptions}
+        canManage={canManage}
+      />
 
       {data.notes.length > 0 && (
         <ul className="space-y-1 rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200 print:border-zinc-300 print:bg-white print:text-zinc-700">
@@ -506,7 +538,7 @@ function TrendChart({
   races,
   series,
 }: {
-  races: { planId: string; label: string; racedAtMs: number }[];
+  races: DebriefHistoryProp["races"];
   series: { name: string; slot: number; values: (number | null)[] }[];
 }) {
   const all = series.flatMap((s) =>
@@ -593,5 +625,96 @@ function TrendChart({
         <span style={{ color: AXIS }}>{races.map((r) => r.label).join(" · ")}</span>
       </p>
     </div>
+  );
+}
+
+/**
+ * Which team this race is filed under in the team statistic.
+ *
+ * The answer comes from the drivers in the line-up, which is right for an
+ * ordinary team entry and wrong for a guest line-up or someone registered with
+ * two teams — so it says how it got there and offers the correction. Naming
+ * the source matters: a statistic quietly filed under the wrong team is worse
+ * than one that admits it guessed.
+ */
+function TeamBox({
+  planId,
+  team,
+  options,
+  canManage,
+}: {
+  planId: string;
+  team: DebriefTeamProp;
+  options: { id: string; name: string; label: string }[];
+  canManage: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+
+  return (
+    <section className={`${card} print:hidden`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm">
+          <span className="text-zinc-400">Zählt zur Team-Statistik von </span>
+          {team.teamGroupName ? (
+            <a
+              href={`/teams/statistics/${team.slug}`}
+              className="font-medium text-[#ff6b35] hover:underline"
+            >
+              {team.teamGroupName}
+            </a>
+          ) : (
+            <span className="text-zinc-300">keinem Team</span>
+          )}
+          <span className="ml-2 text-xs text-zinc-500">
+            {team.teamGroupName == null
+              ? "— keiner der Fahrer ist in CLS einem Team zugeordnet."
+              : team.inferred
+                ? `automatisch aus den Fahrern (${team.votes} von ${team.matched})`
+                : "von Hand gesetzt"}
+          </span>
+        </div>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+          >
+            {open ? "Abbrechen" : "Team ändern"}
+          </button>
+        )}
+      </div>
+
+      {open && canManage && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select
+            defaultValue={team.currentTeamId ?? ""}
+            disabled={pending}
+            onChange={(e) => {
+              const v = e.target.value;
+              start(async () => {
+                const r = await setStintPlanTeam(planId, v === "" ? null : v);
+                setMsg(
+                  r.ok
+                    ? `Gespeichert${r.team ? ` — jetzt ${r.team}` : ""}. Seite neu laden, um es überall zu sehen.`
+                    : r.error
+                );
+              });
+            }}
+            className="max-w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+          >
+            <option value="">Automatisch aus den Fahrern</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {pending && <span className="text-xs text-zinc-500">Speichere…</span>}
+        </div>
+      )}
+      {msg && <p className="mt-2 text-xs text-zinc-400">{msg}</p>}
+    </section>
   );
 }

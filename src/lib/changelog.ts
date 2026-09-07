@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.10.0",
+    date: "2026-09-06",
+    changes: [
+      "New: a team statistic. Every race a de-briefing was made for, per driver, in one place — Relativperformance, Konstanz and incidents per hour race by race, the season trend, and the totals over a driver's whole record with the team. Reachable from the nav as Team Stats.",
+      "Private by team: only the drivers of that team and CLS admins can open it. Because a team spans seasons and subteams, the statistic groups them — Black and Red are one squad to everybody driving in them, and a record that reset every season would answer no question anybody has.",
+      "A stint plan is filed under the team its drivers are registered with; the de-briefing page says how it got there and lets whoever runs the plan correct it, for a guest line-up or a driver registered with two teams.",
+      "Konstanz now follows the definition the team already uses — 1 − (Ø clean − beste Runde) ÷ beste Runde — instead of the standard deviation it launched with, so a CLS de-briefing can be laid next to the team's own sheet. One correction was made on the way: the sheet divides by 84600 where it means 86400, which lifted every consistency figure by about 2 %.",
+      "The four races the team had kept by hand (Sebring, 24h Nürburgring, 6h Watkins Glen, 24h Spa) were imported so the trends are not empty on day one. They are marked as taken over rather than measured — a figure somebody typed and a figure the app measured are not the same kind of fact.",
+    ],
+  },
+  {
     version: "2.9.0",
     date: "2026-09-06",
     changes: [

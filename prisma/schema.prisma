@@ -1350,6 +1350,13 @@ model StintPlan {
   /// anyone with the plan's edit token (or an admin) can flip it back.
   archivedAt DateTime?
 
+  /// The CLS team this plan raced for, when somebody corrected the automatic
+  /// guess. Normally the team is derived from the drivers in the line-up (see
+  /// src/lib/plan-team.ts); this overrides that, for a guest line-up or for a
+  /// driver registered with two teams. No FK on purpose, as with
+  /// Team.leaderUserId: a deleted team must not cascade a stint plan away.
+  teamId String?
+
   /// Frozen debriefing figures, one row per driver — see DebriefMetric.
   debriefMetrics DebriefMetric[]
 
@@ -1373,10 +1380,28 @@ model StintPlan {
 model DebriefMetric {
   id String @id @default(cuid())
 
-  /// The plan this came from. The pair (planId, driverKey) is the identity,
-  /// so re-generating a debriefing updates in place.
-  planId     String
-  plan       StintPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  /// The plan this came from, when CLS computed the row itself. NULL for a row
+  /// imported from a sheet the team kept before CLS did this.
+  planId String?
+  plan   StintPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  /// Where the numbers come from: "cls" = computed from a race log in this
+  /// app, "import" = taken from the team's own spreadsheet. Shown in the UI,
+  /// because a figure somebody typed and a figure the app measured are not the
+  /// same kind of fact and a trend must not pretend otherwise.
+  source    String @default("cls")
+  /// The row's identity together with driverKey: the plan id for a computed
+  /// row, "import:<slug>" for an imported one. So a re-generated de-briefing
+  /// and a re-run import each correct their own rows and nobody else's.
+  sourceKey String
+
+  /// Which team the race belongs to, as the grouping key the Teams overview
+  /// uses (src/lib/team-grouping.ts), e.g. "cas-tech endurance". Grouped
+  /// rather than the per-season Team id, because a team statistic spans
+  /// seasons and subteams: Black and Red are one squad to everyone in it.
+  teamGroup  String?
+  /// The concrete entry name, for display ("CAS-Tech Endurance Black").
+  teamName   String?
   /// Lower-cased driver name — the only key the log, the plan and the event
   /// result reliably share. `driverName` keeps the spelling for display.
   driverKey  String
@@ -1407,6 +1432,11 @@ model DebriefMetric {
   relPerfPpm     Int?
   perf10kPpm     Int?
   consistencyPpm Int?
+  /// Incidents per hour, also in ppm. Computed rows could derive it from
+  /// `incidents` and `driveSec`, but an imported row has only the ratio — and
+  /// faking a drive time to carry it would put a number nobody measured into
+  /// the raw columns.
+  incPerHourPpm  Int?
 
   laps      Int?
   stints    Int?
@@ -1416,8 +1446,9 @@ model DebriefMetric {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([planId, driverKey])
+  @@unique([sourceKey, driverKey])
   @@index([driverKey, racedAt])
+  @@index([teamGroup, racedAt])
 }
 
 /// A race-logger `.jsonl` uploaded straight from a driver's PC by the

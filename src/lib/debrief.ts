@@ -29,9 +29,13 @@
  *   10k-Performance the same ratio against the fixed ≈10k reference lap. Does
  *                   not move with the day's entry list, so it is the figure
  *                   that can be compared across races and across a season.
- *   Konstanz        1 − σ ÷ Ø over the driver's clean laps. A percentage, so
- *                   it survives a change of track; measured per driver against
- *                   their own laps, never driver against driver.
+ *   Konstanz        1 − (Ø clean − beste Runde) ÷ beste Runde: how far the
+ *                   average sat above the driver's own best lap, as a share of
+ *                   that lap. Johann Solowej's definition, so CLS and his
+ *                   spreadsheet agree — with one correction: his sheet divides
+ *                   by 84600 where it means 86400 (transposed digits), which
+ *                   inflates every value by about 2 %. Measured per driver
+ *                   against their own laps, never driver against driver.
  *   Incs/h          incidents ÷ hours actually driven. Raw totals punish
  *                   whoever took the most stints, which is the opposite of
  *                   what a debrief should reward.
@@ -199,12 +203,25 @@ export function stintWindows(schedule: ScheduleStint[]): PlanStintWindow[] {
   }));
 }
 
+/**
+ * Consistency: how close the driver's average racing lap sat to their own best.
+ *
+ * `1 − (Ø clean − best) ÷ best`. This is Johann Solowej's figure, so the team
+ * can lay a CLS de-briefing next to his spreadsheet and read the same number —
+ * with his transposed-digit bug (84600 instead of 86400, worth about 2 % on
+ * every row) taken out.
+ *
+ * The scatter of the laps (`cleanStdSec`) is the better statistic in the
+ * abstract, and it is still on the row for anyone who wants it. It is not the
+ * headline figure because the team already reads this one, and a metric nobody
+ * recognises is a metric nobody uses.
+ */
 function consistencyOf(row: RaceLogRow): number | null {
-  if (row.cleanStdSec == null || row.cleanSec == null) return null;
-  if (row.cleanSec <= 0) return null;
-  // Two clean laps make a standard deviation but not a consistency figure.
+  if (row.cleanSec == null || row.bestSec == null) return null;
+  if (row.bestSec <= 0) return null;
+  // A handful of laps is a sample, not a consistency figure.
   if (row.cleanLaps < 5) return null;
-  return 1 - row.cleanStdSec / row.cleanSec;
+  return 1 - (row.cleanSec - row.bestSec) / row.bestSec;
 }
 
 export function buildDebrief(input: DebriefInput): DebriefData {
@@ -295,9 +312,14 @@ export function buildDebrief(input: DebriefInput): DebriefData {
         refIRatingSec != null && bestSec != null && bestSec > 0
           ? refIRatingSec / bestSec
           : null,
+      // Johann's normalisation: the gap to the reference as a share of the
+      // REFERENCE, not of the driver's own lap. It differs from the
+      // Relativperformance above (which divides by the driver's lap) only in
+      // the second decimal, and matching his sheet is worth more than making
+      // the two symmetrical.
       perf10k:
-        ref10kSec != null && bestSec != null && bestSec > 0
-          ? ref10kSec / bestSec
+        ref10kSec != null && bestSec != null && ref10kSec > 0
+          ? 1 - (bestSec - ref10kSec) / ref10kSec
           : null,
       consistency: consistencyOf(r),
       incidents: r.incidents,

@@ -223,6 +223,18 @@ export function teamGroupKey(rawName: string): string {
   return canonicalTeamName(rawName).toLowerCase();
 }
 
+/**
+ * The grouping key as a URL segment: "cas-tech endurance" →
+ * "cas-tech-endurance". Lossy on purpose (two groups differing only in
+ * punctuation would collide), so a page that resolves one must compare the
+ * SLUG of every candidate rather than trying to invert this.
+ */
+export function teamGroupSlug(groupKeyOrName: string): string {
+  return teamGroupKey(groupKeyOrName)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 // ---------------------------------------------------------------------------
 // Aggregation
 // ---------------------------------------------------------------------------

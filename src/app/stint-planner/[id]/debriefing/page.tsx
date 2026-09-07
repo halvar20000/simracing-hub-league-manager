@@ -14,6 +14,8 @@ import {
   readDebriefHistory,
   type DebriefHistory,
 } from "@/lib/debrief-server";
+import { resolvePlanTeam, teamPickerOptions } from "@/lib/plan-team";
+import { teamGroupSlug } from "@/lib/team-grouping";
 
 export async function generateMetadata({
   params,
@@ -37,9 +39,10 @@ export async function generateMetadata({
 function serializeHistory(h: DebriefHistory) {
   return {
     races: h.races.map((r) => ({
-      planId: r.planId,
+      sourceKey: r.sourceKey,
       label: r.label,
       racedAtMs: r.racedAt.getTime(),
+      imported: r.source === "import",
     })),
     byDriver: Array.from(h.byDriver.entries()).map(([name, points]) => ({
       name,
@@ -83,6 +86,7 @@ export default async function DebriefingPage({
       archivedAt: true,
       createdByUserId: true,
       accessUserIds: true,
+      teamId: true,
     },
   });
   if (!plan) notFound();
@@ -133,6 +137,10 @@ export default async function DebriefingPage({
   }
 
   const history = await readDebriefHistory(built.data.drivers.map((d) => d.name));
+  const canManage = canManageStintPlan(plan, viewer);
+  const team = await resolvePlanTeam(plan, built.state);
+  // The picker is only worth loading for someone who may actually change it.
+  const teamOptions = canManage ? await teamPickerOptions() : [];
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8 print:max-w-none print:px-0 print:py-0">
@@ -149,7 +157,13 @@ export default async function DebriefingPage({
         data={built.data}
         history={serializeHistory(history)}
         postNotes={built.state.notes.post ?? ""}
-        canManage={canManageStintPlan(plan, viewer)}
+        canManage={canManage}
+        team={{
+          ...team,
+          slug: team.teamGroup ? teamGroupSlug(team.teamGroup) : null,
+          currentTeamId: plan.teamId,
+        }}
+        teamOptions={teamOptions}
       />
     </main>
   );

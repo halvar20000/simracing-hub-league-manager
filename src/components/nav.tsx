@@ -40,6 +40,7 @@ export default async function Nav() {
           <NavLink href="/stint-planner">Stint Planner</NavLink>
           {session?.user && (
             <>
+              <NavLink href="/teams/statistics">Team Stats</NavLink>
               <NavLink href="/registrations">My Registrations</NavLink>
               <NavLink href="/reports">My Reports</NavLink>
               <NavLink href="/race-logger">Race Logger</NavLink>

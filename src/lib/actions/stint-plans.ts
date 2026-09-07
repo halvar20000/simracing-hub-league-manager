@@ -10,6 +10,7 @@ import {
   racedAtOf,
   writeDebriefHistory,
 } from "@/lib/debrief-server";
+import { resolvePlanTeam } from "@/lib/plan-team";
 
 // Save/share actions for the stint planner.
 //
@@ -216,12 +217,25 @@ export async function setStintPlanArchived(
     try {
       const plan = await prisma.stintPlan.findUnique({
         where: { id },
-        select: { id: true, title: true, payload: true, updatedAt: true },
+        select: {
+          id: true,
+          title: true,
+          payload: true,
+          updatedAt: true,
+          teamId: true,
+        },
       });
       if (plan) {
         const built = await debriefForPlan(plan);
-        if (built)
-          await writeDebriefHistory(plan, built.data, racedAtOf(built.state, plan));
+        if (built) {
+          const team = await resolvePlanTeam(plan, built.state);
+          await writeDebriefHistory(
+            plan,
+            built.data,
+            racedAtOf(built.state, plan),
+            team
+          );
+        }
       }
     } catch (err) {
       console.error("[stint-plans] debrief history write failed", err);
