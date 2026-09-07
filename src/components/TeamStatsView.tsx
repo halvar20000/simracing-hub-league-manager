@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { TeamStats, TeamStatsDriver, TeamStatsCell } from "@/lib/team-stats";
 import { fmtLap, fmtPct } from "@/lib/debrief";
@@ -100,6 +101,7 @@ export default function TeamStatsView({ stats }: { stats: TeamStatsProp }) {
         <div>
           <h1 className="text-2xl font-bold">{stats.groupName}</h1>
           <p className="text-sm text-zinc-400 print:text-zinc-600">
+            Fahrernamen anklicken für die Einzelauswertung ·{" "}
             {stats.races.length}{" "}
             {stats.races.length === 1 ? "Rennen" : "Rennen"} ·{" "}
             {stats.drivers.length} Fahrer
@@ -184,7 +186,12 @@ export default function TeamStatsView({ stats }: { stats: TeamStatsProp }) {
                         className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
                         style={{ background: colorFor(i) }}
                       />
-                      {d.name}
+                      <Link
+                        href={`/teams/statistics/${stats.slug}/${encodeURIComponent(d.key)}`}
+                        className="hover:text-[#ff6b35] hover:underline print:no-underline"
+                      >
+                        {d.name}
+                      </Link>
                     </td>
                     {d.cells.map((c, k) => (
                       <td
@@ -254,7 +261,12 @@ export default function TeamStatsView({ stats }: { stats: TeamStatsProp }) {
                       className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
                       style={{ background: colorFor(i) }}
                     />
-                    {d.name}
+                    <Link
+                      href={`/teams/statistics/${stats.slug}/${encodeURIComponent(d.key)}`}
+                      className="hover:text-[#ff6b35] hover:underline print:no-underline"
+                    >
+                      {d.name}
+                    </Link>
                   </td>
                   <td className={`${td} text-right tabular-nums`}>{d.races}</td>
                   <td className={`${td} text-right tabular-nums`}>

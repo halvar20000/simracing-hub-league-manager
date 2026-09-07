@@ -233,7 +233,8 @@ export async function setStintPlanArchived(
             plan,
             built.data,
             racedAtOf(built.state, plan),
-            team
+            team,
+            { race: built.race, state: built.state }
           );
         }
       }

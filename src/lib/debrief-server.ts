@@ -204,8 +204,28 @@ export async function writeDebriefHistory(
   plan: PlanRow,
   data: DebriefData,
   racedAt: Date,
-  team?: { teamGroup: string | null; teamName: string | null }
+  team?: { teamGroup: string | null; teamName: string | null },
+  /** The race detail and the plan's practice import, when the caller has
+   *  them — they are what the per-driver page is built from. */
+  extra?: { race: DebriefRaceDetail; state: PlannerState }
 ): Promise<number> {
+  // Practice figures keyed the same way as everything else in the history.
+  const g61 = (() => {
+    const rows = extra?.state.g61Analysis?.drivers;
+    if (!rows?.length) return null;
+    const m = new Map<
+      string,
+      { racePaceSec: number; bestSec: number; laps: number }
+    >();
+    for (const r of rows)
+      m.set(driverHistoryKey(r.driver), {
+        racePaceSec: r.racePaceSec,
+        bestSec: r.bestSec,
+        laps: r.laps,
+      });
+    return m;
+  })();
+
   const keep: string[] = [];
   for (const d of data.drivers) {
     const driverKey = driverHistoryKey(d.name);
@@ -233,6 +253,12 @@ export async function writeDebriefHistory(
       perf10kPpm: ppmOf(d.perf10k),
       consistencyPpm: ppmOf(d.consistency),
       incPerHourPpm: ppmOf(d.incPerHour),
+      // Practice pace for the same track and car, when the plan carries a
+      // Garage 61 import. Matched on the folded name, because Garage 61 and
+      // iRacing disagree about accents as readily as everything else.
+      g61MedianMs: msOf(g61?.get(driverKey)?.racePaceSec ?? null),
+      g61BestMs: msOf(g61?.get(driverKey)?.bestSec ?? null),
+      g61Laps: g61?.get(driverKey)?.laps ?? null,
       laps: d.laps,
       stints: d.stints,
       driveSec: d.driveSec == null ? null : Math.round(d.driveSec),
@@ -250,7 +276,78 @@ export async function writeDebriefHistory(
       driverKey: { notIn: keep.length ? keep : [" "] },
     },
   });
+
+  if (extra) await writeDebriefStints(plan, extra.race, extra.state, racedAt, team);
   return keep.length;
+}
+
+/**
+ * Freeze the stints too.
+ *
+ * The per-race row says how somebody drove that race; these say how they drove
+ * ACROSS it — whether the pace falls away in a double stint, whether the first
+ * stint is always the ragged one, what the night cost. An average hides all
+ * three, and none of it can be recomputed later once a plan is edited.
+ */
+async function writeDebriefStints(
+  plan: PlanRow,
+  race: DebriefRaceDetail,
+  state: PlannerState,
+  racedAt: Date,
+  team?: { teamGroup: string | null; teamName: string | null }
+): Promise<void> {
+  // Wall-clock hour a stint began, so a season can answer "how does he drive
+  // at four in the morning". Only when the plan carries a session start —
+  // guessing one would put a night stint in the afternoon.
+  const startMs = (() => {
+    const raw = state.event.sessionStartLocal?.trim();
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  })();
+
+  const kept: number[] = [];
+  for (const st of race.stints) {
+    if (!st.driver) continue;
+    kept.push(st.index);
+    const values = {
+      planId: plan.id,
+      driverKey: driverHistoryKey(st.driver),
+      driverName: st.driver,
+      teamGroup: team?.teamGroup ?? null,
+      raceTitle: plan.title,
+      track: state.raceLog?.track ?? (state.event.track || null),
+      racedAt,
+      startLap: st.startLap,
+      endLap: st.endLap,
+      laps: st.laps,
+      avgMs: msOf(st.avgSec),
+      bestMs: msOf(st.bestSec),
+      planMs: msOf(st.planSec),
+      deltaMs: msOf(st.deltaSec),
+      pitMs: msOf(st.pitSec),
+      incidents: st.incidents,
+      startSec: st.startSec == null ? null : Math.round(st.startSec),
+      endSec: st.endSec == null ? null : Math.round(st.endSec),
+      startHour:
+        startMs != null && st.startSec != null
+          ? new Date(startMs + st.startSec * 1000).getHours()
+          : null,
+    };
+    await prisma.debriefStintMetric.upsert({
+      where: {
+        sourceKey_stintIndex: { sourceKey: plan.id, stintIndex: st.index },
+      },
+      create: { sourceKey: plan.id, stintIndex: st.index, ...values },
+      update: values,
+    });
+  }
+  await prisma.debriefStintMetric.deleteMany({
+    where: {
+      sourceKey: plan.id,
+      stintIndex: { notIn: kept.length ? kept : [-1] },
+    },
+  });
 }
 
 /**

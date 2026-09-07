@@ -52,7 +52,8 @@ export async function refreshDebriefHistory(
     plan,
     built.data,
     racedAtOf(built.state, plan),
-    team
+    team,
+    { race: built.race, state: built.state }
   );
   revalidatePath(`/stint-planner/${planId}/debriefing`);
   if (team.teamGroup) revalidatePath(`/teams/${teamGroupSlug(team.teamGroup)}/statistik`);

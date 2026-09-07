@@ -19,6 +19,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.12.0",
+    date: "2026-09-07",
+    changes: [
+      "Team statistics: click a driver's name for their own page. It opens with where they stand in the team — pace, consistency, safety and the gap to the team's fastest lap, each as a rank with the team average beside it, so a position is never read without its spread.",
+      "Below that, every figure the history holds, race by race: both averages, the plan's prognosis, the best lap, the reference their own iRating was worth, all three ratios, incidents per hour, laps and stints.",
+      "iRating and Relativperformance are drawn as two separate panels rather than one chart with two axes — two scales in one frame make lines look comparable when nothing about them is. Together they answer whether a driver holds their performance while the rating climbs.",
+      "New: how the pace holds across a race. Every stint is now kept with the de-briefing, so a season can show whether the third stint is reliably slower than the first, and what the night costs. Both are measured as the gap to the plan's prognosis — the only figure that can be averaged across different tracks.",
+      "Where a plan carried a Garage 61 import, practice pace sits next to race pace for the same track and car. It shows who brings their practice time into the race.",
+      "League results — wins, podiums, points — stay on the public career page, which is now linked from the driver page rather than duplicated.",
+    ],
+  },
+  {
     version: "2.11.0",
     date: "2026-09-07",
     changes: [

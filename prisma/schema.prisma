@@ -1359,6 +1359,8 @@ model StintPlan {
 
   /// Frozen debriefing figures, one row per driver — see DebriefMetric.
   debriefMetrics DebriefMetric[]
+  /// …and one row per stint — see DebriefStintMetric.
+  debriefStints  DebriefStintMetric[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1438,6 +1440,15 @@ model DebriefMetric {
   /// the raw columns.
   incPerHourPpm  Int?
 
+  /// This driver's PRACTICE pace for the same track and car, from the plan's
+  /// Garage 61 import: the median of their clean laps and their best. Null
+  /// when the plan carries no import — most do not, and a metric that is
+  /// usually missing must read as missing rather than as zero.
+  g61MedianMs Int?
+  g61BestMs   Int?
+  /// How many clean practice laps that rests on.
+  g61Laps     Int?
+
   laps      Int?
   stints    Int?
   driveSec  Int?
@@ -1447,6 +1458,67 @@ model DebriefMetric {
   updatedAt DateTime @updatedAt
 
   @@unique([sourceKey, driverKey])
+  @@index([driverKey, racedAt])
+  @@index([teamGroup, racedAt])
+}
+
+/// One stint of one race, frozen with the de-briefing.
+///
+/// The per-race row (DebriefMetric) answers "how did he drive that race"; this
+/// answers "how did he drive across a race" — does the pace fall away in a
+/// double stint, is the first stint always the ragged one, what did the night
+/// cost. None of that is visible in an average, and none of it can be
+/// recomputed later: a plan can be edited, re-analysed or archived, so the
+/// stints are frozen at the same moment as the rest of the de-briefing.
+model DebriefStintMetric {
+  id String @id @default(cuid())
+
+  /// Same identity as DebriefMetric: the plan id for a computed row.
+  sourceKey  String
+  /// 1-based stint number within the race.
+  stintIndex Int
+
+  planId String?
+  plan   StintPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  /// Who drove it, keyed exactly like DebriefMetric.driverKey.
+  driverKey  String
+  driverName String
+
+  teamGroup String?
+  raceTitle String
+  track     String?
+  racedAt   DateTime
+
+  startLap Int?
+  endLap   Int?
+  laps     Int?
+
+  /// Lap times in MILLISECONDS — integers, so a trend never drifts on
+  /// floating-point noise.
+  avgMs   Int?
+  bestMs  Int?
+  planMs  Int?
+  /// Actual minus planned, per lap. Positive = slower than planned.
+  deltaMs Int?
+  /// The stop that ENDED this stint.
+  pitMs   Int?
+
+  /// Incidents inside the stint's window. NULL when the log carries no
+  /// timestamped incidents at all — which is not the same as zero.
+  incidents Int?
+
+  /// Race clock, for "which stint of the race was it" and for night detection.
+  startSec  Int?
+  endSec    Int?
+  /// Local hour the stint started, when the plan carries a session start.
+  /// Lets a season answer "how does he drive at four in the morning".
+  startHour Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceKey, stintIndex])
   @@index([driverKey, racedAt])
   @@index([teamGroup, racedAt])
 }
