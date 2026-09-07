@@ -2,6 +2,7 @@ import PptxGenJS from "pptxgenjs";
 import type { DebriefData, DebriefDriver } from "@/lib/debrief";
 import { fmtLap, fmtDelta, fmtPct } from "@/lib/debrief";
 import type { DebriefPicture, DebriefPictures } from "@/lib/debrief-images";
+import type { DebriefRaceDetail } from "@/lib/debrief-stints";
 
 /**
  * The de-briefing as an editable PowerPoint.
@@ -102,11 +103,253 @@ function headerRow(labels: string[]): Cell[] {
   }));
 }
 
+/**
+ * The three views of the race itself: the lap trace, the timeline, the stints.
+ *
+ * The lap trace is a scatter chart — one series per driver, x = lap number —
+ * so PowerPoint keeps the numbers behind it and the team can poke at them.
+ * The timeline has no chart type in PowerPoint at all, so it is drawn from
+ * rectangles; that is fine, because what it has to show is two rows of bars
+ * on one clock.
+ */
+function addRaceSlides(
+  pptx: PptxGenJS,
+  data: DebriefData,
+  race: DebriefRaceDetail
+): void {
+  // ---- lap times over the race ------------------------------------------
+  const laps = race.laps.filter((l) => Number.isFinite(l.sec) && l.sec > 0);
+  if (laps.length > 0) {
+    const s = pptx.addSlide();
+    titleOn(
+      s,
+      "Rundenzeiten über das Rennen",
+      "alle Runden; Box, Gelbphasen und Startrunde sind eigene Reihen"
+    );
+    const clean = laps.filter((l) => l.x == null).map((l) => l.sec);
+    const best = Math.min(...(clean.length ? clean : laps.map((l) => l.sec)));
+    // Same clipping as the page: a four-minute repair lap must not flatten
+    // the rest of the race into a straight line.
+    const yMax = best * 1.25;
+
+    // A PowerPoint scatter chart shares ONE x array across every series and
+    // pairs it POSITIONALLY with each y array. So every series has to span the
+    // whole race with a hole where that driver was not on track — giving each
+    // driver only their own laps silently plots them against the first n lap
+    // numbers, which puts most of the race on the wrong lap.
+    const xs = laps.map((l) => l.lap);
+    const clip = (sec: number) => Math.min(sec, yMax);
+
+    const slots = Array.from(
+      new Set(laps.filter((l) => l.x == null).map((l) => l.d))
+    ).sort((a, b) => a - b);
+
+    const series: { name: string; values: (number | null)[]; color: string }[] =
+      slots.map((slot) => ({
+        name: data.drivers[slot]?.name ?? "unbekannt",
+        values: laps.map((l) =>
+          l.x == null && l.d === slot ? clip(l.sec) : null
+        ),
+        color: colorFor(slot),
+      }));
+    if (laps.some((l) => l.x != null))
+      series.push({
+        name: "aus der Wertung",
+        values: laps.map((l) => (l.x != null ? clip(l.sec) : null)),
+        color: "A1A1AA",
+      });
+
+    s.addChart(
+      pptx.ChartType.scatter,
+      [
+        { name: "Runde", values: xs },
+        ...series.map((ser) => ({ name: ser.name, values: ser.values })),
+      ],
+      {
+        x: 0.5,
+        y: 1.4,
+        w: 12.3,
+        h: 5.4,
+        chartColors: series.map((ser) => ser.color),
+        lineSize: 0,
+        lineDataSymbolSize: 5,
+        showLegend: true,
+        legendPos: "b",
+        legendFontSize: 10,
+        catAxisTitle: "Runde",
+        valAxisTitle: "Rundenzeit (Sekunden)",
+        // Without an explicit floor PowerPoint starts the axis at zero and
+        // squashes a three-hour race into one flat band.
+        valAxisMinVal: Math.floor(best * 0.98),
+        valAxisMaxVal: Math.ceil(yMax),
+        catAxisMinVal: Math.min(...xs),
+        catAxisMaxVal: Math.max(...xs),
+        valAxisLabelFontSize: 9,
+        catAxisLabelFontSize: 9,
+      }
+    );
+    s.addText(
+      `Ausreißer über ${Math.round(yMax)} s sind auf den oberen Rand gesetzt, damit eine Reparaturrunde nicht das ganze Rennen flachdrückt.`,
+      { x: 0.5, y: 6.9, w: 12.3, h: 0.3, fontSize: 9, color: MUTED }
+    );
+  }
+
+  // ---- stint plan against reality ---------------------------------------
+  const tl = race.timeline;
+  if (tl && tl.spanSec > 0) {
+    const s = pptx.addSlide();
+    titleOn(
+      s,
+      "Stintplan gegen Wirklichkeit",
+      "oben der Plan, unten der tatsächliche Verlauf; grau die Boxenstopps"
+    );
+    const X0 = 1.1;
+    const WIDTH = 11.7;
+    const px = (sec: number) => X0 + (sec / tl.spanSec) * WIDTH;
+    const rows: { label: string; bars: typeof tl.actual; y: number }[] = [
+      { label: "Plan", bars: tl.planned, y: 2.0 },
+      { label: "Ist", bars: tl.actual, y: 3.4 },
+    ];
+    // An hour grid, spaced so a 24 h race does not get 24 labels.
+    const step = tl.spanSec / 3600 <= 4 ? 1800 : tl.spanSec / 3600 <= 10 ? 3600 : 7200;
+    for (let t = 0; t <= tl.spanSec; t += step) {
+      s.addShape("line", {
+        x: px(t),
+        y: 1.75,
+        w: 0,
+        h: 3.1,
+        line: { color: "E4E4E7", width: 1 },
+      });
+      s.addText(fmtClockShort(t), {
+        x: px(t) - 0.4,
+        y: 4.9,
+        w: 0.8,
+        h: 0.25,
+        fontSize: 9,
+        color: MUTED,
+        align: "center",
+      });
+    }
+    for (const row of rows) {
+      s.addText(row.label, {
+        x: 0.35,
+        y: row.y,
+        w: 0.7,
+        h: 0.5,
+        fontSize: 11,
+        color: MUTED,
+        valign: "middle",
+      });
+      for (const b of row.bars) {
+        const w = Math.max(0.03, px(b.endSec) - px(b.startSec));
+        s.addShape("roundRect", {
+          x: px(b.startSec),
+          y: row.y,
+          w,
+          h: 0.5,
+          fill: { color: colorFor(b.d), transparency: row.label === "Plan" ? 45 : 0 },
+          line: { color: "FFFFFF", width: 1 },
+          rectRadius: 0.03,
+        });
+        if (w > 0.3)
+          s.addText(String(b.index), {
+            x: px(b.startSec),
+            y: row.y,
+            w,
+            h: 0.5,
+            fontSize: 9,
+            bold: true,
+            color: "1F2937",
+            align: "center",
+            valign: "middle",
+          });
+        if (b.pitSec > 0)
+          s.addShape("rect", {
+            x: px(b.endSec),
+            y: row.y,
+            w: Math.max(0.02, px(b.endSec + b.pitSec) - px(b.endSec)),
+            h: 0.5,
+            fill: { color: "A1A1AA", transparency: row.label === "Plan" ? 55 : 25 },
+          });
+      }
+    }
+    if (tl.actual.length < race.stints.length)
+      s.addText(
+        `${race.stints.length - tl.actual.length} von ${race.stints.length} Stints tragen im Log keine Sessionzeit und fehlen deshalb in der unteren Reihe; in der Stinttabelle stehen sie vollständig.`,
+        { x: 0.4, y: 5.35, w: 12.5, h: 0.3, fontSize: 9, color: MUTED }
+      );
+  }
+
+  // ---- stint by stint ----------------------------------------------------
+  if (race.stints.length > 0) {
+    const s = pptx.addSlide();
+    titleOn(s, "Stint für Stint", "gegen die Prognose des Plans gerechnet");
+    const rows: Cell[][] = [
+      headerRow([
+        "Stint",
+        "Fahrer",
+        "Runden",
+        "von–bis",
+        "Ø Rundenzeit",
+        "beste Runde",
+        "Prognose",
+        "Abweichung",
+        "Incs",
+        "Boxenstopp",
+      ]),
+    ];
+    for (const st of race.stints) {
+      const num = (t: string) => ({
+        text: dash(t),
+        options: { fontSize: 9, align: "right" as const, color: INK },
+      });
+      rows.push([
+        { text: String(st.index), options: { fontSize: 9, color: INK } },
+        {
+          text: st.driver ?? "–",
+          options: { fontSize: 9, color: colorFor(st.d), bold: true },
+        },
+        num(String(st.laps)),
+        num(`${st.startLap ?? "–"}–${st.endLap ?? "–"}`),
+        num(fmtLap(st.avgSec)),
+        num(fmtLap(st.bestSec)),
+        num(fmtLap(st.planSec)),
+        num(fmtDelta(st.deltaSec)),
+        num(race.incidentsTimed ? String(st.incidents ?? 0) : "—"),
+        num(st.pitSec == null ? "—" : `${st.pitSec.toFixed(1).replace(".", ",")} s`),
+      ]);
+    }
+    s.addTable(rows, {
+      x: 0.4,
+      y: 1.4,
+      w: 12.5,
+      colW: [0.75, 2.3, 0.9, 1.15, 1.5, 1.4, 1.35, 1.35, 0.6, 1.2],
+      rowH: 0.28,
+      border: { type: "solid", color: RULE, pt: 1 },
+      valign: "middle",
+      margin: 4,
+    });
+    if (!race.incidentsTimed)
+      s.addText(
+        "Incidents je Stint stehen nur zur Verfügung, wenn der Race Logger sie mit Zeitstempel aufgezeichnet hat. Dieses Log enthält keine — die Gesamtzahl je Fahrer im Anhang kommt aus dem eventresult und lässt sich keinem Stint zuordnen.",
+        { x: 0.4, y: 7.0, w: 12.5, h: 0.4, fontSize: 9, color: MUTED }
+      );
+  }
+}
+
+/** 5400 → "1:30" on the timeline axis. */
+function fmtClockShort(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec - h * 3600) / 60);
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
+
 export async function buildDebriefPptx(
   data: DebriefData,
   trend: DebriefTrend,
   notes: DebriefNotes,
-  pictures: DebriefPictures = { poster: null, impressions: [], skipped: 0 }
+  pictures: DebriefPictures = { poster: null, impressions: [], skipped: 0 },
+  race: DebriefRaceDetail | null = null
 ): Promise<Buffer> {
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: "CLS16x9", width: 13.333, height: 7.5 });
@@ -491,6 +734,11 @@ export async function buildDebriefPptx(
       fontSize: 9,
       color: MUTED,
     });
+  }
+
+  // ---- 6b. how the race actually ran ------------------------------------
+  if (race) {
+    addRaceSlides(pptx, data, race);
   }
 
   // ---- 7. what the team wrote during the race ---------------------------

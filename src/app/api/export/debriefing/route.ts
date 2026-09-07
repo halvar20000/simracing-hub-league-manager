@@ -91,7 +91,8 @@ export async function GET(req: Request) {
     await loadDebriefPictures(
       built.state.poster,
       built.state.impressions ?? []
-    )
+    ),
+    built.race
   );
 
   return new NextResponse(new Uint8Array(buf), {

@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.11.0",
+    date: "2026-09-07",
+    changes: [
+      "The de-briefing now shows how the race actually ran, on the page and in the PowerPoint: every lap over the race, the stint plan laid against what really happened, and a stint-by-stint table.",
+      "Lap times over the race — all of them, not just the clean ones. The laps that are out of the averages (pit in and out, full-course yellows, the start lap) are drawn hollow so they read as context, and a lap slower than 25 % off the best is pinned to the top edge and marked, so one repair lap cannot flatten the whole trace.",
+      "Stint plan against reality — two rows of bars on one race clock, coloured by driver, with the pit stops and their duration between them. It shows at a glance where the strategy held and where it did not; CLS is the only place that holds both halves, so nothing else in the team can draw it.",
+      "Stint by stint — driver, laps, average and best lap, the plan's prognosis for that driver and the gap to it in seconds per lap, plus the stop that ended the stint. A bar chart of the average per stint and of the gap to the plan sits above it.",
+      "The race logger's incidents are now kept with the session time they happened at, so incidents can be counted per stint instead of only per driver. Logs recorded before this carry no timestamps; the column then stays empty and says so rather than spreading a driver's total across their stints.",
+    ],
+  },
+  {
     version: "2.10.1",
     date: "2026-09-07",
     changes: [

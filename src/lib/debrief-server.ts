@@ -13,7 +13,12 @@ import {
   parsePacePoints,
   type PacePoint,
 } from "@/lib/pace-reference";
-import { buildDebrief, type DebriefData } from "@/lib/debrief";
+import { buildDebrief, stintWindows, type DebriefData } from "@/lib/debrief";
+import { modelFromLog } from "@/lib/race-log-model";
+import {
+  buildDebriefRace,
+  type DebriefRaceDetail,
+} from "@/lib/debrief-stints";
 /**
  * The key a driver is filed under in the history.
  *
@@ -110,7 +115,11 @@ async function paceCurveFor(state: PlannerState): Promise<PacePoint[] | null> {
 /** The debriefing for one plan, or null when it has no race log yet. */
 export async function debriefForPlan(
   plan: PlanRow
-): Promise<{ data: DebriefData; state: PlannerState } | null> {
+): Promise<{
+  data: DebriefData;
+  race: DebriefRaceDetail;
+  state: PlannerState;
+} | null> {
   const state = hydratePlanState(plan.payload, plan.title);
   if (!state.raceLog) return null;
 
@@ -152,6 +161,16 @@ export async function debriefForPlan(
         }
       : null;
 
+  // Built once and shared: the metric table, the lap chart, the stint table
+  // and the timeline all read the same attribution, and walking the trace
+  // twice for one request is waste on a twelve-hour log.
+  const model = modelFromLog(state.raceLog, {
+    teamDrivers: state.eventResult?.ownDrivers,
+    planStints: stintWindows(schedule),
+    tempCorrection,
+    overrides: state.raceLog.stintDrivers ?? [],
+  });
+
   const data = buildDebrief({
     title: plan.title,
     car: state.event.car || null,
@@ -163,8 +182,10 @@ export async function debriefForPlan(
     ref10kSec,
     tempCorrection,
     stintDriverOverrides: state.raceLog.stintDrivers ?? [],
+    model,
   });
-  return { data, state };
+  const race = buildDebriefRace(state.raceLog, model, schedule);
+  return { data, race, state };
 }
 
 const msOf = (sec: number | null | undefined): number | null =>

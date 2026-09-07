@@ -199,6 +199,16 @@ export type PlannerRaceLog = {
    *  Empty when the log carries only the single session_start reading. */
   temps?: { t: number; c: number }[];
   /**
+   * Incidents on OUR car with the session clock they landed on, and which
+   * driver row they belong to.
+   *
+   * ABSENT on every log parsed before this existed, and empty on a log whose
+   * logger recorded no incidents at all — in both cases the de-briefing must
+   * say "not recorded" rather than "none". Re-analysing a plan fills it in
+   * where the raw .jsonl has the events.
+   */
+  incidents?: { t: number; d: number }[];
+  /**
    * Hand corrections to who drove which stint, by stint index → driver name.
    *
    * The automatic sources can both be wrong: the plan is an intention typed

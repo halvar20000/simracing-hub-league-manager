@@ -53,6 +53,9 @@ export interface ParsedRaceLog {
   /** Periodic track-temperature samples, `t` = session clock. Empty for a log
    *  written before the logger sampled them. */
   temps: { t: number; c: number }[];
+  /** Incidents on our car with the session clock, when the logger timestamped
+   *  them. Empty means "none recorded" — never "the race was clean". */
+  incidents: { t: number; d: number }[];
   /** See PlannerRaceLog.exclV. */
   exclV: number;
   /** See PlannerRaceLog.incidentSource. */
@@ -98,6 +101,10 @@ interface CarAcc {
   laps: LapRec[];
   pits: { entryLap: number | null; durationSec: number | null; driver: string }[];
   incidentsByDriver: Map<string, number>;
+  /** Every incident with the session clock it landed on, so a de-briefing can
+   *  say WHERE in the race it went wrong instead of only how many there were
+   *  in total. Empty when the logger reported none. */
+  incidentEvents: { t: number | null; driver: string }[];
   best: number;
 }
 
@@ -286,6 +293,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     fieldBestSec: null,
     drivers: [],
     laps: [],
+    incidents: [],
     stints: [],
     temps: [],
     exclV: PARSER_EXCLUSION_GENERATION,
@@ -326,6 +334,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
         laps: [],
         pits: [],
         incidentsByDriver: new Map(),
+        incidentEvents: [],
         best: Infinity,
       };
       cars.set(k, c);
@@ -427,6 +436,13 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
         const car = getCar(o);
         const d = norm(o.driver);
         car.incidentsByDriver.set(d, (car.incidentsByDriver.get(d) ?? 0) + 1);
+        car.incidentEvents.push({
+          t:
+            typeof o.t_session === "number" && Number.isFinite(o.t_session)
+              ? o.t_session
+              : null,
+          driver: d,
+        });
         break;
       }
       default:
@@ -630,6 +646,13 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     laps,
     stints,
     temps,
+    incidents: ownCar.incidentEvents
+      .filter((e): e is { t: number; driver: string } => e.t != null)
+      .map((e) => ({
+        t: Math.round(e.t),
+        d: driverIndex.get(e.driver) ?? -1,
+      }))
+      .sort((a, b) => a.t - b.t),
     exclV: PARSER_EXCLUSION_GENERATION,
     incidentSource,
   };

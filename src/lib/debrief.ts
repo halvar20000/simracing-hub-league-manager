@@ -50,6 +50,7 @@ import { targetLapSec, type PacePoint } from "@/lib/pace-reference";
 import {
   modelFromLog,
   normName,
+  type RaceLogModel,
   type RaceLogRow,
 } from "@/lib/race-log-model";
 
@@ -150,6 +151,10 @@ export type DebriefInput = {
   tempCorrection?: TempCorrection | null;
   /** Hand corrections: stint index → driver name. */
   stintDriverOverrides?: (string | null)[];
+  /** An already-computed model. Walking a twelve-hour trace is not free, and
+   *  the caller usually needs the same model for the lap chart and the stint
+   *  table — so it may build it once and hand it in. */
+  model?: RaceLogModel;
 };
 
 /** 92.418 → "1:32,418" — German decimal comma, as the team reads it. */
@@ -239,12 +244,14 @@ export function buildDebrief(input: DebriefInput): DebriefData {
   } = input;
 
   const planStints = stintWindows(schedule);
-  const model = modelFromLog(log, {
-    teamDrivers,
-    planStints,
-    tempCorrection,
-    overrides: stintDriverOverrides,
-  });
+  const model =
+    input.model ??
+    modelFromLog(log, {
+      teamDrivers,
+      planStints,
+      tempCorrection,
+      overrides: stintDriverOverrides,
+    });
   const prognosis = prognosisByDriver(schedule);
 
   const teamBestSec = (() => {

@@ -7,6 +7,8 @@ import {
   refreshDebriefHistory,
   setStintPlanTeam,
 } from "@/lib/actions/debrief";
+import DebriefRaceCharts from "@/components/DebriefRaceCharts";
+import type { DebriefRaceDetail } from "@/lib/debrief-stints";
 
 /**
  * The post-race de-briefing, as the team reads it.
@@ -118,6 +120,7 @@ export default function DebriefView({
   canManage,
   team,
   teamOptions,
+  race,
 }: {
   planId: string;
   data: DebriefData;
@@ -126,6 +129,7 @@ export default function DebriefView({
   canManage: boolean;
   team: DebriefTeamProp;
   teamOptions: { id: string; name: string; label: string }[];
+  race: DebriefRaceDetail;
 }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -280,6 +284,9 @@ export default function DebriefView({
           die meisten Stints übernommen hat.
         </p>
       </section>
+
+      {/* ---- how the race actually ran ----------------------------------- */}
+      <DebriefRaceCharts race={race} driverNames={d.map((x) => x.name)} />
 
       {/* ---- season trend ------------------------------------------------ */}
       {history.races.length >= 2 ? (

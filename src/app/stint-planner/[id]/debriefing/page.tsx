@@ -158,6 +158,7 @@ export default async function DebriefingPage({
         history={serializeHistory(history)}
         postNotes={built.state.notes.post ?? ""}
         canManage={canManage}
+        race={built.race}
         team={{
           ...team,
           slug: team.teamGroup ? teamGroupSlug(team.teamGroup) : null,
