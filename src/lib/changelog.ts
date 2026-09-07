@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.15.0",
+    date: "2026-09-07",
+    changes: [
+      "Race-by-race standings: the strikethrough now marks the rounds THAT table actually dropped. The combined championship and the Pro/Am championship drop different rounds — each drops what is worst for its own total — but both views drew the class set, so on a Pro/Am season the combined table struck rounds its own sum had kept. The numbers were always right; the marks were not.",
+      "Found through a driver's question, not a test: Markus Groß's combined row struck round 8 (21 points) while its total had in fact dropped round 12 (19 points). Reading the row against its own sum is how anybody would check a standings table, and it did not add up.",
+      "Both drop sets are published per round now (droppedCombined / droppedClass) instead of one shared flag, so a table can never again strike a set that belongs to a different total.",
+      "The race-by-race view finally says what the strikethrough means: \"durchgestrichen = Streichresultat, zählt nicht\", naming which championship's drop it is. It has been unexplained since the column existed.",
+    ],
+  },
+  {
     version: "2.14.3",
     date: "2026-09-07",
     changes: [

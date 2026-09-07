@@ -24,7 +24,18 @@ export interface RoundPoints {
   classPoints: number;        // = classRawPoints + participation - penalty
   gdcRawPoints: number;       // GDC-position race points (rank within the GDC cohort)
   hasResult: boolean;
-  dropped: boolean;          // true when this round is one of the worst-N drop weeks
+  /** True when this round is one of the worst-N drop weeks for the audience
+   *  the page renders by default. Kept for callers that only need one flag. */
+  dropped: boolean;
+  /** Dropped from the COMBINED total (ranked by combinedPoints). */
+  droppedCombined: boolean;
+  /** Dropped from the CLASS total (ranked by classPoints). The two sets
+   *  differ whenever a driver's overall order differs from their in-class
+   *  order, so a table must strike the set that belongs to ITS total —
+   *  striking the other one produces a row whose marks contradict its own
+   *  sum, which is exactly how this was found (GT3 WCT 13th, Markus Groß:
+   *  the combined table struck R8 while its total had dropped R12). */
+  droppedClass: boolean;
 }
 
 export interface DriverStanding {
@@ -386,6 +397,8 @@ export async function computeDriverStandings(
           gdcRawPoints: 0,
           hasResult: false,
           dropped: false,
+          droppedCombined: false,
+          droppedClass: false,
         };
       }
       const rRaw = results.reduce((sum, r) => sum + r.rawPointsAwarded, 0);
@@ -443,6 +456,8 @@ export async function computeDriverStandings(
         gdcRawPoints: rGdcRaw,
         hasResult: true,
         dropped: false,
+        droppedCombined: false,
+        droppedClass: false,
       };
     });
 
@@ -505,12 +520,16 @@ export async function computeDriverStandings(
           classParticipation -= rp.participationPoints;
         }
       }
-      // Per-round `dropped` flag for the UI: reflect the audience the page
-      // renders — class drops on Pro/Am seasons, combined drops otherwise.
-      // (For single-class seasons classPoints === combinedPoints, so the two
-      // sets coincide and behaviour is unchanged.)
+      // Both sets are published, because a page can render either total and
+      // must strike the rounds that ITS total actually dropped. `dropped`
+      // keeps its old meaning (the season's default audience) for callers
+      // that only carry one flag.
       const flagSet = proAmEnabled ? droppedClass : droppedCombined;
-      for (const rp of roundPoints) rp.dropped = flagSet.has(rp.roundId);
+      for (const rp of roundPoints) {
+        rp.dropped = flagSet.has(rp.roundId);
+        rp.droppedCombined = droppedCombined.has(rp.roundId);
+        rp.droppedClass = droppedClass.has(rp.roundId);
+      }
     }
 
     return {

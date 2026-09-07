@@ -162,6 +162,15 @@ export function RaceByRaceDriverTable({
         <span className="text-xs text-zinc-500">
           {filteredSorted.length} of {rows.length}
         </span>
+        {/* Without this line the strikethrough is a mystery: a driver sees a
+            crossed-out result and no explanation of why it does not count. */}
+        <span className="text-xs text-zinc-500">
+          <span className="line-through opacity-60">durchgestrichen</span> ={" "}
+          Streichresultat, zählt nicht{" "}
+          {kind === "combined"
+            ? "(Streicher der Gesamtwertung)"
+            : "(Streicher der Klassenwertung)"}
+        </span>
       </div>
 
       <div className="overflow-x-auto rounded border border-zinc-800">
@@ -270,12 +279,17 @@ export function RaceByRaceDriverTable({
                   {r.roundPoints.map((rp) => {
                     const cellTotal =
                       kind === "combined" ? rp.combinedPoints : rp.classPoints;
+                    // Strike the rounds THIS total dropped. The combined and
+                    // the class total drop different rounds, so a shared flag
+                    // makes one of the two tables contradict its own sum.
+                    const struck =
+                      kind === "combined" ? rp.droppedCombined : rp.droppedClass;
                     const dash = <span className="text-zinc-700">—</span>;
                     return (
                       <Fragment key={rp.roundId}>
                         <td
                           className={`border-l border-zinc-800 px-1.5 py-1.5 text-right tabular-nums${
-                            rp.dropped ? " line-through opacity-60" : ""
+                            struck ? " line-through opacity-60" : ""
                           }`}
                         >
                           {rp.hasResult ? (
@@ -286,7 +300,7 @@ export function RaceByRaceDriverTable({
                         </td>
                         <td
                           className={`px-1.5 py-1.5 text-right tabular-nums text-zinc-300${
-                            rp.dropped ? " line-through opacity-60" : ""
+                            struck ? " line-through opacity-60" : ""
                           }`}
                         >
                           {rp.hasResult &&
@@ -299,7 +313,7 @@ export function RaceByRaceDriverTable({
                         {showParticipationCol && (
                           <td
                             className={`px-1.5 py-1.5 text-right tabular-nums text-emerald-400${
-                              rp.dropped ? " line-through opacity-60" : ""
+                              struck ? " line-through opacity-60" : ""
                             }`}
                           >
                             {rp.hasResult && rp.participationPoints !== 0
