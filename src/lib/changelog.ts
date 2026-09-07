@@ -19,6 +19,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.14.0",
+    date: "2026-09-07",
+    changes: [
+      "The race log is now parsed for the WHOLE FIELD, not only our own car. The logger always recorded every car in the session — 37 of them at Sebring, with lap times, positions, pit stops and penalties — and the parser threw all of it away except one fastest lap. A de-briefing that cannot say what the rest of the class was doing cannot answer the only question worth asking after a race: were we slow, or was everybody slow?",
+      "New on the de-briefing: Klassenumfeld. Our median racing lap against the class median, ten minutes at a time, with the full-course yellows banded, plus the whole class in one table — median, spread, best, stops and average stop time. Our own row is highlighted.",
+      "The class figures run through the SAME exclusion rules as our own: formation lap, start lap, in- and out-laps, yellows and restarts are out for a rival exactly as they are for us. A benchmark computed by different rules than the thing it benchmarks is worse than no benchmark.",
+      "The parse is keyed by the iRacing session, not by the plan, and stored once. The second CAS team to open a de-briefing for the same race reads the existing parse instead of uploading the identical log — the log now belongs to the round, not to whoever happened to upload it.",
+      "Two limits are stated on the page rather than hidden: the figures are per CAR, because the logger freezes the driver name at session start and a foreign car's laps cannot be split between its drivers; and stops count from 20 seconds of standing time, so drive-throughs do not make a clean team look like it lived in the box.",
+      "Duplicate lap events are now de-duplicated per lap number. The logger re-reports laps it has already seen — one Sebring car sent 524 lap events for 92 laps — and every median in the old code counted them twice.",
+    ],
+  },
+  {
     version: "2.13.0",
     date: "2026-09-07",
     changes: [

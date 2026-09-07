@@ -375,6 +375,10 @@ model Round {
   /// Race logs auto-uploaded by drivers running the standalone race logger.
   raceLogUploads RaceLogUpload[]
 
+  /// Field-wide parses of this round's race log — one row per logged session,
+  /// shared by every plan and page that needs the rest of the field.
+  raceLogFields RaceLogField[]
+
   /// YouTube video ID (11 chars) of the race-stream VOD for this round,
   /// embedded on the public round page. Set automatically by the YouTube
   /// auto-match cron (src/lib/match-youtube.ts) from League.youtubeChannelId,
@@ -1579,6 +1583,61 @@ model RaceLogUpload {
   @@unique([uploadedById, sha256])
   @@index([roundId])
   @@index([createdAt])
+}
+
+/// One race log, parsed for the WHOLE FIELD instead of only our own car.
+///
+/// The logger records every car in the session, so a single upload carries the
+/// reference every de-briefing needs: what the rest of the class was doing.
+/// Parsing a 6 MB .jsonl on every page view would be waste, and — worse —
+/// would let two pages disagree if the parser changed between them, so the
+/// result is frozen here.
+///
+/// Keyed by the SESSION, not by the plan: iRacing's SessionUniqueID is the
+/// same file for everybody who was in that race. The second team to open a
+/// de-briefing for the same race therefore reads this row instead of
+/// re-uploading the identical log.
+model RaceLogField {
+  id String @id @default(cuid())
+
+  /// Stable identity of the logged session: "sid:<SessionUniqueID>" when the
+  /// log carries one, else "url:<sha256 of the blob URL>".
+  sourceKey       String  @unique
+  sessionUniqueId Int?
+  sessionNum      Int?
+
+  /// Where the raw .jsonl lives (Vercel Blob), so the parse can be redone
+  /// when FIELD_MODEL_GENERATION moves.
+  url String
+
+  /// Round this session belongs to, when it could be resolved. Null is normal
+  /// for a plan whose race is not a CLS round.
+  roundId String?
+  round   Round?  @relation(fields: [roundId], references: [id], onDelete: SetNull)
+
+  /// The plan whose upload produced this row — for support, not for access.
+  planId String?
+
+  track       String?
+  sessionName String?
+  official    Boolean?
+  startedAt   DateTime?
+
+  /// FIELD_MODEL_GENERATION this row was produced with. A row from an older
+  /// generation is re-parsed rather than compared against newer numbers.
+  generation Int @default(1)
+  /// Cars in the parse — a cheap sanity check without reading the JSON.
+  cars       Int @default(0)
+
+  /// The FieldModel (see src/lib/race-log-field.ts).
+  data Json
+
+  parsedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roundId])
+  @@index([sessionUniqueId])
 }
 
 /// Measured pit-stop constants for one car (optionally per track), shared

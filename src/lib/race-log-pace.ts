@@ -83,7 +83,7 @@ function percentile(xs: number[], p: number): number | null {
 const round3 = (n: number | null | undefined): number | null =>
   n == null || !Number.isFinite(n) ? null : Math.round(n * 1000) / 1000;
 
-interface LapRec {
+export interface LapRec {
   lap: number | null;
   sec: number;
   driver: string;
@@ -112,7 +112,7 @@ interface CarAcc {
 const MAX_SLOTS = 6;
 
 /** A full-course-yellow window on the session clock, [from, to]. */
-interface CautionWindow {
+export interface CautionWindow {
   from: number;
   to: number;
 }
@@ -131,7 +131,7 @@ interface CautionWindow {
  * A caution that is never closed ran to the end of the session (the race
  * finished behind the pace car), so it closes at the last event in the log.
  */
-function cautionWindows(
+export function cautionWindows(
   flags: { flag: string; t: number }[],
   endT: number
 ): CautionWindow[] {
@@ -197,7 +197,7 @@ function tempAt(
  * lap spans [t − sec, t]); a lap with no clock keeps only the in/out marks,
  * which are lap-number based. Returns a map keyed by lap number.
  */
-function markExcludedLaps(
+export function markExcludedLaps(
   numbered: LapRec[],
   inLaps: Set<number>,
   greenAtSec: number | null,

@@ -15,6 +15,8 @@ import {
   type DebriefHistory,
 } from "@/lib/debrief-server";
 import { resolvePlanTeam, teamPickerOptions } from "@/lib/plan-team";
+import { fieldForPlan } from "@/lib/race-log-field-server";
+import { buildFieldBench } from "@/lib/debrief-field";
 import { teamGroupSlug } from "@/lib/team-grouping";
 
 export async function generateMetadata({
@@ -137,6 +139,14 @@ export default async function DebriefingPage({
   }
 
   const history = await readDebriefHistory(built.data.drivers.map((d) => d.name));
+  // The rest of the field, from the same raw log. Best-effort by contract:
+  // a blob store having a bad day must not take the de-briefing with it.
+  const fieldCtx = await fieldForPlan(plan, built.state);
+  const field = fieldCtx
+    ? buildFieldBench(fieldCtx.model, fieldCtx.ownCarNumber, {
+        shared: fieldCtx.shared,
+      })
+    : null;
   const canManage = canManageStintPlan(plan, viewer);
   const team = await resolvePlanTeam(plan, built.state);
   // The picker is only worth loading for someone who may actually change it.
@@ -159,6 +169,7 @@ export default async function DebriefingPage({
         postNotes={built.state.notes.post ?? ""}
         canManage={canManage}
         race={built.race}
+        field={field}
         team={{
           ...team,
           slug: team.teamGroup ? teamGroupSlug(team.teamGroup) : null,

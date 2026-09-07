@@ -8,7 +8,9 @@ import {
   setStintPlanTeam,
 } from "@/lib/actions/debrief";
 import DebriefRaceCharts from "@/components/DebriefRaceCharts";
+import DebriefFieldBox from "@/components/DebriefFieldBox";
 import type { DebriefRaceDetail } from "@/lib/debrief-stints";
+import type { FieldBench } from "@/lib/debrief-field";
 
 /**
  * The post-race de-briefing, as the team reads it.
@@ -121,6 +123,7 @@ export default function DebriefView({
   team,
   teamOptions,
   race,
+  field,
 }: {
   planId: string;
   data: DebriefData;
@@ -130,6 +133,8 @@ export default function DebriefView({
   team: DebriefTeamProp;
   teamOptions: { id: string; name: string; label: string }[];
   race: DebriefRaceDetail;
+  /** The class around us, when the raw log could be parsed field-wide. */
+  field: FieldBench | null;
 }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -287,6 +292,8 @@ export default function DebriefView({
 
       {/* ---- how the race actually ran ----------------------------------- */}
       <DebriefRaceCharts race={race} driverNames={d.map((x) => x.name)} />
+
+      {field && <DebriefFieldBox field={field} />}
 
       {/* ---- season trend ------------------------------------------------ */}
       {history.races.length >= 2 ? (
