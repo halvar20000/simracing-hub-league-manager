@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.18.0",
+    date: "2026-09-08",
+    changes: [
+      "Stint planner: building a plan is now three tabs instead of one long scroll. Basics (event, pit stop, roster), Pace & fuel (what the team runs), Per driver (imported figures, the drivers table, availability) — then During race and After race as before. Johann Solowej's proposal draws these as separate pages and that is the right read: it was nine cards in a column with no stated order.",
+      "Every setup tab carries the same six numbers at the top — stints, stops, laps, fuel, drivers, projected finish. Splitting the page costs the one thing the long scroll gave for free, that the schedule was always a scroll away, so you could see what a number did. This is the cheap half of that feedback, on every tab.",
+      "The \"what is still missing\" checklist now switches tab before it scrolls. Its steps live on three different tabs now, and scrolling to a card on a hidden tab does exactly nothing.",
+    ],
+  },
+  {
     version: "2.17.0",
     date: "2026-09-08",
     changes: [

@@ -141,17 +141,45 @@ const fmtSec = (sec: number | null | undefined): string => {
   return `${m}:${rest.toFixed(3).padStart(6, "0")}`;
 };
 
-/** The three lives of a stint plan. Labels come from the dictionary — this
- *  only fixes the order and which key each tab reads. */
+/**
+ * The three lives of a stint plan: building it, running it, picking it apart.
+ * Still the unit the race clock reasons about — see `autoPhase`.
+ */
 type PlanPhase = "pre" | "during" | "post";
-const PHASES: {
-  key: PlanPhase;
-  hintKey: "preHint" | "duringHint" | "postHint";
+
+/**
+ * The tabs on screen.
+ *
+ * Building a plan is three jobs, not one, and putting them on one page meant a
+ * scroll past nine cards with no stated order. Johann Solowej's proposal
+ * (Sept 2026) draws them as separate pages and he is right — so PRE is split
+ * three ways, in the order the work actually happens:
+ *
+ *   basis  — what the race is, what a stop costs, who is in the car
+ *   pace   — what the TEAM runs: the profiles and what a longer stint costs
+ *   data   — what each DRIVER runs: imported figures, the table, availability
+ *
+ * Labels come from the dictionary; this only fixes the order and which phase
+ * each tab belongs to.
+ */
+type PlanTab = "basis" | "pace" | "data" | "during" | "post";
+const TABS: {
+  key: PlanTab;
+  phase: PlanPhase;
+  labelKey: "basis" | "pace" | "data" | "during" | "post";
 }[] = [
-  { key: "pre", hintKey: "preHint" },
-  { key: "during", hintKey: "duringHint" },
-  { key: "post", hintKey: "postHint" },
+  { key: "basis", phase: "pre", labelKey: "basis" },
+  { key: "pace", phase: "pre", labelKey: "pace" },
+  { key: "data", phase: "pre", labelKey: "data" },
+  { key: "during", phase: "during", labelKey: "during" },
+  { key: "post", phase: "post", labelKey: "post" },
 ];
+/** Where the race clock sends you when you have not picked a tab yourself. */
+const DEFAULT_TAB: Record<PlanPhase, PlanTab> = {
+  pre: "basis",
+  during: "during",
+  post: "post",
+};
 
 const fmtClock = (ms: number | null): string =>
   ms == null
@@ -2409,10 +2437,62 @@ export default function StintPlanner({
     const end = (lastStint?.wallEndMs ?? start) + 20 * 60_000;
     return now <= end ? "during" : "post";
   }, [now, result.raceStartUtcMs, lastStint?.wallEndMs]);
-  const [manualPhase, setManualPhase] = useState<PlanPhase | null>(null);
+  const [manualTab, setManualTab] = useState<PlanTab | null>(null);
   // A completed plan opens on the debrief — that is the only part still live.
-  const phase: PlanPhase = manualPhase ?? (frozen ? "post" : autoPhase);
-  const setPhase = (p: PlanPhase) => setManualPhase(p);
+  const tab: PlanTab = manualTab ?? DEFAULT_TAB[frozen ? "post" : autoPhase];
+  const setTab = (x: PlanTab) => setManualTab(x);
+  /** Which life the VISIBLE tab belongs to. */
+  const phase: PlanPhase = TABS.find((x) => x.key === tab)?.phase ?? "pre";
+  /** One tab's wrapper: on screen only when selected, always on paper. */
+  const tabBox = (key: PlanTab) =>
+    `space-y-6 ${tab === key ? "" : "hidden print:block"}`;
+
+  /**
+   * Which setup tab a card lives on. The checklist jumps between them, and a
+   * card on a hidden tab cannot be scrolled to — so switch first, then scroll
+   * once React has painted the tab.
+   */
+  const jumpToCard = (anchor: string) => {
+    const CARD_TAB: Record<string, PlanTab> = {
+      "card-event": "basis",
+      "card-pit": "basis",
+      "card-drivers": "basis",
+      "card-fuel": "pace",
+      "card-fuelsave": "pace",
+      "card-g61": "data",
+    };
+    const target = CARD_TAB[anchor];
+    if (target && target !== tab) setTab(target);
+    // One frame for the tab to be shown; the element has no box until then.
+    requestAnimationFrame(() =>
+      document
+        .getElementById(anchor)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" })
+    );
+  };
+
+  /**
+   * Six numbers, on every setup tab.
+   *
+   * Splitting PRE into three pages costs the one thing the single long page
+   * had for free: the schedule was always a scroll away, so you could see what
+   * a number did. This is the cheap half of that feedback — stints, stops,
+   * laps, fuel, drivers and the projected finish — repeated at the top of each
+   * setup tab. Hidden on paper: the printout has the schedule itself.
+   */
+  const summaryStrip = (
+    <div className="grid grid-cols-3 gap-2 print:hidden lg:grid-cols-6">
+      <Stat label={t.live.stints} value={String(result.totals.stintCount)} />
+      <Stat label={t.live.pitStops} value={String(result.totals.pitStops)} />
+      <Stat label={t.live.totalLaps} value={fmtLaps(result.totals.laps)} />
+      <Stat label={t.live.totalFuel} value={`${fmtFuel(result.totals.fuel)} L`} />
+      <Stat label={t.live.drivers} value={String(result.totals.driverCount)} />
+      <Stat
+        label={t.live.projectedFinish}
+        value={lastStint ? fmtDuration(lastStint.endSec) : "—"}
+      />
+    </div>
+  );
 
   /** Mark completed / reopen. Owner (edit token) or admin — checked server-side. */
   const onToggleArchived = async () => {
@@ -2430,7 +2510,7 @@ export default function StintPlanner({
       const res = await setStintPlanArchived(curId, editToken, next);
       if (res.ok) {
         setArchivedAtMs(res.archivedAt);
-        setManualPhase(next ? "post" : null);
+        setManualTab(next ? "post" : null);
         setStatus(next ? t.header.archived : t.header.reopened);
       } else {
         setStatus(res.error);
@@ -3295,23 +3375,27 @@ export default function StintPlanner({
         </p>
       )}
 
-      {/* Phase tabs — the plan has three lives: building it, running it,
-          and picking it apart afterwards. Only one is ever on screen; all
-          three are in the DOM so a printout stays complete. */}
+      {/* Tabs. Only one is ever on screen; all of them stay in the DOM so a
+          printout is the whole plan. The three setup tabs are tinted as one
+          group so the split between building the plan and running it is still
+          readable at a glance. */}
       <div className="sticky top-0 z-30 -mx-1 flex gap-1 rounded-lg border border-zinc-800 bg-zinc-950/95 p-1 backdrop-blur print:hidden">
-        {PHASES.map((ph) => (
+        {TABS.map((x) => (
           <button
-            key={ph.key}
-            onClick={() => setPhase(ph.key)}
-            className={`flex-1 rounded px-3 py-2 text-sm font-semibold transition ${
-              phase === ph.key
+            key={x.key}
+            onClick={() => setTab(x.key)}
+            title={t.tabs[`${x.labelKey}Hint` as const]}
+            className={`flex-1 rounded px-2 py-2 text-sm font-semibold transition ${
+              tab === x.key
                 ? "bg-[#ff6b35] text-zinc-950"
-                : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                : x.phase === "pre"
+                  ? "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                  : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
             }`}
           >
-            {t.phases[ph.key]}
-            <span className="ml-1.5 hidden text-xs font-normal opacity-70 sm:inline">
-              {t.phases[ph.hintKey]}
+            {t.tabs[x.labelKey]}
+            <span className="ml-1.5 hidden text-xs font-normal opacity-70 xl:inline">
+              {t.tabs[`${x.labelKey}Hint` as const]}
             </span>
           </button>
         ))}
@@ -3321,17 +3405,18 @@ export default function StintPlanner({
           are what they are and a checklist would be in the way. */}
       {phase === "pre" && !frozen && (
         <>
-          <PlanChecklist items={checklist} />
+          <PlanChecklist items={checklist} onJump={jumpToCard} />
           <PlanWarnings items={warnings} />
         </>
       )}
-      {/* ===== PRE ===== */}
-      {/* A completed plan freezes everything in PRE and DURING. One disabled
+      {/* ===== BASICS — what the race is, what a stop costs, who drives ===== */}
+      {/* A completed plan freezes everything up to the flag. One disabled
           fieldset does that for every input, select, textarea and button
           inside; `contents` keeps it out of the layout. The server enforces
           the same rule, so this is convenience, not the guard. */}
-      <div className={`space-y-6 ${phase === "pre" ? "" : "hidden print:block"}`}>
+      <div className={tabBox("basis")}>
       <fieldset disabled={frozen} className="contents">
+      {summaryStrip}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Event config */}
         <div className={card} id="card-event">
@@ -4239,6 +4324,84 @@ export default function StintPlanner({
           )}
         </div>
 
+        {/* Roster — who is on this plan, and the one place to add someone.
+            The table that settles their pace and fuel sits far below now (after
+            the Garage 61 charts, because that is the order the work happens
+            in), which left no obvious place to build the line-up while setting
+            the race up. This is that place; the numbers stay down there. */}
+        <div className={card} id="card-drivers">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              {t.roster.title}
+              <GuideLink section="setup" />
+            </h2>
+            <ClsDriverPicker
+              options={clsDrivers.filter(
+                (d) => !s.drivers.some((r) => r.id === d.id)
+              )}
+              onPick={addClsDriver}
+            />
+          </div>
+          {s.drivers.length === 0 ? (
+            <p className="text-sm text-zinc-500">{t.roster.empty}</p>
+          ) : (
+            (() => {
+              const missing = s.drivers.filter(
+                (d) => !d.laptime.trim() || !d.fuelPerLap?.trim()
+              );
+              return (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {s.drivers.map((d) => {
+                      const gap = !d.laptime.trim() || !d.fuelPerLap?.trim();
+                      return (
+                        <span
+                          key={d.id}
+                          title={
+                            gap
+                              ? t.roster.gapHint
+                              : t.roster.ownFigures(d.laptime, d.fuelPerLap ?? "—")
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm ${
+                            gap
+                              ? "border-amber-800/60 bg-amber-950/20 text-amber-100"
+                              : "border-zinc-700 bg-zinc-900/60 text-zinc-200"
+                          }`}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${driverColour(d.id).dot}`}
+                          />
+                          {d.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500">
+                    {t.roster.countPre(s.drivers.length)} {t.roster.countPost}{" "}
+                    <strong className="text-zinc-400">{t.roster.driversWord}</strong>{" "}
+                    {t.roster.countPost2}
+                    {missing.length > 0 && (
+                      <span className="text-amber-300">
+                        {" "}
+                        {t.roster.missing(missing.length)}
+                      </span>
+                    )}
+                  </p>
+                </>
+              );
+            })()
+          )}
+        </div>
+      </div>
+
+      </fieldset>
+      </div>
+
+      {/* ===== PACE & FUEL — what the TEAM runs ===== */}
+      <div className={tabBox("pace")}>
+      <fieldset disabled={frozen} className="contents">
+      {summaryStrip}
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Fuel profiles */}
         <div className={card} id="card-fuel">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -4458,76 +4621,6 @@ export default function StintPlanner({
           </div>
         </div>
 
-        {/* Roster — who is on this plan, and the one place to add someone.
-            The table that settles their pace and fuel sits far below now (after
-            the Garage 61 charts, because that is the order the work happens
-            in), which left no obvious place to build the line-up while setting
-            the race up. This is that place; the numbers stay down there. */}
-        <div className={card} id="card-drivers">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-              {t.roster.title}
-              <GuideLink section="setup" />
-            </h2>
-            <ClsDriverPicker
-              options={clsDrivers.filter(
-                (d) => !s.drivers.some((r) => r.id === d.id)
-              )}
-              onPick={addClsDriver}
-            />
-          </div>
-          {s.drivers.length === 0 ? (
-            <p className="text-sm text-zinc-500">{t.roster.empty}</p>
-          ) : (
-            (() => {
-              const missing = s.drivers.filter(
-                (d) => !d.laptime.trim() || !d.fuelPerLap?.trim()
-              );
-              return (
-                <>
-                  <div className="flex flex-wrap gap-1.5">
-                    {s.drivers.map((d) => {
-                      const gap = !d.laptime.trim() || !d.fuelPerLap?.trim();
-                      return (
-                        <span
-                          key={d.id}
-                          title={
-                            gap
-                              ? t.roster.gapHint
-                              : t.roster.ownFigures(d.laptime, d.fuelPerLap ?? "—")
-                          }
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm ${
-                            gap
-                              ? "border-amber-800/60 bg-amber-950/20 text-amber-100"
-                              : "border-zinc-700 bg-zinc-900/60 text-zinc-200"
-                          }`}
-                        >
-                          <span
-                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${driverColour(d.id).dot}`}
-                          />
-                          {d.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">
-                    {t.roster.countPre(s.drivers.length)} {t.roster.countPost}{" "}
-                    <strong className="text-zinc-400">{t.roster.driversWord}</strong>{" "}
-                    {t.roster.countPost2}
-                    {missing.length > 0 && (
-                      <span className="text-amber-300">
-                        {" "}
-                        {t.roster.missing(missing.length)}
-                      </span>
-                    )}
-                  </p>
-                </>
-              );
-            })()
-          )}
-        </div>
-      </div>
-
       {/* Fuel-save strategy optimizer */}
       <div className={card} id="card-fuelsave">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -4694,6 +4787,15 @@ export default function StintPlanner({
             );
           })()}
       </div>
+
+      </div>
+      </fieldset>
+      </div>
+
+      {/* ===== PER DRIVER — what each DRIVER runs ===== */}
+      <div className={tabBox("data")}>
+      <fieldset disabled={frozen} className="contents">
+      {summaryStrip}
 
       {/* Garage 61 import.
           Johann Solowej asked for an option to hide this whole section
@@ -5832,7 +5934,7 @@ export default function StintPlanner({
       </fieldset>
       </div>
       {/* ===== DURING ===== */}
-      <div className={`space-y-6 ${phase === "during" ? "" : "hidden print:block"}`}>
+      <div className={tabBox("during")}>
       <fieldset disabled={frozen} className="contents">
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -5949,7 +6051,7 @@ export default function StintPlanner({
       </fieldset>
       </div>
       {/* ===== POST ===== */}
-      <div className={`space-y-6 ${phase === "post" ? "" : "hidden print:block"}`}>
+      <div className={tabBox("post")}>
       {/* Poster & impressions — the team's memory of the race */}
       <div className={card}>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">

@@ -24,17 +24,19 @@ export type ChecklistItem = {
   done: boolean;
 };
 
-export default function PlanChecklist({ items }: { items: ChecklistItem[] }) {
+export default function PlanChecklist({
+  items,
+  onJump,
+}: {
+  items: ChecklistItem[];
+  /** Bring the card into view. The planner has to switch tab first — the
+   *  target card usually lives on a different one, and scrollIntoView on a
+   *  hidden element does nothing at all. */
+  onJump: (anchor: string) => void;
+}) {
   const { t } = usePlannerUi();
   const open = items.filter((i) => !i.done);
   if (open.length === 0) return null;
-
-  const jump = (anchor?: string) => {
-    if (!anchor) return;
-    document
-      .getElementById(anchor)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
 
   return (
     <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 p-4 print:hidden">
@@ -63,7 +65,7 @@ export default function PlanChecklist({ items }: { items: ChecklistItem[] }) {
             ) : (
               <button
                 type="button"
-                onClick={() => jump(it.anchor)}
+                onClick={() => it.anchor && onJump(it.anchor)}
                 className="text-amber-100 underline decoration-amber-500/40 underline-offset-2 hover:decoration-amber-300"
               >
                 {it.label}

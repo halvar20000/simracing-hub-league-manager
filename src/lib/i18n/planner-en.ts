@@ -1612,5 +1612,18 @@ export const en = {
     // Easy mode
     easyPitNote: "Detailed pit values and the Garage 61 import are in Advanced.",
   },
+  // ---- the five tabs ----------------------------------------------------
+  tabs: {
+    basis: "Basics",
+    basisHint: "event, pit stop, roster",
+    pace: "Pace & fuel",
+    paceHint: "what the team runs",
+    data: "Per driver",
+    dataHint: "figures, availability",
+    during: "During race",
+    duringHint: "schedule & live",
+    post: "After race",
+    postHint: "result & analysis",
+  },
   // <<SECTIONS>>
 };

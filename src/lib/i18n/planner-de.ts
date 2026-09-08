@@ -1604,5 +1604,17 @@ export const de: PlannerDict = {
     easyPitNote:
       "Detaillierte Boxenwerte und der Garage-61-Import stehen im Erweitert-Modus.",
   },
+  tabs: {
+    basis: "Basisdaten",
+    basisHint: "Event, Boxenstopp, Kader",
+    pace: "Pace & Verbrauch",
+    paceHint: "was das Team fährt",
+    data: "Pro Fahrer",
+    dataHint: "Werte, Verfügbarkeit",
+    during: "Im Rennen",
+    duringHint: "Zeitplan & live",
+    post: "Nach dem Rennen",
+    postHint: "Ergebnis & Auswertung",
+  },
   // <<SECTIONS>>
 };
