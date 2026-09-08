@@ -259,6 +259,19 @@ Per-round recognition badge — **no championship points, never touches standing
 - **Admin**: `src/lib/actions/driver-of-the-day.ts` (`computeAndSaveDotd`, `deleteDotd`) + an "🏆 Driver of the Day" panel on the round Race Center admin page (upload, full ranking table, per-class winners, recompute, danger-zone delete).
 - **Public**: `src/components/DriverOfTheDayHero.tsx` — hero card near the top of the round page, gated by `round.driverOfTheDay && showResults` (so it follows the same publish gate as results; admins preview early).
 
+## Stint planner: language (DE default) + Easy/Advanced
+
+**The planner is the ONLY part of CLS that is translated, and its default is German.** Everything else stays English.
+
+- **Dictionaries**: `src/lib/i18n/planner-en.ts` (source of truth for the key set) + `planner-de.ts` (`: PlannerDict`, so a missing/misspelt/extra key is a build error). `planner.ts` exports `DICTS`, `DEFAULT_LANG = "de"`, `type PlannerDict`. `en` must NOT be `as const` — values have to widen to `string`.
+- Sentences carrying a number/name are **functions**, not `{n}` templates — word order differs too much between DE and EN.
+- **Reading it**: `useT()` (dictionary) or `usePlannerUi()` (`{ lang, setLang, t, mode, setMode, advanced }`) from `src/components/planner/PlannerUi.tsx`. No provider — it is a module store read through `useSyncExternalStore` with a real `getServerSnapshot`, so the server renders German and an EN choice lands during hydration without a flash. Persisted in `localStorage` (`cls.planner.lang` / `cls.planner.mode`).
+- **Server Components can't read it.** Page chrome that needs translating was moved into client components (`PlanIndexView`, `PlanPageHeader`, `NoPlanAccess`, `DebriefPageChrome`); the pages still do all querying/access filtering and hand down reduced rows.
+- **Pure modules must not write prose.** `stint-autofill.ts` returns `BrokenWish` codes; `race-log-attribution.ts:describeExclusions` takes an `ExclusionLabels` argument. Keep it that way.
+- **UI kit** (`src/components/planner/`): `Field` / `CheckField` / `Hint` (hover + focus + tap explanations — use these, not the native `title`, except where a plain attribute is genuinely enough), `AdvancedOnly` (pass `activeNote` when the hidden block is actually in effect; print always includes it), `GuideLink` (`?` → `/stint-planner/anleitung#<section>`), `PlanChecklist`, `PlanWarnings`, `PlannerUiSwitch`.
+- `Hint` popovers open **downwards** — table headers sit in `.overflow-x-auto`, which clips the vertical axis too. `Field` popovers open upwards (nothing clips them in a card).
+- **Easy mode currently hides only the detailed pit-stop model.** `AdvancedOnly` is general; move more into it if the team asks.
+- **The manual `/stint-planner/anleitung` is German-only by design** (the team's own document). The EN switch labels the link "Guide (German)" rather than pretending.
 ## Race Logger (standalone, driver-side)
 
 The race-logger `.jsonl` that Driver of the Day and the stint-planner analysis need no longer has to be collected by hand: drivers run the logger themselves and it uploads the finished log.
