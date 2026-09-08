@@ -274,6 +274,20 @@ Per-round recognition badge — **no championship points, never touches standing
 - **The manual `/stint-planner/anleitung` is German-only by design** (the team's own document). The EN switch labels the link "Guide (German)" rather than pretending.
 - **Easy mode HIDES, it never changes the plan.** A view toggle that silently re-timed a schedule on race day would be a trap. Where a hidden block is actually in effect, `AdvancedOnly activeNote` says so. The one deliberate exception is the schedule's tyre/stop/temperature columns, which are dropped from the printout too — a pit-wall sheet in Easy mode should be the short one.
 
+## Stint planner: the five tabs
+
+`PlanPhase` (`pre | during | post`) is still the unit the race clock reasons about — `autoPhase` picks one from the wall clock and `DEFAULT_TAB` maps it to a tab. `PlanTab` (`basis | pace | data | during | post`) is what is on screen: PRE is split three ways in the order the work happens.
+
+| Tab | Cards |
+|---|---|
+| `basis` | Event, Pit-stop model, Roster |
+| `pace` | Fuel profiles (standard / fuel-save / rain, stint length, tyre floor), Fuel-save targets |
+| `data` | Garage 61 + driver stats, Drivers table, Availability, schedule preview, pre-race notes |
+
+- Every tab stays in the DOM (`tabBox()` = `hidden print:block`) so a printout is the whole plan.
+- `summaryStrip` repeats six totals at the top of each setup tab — the split cost the always-a-scroll-away schedule, this is the cheap half of that feedback. `print:hidden`, because paper has the real table.
+- **Anything that scrolls to a card must switch tab first** (`jumpToCard`, with the `CARD_TAB` map): `scrollIntoView` on an element inside a `hidden` tab does nothing. Add new anchors to that map.
+
 ## Stint planner: pace, fuel and stint rules worth knowing
 
 - **Fallback order for a driver with no pace/fuel**: their own figure → the **Standard profile if it is filled** → the **team average** of the drivers who do have figures. The Standard profile keeps priority on purpose: preferring the average outright would re-time every existing plan, and an archived plan must re-open with the schedule it was signed off with. The team average exists so an EMPTY Standard profile no longer blanks the whole schedule (it used to: an unassigned stint fell to Standard, got 0 laps, and the loop broke at stint 1).
