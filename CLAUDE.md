@@ -272,6 +272,7 @@ Per-round recognition badge — **no championship points, never touches standing
 - `Hint` popovers open **downwards** — table headers sit in `.overflow-x-auto`, which clips the vertical axis too. `Field` popovers open upwards (nothing clips them in a card).
 - **Easy mode currently hides only the detailed pit-stop model.** `AdvancedOnly` is general; move more into it if the team asks.
 - **The manual `/stint-planner/anleitung` is German-only by design** (the team's own document). The EN switch labels the link "Guide (German)" rather than pretending.
+
 ## Race Logger (standalone, driver-side)
 
 The race-logger `.jsonl` that Driver of the Day and the stint-planner analysis need no longer has to be collected by hand: drivers run the logger themselves and it uploads the finished log.
