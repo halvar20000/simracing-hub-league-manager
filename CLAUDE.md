@@ -272,6 +272,18 @@ Per-round recognition badge — **no championship points, never touches standing
 - `Hint` popovers open **downwards** — table headers sit in `.overflow-x-auto`, which clips the vertical axis too. `Field` popovers open upwards (nothing clips them in a card).
 - **Easy mode currently hides only the detailed pit-stop model.** `AdvancedOnly` is general; move more into it if the team asks.
 - **The manual `/stint-planner/anleitung` is German-only by design** (the team's own document). The EN switch labels the link "Guide (German)" rather than pretending.
+- **Easy mode HIDES, it never changes the plan.** A view toggle that silently re-timed a schedule on race day would be a trap. Where a hidden block is actually in effect, `AdvancedOnly activeNote` says so. The one deliberate exception is the schedule's tyre/stop/temperature columns, which are dropped from the printout too — a pit-wall sheet in Easy mode should be the short one.
+
+## Stint planner: pace, fuel and stint rules worth knowing
+
+- **Fallback order for a driver with no pace/fuel**: their own figure → the **Standard profile if it is filled** → the **team average** of the drivers who do have figures. The Standard profile keeps priority on purpose: preferring the average outright would re-time every existing plan, and an archived plan must re-open with the schedule it was signed off with. The team average exists so an EMPTY Standard profile no longer blanks the whole schedule (it used to: an unassigned stint fell to Standard, got 0 laps, and the loop broke at stint 1).
+- **Rain is a profile, not a penalty** (`PlannerState.rain`, `rainProfileOf`): lap time AND l/lap. The wet lap-time delta is **derived inside `buildSchedule`** from `rain` when present, so a direct engine call cannot get the fuel half without the pace half. Half wet = half of it; without a rain profile it is `DEFAULT_HALF_WET_FRACTION` (0.45) of the wet model. `halfWetDeltaSec()` mirrors both branches — keep them in step or the placeholder lies.
+- **`marginLap`** takes one lap off the FUEL-LIMITED stint length (not litres off the tank) — so it stays one lap in hand at any consumption. `fuelReserve` is the fixed-litre one; they are independent.
+- **`fuelSaveTargets()` vs `optimizeFuelSave()`**: the first answers "what would one more lap per stint cost", which is an instruction a driver can follow; the second sweeps the whole fuel band and is an analysis. **Neither writes anything into the plan** — the optimiser used to overwrite the Standard profile and must not again.
+- **Per-driver deltas** (`wetSec` / `halfWetSec` / `trafficSec` / `tempSlopePer10`, Advanced only) override the plan-wide figure; blank = the plan's. `iRating` is typed per driver for an official race so the pace-curve target exists BEFORE the result upload, which then overwrites it.
+- **Stint-run preferences**: `prefDouble` / `prefTriple` (`StintPref3` = happy | ok | avoid) replace the old numeric `maxConsecutive`, which is still honoured and still shown for plans that used one. Auto-fill prefers "happy", tolerates "ok", and treats "avoid" as the last resort before an empty stint.
+- **Two different fairness checks, do not merge them**: the drivers table flags anyone under **85 % of an even share** (is the workload balanced), the per-driver totals flag anyone under **a quarter of an even share** when `event.fairShare` is on (did this driver drive the race at all).
+- New plan fields live in the `StintPlan.payload` JSON — **no migration**; `hydratePlanState` spreads defaults over an old payload.
 
 ## Race Logger (standalone, driver-side)
 
