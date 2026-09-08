@@ -23,11 +23,23 @@
 
 import { useId, useState } from "react";
 
-const POPOVER =
-  "pointer-events-none absolute bottom-full left-0 z-50 mb-1.5 w-64 max-w-[80vw] " +
-  "rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-2 text-[11px] " +
-  "font-normal normal-case leading-snug tracking-normal text-zinc-300 shadow-xl " +
-  "shadow-black/60 print:hidden";
+const POPOVER_BASE =
+  "pointer-events-none absolute z-50 w-64 max-w-[80vw] rounded-md border " +
+  "border-zinc-700 bg-zinc-950 px-2.5 py-2 text-[11px] font-normal normal-case " +
+  "leading-snug tracking-normal text-zinc-300 shadow-xl shadow-black/60 print:hidden";
+
+/** Above the field, which is where there is room in a card. */
+const POPOVER_UP = `${POPOVER_BASE} bottom-full left-0 mb-1.5`;
+
+/**
+ * Below the icon, and towards the middle of the page.
+ *
+ * Table headers sit inside `.overflow-x-auto`, and a box that scrolls on one
+ * axis clips the other — so a popover drawn ABOVE a <th> is cut off by the
+ * scroll container. Downwards there is a whole table's worth of room. Right
+ * alignment keeps it inside the frame for the columns near the right edge.
+ */
+const POPOVER_DOWN = `${POPOVER_BASE} top-full right-0 mt-1.5`;
 
 const MARK =
   "ml-1 inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center " +
@@ -61,7 +73,7 @@ export function Hint({ text }: { text: string }) {
       <span
         id={id}
         role="tooltip"
-        className={`${POPOVER} left-auto right-0 ${
+        className={`${POPOVER_DOWN} ${
           pinned ? "block" : "hidden group-hover/hint:block"
         }`}
       >
@@ -117,7 +129,7 @@ export function Field({
         <span
           id={id}
           role="tooltip"
-          className={`${POPOVER} ${
+          className={`${POPOVER_UP} ${
             pinned ? "block" : "hidden group-hover:block group-focus-within:block"
           }`}
         >
@@ -162,7 +174,10 @@ export function CheckField({
         </span>
       </label>
       {hint && (
-        <span role="tooltip" className={`${POPOVER} hidden group-hover:block group-focus-within:block`}>
+        <span
+          role="tooltip"
+          className={`${POPOVER_UP} hidden group-hover:block group-focus-within:block`}
+        >
           {hint}
         </span>
       )}

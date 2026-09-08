@@ -28,6 +28,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "A new plan now says what it still needs. Instead of opening on an empty schedule under one sentence, there is a checklist above it — track, car, race length, lap time, fuel per lap, tank, drivers, session start — that ticks itself off and jumps to the card that owns each missing step. It disappears once the plan is complete.",
       "And it flags numbers that look wrong without blocking anything: a lap time typed as \"118.8\" instead of \"1:58.8\", a tank that lasts two laps or two hundred, a stint longer than the race, a track temperature with nothing measuring how lap time reacts to it. All of those produce a perfectly plausible-looking schedule and nothing on the page contradicted them.",
       "Every card heading has a \"?\" that opens the manual at the section covering it, in a new tab. The manual itself stays German.",
+      "Column explanations in the wide tables open downwards rather than upwards: those tables scroll sideways, and a box that scrolls on one axis clips the other, so a tooltip drawn above a column header was cut off by its own table.",
     ],
   },
   {
