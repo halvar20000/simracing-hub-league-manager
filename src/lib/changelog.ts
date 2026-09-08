@@ -31,6 +31,7 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Margin lap: plan every fuel-limited stint one lap shorter than the tank allows. Unlike the litre reserve it scales with consumption, so it stays one lap in hand whether the car is thirsty in the wet or sipping at night.",
       "An official race now takes each driver's iRating in the drivers table and shows the target lap time the pace curve says it is worth — before the race, where it is useful, instead of only after the result file is uploaded.",
       "Fair share is a switch, and with it on the per-driver totals mark anyone under a quarter of an even share. Not the same question as the 85 % balance flag already there: this one asks whether a driver did enough of the race to have driven it at all.",
+      "Half wet follows the rain profile when there is one (half of it, the average Johann described) and the measured fraction of the wet penalty when there is not — so the figure shown beside the field is the one the schedule actually uses.",
       "Easy mode is now the master switch it should have been: it also puts away Garage 61, the pace/fuel model choice and the schedule's tyre, stop-cost and track-temperature columns. It still only hides — a plan keeps computing exactly as it did, and where a hidden model is running, Easy says so.",
     ],
   },

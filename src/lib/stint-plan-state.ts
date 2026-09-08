@@ -379,7 +379,12 @@ export function wetDeltaSecOf(s: PlannerState): number {
 export function halfWetDeltaSec(s: PlannerState): number {
   const manual = s.wetModel?.manualHalfDeltaSec;
   if (manual != null && isFinite(manual) && manual >= 0) return manual;
-  return wetDeltaSecOf(s) * DEFAULT_HALF_WET_FRACTION;
+  // With a rain profile, half wet is half of it — the "average of dry and wet"
+  // Johann asked for, and what the engine computes. Without one, the measured
+  // fraction of the wet penalty stands. These two must not drift: the engine
+  // recomputes from the rain profile, so a different fraction here would show
+  // the team a placeholder the schedule does not use.
+  return wetDeltaSecOf(s) * (rainProfileOf(s) ? 0.5 : DEFAULT_HALF_WET_FRACTION);
 }
 export type PlannerState = {
   title: string;
