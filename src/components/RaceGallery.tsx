@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PlannerImage } from "@/lib/stint-plan-state";
+import { useT } from "@/components/planner/PlannerUi";
 
 /**
  * The race poster and the impressions from the race.
@@ -32,6 +33,7 @@ export default function RaceGallery({
   onCaption: (url: string, caption: string) => void;
   max: number;
 }) {
+  const t = useT();
   const [lightbox, setLightbox] = useState<PlannerImage | null>(null);
 
   // Escape closes the lightbox — nobody wants to hunt for the × on a 4K shot.
@@ -52,10 +54,10 @@ export default function RaceGallery({
       <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs uppercase tracking-wider text-zinc-500">
-            Result poster / certificate
+            {t.gallery.posterTitle}
           </span>
           <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800">
-            {busy ? "Uploading…" : poster ? "Replace poster" : "Upload poster"}
+            {busy ? t.gallery.uploading : poster ? t.gallery.replacePoster : t.gallery.uploadPoster}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
@@ -75,7 +77,7 @@ export default function RaceGallery({
                 for no benefit on a picture shown once. */}
             <img
               src={poster.url}
-              alt={poster.caption || "Result poster"}
+              alt={poster.caption || t.gallery.posterAlt}
               className="w-full cursor-zoom-in"
               onClick={() => setLightbox(poster)}
             />
@@ -84,7 +86,7 @@ export default function RaceGallery({
                 type="text"
                 value={poster.caption ?? ""}
                 onChange={(e) => onCaption(poster.url, e.target.value)}
-                placeholder="Caption (optional) — e.g. P8 in class, LMP2"
+                placeholder={t.gallery.captionPlaceholder}
                 className="print:hidden min-w-[12rem] flex-1 rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-200"
               />
               <span className="hidden print:inline">{poster.caption}</span>
@@ -105,10 +107,7 @@ export default function RaceGallery({
             </figcaption>
           </figure>
         ) : (
-          <p className="text-sm text-zinc-500">
-            Upload the official certificate or your own result poster — it stays
-            with the plan and everyone on the share link sees it.
-          </p>
+          <p className="text-sm text-zinc-500">{t.gallery.posterEmpty}</p>
         )}
       </div>
 
@@ -116,7 +115,7 @@ export default function RaceGallery({
       <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs uppercase tracking-wider text-zinc-500">
-            Impressions from the race
+            {t.gallery.impressionsTitle}
             {impressions.length > 0 && (
               <span className="ml-1 text-zinc-600">
                 ({impressions.length}/{max})
@@ -130,7 +129,7 @@ export default function RaceGallery({
                 : "cursor-pointer text-zinc-300 hover:bg-zinc-800"
             }`}
           >
-            {busy ? "Uploading…" : full ? `Limit ${max} reached` : "Add pictures"}
+            {busy ? t.gallery.uploading : full ? t.gallery.limitReached(max) : t.gallery.addPictures}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
@@ -169,7 +168,7 @@ export default function RaceGallery({
                     type="text"
                     value={img.caption ?? ""}
                     onChange={(e) => onCaption(img.url, e.target.value)}
-                    placeholder="Caption…"
+                    placeholder={t.gallery.captionShort}
                     className="print:hidden w-full rounded border border-zinc-800 bg-zinc-950 px-1.5 py-0.5 text-xs text-zinc-200"
                   />
                   <span className="hidden text-xs text-zinc-400 print:block">
@@ -216,13 +215,13 @@ export default function RaceGallery({
                   rel="noopener noreferrer"
                   className="text-orange-300 hover:text-orange-200"
                 >
-                  Full size
+                  {t.gallery.fullSize}
                 </a>
                 <button
                   onClick={() => setLightbox(null)}
                   className="text-zinc-400 hover:text-zinc-200"
                 >
-                  Close (Esc)
+                  {t.gallery.closeEsc}
                 </button>
               </span>
             </figcaption>

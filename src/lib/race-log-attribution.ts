@@ -148,18 +148,28 @@ export function cleanLapStats(
   };
 }
 
+/** How each excluded-lap reason is phrased. Passed in rather than baked in:
+ *  this module is pure and the dashboard renders in the user's language. */
+export type ExclusionLabels = {
+  exFormStart: (n: number) => string;
+  exInOut: (n: number) => string;
+  exFcy: (n: number) => string;
+  exRestart: (n: number) => string;
+};
+
 /** "2 formation/start, 6 in/out, 3 under yellow, 1 restart" — for the note
  *  under the average chart, so a wrong exclusion is visible instead of silent. */
 export function describeExclusions(
-  byReason: Partial<Record<LapExclusion, number>>
+  byReason: Partial<Record<LapExclusion, number>>,
+  labels: ExclusionLabels
 ): string {
   const startish = (byReason.form ?? 0) + (byReason.start ?? 0);
   const inout = (byReason.in ?? 0) + (byReason.out ?? 0);
   const parts: string[] = [];
-  if (startish) parts.push(`${startish} formation/start`);
-  if (inout) parts.push(`${inout} in/out`);
-  if (byReason.fcy) parts.push(`${byReason.fcy} under a full-course yellow`);
-  if (byReason.restart) parts.push(`${byReason.restart} restart`);
+  if (startish) parts.push(labels.exFormStart(startish));
+  if (inout) parts.push(labels.exInOut(inout));
+  if (byReason.fcy) parts.push(labels.exFcy(byReason.fcy));
+  if (byReason.restart) parts.push(labels.exRestart(byReason.restart));
   return parts.join(", ");
 }
 

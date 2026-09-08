@@ -2,6 +2,8 @@
 
 import type { FieldBench } from "@/lib/debrief-field";
 import { fmtLap } from "@/lib/debrief";
+import { useT } from "@/components/planner/PlannerUi";
+import type { PlannerDict } from "@/lib/i18n/planner";
 
 /**
  * "Waren wir langsam, oder waren alle langsam?"
@@ -27,51 +29,48 @@ const th =
   "border-b border-zinc-800 px-2 py-1.5 text-left font-medium text-zinc-400 print:border-zinc-300 print:text-zinc-700";
 const td = "px-2 py-1.5 text-zinc-200 print:text-zinc-900";
 
-const fmtDelta = (sec: number | null) =>
-  sec == null || !Number.isFinite(sec)
-    ? "—"
-    : `${sec >= 0 ? "+" : "−"}${Math.abs(sec).toFixed(2).replace(".", ",")}`;
-
-const fmtSec = (sec: number | null, digits = 1) =>
-  sec == null || !Number.isFinite(sec)
-    ? "—"
-    : `${sec.toFixed(digits).replace(".", ",")} s`;
+const makeFmt = (t: PlannerDict) => ({
+  delta: (sec: number | null) =>
+    sec == null || !Number.isFinite(sec)
+      ? "—"
+      : `${sec >= 0 ? "+" : "−"}${t.common.dec(Math.abs(sec), 2)}`,
+  sec: (sec: number | null, digits = 1) =>
+    sec == null || !Number.isFinite(sec) ? "—" : `${t.common.dec(sec, digits)} s`,
+});
 
 export default function DebriefFieldBox({ field }: { field: FieldBench }) {
+  const t = useT();
+  const fmt = makeFmt(t);
   const own = field.own;
   return (
     <section className={card}>
-      <h2 className={h2}>Klassenumfeld — {field.className ?? "Klasse"}</h2>
+      <h2 className={h2}>
+        {t.dbfField.boxTitle(field.className ?? t.dbfField.classFallback)}
+      </h2>
 
       <p className="mb-3 text-sm text-zinc-300 print:text-zinc-800">
         {own?.cleanSec != null && field.classCleanSec != null ? (
           <>
-            Unser Median lag bei{" "}
+            {t.dbfField.medianPre}{" "}
             <span className="font-semibold text-zinc-100 print:text-zinc-900">
               {fmtLap(own.cleanSec)}
             </span>
-            , der Klassenmedian bei {fmtLap(field.classCleanSec)} —{" "}
+            {t.dbfField.medianMid(fmtLap(field.classCleanSec))}{" "}
             <span
               style={{
                 color:
                   (own.deltaSec ?? 0) <= 0 ? "#199e70" : "#d95926",
               }}
             >
-              {fmtDelta(own.deltaSec)} s
+              {fmt.delta(own.deltaSec)} s
             </span>
             {field.paceRank != null && (
-              <>
-                , Platz {field.paceRank} von {field.paceRanked} in der Klasse
-                nach Pace
-              </>
+              <>{t.dbfField.rank(field.paceRank, field.paceRanked)}</>
             )}
             .
           </>
         ) : (
-          <>
-            Für unser Auto hat das Log zu wenige saubere Runden erfasst, um eine
-            Median-Pace zu bilden.
-          </>
+          <>{t.dbfField.tooFewLaps}</>
         )}
       </p>
 
@@ -81,16 +80,16 @@ export default function DebriefFieldBox({ field }: { field: FieldBench }) {
         <table className="w-full min-w-[46rem] border-collapse text-sm">
           <thead>
             <tr>
-              <th className={th}>#</th>
-              <th className={th}>Team</th>
-              <th className={`${th} text-right`}>Median</th>
-              <th className={`${th} text-right`}>Δ Klasse</th>
-              <th className={`${th} text-right`}>Beste</th>
-              <th className={`${th} text-right`}>Streuung</th>
-              <th className={`${th} text-right`}>Stopps</th>
-              <th className={`${th} text-right`}>Ø Stopp</th>
-              <th className={`${th} text-right`}>Runden</th>
-              <th className={`${th} text-right`}>Pos.</th>
+              <th className={th}>{t.dbfField.colNum}</th>
+              <th className={th}>{t.dbfField.colTeam}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colMedian}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colDeltaClass}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colBest}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colSpread}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colStops}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colAvgStop}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colLaps}</th>
+              <th className={`${th} text-right`}>{t.dbfField.colPos}</th>
             </tr>
           </thead>
           <tbody>
@@ -109,17 +108,17 @@ export default function DebriefFieldBox({ field }: { field: FieldBench }) {
                   {r.cleanSec == null ? "—" : fmtLap(r.cleanSec)}
                 </td>
                 <td className={`${td} text-right tabular-nums`}>
-                  {fmtDelta(r.deltaSec)}
+                  {fmt.delta(r.deltaSec)}
                 </td>
                 <td className={`${td} text-right tabular-nums`}>
                   {r.bestSec == null ? "—" : fmtLap(r.bestSec)}
                 </td>
                 <td className={`${td} text-right tabular-nums`}>
-                  {fmtSec(r.spreadSec, 2)}
+                  {fmt.sec(r.spreadSec, 2)}
                 </td>
                 <td className={`${td} text-right tabular-nums`}>{r.stops}</td>
                 <td className={`${td} text-right tabular-nums`}>
-                  {fmtSec(r.pitMedianSec)}
+                  {fmt.sec(r.pitMedianSec)}
                 </td>
                 <td className={`${td} text-right tabular-nums`}>
                   {r.laps ?? "—"}
@@ -134,18 +133,12 @@ export default function DebriefFieldBox({ field }: { field: FieldBench }) {
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 print:text-zinc-600">
-        Median der Rennrunden — Einführungs- und Startrunde, Ein- und
-        Ausfahrtsrunden, Gelbphasen und Restarts sind nach denselben Regeln
-        ausgeschlossen wie bei uns. Streuung ist p90 minus Median, also
-        unempfindlich gegen die eine Runde im Kiesbett. Stopps zählen erst ab 20
-        Sekunden Standzeit, kürzere Boxendurchfahrten bleiben draußen.{" "}
+        {t.dbfField.methodNote} {t.dbfField.methodStops}{" "}
         <span className="text-zinc-600 print:text-zinc-700">
-          Die Zahlen gelten je Auto, nicht je Fahrer: der Logger schreibt für
-          jedes fremde Auto nur den Namen, der beim Session-Start darin saß.
+          {t.dbfField.perCarNote}
         </span>
-        {field.cautionBands.length > 0 &&
-          " Im gelben Band steht bewusst die tatsächlich gefahrene Pace: das Feld wird schon langsamer, bevor Race Control die Flagge wirft, und diese Runden gehören zum Rennen."}
-        {field.shared && " Der Parse stammt aus dem Upload eines anderen Teams zum selben Rennen."}
+        {field.cautionBands.length > 0 && t.dbfField.cautionNote}
+        {field.shared && t.dbfField.sharedNote}
       </p>
     </section>
   );
@@ -161,6 +154,7 @@ export default function DebriefFieldBox({ field }: { field: FieldBench }) {
  * the gap is the point.
  */
 function WindowChart({ field }: { field: FieldBench }) {
+  const t = useT();
   const pts = field.windows;
   const vals = pts.flatMap((p) =>
     [p.own, p.cls].filter((x): x is number => x != null)
@@ -207,7 +201,7 @@ function WindowChart({ field }: { field: FieldBench }) {
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
         role="img"
-        aria-label="Median je Zehn-Minuten-Fenster, unser Auto gegen die Klasse"
+        aria-label={t.dbfField.windowAria}
       >
         {field.cautionBands.map((b, i) => (
           <rect
@@ -236,16 +230,16 @@ function WindowChart({ field }: { field: FieldBench }) {
           )
         )}
         <text x={L} y={H - 6} fontSize={10} fill="#71717a">
-          {minX} min
+          {t.dbfField.minutes(minX)}
         </text>
         <text x={W - R} y={H - 6} fontSize={10} fill="#71717a" textAnchor="end">
-          {maxX} min
+          {t.dbfField.minutes(maxX)}
         </text>
       </svg>
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500 print:text-zinc-600">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-0.5 w-4" style={{ background: OWN }} />
-          unser Auto
+          {t.dbfField.ourCar}
         </span>
         <span className="flex items-center gap-1.5">
           <span
@@ -254,7 +248,7 @@ function WindowChart({ field }: { field: FieldBench }) {
               backgroundImage: `repeating-linear-gradient(90deg, ${REFERENCE} 0 5px, transparent 5px 9px)`,
             }}
           />
-          Klassenmedian
+          {t.dbfField.classMedian}
         </span>
         {field.cautionBands.length > 0 && (
           <span className="flex items-center gap-1.5">
@@ -262,7 +256,7 @@ function WindowChart({ field }: { field: FieldBench }) {
               className="inline-block h-2 w-3 rounded-sm"
               style={{ background: CAUTION, opacity: 0.35 }}
             />
-            Gelbphase
+            {t.dbfField.caution}
           </span>
         )}
       </div>

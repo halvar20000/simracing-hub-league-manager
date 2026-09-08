@@ -17,6 +17,7 @@ import {
   percentile,
   type RaceLogRow,
 } from "@/lib/race-log-model";
+import { useT } from "@/components/planner/PlannerUi";
 
 /**
  * Team-performance dashboard for an uploaded race-logger JSONL.
@@ -111,6 +112,7 @@ export default function RaceLogDashboard({
   /** Called when someone corrects a stint's driver. Absent = read-only. */
   onStintDriverChange?: (stintIndex: number, driverName: string | null) => void;
 }) {
+  const t = useT();
   const laps = useMemo(() => log.laps ?? [], [log.laps]);
   const logDrivers = useMemo(() => log.drivers ?? [], [log.drivers]);
   const stints = useMemo(() => log.stints ?? [], [log.stints]);
@@ -196,9 +198,7 @@ export default function RaceLogDashboard({
   const fromPlan = source === "plan";
 
   if (rows.length === 0) {
-    return (
-      <p className="text-sm text-zinc-500">No lap data for our car in this log.</p>
-    );
+    return <p className="text-sm text-zinc-500">{t.rlog.noLapData}</p>;
   }
 
   // The clean average is the better number, so it leads — but iRacing's own
@@ -249,7 +249,7 @@ export default function RaceLogDashboard({
     },
     {}
   );
-  const droppedNote = describeExclusions(droppedByReason);
+  const droppedNote = describeExclusions(droppedByReason, t.rlog);
 
   const teamBest = (() => {
     const xs = rows.map((r) => r.bestSec).filter((n): n is number => n != null);
@@ -277,10 +277,11 @@ export default function RaceLogDashboard({
    *  saying what it is a gap TO. */
   const baselineLabelOf = (i: number): string => {
     if (targets[i] != null) {
-      return `target for ${rows[i].iRating} iR (${fmtPaceSec(targets[i])})`;
+      return t.rlog.baselineTarget(rows[i].iRating ?? "?", fmtPaceSec(targets[i]));
     }
-    if (official && refLapSec != null) return `10k reference (${fmtPaceSec(refLapSec)})`;
-    return `class best (${fmtPaceSec(classReference)})`;
+    if (official && refLapSec != null)
+      return t.rlog.baseline10k(fmtPaceSec(refLapSec));
+    return t.rlog.baselineClass(fmtPaceSec(classReference));
   };
   const reference = classReference;
 
@@ -288,51 +289,38 @@ export default function RaceLogDashboard({
     <div className="space-y-5">
       {planDisagrees && (
         <p className="rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
-          <span className="font-semibold">
-            The stint plan does not match what iRacing scored.
-          </span>{" "}
-          Going by the plan,{" "}
-          <span className="text-amber-100">{planCheck?.worstDriver ?? "a driver"}</span>{" "}
-          would have {planCheck?.worstDelta} laps more or fewer than the results
-          credit him with — which is what a swapped stint looks like when someone
-          stepped in for a team mate and the plan was never changed. The drivers
-          below therefore come from the RESULTS, not from the plan. If that is
-          still wrong, set the driver by hand in the stint table.
+          <span className="font-semibold">{t.rlog.planDisagreesTitle}</span>{" "}
+          {t.rlog.planDisagreesBody(
+            planCheck?.worstDriver ?? t.rlog.aDriver,
+            planCheck?.worstDelta ?? "?"
+          )}
         </p>
       )}
       {overridden > 0 && (
         <p className="rounded border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
-          {overridden} stint{overridden === 1 ? "" : "s"} assigned by hand — those
-          beat both the plan and the reconstruction.
+          {t.rlog.overridden(overridden)}
         </p>
       )}
       {(fromPlan || inferred) && (
         <p className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-400">
-          <span className="font-semibold text-zinc-300">Team event.</span> Laps,
-          best lap, average lap and incidents come from the{" "}
-          <span className="font-mono">eventresult.json</span> — iRacing&apos;s own
-          per-driver scoring. The race logger records only one driver name per
-          car, so who drove which stint comes from{" "}
+          <span className="font-semibold text-zinc-300">{t.rlog.teamEventTitle}</span>{" "}
+          {t.rlog.teamEventPre}{" "}
+          <span className="font-mono">eventresult.json</span> {t.rlog.teamEventMid}{" "}
           {fromPlan ? (
             <>
               <span className="font-semibold text-zinc-300">
-                your stint schedule above
+                {t.rlog.teamEventPlanBold}
               </span>{" "}
-              — each real stint is matched to the planned stint it overlaps in
-              time, live ± corrections included.
+              {t.rlog.teamEventPlanPost}
             </>
           ) : (
             <>
-              a <em>reconstruction</em> from each driver&apos;s fastest-lap number
-              and lap count. Assign the drivers in the stint schedule above and
-              this becomes exact.
+              {t.rlog.teamEventInferredPre} <em>{t.rlog.teamEventInferredEm}</em>{" "}
+              {t.rlog.teamEventInferredPost}
             </>
           )}
           {inferred && !confident && (
-            <span className="ml-1 text-amber-300">
-              The reconstruction did not match every driver&apos;s lap count
-              exactly — treat the stint assignment as a best guess.
-            </span>
+            <span className="ml-1 text-amber-300">{t.rlog.notConfident}</span>
           )}
         </p>
       )}
@@ -356,33 +344,31 @@ export default function RaceLogDashboard({
             <div className="mt-2 text-2xl font-semibold text-zinc-50">
               {fmtLapSec(d.bestSec)}
             </div>
-            <div className="text-xs text-zinc-500">best lap</div>
+            <div className="text-xs text-zinc-500">{t.rlog.bestLap}</div>
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs tabular-nums">
-              <dt className="text-zinc-500">Laps</dt>
+              <dt className="text-zinc-500">{t.rlog.laps}</dt>
               <dd className="text-right text-zinc-200">{d.laps ?? "—"}</dd>
-              <dt className="text-zinc-500">Average</dt>
+              <dt className="text-zinc-500">{t.rlog.average}</dt>
               <dd className="text-right text-zinc-200">{fmtLapSec(d.avgSec)}</dd>
-              <dt
-                className="text-zinc-500"
-                title="Average over this driver's racing laps only — the lap into the pits and the lap back out are left out, so a double stint and a repair stop no longer make a driver look slow."
-              >
-                Ø clean{source !== "log" && <sup className="text-zinc-600">*</sup>}
+              <dt className="text-zinc-500" title={t.rlog.cleanAvgHint}>
+                {t.rlog.cleanAvg}
+                {source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd
                 className="text-right text-zinc-200"
                 title={
                   d.cleanLaps
-                    ? `${d.cleanLaps} racing laps, ${d.cleanDropped} ignored${
-                        describeExclusions(d.cleanByReason)
-                          ? ` (${describeExclusions(d.cleanByReason)})`
-                          : ""
-                      }`
-                    : "No racing laps left after removing the in/out laps"
+                    ? t.rlog.cleanCell(
+                        d.cleanLaps,
+                        d.cleanDropped,
+                        describeExclusions(d.cleanByReason, t.rlog)
+                      )
+                    : t.rlog.cleanCellNone
                 }
               >
                 {fmtLapSec(d.cleanSec)}
               </dd>
-              <dt className="text-zinc-500">Incidents</dt>
+              <dt className="text-zinc-500">{t.rlog.incidents}</dt>
               <dd
                 className={`text-right ${
                   (d.incidents ?? 0) > 0 ? "text-amber-300" : "text-emerald-300"
@@ -391,13 +377,17 @@ export default function RaceLogDashboard({
                 {d.incidents ?? "—"}
               </dd>
               <dt className="text-zinc-500">
-                Green pace{source !== "log" && <sup className="text-zinc-600">*</sup>}
+                {t.rlog.greenPace}
+                {source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd className="text-right text-zinc-200">{fmtLapSec(d.greenSec)}</dd>
               {official && targets[di] != null && (
                 <>
-                  <dt className="text-zinc-500" title={`Read off the pace curve at this driver's own ${d.iRating} iRating.`}>
-                    Target ({d.iRating} iR)
+                  <dt
+                    className="text-zinc-500"
+                    title={t.rlog.targetHint(d.iRating ?? "?")}
+                  >
+                    {t.rlog.target(d.iRating ?? "?")}
                   </dt>
                   <dd className="text-right text-cyan-300">
                     {fmtPaceSec(targets[di])}
@@ -405,13 +395,15 @@ export default function RaceLogDashboard({
                 </>
               )}
               <dt className="text-zinc-500">
-                Spread{source !== "log" && <sup className="text-zinc-600">*</sup>}
+                {t.rlog.spread}
+                {source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd className="text-right text-zinc-200">
                 {d.spreadSec == null ? "—" : `${d.spreadSec.toFixed(3)} s`}
               </dd>
               <dt className="text-zinc-500">
-                Stints{source !== "log" && <sup className="text-zinc-600">*</sup>}
+                {t.rlog.stints}
+                {source !== "log" && <sup className="text-zinc-600">*</sup>}
               </dt>
               <dd className="text-right text-zinc-200">{d.stints}</dd>
             </dl>
@@ -420,9 +412,7 @@ export default function RaceLogDashboard({
       </div>
       {source !== "log" && (
         <p className="-mt-3 text-[11px] text-zinc-600">
-          {fromPlan
-            ? "* measured from the log, split by the driver order in your stint schedule."
-            : "* derived from the reconstructed stint split."}
+          {fromPlan ? t.rlog.footnotePlan : t.rlog.footnoteInferred}
         </p>
       )}
 
@@ -436,7 +426,7 @@ export default function RaceLogDashboard({
 
       <div className="grid gap-5 lg:grid-cols-2">
         <GapBars
-          title="Best lap — gap to class best"
+          title={t.rlog.gapBest}
           rows={rows}
           values={rows.map((r) =>
             r.bestSec != null && reference != null ? r.bestSec - reference : null
@@ -446,33 +436,33 @@ export default function RaceLogDashboard({
         <GapBars
           title={
             official && haveTargets
-              ? "Average lap — gap to your own iRating's target"
+              ? t.rlog.gapAvgTarget
               : official && refLapSec != null
-                ? "Average lap — gap to the 10k reference"
-                : "Average lap — gap to class best"
+                ? t.rlog.gapAvg10k
+                : t.rlog.gapAvgClass
           }
           note={
             mode === "temp"
-              ? `Racing laps only, then every lap shifted to ${baseTempC}\u00a0°C at the plan's measured ${tempSlopePerC}\u00a0s per degree — so the man who drove the hot opening stint can be compared with the man who had the cool night. ${tempCorrectedTotal} laps corrected${
+              ? t.rlog.noteTemp(
+                  `${baseTempC}\u00a0`,
+                  `${tempSlopePerC}\u00a0`,
+                  tempCorrectedTotal,
                   tempSkippedTotal > 0
-                    ? `, ${tempSkippedTotal} left out for carrying no temperature`
-                    : ""
-                }. Temperatures come from ${
-                  tempFromLog
-                    ? "the race logger's own samples"
-                    : "the per-stint figures typed on the pit wall"
-                }.`
+                    ? t.rlog.noteTempSkipped(tempSkippedTotal)
+                    : "",
+                  tempFromLog ? t.rlog.noteTempFromLog : t.rlog.noteTempFromPlan
+                )
               : mode === "clean"
-              ? marked
-                ? `Average over racing laps only — the formation and start laps, the lap into the pits and the lap back out, every lap under a full-course yellow and the restart lap after it are all left out${
-                    droppedTotal > 0
-                      ? ` (${droppedTotal} laps${droppedNote ? `: ${droppedNote}` : ""})`
-                      : ""
-                  }. A local waved yellow is not a caution and does not remove a lap.`
-                : `Average over racing laps: the lap into the pits and the lap back out are ignored${
-                    droppedTotal > 0 ? ` (${droppedTotal} laps)` : ""
-                  }. This log was analysed before the formation, start and full-course-yellow laps were recognised — press Re-analyse above to apply those too.`
-              : "iRacing's average over every lap the driver completed, so pit, caution and repair laps are in it."
+                ? marked
+                  ? t.rlog.noteCleanMarked(
+                      droppedTotal > 0
+                        ? t.rlog.noteCleanDropped(droppedTotal, droppedNote)
+                        : ""
+                    )
+                  : t.rlog.noteCleanOld(
+                      droppedTotal > 0 ? t.rlog.noteCleanOldDropped(droppedTotal) : ""
+                    )
+                : t.rlog.noteIracing
           }
           action={
             haveClean && (
@@ -490,17 +480,13 @@ export default function RaceLogDashboard({
                   )
                 }
                 className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800"
-                title={
-                  haveTemp
-                    ? "Cycle: clean average → corrected to one track temperature → iRacing's own average."
-                    : "Switch between the clean average (in/out laps removed) and iRacing's own average. A temperature-corrected average needs a measured °C slope on the plan."
-                }
+                title={haveTemp ? t.rlog.cycleHintTemp : t.rlog.cycleHintNoTemp}
               >
                 {mode === "clean"
-                  ? "Ø clean"
+                  ? t.rlog.cleanAvg
                   : mode === "temp"
-                    ? "Ø temp-corrected"
-                    : "iRacing Ø"}
+                    ? t.rlog.modeTemp
+                    : t.rlog.modeIracing}
               </button>
             )
           }
@@ -515,42 +501,35 @@ export default function RaceLogDashboard({
           extraNote={
             official
               ? haveTargets
-                ? `Each bar is that driver's own yardstick: the lap his iRating was worth here, read off the pace curve. A short bar means he drove above his rating${
+                ? t.rlog.extraTargets(
                     refLapSec != null
-                      ? `; the fixed 10k reference for this track is ${fmtPaceSec(refLapSec)}`
+                      ? t.rlog.extraTargetsRef(fmtPaceSec(refLapSec))
                       : ""
-                  }.`
+                  )
                 : paceCurve && paceCurve.length > 0
-                  ? "No iRatings in the results file yet — upload the eventresult.json and every driver gets his own target. Until then the fixed reference (or the class best) is used for everyone."
-                  : "No pace curve chosen for this plan, so everyone is measured against the same number. Pick one in the Event card to get per-driver targets."
+                  ? t.rlog.extraNoRatings
+                  : t.rlog.extraNoCurve
               : undefined
           }
         />
         <CountBars
-          title="Laps driven"
+          title={t.rlog.lapsDriven}
           rows={rows}
           values={rows.map((r) => r.laps ?? 0)}
         />
         <CountBars
-          title="Incidents per stint"
-          note="Bar length is incidents ÷ stints. Comparing raw totals punishes whoever was in the car longest — a driver with four stints and 4x is as clean as one with two stints and 2x."
+          title={t.rlog.incPerStint}
+          note={t.rlog.incPerStintNote}
           rows={rows}
           values={rows.map((r) =>
             r.stints > 0 ? (r.incidents ?? 0) / r.stints : (r.incidents ?? 0)
           )}
           labels={rows.map((r) => {
             const inc = r.incidents ?? 0;
-            if (r.stints <= 0) return `${inc}x — stints unknown`;
-            const rate = inc / r.stints;
-            return `${rate.toFixed(1)}/stint — ${inc}x in ${r.stints} stint${
-              r.stints === 1 ? "" : "s"
-            }`;
+            if (r.stints <= 0) return t.rlog.incUnknownStints(inc);
+            return t.rlog.incRate((inc / r.stints).toFixed(1), inc, r.stints);
           })}
-          emptyNote={
-            incidentsMeasured
-              ? "No incidents — clean race."
-              : "Not recorded. This log carries no incident data — the race logger takes incidents from the broadcast dashboard, and it was not running. Upload the eventresult.json for iRacing's own count, or use a newer RaceLogger, which reads the count itself."
-          }
+          emptyNote={incidentsMeasured ? t.rlog.incNone : t.rlog.incNotRecorded}
         />
       </div>
 
@@ -584,6 +563,7 @@ function LapTrace({
   log: PlannerRaceLog;
   source: "plan" | "inferred" | "log";
 }) {
+  const t = useT();
   const [hover, setHover] = useState<{ x: number; i: number } | null>(null);
 
   const W = 820;
@@ -659,19 +639,17 @@ function LapTrace({
     <figure className="relative rounded border border-zinc-800 bg-zinc-950/60 p-3">
       <figcaption className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-zinc-200">
-          Lap times over the race
+          {t.rlog.traceTitle}
           {source !== "log" && (
             <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
               {source === "plan"
-                ? "drivers from the stint plan"
-                : "stint split reconstructed"}
+                ? t.rlog.badgeFromPlan
+                : t.rlog.badgeReconstructed}
             </span>
           )}
         </span>
         <span className="text-xs text-zinc-500">
-          {model.above > 0
-            ? `${model.above} lap${model.above === 1 ? "" : "s"} above the scale (pit / caution)`
-            : "all laps in scale"}
+          {model.above > 0 ? t.rlog.aboveScale(model.above) : t.rlog.allInScale}
         </span>
       </figcaption>
 
@@ -688,7 +666,8 @@ function LapTrace({
         {log.classBestSec != null && (
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-0 w-4 border-t border-dashed border-zinc-400" />
-            class best{log.ownCarClass ? ` (${log.ownCarClass})` : ""}
+            {t.rlog.classBest}
+            {log.ownCarClass ? ` (${log.ownCarClass})` : ""}
           </span>
         )}
       </div>
@@ -697,7 +676,7 @@ function LapTrace({
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
-        aria-label="Lap time per lap for each team driver"
+        aria-label={t.rlog.traceAria}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
@@ -840,12 +819,12 @@ function LapTrace({
             transform: "translateX(-50%)",
           }}
         >
-          <div className="font-semibold">Lap {hovered.lap}</div>
-          <div className="text-zinc-400">{hoveredRow?.name ?? "unassigned"}</div>
+          <div className="font-semibold">{t.rlog.hoverLap(hovered.lap)}</div>
+          <div className="text-zinc-400">{hoveredRow?.name ?? t.rlog.unassigned}</div>
           <div className="tabular-nums">{fmtLapSec(hovered.sec)}</div>
           {log.classBestSec != null && (
             <div className="tabular-nums text-zinc-500">
-              {fmtGap(hovered.sec - log.classBestSec)} vs class best
+              {fmtGap(hovered.sec - log.classBestSec)} {t.rlog.vsClassBest}
             </div>
           )}
         </div>
@@ -880,6 +859,7 @@ function GapBars({
    *  a number nobody can check. */
   baselineLabels?: string[];
 }) {
+  const t = useT();
   const usable = values.filter((v): v is number => v != null);
   const max = Math.max(0.001, ...usable);
   return (
@@ -893,7 +873,7 @@ function GapBars({
       )}
       {extraNote && <p className="mb-3 text-xs text-cyan-300/80">{extraNote}</p>}
       {usable.length === 0 ? (
-        <p className="text-xs text-zinc-500">No comparable lap times.</p>
+        <p className="text-xs text-zinc-500">{t.rlog.noComparable}</p>
       ) : (
         <ul className={note ? "space-y-3" : "mt-3 space-y-3"}>
           {rows.map((r, i) => (
@@ -921,9 +901,11 @@ function GapBars({
                         : `${Math.max(2, (values[i]! / max) * 100)}%`,
                     backgroundColor: colorFor(r.slot),
                   }}
-                  title={`${r.name}: ${fmtGap(values[i])} s off ${
-                    baselineLabels?.[i] ?? "class best"
-                  }`}
+                  title={t.rlog.gapTo(
+                    r.name,
+                    fmtGap(values[i]),
+                    baselineLabels?.[i] ?? t.rlog.classBest
+                  )}
                 />
               </div>
             </li>
@@ -1017,6 +999,7 @@ function StintTable({
   overrides: (string | null)[];
   onStintDriverChange?: (stintIndex: number, driverName: string | null) => void;
 }) {
+  const t = useT();
   const stints = log.stints ?? [];
   const paces = stints.map((s) => s.avgSec).filter((n): n is number => n != null);
   const min = paces.length ? Math.min(...paces) : 0;
@@ -1027,26 +1010,27 @@ function StintTable({
     <figure className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
       <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-zinc-200">
-          Stint by stint{log.ownCarNumber ? ` — car #${log.ownCarNumber}` : ""}
+          {t.rlog.stintTableTitle}
+          {log.ownCarNumber ? t.rlog.stintTableCar(log.ownCarNumber) : ""}
           {source !== "log" && (
             <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">
-              {source === "plan" ? "drivers from the plan" : "drivers reconstructed"}
+              {source === "plan"
+                ? t.rlog.badgePlanShort
+                : t.rlog.badgeReconstructedShort}
             </span>
           )}
         </span>
-        <span className="text-xs text-zinc-500">
-          bar length = stint pace relative to our best and worst stint
-        </span>
+        <span className="text-xs text-zinc-500">{t.rlog.stintBarNote}</span>
       </figcaption>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm tabular-nums">
           <thead className="text-zinc-500">
             <tr className="border-b border-zinc-800">
-              <th className="py-1 pr-2">#</th>
-              <th className="py-1 pr-2">Laps</th>
-              <th className="py-1 pr-2">Driver</th>
-              <th className="w-1/3 py-1 pr-2">Stint pace</th>
-              <th className="py-1 pr-2 text-right">Pit</th>
+              <th className="py-1 pr-2">{t.rlog.colNum}</th>
+              <th className="py-1 pr-2">{t.rlog.colLaps}</th>
+              <th className="py-1 pr-2">{t.rlog.colDriver}</th>
+              <th className="w-1/3 py-1 pr-2">{t.rlog.colStintPace}</th>
+              <th className="py-1 pr-2 text-right">{t.rlog.colPit}</th>
             </tr>
           </thead>
           <tbody>
@@ -1078,7 +1062,7 @@ function StintTable({
                           onChange={(e) =>
                             onStintDriverChange(i, e.target.value || null)
                           }
-                          title="Who actually drove this stint. Set it only when the automatic answer is wrong — a hand correction beats the plan and the reconstruction, and it is saved with the plan."
+                          title={t.rlog.stintDriverHint}
                           className={`max-w-[12rem] rounded border bg-transparent px-1 py-0.5 text-sm print:appearance-none print:border-0 ${
                             overrides[i]
                               ? "border-[#ff6b35]/60 text-zinc-100"
@@ -1087,8 +1071,8 @@ function StintTable({
                         >
                           <option value="">
                             {rows[autoStintRow[i] ?? -1]
-                              ? `automatic — ${rows[autoStintRow[i]].name}`
-                              : "automatic — unknown"}
+                              ? t.rlog.autoDriver(rows[autoStintRow[i]].name)
+                              : t.rlog.autoUnknown}
                           </option>
                           {rows.map((r) => (
                             <option key={r.name} value={r.name}>
@@ -1110,7 +1094,7 @@ function StintTable({
                             width: `${Math.max(2, frac * 100)}%`,
                             backgroundColor: colorFor(row?.slot ?? -1),
                           }}
-                          title={`Stint ${st.index}: ${fmtLapSec(st.avgSec)}`}
+                          title={t.rlog.stintPaceHint(st.index, fmtLapSec(st.avgSec))}
                         />
                       </span>
                       <span className="w-20 shrink-0 text-right text-zinc-400">

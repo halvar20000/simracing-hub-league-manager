@@ -24,6 +24,25 @@
 //
 // Pure module: no React, no DB, no "use server".
 
+/**
+ * A preference the automatic line-up could not keep. Kept as a code + count so
+ * the UI can phrase it in whatever language it is running in — the engine is
+ * pure and has no business writing English.
+ */
+export type BrokenWish = {
+  kind:
+    | "nightStints"
+    | "noNightStint"
+    | "wetStints"
+    | "noWetStint"
+    | "takesStart"
+    | "notOnStart"
+    | "runTooLong"
+    | "outsideAvailability";
+  /** The number the phrase needs, where the kind has one. */
+  n?: number;
+};
+
 export type StintPref = "" | "prefer" | "avoid";
 
 export type AutofillDriver = {
@@ -73,7 +92,7 @@ export type AutofillDriverReport = {
   takesStart: boolean;
   longestRun: number;
   /** Preferences that could not be honoured, in plain words. */
-  broken: string[];
+  broken: BrokenWish[];
 };
 
 export type AutofillResult = {
@@ -240,21 +259,24 @@ export function autofillDrivers(
     const stintCount = count.get(d.id) ?? 0;
     const maxRun = d.maxConsecutive && d.maxConsecutive > 0 ? d.maxConsecutive : Infinity;
 
-    const broken: string[] = [];
+    // Codes, not sentences: the planner renders this report in the user's
+    // language, and a pre-formatted English phrase cannot be translated at the
+    // call site. `n` carries the number the phrase needs, where there is one.
+    const broken: BrokenWish[] = [];
     if (d.night === "avoid" && nightStints > 0)
-      broken.push(`${nightStints} night stint${nightStints === 1 ? "" : "s"}`);
+      broken.push({ kind: "nightStints", n: nightStints });
     if (d.night === "prefer" && nightStints === 0 && stints.some((st) => isNightStint(st, opts)))
-      broken.push("no night stint");
+      broken.push({ kind: "noNightStint" });
     if (d.rain === "avoid" && rainStints > 0)
-      broken.push(`${rainStints} wet stint${rainStints === 1 ? "" : "s"}`);
+      broken.push({ kind: "wetStints", n: rainStints });
     if (d.rain === "prefer" && rainStints === 0 && stints.some((st) => st.rain))
-      broken.push("no wet stint");
-    if (d.start === "avoid" && takesStart) broken.push("takes the start");
-    if (d.start === "prefer" && !takesStart) broken.push("not on the start");
-    if (longestRun > maxRun) broken.push(`${longestRun} stints in a row`);
+      broken.push({ kind: "noWetStint" });
+    if (d.start === "avoid" && takesStart) broken.push({ kind: "takesStart" });
+    if (d.start === "prefer" && !takesStart) broken.push({ kind: "notOnStart" });
+    if (longestRun > maxRun) broken.push({ kind: "runTooLong", n: longestRun });
     const blockedUsed = stints.filter((st, i) => assignment[i] === d.id && !isFree(d, st)).length;
     if (blockedUsed > 0)
-      broken.push(`${blockedUsed} stint${blockedUsed === 1 ? "" : "s"} outside their availability`);
+      broken.push({ kind: "outsideAvailability", n: blockedUsed });
 
     return {
       driverId: d.id,

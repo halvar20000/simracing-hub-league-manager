@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { duplicateStintPlan } from "@/lib/actions/stint-plans";
+import { useT } from "@/components/planner/PlannerUi";
 
 /** Clones a stint plan and opens the copy (storing its edit token locally so
  *  the person who duplicated it can edit the copy). */
 export default function StintPlanDuplicateButton({ planId }: { planId: string }) {
   const router = useRouter();
+  const t = useT();
   const [busy, setBusy] = useState(false);
 
   async function onClick() {
@@ -27,6 +29,7 @@ export default function StintPlanDuplicateButton({ planId }: { planId: string })
     <button
       onClick={onClick}
       disabled={busy}
+      title={t.gallery.duplicateHint}
       className="shrink-0 rounded border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
     >
       {busy ? "Copying…" : "Duplicate"}

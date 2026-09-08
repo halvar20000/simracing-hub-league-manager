@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
@@ -16,6 +15,8 @@ import {
   getStintPlanViewer,
 } from "@/lib/stint-plan-access";
 import { describePlanPeople } from "@/lib/stint-plan-people";
+import PlanPageHeader from "@/components/planner/PlanPageHeader";
+import NoPlanAccess from "@/components/planner/NoPlanAccess";
 
 export async function generateMetadata({
   params,
@@ -33,36 +34,6 @@ export async function generateMetadata({
       "Endurance stint plan — fuel, stints and driver rotation for an iRacing Special Event.",
     url: `/stint-planner/${id}`,
   });
-}
-
-/** Shown to a signed-in CLS member who is simply not on this plan. */
-function NoAccess() {
-  return (
-    <main className="mx-auto max-w-2xl px-6 py-16 text-center">
-      <h1 className="mb-3 text-2xl font-bold">This plan isn&rsquo;t shared with you</h1>
-      <p className="mb-6 text-sm text-zinc-400">
-        A stint plan can only be opened by the driver who created it, the
-        drivers in it, the people they added and CLS admins. If you should be in
-        it, ask whoever built the plan to add you — there is a{" "}
-        <span className="text-zinc-300">Who can open this plan</span> box on
-        their side.
-      </p>
-      <div className="flex flex-wrap justify-center gap-2">
-        <Link
-          href="/stint-planner"
-          className="rounded border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-        >
-          ← Your stint plans
-        </Link>
-        <Link
-          href="/stint-planner/new"
-          className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-500"
-        >
-          + New plan
-        </Link>
-      </div>
-    </main>
-  );
 }
 
 export default async function SavedStintPlanPage({
@@ -92,7 +63,7 @@ export default async function SavedStintPlanPage({
   if (!plan) notFound();
 
   // The gate. The server actions repeat it — this only decides what is drawn.
-  if (!canAccessStintPlan(plan, viewer)) return <NoAccess />;
+  if (!canAccessStintPlan(plan, viewer)) return <NoPlanAccess />;
 
   const canManage = canManageStintPlan(plan, viewer);
   const initial = hydratePlanState(plan.payload, plan.title);
@@ -110,25 +81,11 @@ export default async function SavedStintPlanPage({
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-        <Link href="/stint-planner" className="text-zinc-400 hover:text-[#ff6b35]">
-          ← All stint plans
-        </Link>
-        {hasRaceLog && (
-          <Link
-            href={`/stint-planner/${plan.id}/debriefing`}
-            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-zinc-300 hover:bg-zinc-800"
-          >
-            De-briefing für das Team →
-          </Link>
-        )}
-      </div>
-      <h1 className="mb-1 text-2xl font-bold">Endurance Stint Planner</h1>
-      <p className="mb-6 max-w-2xl text-sm text-zinc-400">
-        {plan.archivedAt
-          ? "Completed plan — the race is done, so the plan itself is frozen. The debrief below stays open."
-          : "Shared stint plan — live for everyone on it. Changes save automatically and everyone’s view refreshes within a few seconds."}
-      </p>
+      <PlanPageHeader
+        variant="plan"
+        archived={plan.archivedAt != null}
+        debriefHref={hasRaceLog ? `/stint-planner/${plan.id}/debriefing` : null}
+      />
 
       <StintPlanAccessPanel planId={plan.id} initial={people} clsDrivers={clsDrivers} />
 

@@ -66,6 +66,7 @@ import {
   isNightStint,
   type AutofillResult,
   type AutofillStint,
+  type BrokenWish,
   type StintPref,
 } from "@/lib/stint-autofill";
 import {
@@ -105,6 +106,14 @@ import {
   type G61TeamOption,
   type G61Status,
 } from "@/lib/actions/garage61-connect";
+import { useT } from "@/components/planner/PlannerUi";
+import { Field, CheckField, Hint } from "@/components/planner/Field";
+import PlannerUiSwitch from "@/components/planner/PlannerUiSwitch";
+import AdvancedOnly from "@/components/planner/AdvancedOnly";
+import GuideLink from "@/components/planner/GuideLink";
+import PlanChecklist, { type ChecklistItem } from "@/components/planner/PlanChecklist";
+import PlanWarnings from "@/components/planner/PlanWarnings";
+import type { PlannerDict } from "@/lib/i18n/planner";
 
 /** True for the error Next.js throws when a Server Action id no longer exists
  *  on the server — i.e. the app was redeployed while this tab stayed open. */
@@ -128,12 +137,16 @@ const fmtSec = (sec: number | null | undefined): string => {
   return `${m}:${rest.toFixed(3).padStart(6, "0")}`;
 };
 
-/** The three lives of a stint plan. */
+/** The three lives of a stint plan. Labels come from the dictionary — this
+ *  only fixes the order and which key each tab reads. */
 type PlanPhase = "pre" | "during" | "post";
-const PHASES: { key: PlanPhase; label: string; hint: string }[] = [
-  { key: "pre", label: "Pre-Race", hint: "setup & drivers" },
-  { key: "during", label: "During Race", hint: "schedule & live" },
-  { key: "post", label: "After Race", hint: "result & analysis" },
+const PHASES: {
+  key: PlanPhase;
+  hintKey: "preHint" | "duringHint" | "postHint";
+}[] = [
+  { key: "pre", hintKey: "preHint" },
+  { key: "during", hintKey: "duringHint" },
+  { key: "post", hintKey: "postHint" },
 ];
 
 const fmtClock = (ms: number | null): string =>
@@ -174,26 +187,33 @@ const round1 = (n: number): number => Math.round(n * 10) / 10;
  * "+ 20 tyres" makes the parts look like they should sum to the total when they
  * do not — say "overlapped" instead.
  */
-function stopBreakdownText(b: PitStopBreakdown, m: PitModel): string {
-  const parts = [`${b.laneSec.toFixed(0)}s lane`];
+function stopBreakdownText(
+  b: PitStopBreakdown,
+  m: PitModel,
+  t: PlannerDict
+): string {
+  const parts = [`${b.laneSec.toFixed(0)}s ${t.breakdown.lane}`];
   if (m.tyreSequential) {
-    if (b.refuelSec > 0) parts.push(`${b.refuelSec.toFixed(1)}s fuel`);
-    if (b.tyreSec > 0) parts.push(`${b.tyreSec.toFixed(0)}s tyres`);
+    if (b.refuelSec > 0) parts.push(`${b.refuelSec.toFixed(1)}s ${t.breakdown.fuel}`);
+    if (b.tyreSec > 0) parts.push(`${b.tyreSec.toFixed(0)}s ${t.breakdown.tyres}`);
   } else {
     // Parallel: only the longer of the two is on the clock.
-    const longer = b.tyreSec > b.refuelSec ? "tyres" : "fuel";
+    const tyresLonger = b.tyreSec > b.refuelSec;
+    const longer = tyresLonger ? t.breakdown.tyres : t.breakdown.fuel;
+    const shorter = tyresLonger ? t.breakdown.fuel : t.breakdown.tyres;
     const longerSec = Math.max(b.tyreSec, b.refuelSec);
     const shorterSec = Math.min(b.tyreSec, b.refuelSec);
     if (longerSec > 0) {
       parts.push(
         `${longerSec.toFixed(1)}s ${longer}` +
           (shorterSec > 0
-            ? ` (${shorterSec.toFixed(0)}s ${longer === "tyres" ? "fuel" : "tyres"} overlapped)`
+            ? ` (${t.breakdown.overlapped(shorterSec.toFixed(0), shorter)})`
             : "")
       );
     }
   }
-  if (b.swapExtraSec > 0) parts.push(`${b.swapExtraSec.toFixed(0)}s driver change`);
+  if (b.swapExtraSec > 0)
+    parts.push(`${b.swapExtraSec.toFixed(0)}s ${t.breakdown.driverChange}`);
   return parts.join(" + ");
 }
 
@@ -230,6 +250,7 @@ function NotesField({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
+  const t = useT();
   const [big, setBig] = useState(false);
 
   // Escape closes it. Bound only while open, so it cannot swallow Escape from
@@ -262,9 +283,9 @@ function NotesField({
           type="button"
           onClick={() => setBig(true)}
           className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-800 print:hidden"
-          title="Open this field over the whole page — Escape closes it."
+          title={t.notes.enlargeHint}
         >
-          ⤢ Enlarge
+          {t.notes.enlarge}
         </button>
       </div>
 
@@ -297,25 +318,16 @@ function NotesField({
               onClick={() => setBig(false)}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-sm text-zinc-200 hover:bg-zinc-800"
             >
-              Done (Esc)
+              {t.notes.doneEsc}
             </button>
           </div>
           {field("flex-1 min-h-0", true)}
-          <p className="mt-2 text-[11px] text-zinc-500">
-            Saves as you type, exactly like the small field.
-          </p>
+          <p className="mt-2 text-[11px] text-zinc-500">{t.notes.savesAsYouType}</p>
         </div>
       )}
     </div>
   );
 }
-
-// localStorage never notifies us of its own changes; we re-read on re-render.
-// How to drive a session that measures every pit constant. The fuel-ONLY stop
-// is the one that matters most: without it, a fill and a tyre change cannot be
-// told apart, and the refuel rate comes out two or three times too fast.
-const PIT_PROTOCOL =
-  "To measure everything in one session: 3–4 clean laps in a row (the reference), then one lap through the pit lane without stopping, one stop with no service at all, one stop with tyres only, and one stop with fuel only (no tyres) — a big fill is best. Come back out and do a clean lap after each.";
 
 /** "Thomas Herbrig" → "TH". Keeps the spotter column from doubling the width
  *  of a table that already has to fit a whole race on one screen. */
@@ -329,7 +341,9 @@ const initialsOf = (name: string): string =>
     .slice(0, 3) || "?";
 
 /** Why this stint's lap time is what it is — the tooltip on the Lap column. */
-const lapBreakdownText = (st: {
+const lapBreakdownText = (
+  t: PlannerDict,
+  st: {
   lapSec: number;
   baseLapSec: number;
   tempDeltaSec: number;
@@ -340,25 +354,32 @@ const lapBreakdownText = (st: {
   driverName: string | null;
   paceFallback?: boolean;
   fuelFallback?: boolean;
-  fuelPerLapUsed?: number;
-}): string => {
+    fuelPerLapUsed?: number;
+  }
+): string => {
   const who = st.driverName
     ? st.paceFallback
-      ? `(${st.driverName} — no pace of their own, Standard profile)`
-      : `(${st.driverName})`
-    : "(profile pace)";
+      ? t.lapBreak.driverFallback(st.driverName)
+      : t.lapBreak.driver(st.driverName)
+    : t.lapBreak.profilePace;
   const parts: string[] = [`${fmtLap(st.baseLapSec)} ${who}`];
   const add = (v: number, label: string) => {
     if (Math.abs(v) > 0.0005) parts.push(`${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(2)} s ${label}`);
   };
-  add(st.tempDeltaSec, st.trackTempC != null ? `at ${st.trackTempC}°C` : "temperature");
-  add(st.weatherDeltaSec, st.condition === "wet" ? "full wet" : "half wet");
-  add(st.trafficDeltaSec, "race traffic");
+  add(
+    st.tempDeltaSec,
+    st.trackTempC != null ? t.lapBreak.atTemp(st.trackTempC) : t.lapBreak.temperature
+  );
+  add(
+    st.weatherDeltaSec,
+    st.condition === "wet" ? t.lapBreak.fullWet : t.lapBreak.halfWet
+  );
+  add(st.trafficDeltaSec, t.lapBreak.traffic);
   const fuel =
     st.fuelPerLapUsed != null
-      ? `\n${st.fuelPerLapUsed.toFixed(2)} L/lap${st.fuelFallback ? " (Standard profile — this driver has no fuel figure)" : ""}`
+      ? `\n${t.lapBreak.fuelLine(st.fuelPerLapUsed.toFixed(2))}${st.fuelFallback ? t.lapBreak.fuelFallback : ""}`
       : "";
-  return `${parts.join("  ")}  =  ${fmtLap(st.lapSec)} per lap${fuel}`;
+  return `${parts.join("  ")}  ${t.lapBreak.perLap(fmtLap(st.lapSec))}${fuel}`;
 };
 
 // One stable colour per driver, the way Johann's sheet does it: the rotation is
@@ -383,19 +404,7 @@ const NO_DRIVER_COLOUR = {
 
 const emptyStoreSubscribe = () => () => {};
 
-export default function StintPlanner({
-  initial,
-  planId = null,
-  initialUpdatedAtMs = null,
-  initialArchivedAtMs = null,
-  viewerIsAdmin = false,
-  viewerCanManage = false,
-  clsDrivers,
-  tracks,
-  cars,
-  pitReferences = [],
-  paceReferences = [],
-}: {
+type StintPlannerProps = {
   initial: PlannerState;
   planId?: string | null;
   initialUpdatedAtMs?: number | null;
@@ -413,7 +422,22 @@ export default function StintPlanner({
   /** iRating → lap time curves (admin-curated shared library). Only used by a
    *  plan set to "Official race" — see the Event card. */
   paceReferences?: PaceReferenceRow[];
-}) {
+};
+
+export default function StintPlanner({
+  initial,
+  planId = null,
+  initialUpdatedAtMs = null,
+  initialArchivedAtMs = null,
+  viewerIsAdmin = false,
+  viewerCanManage = false,
+  clsDrivers,
+  tracks,
+  cars,
+  pitReferences = [],
+  paceReferences = [],
+}: StintPlannerProps) {
+  const t = useT();
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
   /** "Per driver" mode keeps the two profile rows collapsed — there they are
@@ -473,7 +497,7 @@ export default function StintPlanner({
     if (!curId) return;
     const snap = JSON.stringify(s);
     if (snap === lastSavedSnapshotRef.current) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       void (async () => {
         setSyncStatus("saving");
         try {
@@ -493,7 +517,7 @@ export default function StintPlanner({
         }
       })();
     }, 1200);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [s, curId]);
 
   // Auto-refresh: poll for a newer server version and apply it — but only when
@@ -534,6 +558,128 @@ export default function StintPlanner({
   const result = useMemo(() => buildSchedule(stateToInput(s)), [s]);
   /** True when this plan prices its stops from measured constants. */
   const pitOn = planPitModel(s) !== null;
+
+  /**
+   * Numbers that are legal but look wrong.
+   *
+   * The one that actually costs races is the lap time typed as "118.8" instead
+   * of "1:58.8": the schedule that comes out is internally consistent, has
+   * roughly twice the stints, and nothing on the page contradicts it. Every
+   * check below is of that shape — plausible-looking input, silently wrong
+   * output. None of them blocks anything.
+   */
+  const warnings = useMemo<string[]>(() => {
+    const out: string[] = [];
+    const e = s.event;
+    const lapSec = parseDurationToSec(s.standard.laptime);
+    const fuelPerLap = parseTypedNumber(s.standard.fuelPerLap);
+    const tank = parseTypedNumber(e.tankSize);
+    const reserve = parseTypedNumber(e.fuelReserve);
+
+    // 25 s is quicker than any lap in iRacing that a stint plan is built for;
+    // 12 min is longer than the Nordschleife at a crawl.
+    if (lapSec != null && lapSec > 0 && lapSec < 25)
+      out.push(t.warn.lapTimeShort(s.standard.laptime));
+    if (lapSec != null && lapSec > 720)
+      out.push(t.warn.lapTimeLong(s.standard.laptime));
+
+    const usable = Math.max(0, tank - reserve);
+    if (fuelPerLap > 0 && usable > 0) {
+      const lapsPerTank = usable / fuelPerLap;
+      // Under 3 laps a tank means one of the two numbers is in the wrong unit;
+      // over 200 means the tank or the consumption is not this car's.
+      if (lapsPerTank < 3 || lapsPerTank > 200)
+        out.push(t.warn.fuelVsTank(fmtLaps(round1(lapsPerTank))));
+    }
+    if (tank > 0 && reserve > tank * 0.2) out.push(t.warn.reserveHigh);
+
+    if (result.stints.length === 1 && result.raceSec > 3600)
+      out.push(t.warn.stintOverRace);
+    if (result.stints.length > 0 && result.totals.pitStops === 0 && result.raceSec > 5400)
+      out.push(t.warn.noStops);
+
+    const gridFuel = parseTypedNumber(e.gridFuelL);
+    if (gridFuel > 0 && fuelPerLap > 0 && gridFuel > fuelPerLap)
+      out.push(t.warn.gridFuelHigh);
+
+    const short = result.stints.filter((st) => st.fuelShort).length;
+    if (short > 0) out.push(t.warn.fuelShortStints(short));
+
+    // A track temperature with no slope behind it changes nothing at all, and
+    // the field gives no sign of that.
+    if (e.trackTempC.trim() !== "" && s.tempModel == null)
+      out.push(t.warn.tempWithoutModel);
+
+    return out;
+  }, [s, result, t]);
+
+  /**
+   * The "what is still missing" list above the schedule. Only the inputs the
+   * engine genuinely cannot do without are steps — a plan is usable long
+   * before every field on the page is filled in, and a checklist that demands
+   * the track temperature would be a lie about what is required.
+   *
+   * Session start is included even though the schedule computes without it:
+   * without it there are no wall-clock times, no night stints and no Discord
+   * alerts, which is most of what the plan is for on race day.
+   */
+  const checklist = useMemo<ChecklistItem[]>(() => {
+    const has = (v: string | undefined | null) => (v ?? "").trim() !== "";
+    const e = s.event;
+    const items: ChecklistItem[] = [
+      { key: "track", label: t.checklist.track, anchor: "card-event", done: has(e.track) },
+      { key: "car", label: t.checklist.car, anchor: "card-event", done: has(e.car) },
+      {
+        key: "duration",
+        label: t.checklist.duration,
+        anchor: "card-event",
+        done:
+          e.raceLimit === "time"
+            ? has(e.raceDuration)
+            : e.raceLimit === "laps"
+              ? has(e.raceLaps)
+              : has(e.raceDistance),
+      },
+    ];
+    // A lap count or a distance can only become a schedule once the planner
+    // knows how long a lap is; a timed race never needs it.
+    if (e.raceLimit === "distance") {
+      items.push({
+        key: "lapDistance",
+        label: t.checklist.lapDistance,
+        anchor: "card-event",
+        done: has(e.lapDistanceKm),
+      });
+    }
+    items.push(
+      {
+        key: "lapTime",
+        label: t.checklist.lapTime,
+        anchor: "card-fuel",
+        done: has(s.standard.laptime),
+      },
+      {
+        key: "fuelPerLap",
+        label: t.checklist.fuelPerLap,
+        anchor: "card-fuel",
+        done: has(s.standard.fuelPerLap),
+      },
+      { key: "tank", label: t.checklist.tank, anchor: "card-event", done: has(e.tankSize) },
+      {
+        key: "drivers",
+        label: t.checklist.drivers,
+        anchor: "card-drivers",
+        done: s.drivers.length > 0,
+      },
+      {
+        key: "start",
+        label: t.checklist.start,
+        anchor: "card-event",
+        done: has(e.sessionStartLocal),
+      }
+    );
+    return items;
+  }, [s, t]);
   /** An OFFICIAL race is measured against what each driver's iRating was worth,
    *  not against the fastest man in class — see the Event card. */
   const official = s.event.raceKind === "official";
@@ -632,16 +778,16 @@ export default function StintPlanner({
   // flag lands exactly on the click and every stint shifts with it.
   const greenOffsetSec = parseDurationToSec(s.event.greenFlagOffset) ?? 0;
   const setRaceStartNow = () => {
-    const t = new Date(Date.now() - greenOffsetSec * 1000);
+    const green = new Date(Date.now() - greenOffsetSec * 1000);
     const pad = (n: number) => String(n).padStart(2, "0");
     const local =
-      `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}` +
-      `T${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+      `${green.getFullYear()}-${pad(green.getMonth() + 1)}-${pad(green.getDate())}` +
+      `T${pad(green.getHours())}:${pad(green.getMinutes())}:${pad(green.getSeconds())}`;
     patchEvent("sessionStartLocal", local);
     setStatus(
       greenOffsetSec > 0
-        ? `Race start stamped — green flag now, ${s.event.greenFlagOffset} offset accounted for.`
-        : "Race start stamped to the second."
+        ? t.msg.raceStartStampedOffset(s.event.greenFlagOffset)
+        : t.msg.raceStartStamped
     );
   };
 
@@ -831,7 +977,7 @@ export default function StintPlanner({
     <select
       value={value ?? ""}
       onChange={(e) => patchDriverPref(driverId, { [key]: e.target.value as StintPref })}
-      title={`Would they rather drive ${what}, or rather not?`}
+      title={t.avail.prefHint(what)}
       className={`rounded border bg-zinc-950 px-1.5 py-1 text-xs ${
         value === "prefer"
           ? "border-emerald-700/70 text-emerald-200"
@@ -841,10 +987,32 @@ export default function StintPlanner({
       }`}
     >
       <option value="">—</option>
-      <option value="prefer">happy to</option>
-      <option value="avoid">rather not</option>
+      <option value="prefer">{t.avail.prefHappy}</option>
+      <option value="avoid">{t.avail.prefAvoid}</option>
     </select>
   );
+
+  /** One broken preference, phrased in the interface language. */
+  const brokenWishText = (w: BrokenWish): string => {
+    switch (w.kind) {
+      case "nightStints":
+        return t.wish.nightStints(w.n ?? 0);
+      case "noNightStint":
+        return t.wish.noNightStint;
+      case "wetStints":
+        return t.wish.wetStints(w.n ?? 0);
+      case "noWetStint":
+        return t.wish.noWetStint;
+      case "takesStart":
+        return t.wish.takesStart;
+      case "notOnStart":
+        return t.wish.notOnStart;
+      case "runTooLong":
+        return t.wish.runTooLong(w.n ?? 0);
+      case "outsideAvailability":
+        return t.wish.outsideAvailability(w.n ?? 0);
+    }
+  };
 
   const coveredHours = (startSec: number, endSec: number): number[] => {
     const h0 = Math.floor(startSec / 3600);
@@ -984,19 +1152,13 @@ export default function StintPlanner({
           ownCarNumber: res.ownCarNumber,
         },
       }));
-      setStatus(
-        `Eventresult parsed — ${res.summary.length} ${
-          res.teamEvent ? "teams" : "drivers"
-        }. Saved with the plan.`
-      );
+      setStatus(t.msg.resultParsed(res.summary.length, res.teamEvent));
     } catch (e) {
       if (isStaleActionError(e)) {
         setStaleBuild(true);
-        setResultError(
-          "The site was updated while this tab was open — reload the page, then upload again."
-        );
+        setResultError(t.msg.staleReloadUpload);
       } else {
-        setResultError("Upload failed — please try again.");
+        setResultError(t.msg.uploadFailed);
       }
     } finally {
       setUploadingResult(false);
@@ -1030,17 +1192,15 @@ export default function StintPlanner({
       }));
       setStatus(
         res.ownCarNumber
-          ? `Race log parsed — stints of car #${res.ownCarNumber}. Saved with the plan.`
-          : "Race log parsed. (No car matched this plan's drivers, so no stint breakdown.)"
+          ? t.msg.logParsed(res.ownCarNumber)
+          : t.msg.logParsedNoCar
       );
     } catch (e) {
       if (isStaleActionError(e)) {
         setStaleBuild(true);
-        setLogError(
-          "The site was updated while this tab was open — reload the page, then upload again."
-        );
+        setLogError(t.msg.staleReloadUpload);
       } else {
-        setLogError("Upload failed — please try again.");
+        setLogError(t.msg.uploadFailed);
       }
     } finally {
       setUploadingLog(false);
@@ -1068,15 +1228,13 @@ export default function StintPlanner({
         ...p,
         raceLog: { ...res.log, parsedAt: new Date().toISOString() },
       }));
-      setStatus("Race log re-analysed with the current parser.");
+      setStatus(t.msg.logReanalysed);
     } catch (e) {
       if (isStaleActionError(e)) {
         setStaleBuild(true);
-        setLogError(
-          "The site was updated while this tab was open — reload the page, then try again."
-        );
+        setLogError(t.msg.staleReloadRetry);
       } else {
-        setLogError("Re-analysing failed — please try again.");
+        setLogError(t.msg.reanalyseFailed);
       }
     } finally {
       setUploadingLog(false);
@@ -1146,13 +1304,13 @@ export default function StintPlanner({
         return sec ? { ...d, laptime: fmtLap(sec) } : d;
       }),
     }));
-    setStatus("Driver lap times set from the race log.");
+    setStatus(t.msg.logPaceApplied);
   };
 
   const applyLogTrackTemp = () => {
-    const t = s.raceLog?.trackTempC;
-    if (t == null) return;
-    setS((p) => ({ ...p, event: { ...p.event, trackTempC: String(t) } }));
+    const logTemp = s.raceLog?.trackTempC;
+    if (logTemp == null) return;
+    setS((p) => ({ ...p, event: { ...p.event, trackTempC: String(logTemp) } }));
     setStatus(`Track temperature set to ${t} °C from the race log.`);
   };
 
@@ -1215,11 +1373,15 @@ export default function StintPlanner({
           ? ` (weighted for real driver pace, ${fmtLap(avgLap)} avg)`
           : "";
       setFuelSaveMsg(
-        `Applied to Standard profile: ${best.stops} stops · target ${fmtLap(best.laptimeSec)} @ ${best.fuelPerLap.toFixed(2)} L/lap → ${
+        t.msg.fsApplied(
+          best.stops,
+          fmtLap(best.laptimeSec),
+          best.fuelPerLap.toFixed(2),
           opt.lapLimited
-            ? `${fmtDuration(best.totalTimeSec)} for ${best.totalLaps} laps`
-            : `${best.totalLaps.toFixed(1)} laps`
-        }${paceNote}.`
+            ? t.msg.fsOutcomeTime(fmtDuration(best.totalTimeSec), best.totalLaps)
+            : t.msg.fsOutcomeLaps(best.totalLaps.toFixed(1)),
+          paceNote
+        )
       );
     } else {
       setFuelSaveMsg(null);
@@ -1300,9 +1462,7 @@ export default function StintPlanner({
         pitRows.push(...pitRowsFromSheet(grid as unknown[][]));
       }
       if (rows.length === 0) {
-        setG61Msg(
-          "No lap data found — is this a Garage 61 session export (.xlsx)?"
-        );
+        setG61Msg(t.msg.g61NoLapData);
         return;
       }
       // Cumulative: this file's laps are added to the ones the plan already
@@ -1329,8 +1489,11 @@ export default function StintPlanner({
         const matched = result.diag?.lapsAfterRoster ?? 0;
         setG61Msg(
           s.drivers.length > 0 && matched === 0
-            ? `None of the ${rows.length} laps in the file were driven by your plan's drivers. The file has: ${seen.length ? seen.join(", ") : "no driver name"}. Match the names, or add the driver to the plan.`
-            : `Found ${rows.length} laps, but no clean full lap among them — in/out laps, partials and laps without fuel data can't be used. Drive a few consecutive green laps.`
+            ? t.msg.g61NoMatch(
+                rows.length,
+                seen.length ? seen.join(", ") : t.msg.g61NoDriverName
+              )
+            : t.msg.g61NoCleanLap(rows.length)
         );
         return;
       }
@@ -1351,15 +1514,12 @@ export default function StintPlanner({
       }));
       if (cumulative) {
         setG61Msg(
-          `Added ${rows.length} lap${rows.length === 1 ? "" : "s"} to the pool — ` +
-            `now ${poolLapCount(pool.sources)} laps from ${pool.sources.length} import${pool.sources.length === 1 ? "" : "s"}.` +
-            (pool.replacedDuplicate
-              ? " This file was already in the pool, so it replaced the earlier copy instead of counting twice."
-              : "") +
+          t.msg.g61Added(rows.length, poolLapCount(pool.sources), pool.sources.length) +
+            (pool.replacedDuplicate ? t.msg.g61Duplicate : "") +
             (pool.evicted.length
-              ? ` Oldest import${pool.evicted.length === 1 ? "" : "s"} dropped to stay under ${MAX_POOL_LAPS} laps: ${pool.evicted.join(", ")}.`
+              ? t.msg.g61Evicted(pool.evicted.length, MAX_POOL_LAPS, pool.evicted.join(", "))
               : "") +
-            " Review below, then Apply to plan."
+            t.msgPull.reviewThenApplySpaced
         );
       }
       // Did this session contain pit stops? Then the constants are in there too.
@@ -1369,7 +1529,7 @@ export default function StintPlanner({
       setPitScan(scan);
       setPitKinds(scan.ok ? scan.stops.map((x) => x.kind) : []);
     } catch {
-      setG61Msg("Could not read the file — is it a valid .xlsx export?");
+      setG61Msg(t.msg.g61FileRead);
     } finally {
       setG61Busy(false);
     }
@@ -1392,16 +1552,14 @@ export default function StintPlanner({
         tyreSequential: c.tyreSequential ?? p.event.tyreSequential,
       },
     }));
-    setPitSaveMsg("Measured values are in this plan's pit-stop model.");
+    setPitSaveMsg(t.msg.pitApplied);
   }
 
   /** Admins can put them in the shared library for this car + track. */
   async function saveDerivedPitToLibrary() {
     const c = derivePitConstants(labelledStops());
     if (c.laneLossSec == null || c.refuelLps == null || c.tyreChangeSec == null) {
-      setPitSaveMsg(
-        "The library needs all three: lane loss, refuel rate and tyre time. Label the missing stop kinds, or drive the missing stop."
-      );
+      setPitSaveMsg(t.msg.pitLibraryIncomplete);
       return;
     }
     const res = await upsertPitReference({
@@ -1417,9 +1575,7 @@ export default function StintPlanner({
       notes: c.notes.join(" "),
     });
     setPitSaveMsg(
-      res.ok
-        ? `Saved to the library for ${s.event.car}${s.event.track ? ` @ ${s.event.track}` : ""}.`
-        : res.error
+      res.ok ? t.msg.pitLibrarySaved(s.event.car, s.event.track) : res.error
     );
   }
 
@@ -1534,9 +1690,7 @@ export default function StintPlanner({
         : "";
     // The pull has landed in the driver table, so drop the pending change list.
     setG61(null);
-    setG61Msg(
-      `Applied to the driver table: pace + fuel/lap for ${matched} driver${matched === 1 ? "" : "s"}.${tempNote} Save keeps it.`
-    );
+    setG61Msg(t.msg.g61Applied(matched, tempNote));
   }
 
   /**
@@ -1550,7 +1704,7 @@ export default function StintPlanner({
       const sources = (p.g61Sources ?? []).filter((x) => x.id !== id);
       if (sources.length === 0) {
         setG61(null);
-        setG61Msg("Removed the last import — the plan has no Garage 61 laps left.");
+        setG61Msg(t.msg.g61SourceRemovedEmpty);
         return { ...p, g61Sources: [], g61Analysis: null };
       }
       const result = aggregateGarage61Laps(poolRows(sources), {
@@ -1559,8 +1713,8 @@ export default function StintPlanner({
       setG61(result.drivers.length > 0 ? result : null);
       setG61Msg(
         result.drivers.length > 0
-          ? `Import removed — recomputed from ${poolLapCount(sources)} laps across ${sources.length} import${sources.length === 1 ? "" : "s"}. Apply to plan to write the new figures into the driver table.`
-          : "Import removed — no clean laps left in the pool."
+          ? t.msg.g61SourceRemoved(poolLapCount(sources), sources.length)
+          : t.msg.g61SourceRemovedEmpty
       );
       return {
         ...p,
@@ -1624,9 +1778,7 @@ export default function StintPlanner({
     setClearArmed(false);
     setClearDriverFigures(false);
     setG61Msg(
-      alsoDriverFigures
-        ? "Garage 61 data cleared, including the pace and fuel it had filled in. Figures you typed yourself were kept. Save to make it permanent."
-        : "Garage 61 data cleared. The pace and fuel already in the driver table stayed — they are the plan's numbers now. Save to make it permanent."
+      alsoDriverFigures ? t.msg.g61ClearedWithFigures : t.msg.g61Cleared
     );
   }
 
@@ -1765,7 +1917,7 @@ export default function StintPlanner({
     const a = Number(tempRampFrom);
     const b = Number(tempRampTo);
     if (!isFinite(a) || !isFinite(b) || tempRampFrom === "" || tempRampTo === "") {
-      setStatus("Enter at least a start and an end temperature for the ramp.");
+      setStatus(t.msg.tempRampNeedEnds);
       return;
     }
     const n = result.stints.length;
@@ -1800,15 +1952,15 @@ export default function StintPlanner({
     setS((p) => {
       const next = [...p.assignments];
       for (let i = 0; i < n; i++) {
-        const t = Math.round(tempAt(i) * 10) / 10;
-        next[i] = { ...(next[i] ?? { profile: "standard", driverId: null }), trackTempC: t };
+        const stintTemp = Math.round(tempAt(i) * 10) / 10;
+        next[i] = { ...(next[i] ?? { profile: "standard", driverId: null }), trackTempC: stintTemp };
       }
       return { ...p, assignments: next };
     });
     setStatus(
       hasPeak
-        ? `Track temperature ramped ${a} → ${peak} °C at stint ${peakIdx + 1} → ${b} °C across ${n} stints.`
-        : `Track temperature ramped ${a} °C → ${b} °C across ${n} stints.`
+        ? t.msg.tempRampedPeak(String(a), String(peak), peakIdx + 1, String(b), n)
+        : t.msg.tempRamped(String(a), String(b), n)
     );
   };
   // ---- Race poster & impressions -----------------------------------------
@@ -1827,7 +1979,7 @@ export default function StintPlanner({
           : Math.max(0, MAX_IMPRESSIONS - s.impressions.length);
       const list = Array.from(files).slice(0, room);
       if (list.length === 0) {
-        setGalleryError(`Only ${MAX_IMPRESSIONS} pictures per plan.`);
+        setGalleryError(t.msg.galleryMax(MAX_IMPRESSIONS));
         return;
       }
       for (const f of list) fd.append("files", f);
@@ -1842,22 +1994,20 @@ export default function StintPlanner({
           : { ...p, impressions: [...p.impressions, ...res.images] }
       );
       if (res.skipped.length > 0) {
-        setGalleryError(`Skipped: ${res.skipped.join(", ")}.`);
+        setGalleryError(t.msg.gallerySkipped(res.skipped.join(", ")));
       } else {
         setStatus(
           kind === "poster"
-            ? "Poster saved with the plan."
-            : `${res.images.length} picture${res.images.length === 1 ? "" : "s"} added.`
+            ? t.msg.posterSaved
+            : t.msg.picturesAdded(res.images.length)
         );
       }
     } catch (e) {
       if (isStaleActionError(e)) {
         setStaleBuild(true);
-        setGalleryError(
-          "The site was updated while this tab was open — reload the page, then try again."
-        );
+        setGalleryError(t.msg.staleReloadRetry);
       } else {
-        setGalleryError("Upload failed — please try again.");
+        setGalleryError(t.msg.uploadFailed);
       }
     } finally {
       setGalleryBusy(false);
@@ -1886,7 +2036,7 @@ export default function StintPlanner({
   // ---- Garage 61 live pull (server-side API, uses the event Track + Car) ----
   async function onGarage61Pull() {
     if (!s.event.track.trim()) {
-      setG61Msg("Select a Track above first — the live pull uses the event Track and Car.");
+      setG61Msg(t.msg.g61NeedTrack);
       return;
     }
     setG61PullBusy(true);
@@ -1951,24 +2101,26 @@ export default function StintPlanner({
       setG61Msg(
         // Say which window the data came from and what it cost — a silent
         // filter is how you end up planning on three laps.
-        `Pulled ${res.meta.lapsFetched} lap${res.meta.lapsFetched === 1 ? "" : "s"} from Garage 61 ` +
-          `(${res.meta.trackMatched ?? "track"}${res.meta.carMatched ? " · " + res.meta.carMatched : ""}` +
-          `, ${res.meta.window})` +
-          (res.meta.lapsTooOld > 0 ? ` · ${res.meta.lapsTooOld} older lap${res.meta.lapsTooOld === 1 ? "" : "s"} left out` : "") +
-          (res.meta.oldestLapMs != null && res.meta.newestLapMs != null
-            ? ` · ${fmtDay(res.meta.oldestLapMs)}–${fmtDay(res.meta.newestLapMs)}`
-            : res.meta.datesMissing
-              ? " · laps carry no date, so only the season filter applied"
-              : "") +
-          (cumulative
-            ? ` · added to the pool: ${poolLapCount(pool.sources)} laps from ${pool.sources.length} import${pool.sources.length === 1 ? "" : "s"}` +
-              (pool.replacedDuplicate ? " (this pull replaced an identical earlier one)" : "") +
-              (pool.evicted.length ? ` · dropped: ${pool.evicted.join(", ")}` : "")
+        t.msg.g61Pulled(
+          res.meta.lapsFetched,
+          `${res.meta.trackMatched ?? t.msg.g61PullTrackFallback}${res.meta.carMatched ? " · " + res.meta.carMatched : ""}`,
+          res.meta.window
+        ) +
+        (res.meta.lapsTooOld > 0 ? t.msg.g61PulledTooOld(res.meta.lapsTooOld) : "") +
+        (res.meta.oldestLapMs != null && res.meta.newestLapMs != null
+          ? ` · ${fmtDay(res.meta.oldestLapMs)}–${fmtDay(res.meta.newestLapMs)}`
+          : res.meta.datesMissing
+            ? t.msgPull.noDates
             : "") +
-          ". Review below, then Apply to plan."
+        (cumulative
+          ? t.msgPull.addedToPool(poolLapCount(pool.sources), pool.sources.length) +
+            (pool.replacedDuplicate ? t.msgPull.replacedDuplicate : "") +
+            (pool.evicted.length ? t.msgPull.dropped(pool.evicted.join(", ")) : "")
+          : "") +
+        t.msgPull.reviewThenApply
       );
     } catch {
-      setG61Msg("Live pull failed — please try again.");
+      setG61Msg(t.msg.g61PullFailed);
     } finally {
       setG61PullBusy(false);
     }
@@ -2001,7 +2153,7 @@ export default function StintPlanner({
   async function onG61Connect() {
     if (!curId) return;
     if (g61Token.trim().length < 8) {
-      setG61ConnMsg("Paste your Garage 61 personal access token first.");
+      setG61ConnMsg(t.msg.g61NeedToken);
       return;
     }
     setG61ConnBusy(true);
@@ -2017,12 +2169,10 @@ export default function StintPlanner({
       const st = await getGarage61Status(curId);
       setG61Status(st);
       setG61ConnMsg(
-        res.teams.length > 1
-          ? "Connected. Pick which team to pull from below."
-          : "Connected ✓"
+        res.teams.length > 1 ? t.msg.g61ConnectedPickTeam : t.msg.g61ConnectedOk
       );
     } catch {
-      setG61ConnMsg("Couldn't connect — please try again.");
+      setG61ConnMsg(t.msg.g61ConnectFailed);
     } finally {
       setG61ConnBusy(false);
     }
@@ -2030,7 +2180,7 @@ export default function StintPlanner({
 
   async function onG61PickTeam(slug: string) {
     if (!curId) return;
-    const team = g61Teams.find((t) => t.slug === slug);
+    const team = g61Teams.find((x) => x.slug === slug);
     setG61ConnBusy(true);
     try {
       await setGarage61Team(curId, editToken ?? "", slug, team?.name ?? "");
@@ -2050,7 +2200,7 @@ export default function StintPlanner({
       setG61Teams([]);
       const st = await getGarage61Status(curId);
       setG61Status(st);
-      setG61ConnMsg("Disconnected.");
+      setG61ConnMsg(t.msg.g61Disconnected);
     } finally {
       setG61ConnBusy(false);
     }
@@ -2098,18 +2248,16 @@ export default function StintPlanner({
       const url = `${window.location.origin}/stint-planner/${res.id}`;
       try {
         await navigator.clipboard.writeText(url);
-        setStatus("Saved — share link copied to clipboard.");
+        setStatus(t.msg.savedCopied);
       } catch {
-        setStatus("Saved. Share link is in the address bar.");
+        setStatus(t.msg.savedNoClipboard);
       }
     } catch (e) {
       if (isStaleActionError(e)) {
         setStaleBuild(true);
-        setStatus(
-          "The site was updated while this tab was open — reload the page, then save again."
-        );
+        setStatus(t.msg.staleReloadSave);
       } else {
-        setStatus("Saving failed — please try again.");
+        setStatus(t.msg.saveFailed);
       }
     } finally {
       setSaving(false);
@@ -2167,9 +2315,7 @@ export default function StintPlanner({
     const next = !frozen;
     if (
       next &&
-      !window.confirm(
-        "Mark this plan as completed?\n\nThe event, drivers, stints and live corrections are frozen and the Discord alerts stop. You can still add the eventresult, the race log, pictures and post-race notes — and reopen the plan any time."
-      )
+      !window.confirm(t.header.confirmArchive)
     ) {
       return;
     }
@@ -2180,13 +2326,13 @@ export default function StintPlanner({
       if (res.ok) {
         setArchivedAtMs(res.archivedAt);
         setManualPhase(next ? "post" : null);
-        setStatus(next ? "Plan marked as completed." : "Plan reopened.");
+        setStatus(next ? t.header.archived : t.header.reopened);
       } else {
         setStatus(res.error);
       }
     } catch (e) {
       if (isStaleActionError(e)) setStaleBuild(true);
-      else setStatus("Could not reach the server — please try again.");
+      else setStatus(t.common.serverUnreachable);
     } finally {
       setArchiveBusy(false);
     }
@@ -2215,10 +2361,10 @@ export default function StintPlanner({
           : { ...p, alertsSent: res.alertsSent }
       );
       if (res.messages.length > 0) setAlertMsg(res.messages.join(" "));
-      else if (force) setAlertMsg("Nothing due — no stint starts within reach.");
+      else if (force) setAlertMsg(t.sched.nothingDue);
     } catch (e) {
       if (isStaleActionError(e)) setStaleBuild(true);
-      else if (force) setAlertMsg("Could not reach the server — please try again.");
+      else if (force) setAlertMsg(t.common.serverUnreachable);
     } finally {
       if (force) setAlertBusy(false);
     }
@@ -2256,18 +2402,19 @@ export default function StintPlanner({
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Stint schedule &amp; pit timeline
+            {t.sched.title}
+            <GuideLink section="stints" />
           </h2>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
             <button
               onClick={() => setShowSpotter((v) => !v)}
               className={`rounded border px-2 py-1 text-xs ${showSpotter ? "border-zinc-600 bg-zinc-800 text-zinc-200" : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800"}`}
-              title="The spotter column is hidden by default — it is the widest column nobody reads twice."
+              title={t.sched.spotterToggleHint}
             >
-              {showSpotter ? "Hide spotter" : "Show spotter"}
+              {showSpotter ? t.sched.hideSpotter : t.sched.showSpotter}
             </button>
             <div className="flex items-center gap-1 rounded border border-sky-900/50 bg-sky-950/20 px-2 py-1 text-xs text-sky-200">
-              <span title="Mark this stint and every later stint with the chosen condition.">☔ Rain from stint</span>
+              <span title={t.sched.rainFromHint}>{t.sched.rainFrom}</span>
               <input
                 type="number"
                 min={1}
@@ -2282,9 +2429,9 @@ export default function StintPlanner({
                   if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "half");
                 }}
                 className="rounded border border-sky-800 px-1.5 py-0.5 text-sky-200 hover:bg-sky-900/40"
-                title="Damp / drying from this stint on"
+                title={t.sched.halfWetBtnHint}
               >
-                ½ wet
+                {t.sched.halfWetBtn}
               </button>
               <button
                 onClick={() => {
@@ -2292,29 +2439,27 @@ export default function StintPlanner({
                   if (isFinite(n) && n >= 1) setRainFromStint(n - 1, "wet");
                 }}
                 className="rounded bg-sky-800 px-1.5 py-0.5 text-white hover:bg-sky-700"
-                title="Full wet from this stint on"
+                title={t.sched.wetBtnHint}
               >
-                Wet
+                {t.sched.wetBtn}
               </button>
               <button
                 onClick={clearWetStints}
                 className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
-                title="Clear all wet flags"
+                title={t.sched.allDryHint}
               >
-                All dry
+                {t.sched.allDry}
               </button>
             </div>
             <div className="flex items-center gap-1 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1 text-xs text-amber-200">
-              <span title="Fill every stint with a track-temperature ramp: start → peak → end. Leave the peak empty for one straight line. Correct single stints afterwards.">
-                🌡 Temp ramp
-              </span>
+              <span title={t.sched.tempRampHint}>{t.sched.tempRamp}</span>
               <input
                 type="number"
                 step="0.5"
                 value={tempRampFrom}
                 onChange={(e) => setTempRampFrom(e.target.value)}
-                placeholder="start"
-                title="Track temperature at the green flag"
+                placeholder={t.sched.tempStart}
+                title={t.sched.tempStartHint}
                 className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
               />
               <span className="text-amber-300/70">↗</span>
@@ -2323,8 +2468,8 @@ export default function StintPlanner({
                 step="0.5"
                 value={tempRampPeak}
                 onChange={(e) => setTempRampPeak(e.target.value)}
-                placeholder="peak"
-                title="Hottest track temperature of the race — leave empty for a straight start-to-end ramp"
+                placeholder={t.sched.tempPeak}
+                title={t.sched.tempPeakHint}
                 className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
               />
               <input
@@ -2332,8 +2477,8 @@ export default function StintPlanner({
                 min={1}
                 value={tempRampPeakAt}
                 onChange={(e) => setTempRampPeakAt(e.target.value)}
-                placeholder="@#"
-                title="Stint the peak falls in (default: the middle stint)"
+                placeholder={t.sched.tempPeakAt}
+                title={t.sched.tempPeakAtHint}
                 className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
               />
               <span className="text-amber-300/70">↘</span>
@@ -2342,22 +2487,22 @@ export default function StintPlanner({
                 step="0.5"
                 value={tempRampTo}
                 onChange={(e) => setTempRampTo(e.target.value)}
-                placeholder="end"
-                title="Track temperature at the chequered flag"
+                placeholder={t.sched.tempEnd}
+                title={t.sched.tempEndHint}
                 className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
               />
               <button
                 onClick={applyTempRamp}
                 className="rounded bg-amber-700 px-1.5 py-0.5 text-white hover:bg-amber-600"
               >
-                Apply
+                {t.common.apply}
               </button>
               <button
                 onClick={clearStintTemps}
                 className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-zinc-800"
-                title="Clear every per-stint temperature (back to the plan's Track temp)"
+                title={t.sched.clearTempsHint}
               >
-                Clear
+                {t.sched.clearTemps}
               </button>
             </div>
             <div
@@ -2369,7 +2514,7 @@ export default function StintPlanner({
             >
               <label
                 className="flex cursor-pointer items-center gap-1"
-                title="Send the driver of the next stint a Discord DM before they are due in the car. Needs a session start and a Discord account linked in CLS."
+                title={t.sched.discordAlertHint}
               >
                 <input
                   type="checkbox"
@@ -2378,7 +2523,7 @@ export default function StintPlanner({
                     setS((p) => ({ ...p, alertsEnabled: e.target.checked }))
                   }
                 />
-                🔔 Discord alert
+                {t.sched.discordAlert}
               </label>
               <input
                 type="number"
@@ -2386,26 +2531,26 @@ export default function StintPlanner({
                 max={120}
                 value={s.event.alertLeadMin}
                 onChange={(e) => patchEvent("alertLeadMin", e.target.value)}
-                title="Minutes before the stint starts"
+                title={t.sched.alertLeadHint}
                 className="w-12 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-100"
               />
-              <span>min before</span>
+              <span>{t.sched.minBefore}</span>
               <button
                 onClick={() => runAlertCheck(true)}
                 disabled={alertBusy || !curId}
                 className="rounded bg-indigo-800 px-1.5 py-0.5 text-white hover:bg-indigo-700 disabled:opacity-40"
-                title="Send the DM for the next upcoming stint right now — a live test of the whole chain"
+                title={t.sched.testAlertHint}
               >
-                {alertBusy ? "Sending…" : "Test"}
+                {alertBusy ? t.sched.sendingAlert : t.sched.testAlert}
               </button>
             </div>
-            <button onClick={autoFill}
+            <button onClick={autoFill} title={t.sched.autoFillHint}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-              Auto-fill drivers
+              {t.sched.autoFill}
             </button>
-            <button onClick={clearAssignments}
+            <button onClick={clearAssignments} title={t.sched.clearAssignmentsHint}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-              Clear
+              {t.sched.clearAssignments}
             </button>
           </div>
         </div>
@@ -2415,60 +2560,89 @@ export default function StintPlanner({
           </p>
         )}
         {s.alertsEnabled && !curId && (
-          <p className="mb-3 text-xs text-amber-300">
-            Save the plan first — the alerts run against the saved plan.
-          </p>
+          <p className="mb-3 text-xs text-amber-300">{t.sched.saveFirstForAlerts}</p>
         )}
         {result.stints.length === 0 ? (
-          <p className="text-sm text-zinc-500">
-            Enter a race duration, lap time, fuel per lap and tank size to
-            generate the schedule.
-          </p>
+          <p className="text-sm text-zinc-500">{t.sched.emptyState}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm tabular-nums">
               <thead className="text-zinc-500">
                 <tr className="border-b border-zinc-800">
-                  <th className="sticky left-0 z-20 bg-zinc-900 py-1 pr-2 print:static print:bg-transparent">#</th>
-                  <th className="sticky left-8 z-20 bg-zinc-900 py-1 pr-2 print:static print:bg-transparent">Driver</th>
-                  {showSpotter && <th className="py-1 pr-2" title="Spotter for this stint — initials; the full name is on hover.">Sp.</th>}
-                  {s.savingEnabled && <th className="py-1 pr-2">Profile</th>}
-                  <th className="py-1 pr-2 text-right">Race start</th>
-                  {showClock && <th className="py-1 pr-2 text-right">Clock in</th>}
-                  <th className="py-1 pr-2 text-right">Race end</th>
-                  <th className="py-1 pr-2 text-right" title="Live correction in minutes (±). Cascades to later stints.">±min</th>
-                  <th className="py-1 pr-2 text-right">Length</th>
-                  <th
-                    className="py-1 pr-2 text-right"
-                    title="The lap time this stint was computed with: the driver's own pace plus the temperature, weather and traffic penalties. Everything else in the row follows from it."
-                  >
-                    Lap
+                  <th className="sticky left-0 z-20 bg-zinc-900 py-1 pr-2 print:static print:bg-transparent">
+                    {t.sched.colNum}
                   </th>
-                  <th
-                    className="py-1 pr-2 text-right"
-                    title="Laps this stint runs. Type a number to overrule the model — pitted early after damage or a shortcut, or stayed out a lap longer. Clear the field to hand it back to the model."
-                  >
-                    Laps
+                  <th className="sticky left-8 z-20 bg-zinc-900 py-1 pr-2 print:static print:bg-transparent">
+                    {t.sched.colDriver}
                   </th>
-                  <th className="py-1 pr-2 text-right">Fuel</th>
-                  <th
-                    className="py-1 pr-2 text-right"
-                    title="Fuel left in the tank when the stint ends, above the reserve. This is what the stop has to put back in."
-                  >
-                    Left
+                  {showSpotter && (
+                    <th className="py-1 pr-2">
+                      {t.sched.colSpotter}
+                      <Hint text={t.sched.colSpotterHint} />
+                    </th>
+                  )}
+                  {s.savingEnabled && (
+                    <th className="py-1 pr-2">
+                      {t.sched.colProfile}
+                      <Hint text={t.sched.colProfileHint} />
+                    </th>
+                  )}
+                  <th className="py-1 pr-2 text-right">{t.sched.colRaceStart}</th>
+                  {showClock && (
+                    <th className="py-1 pr-2 text-right">{t.sched.colClockIn}</th>
+                  )}
+                  <th className="py-1 pr-2 text-right">{t.sched.colRaceEnd}</th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.sched.colCorrection}
+                    <Hint text={t.sched.colCorrectionHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">{t.sched.colLength}</th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.sched.colLap}
+                    <Hint text={t.sched.colLapHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.sched.colLaps}
+                    <Hint text={t.sched.colLapsHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">{t.sched.colFuel}</th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.sched.colLeft}
+                    <Hint text={t.sched.colLeftHint} />
                   </th>
                   {pitOn && (
                     <>
-                      <th className="py-1 pr-2 text-center" title="Fill the tank at the stop that ends this stint. Untick to take a set number of litres — a splash: shorter stop, shorter next stint.">Full</th>
-                      <th className="py-1 pr-2 text-right" title="Litres taken at the stop that ends this stint. Only editable when 'Full' is unticked.">Fill L</th>
-                      <th className="py-1 pr-2 text-center" title="Change tyres at that stop? Unticked keeps the set for the next stint.">🛞</th>
-                      <th className="py-1 pr-2 text-right" title="Tyre condition at the end of this stint.">Tyre %</th>
-                      <th className="py-1 pr-2 text-right" title="What that stop costs: lane loss + fuel + tyres + any uncovered driver change.">Stop</th>
+                      <th className="py-1 pr-2 text-center">
+                        {t.sched.colFull}
+                        <Hint text={t.sched.colFullHint} />
+                      </th>
+                      <th className="py-1 pr-2 text-right">
+                        {t.sched.colFillL}
+                        <Hint text={t.sched.colFillLHint} />
+                      </th>
+                      <th className="py-1 pr-2 text-center">
+                        {t.sched.colTyres}
+                        <Hint text={t.sched.colTyresHint} />
+                      </th>
+                      <th className="py-1 pr-2 text-right">
+                        {t.sched.colTyrePct}
+                        <Hint text={t.sched.colTyrePctHint} />
+                      </th>
+                      <th className="py-1 pr-2 text-right">
+                        {t.sched.colStop}
+                        <Hint text={t.sched.colStopHint} />
+                      </th>
                     </>
                   )}
-                  <th className="py-1 pr-2 text-right" title="Track temperature for this stint. Empty = the plan's Track temp, i.e. exactly the entered pace.">°C</th>
-                  <th className="py-1 pr-2 text-center" title="Track condition for this stint: dry, half wet (damp/drying) or full wet. Each adds its own penalty per lap.">Track</th>
-                  {showNote && <th className="py-1 pr-2">Note</th>}
+                  <th className="py-1 pr-2 text-right">
+                    {t.sched.colTemp}
+                    <Hint text={t.sched.colTempHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-center">
+                    {t.sched.colTrack}
+                    <Hint text={t.sched.colTrackHint} />
+                  </th>
+                  {showNote && <th className="py-1 pr-2">{t.sched.colNote}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -2492,7 +2666,9 @@ export default function StintPlanner({
                       <td className="sticky left-0 z-10 bg-zinc-900 py-1 pr-2 text-zinc-500 print:static print:bg-transparent">
                         {st.index}
                         {st.partial && (
-                          <span className="ml-1 text-[10px] uppercase text-amber-400">fin</span>
+                          <span className="ml-1 text-[10px] uppercase text-amber-400">
+                            {t.sched.fin}
+                          </span>
                         )}
                       </td>
                       <td className="sticky left-8 z-10 bg-zinc-900 py-1 pr-2 print:static print:hidden print:bg-transparent">
@@ -2509,7 +2685,7 @@ export default function StintPlanner({
                             });
                           }}
                         >
-                          <option value="">— Unassigned —</option>
+                          <option value="">{t.common.unassigned}</option>
                           {driverOpts.map((d) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
                           ))}
@@ -2525,7 +2701,11 @@ export default function StintPlanner({
                               className={`rounded border px-2 py-1 text-sm ${driverColour(a.spotterId).chip}`}
                               value={a.spotterId ?? ""}
                               onChange={(e) => setAssignment(i, { spotterId: e.target.value || null })}
-                              title={spotterName ? `Spotter: ${spotterName}` : "No spotter for this stint"}
+                              title={
+                                spotterName
+                                  ? t.sched.spotterOf(spotterName)
+                                  : t.sched.noSpotter
+                              }
                             >
                               <option value="">—</option>
                               {spotterOpts.map((d) => (
@@ -2547,8 +2727,8 @@ export default function StintPlanner({
                             value={a.profile}
                             onChange={(e) => setAssignment(i, { profile: e.target.value as StintProfileKey })}
                           >
-                            <option value="standard">Std</option>
-                            <option value="saving">FS</option>
+                            <option value="standard">{t.sched.profileStd}</option>
+                            <option value="saving">{t.sched.profileFs}</option>
                           </select>
                         </td>
                       )}
@@ -2559,7 +2739,10 @@ export default function StintPlanner({
                           {stintAtNight(st) && (
                             <span
                               className="ml-1 text-[10px] text-sky-300/80"
-                              title={`Starts in the night window (${s.event.nightFromHour}:00–${s.event.nightToHour}:00 your time)`}
+                              title={t.sched.nightWindow(
+                                s.event.nightFromHour,
+                                s.event.nightToHour
+                              )}
                             >
                               ☾
                             </span>
@@ -2590,7 +2773,7 @@ export default function StintPlanner({
                       <td className="py-1 pr-2 text-right">{fmtDuration(st.endSec - st.startSec)}</td>
                       <td
                         className="py-1 pr-2 text-right text-zinc-300"
-                        title={lapBreakdownText(st)}
+                        title={lapBreakdownText(t, st)}
                       >
                         {fmtLap(st.lapSec)}
                         {st.lapSec - st.baseLapSec > 0.0005 && (
@@ -2605,15 +2788,15 @@ export default function StintPlanner({
                         {st.driverId && (st.paceFallback || st.fuelFallback) && (
                           <span
                             className="ml-1 text-[10px] uppercase text-amber-400/90"
-                            title={`No own ${
+                            title={t.sched.estHint(
                               st.paceFallback && st.fuelFallback
-                                ? "pace or fuel figure"
+                                ? t.sched.estPaceFuel
                                 : st.paceFallback
-                                  ? "pace"
-                                  : "fuel figure"
-                            } for this driver — the Standard profile was used.`}
+                                  ? t.sched.estPace
+                                  : t.sched.estFuel
+                            )}
                           >
-                            est
+                            {t.sched.est}
                           </span>
                         )}
                       </td>
@@ -2632,8 +2815,8 @@ export default function StintPlanner({
                           }
                           title={
                             st.lapsOverridden
-                              ? "Typed in by hand — the model is overruled for this stint. Clear the field to give it back."
-                              : "Laps from the model. Type a number to overrule it (pitted early, shortcut, a lap longer)."
+                              ? t.sched.lapsOverridden
+                              : t.sched.lapsFromModel
                           }
                           className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
                             st.fuelShort
@@ -2646,7 +2829,7 @@ export default function StintPlanner({
                         {st.fuelShort && (
                           <span
                             className="ml-1 text-[10px] uppercase text-red-400"
-                            title="More laps than the fuel on board allows — the car does not get that far."
+                            title={t.sched.fuelShortMark}
                           >
                             !
                           </span>
@@ -2658,8 +2841,11 @@ export default function StintPlanner({
                       <td className="py-1 pr-2 text-right">
                         {fmtFuel(st.fuel)} L
                         {st.shortFill && (
-                          <span className="ml-1 text-[10px] uppercase text-amber-400" title="Short stint — the previous stop was only a splash">
-                            short
+                          <span
+                            className="ml-1 text-[10px] uppercase text-amber-400"
+                            title={t.sched.shortFillHint}
+                          >
+                            {t.sched.shortFill}
                           </span>
                         )}
                       </td>
@@ -2673,8 +2859,11 @@ export default function StintPlanner({
                         }`}
                         title={
                           st.fuelShort
-                            ? "The stint burns more than it started with — it cannot be run on this fuel."
-                            : `Tank at the flag: ${fmtFuel(st.fuelAtStart)} L → ${fmtFuel(st.fuelAtEnd)} L (above the reserve)`
+                            ? t.sched.fuelShortLeft
+                            : t.sched.tankAtFlag(
+                                fmtFuel(st.fuelAtStart),
+                                fmtFuel(st.fuelAtEnd)
+                              )
                         }
                       >
                         {fmtFuel(st.fuelAtEnd)} L
@@ -2700,7 +2889,7 @@ export default function StintPlanner({
                                       : Math.round(st.fillLitres),
                                   })
                                 }
-                                title="Fill the tank at this stop. Untick for a splash."
+                                title={t.sched.cellFull}
                               />
                             )}
                           </td>
@@ -2727,7 +2916,7 @@ export default function StintPlanner({
                                       e.target.value === "" ? null : Number(e.target.value),
                                   })
                                 }
-                                title="Litres at this stop."
+                                title={t.sched.cellFillL}
                                 className="w-16 rounded border border-amber-500/70 bg-zinc-950 px-1.5 py-1 text-right text-sm text-amber-200"
                               />
                             )}
@@ -2743,7 +2932,7 @@ export default function StintPlanner({
                                 type="checkbox"
                                 checked={a.tyreChange ?? true}
                                 onChange={(e) => setAssignment(i, { tyreChange: e.target.checked })}
-                                title="Change tyres at this stop"
+                                title={t.sched.cellTyres}
                               />
                             )}
                           </td>
@@ -2768,7 +2957,7 @@ export default function StintPlanner({
                             className="py-1 pr-2 text-right text-zinc-400"
                             title={
                               st.stop && planPitModel(s)
-                                ? stopBreakdownText(st.stop, planPitModel(s)!)
+                                ? stopBreakdownText(st.stop, planPitModel(s)!, t)
                                 : undefined
                             }
                           >
@@ -2794,8 +2983,10 @@ export default function StintPlanner({
                           }
                           title={
                             st.tempDeltaSec
-                              ? `${st.tempDeltaSec > 0 ? "+" : ""}${st.tempDeltaSec.toFixed(2)} s/lap vs the plan's base temperature`
-                              : "Track temperature for this stint (blank = base temp)"
+                              ? t.schedCell.tempDelta(
+                                  `${st.tempDeltaSec > 0 ? "+" : ""}${st.tempDeltaSec.toFixed(2)}`
+                                )
+                              : t.schedCell.tempBlank
                           }
                           className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
                             st.tempDeltaSec > 0
@@ -2818,8 +3009,8 @@ export default function StintPlanner({
                           }}
                           title={
                             st.weatherDeltaSec
-                              ? `+${st.weatherDeltaSec.toFixed(1)} s/lap for this stint`
-                              : "Track condition for this stint"
+                              ? t.schedCell.weatherDelta(st.weatherDeltaSec.toFixed(1))
+                              : t.schedCell.conditionPlain
                           }
                           className={`rounded border bg-zinc-950 px-1 py-1 text-sm ${
                             st.condition === "wet"
@@ -2829,9 +3020,9 @@ export default function StintPlanner({
                                 : "border-zinc-700 text-zinc-400"
                           }`}
                         >
-                          <option value="dry">dry</option>
-                          <option value="half">½ wet</option>
-                          <option value="wet">wet</option>
+                          <option value="dry">{t.sched.condDry}</option>
+                          <option value="half">{t.sched.condHalf}</option>
+                          <option value="wet">{t.sched.condWet}</option>
                         </select>
                       </td>
                       <td className="hidden py-1 pr-2 text-center text-sky-300 print:table-cell">
@@ -2844,7 +3035,7 @@ export default function StintPlanner({
                               type="text"
                               value={a.note ?? ""}
                               onChange={(e) => setAssignment(i, { note: e.target.value })}
-                              placeholder="incident, weather, SC…"
+                              placeholder={t.schedCell.notePlaceholder}
                               className="w-44 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-sm text-zinc-100"
                             />
                           </td>
@@ -2876,15 +3067,13 @@ export default function StintPlanner({
       {staleBuild && (
         <div className="sticky top-2 z-40 flex flex-wrap items-center justify-between gap-3 rounded border border-amber-600 bg-amber-950/80 px-4 py-3 text-sm text-amber-100 shadow-lg backdrop-blur print:hidden">
           <span>
-            <strong>A new version of the site is live.</strong> This tab is
-            running the old one — uploads and auto-save will fail until you
-            reload.
+            <strong>{t.header.staleTitle}</strong> {t.header.staleBody}
           </span>
           <button
             onClick={() => window.location.reload()}
             className="rounded bg-amber-500 px-3 py-1.5 font-semibold text-zinc-950 hover:bg-amber-400"
           >
-            Reload now
+            {t.header.reloadNow}
           </button>
         </div>
       )}
@@ -2893,10 +3082,8 @@ export default function StintPlanner({
       {frozen && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 print:hidden">
           <span>
-            <strong className="text-zinc-100">Completed plan.</strong> Event,
-            drivers, stints and live corrections are locked and no Discord alerts
-            go out. Race result, race log, pictures and post-race notes can still
-            be added.
+            <strong className="text-zinc-100">{t.header.frozenTitle}</strong>{" "}
+            {t.header.frozenBody}
           </span>
           {curId && (
             <button
@@ -2904,7 +3091,7 @@ export default function StintPlanner({
               disabled={archiveBusy}
               className="rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-sm font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-50"
             >
-              {archiveBusy ? "Reopening…" : "↩ Reopen plan"}
+              {archiveBusy ? t.header.reopening : t.header.reopen}
             </button>
           )}
         </div>
@@ -2913,45 +3100,47 @@ export default function StintPlanner({
       {/* Header: title + actions */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-[16rem] flex-1">
-          <label className={lbl}>Plan title</label>
-          <input
-            className={`${inp} text-lg font-semibold disabled:opacity-70`}
-            value={s.title}
-            disabled={frozen}
-            onChange={(e) => setS((p) => ({ ...p, title: e.target.value }))}
-            placeholder="e.g. 6h Road America"
-          />
+          <Field label={t.header.planTitle} hint={t.header.planTitleHint}>
+            <input
+              className={`${inp} text-lg font-semibold disabled:opacity-70`}
+              value={s.title}
+              disabled={frozen}
+              onChange={(e) => setS((p) => ({ ...p, title: e.target.value }))}
+              placeholder={t.header.planTitlePlaceholder}
+            />
+          </Field>
         </div>
         <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <PlannerUiSwitch />
           {!curId && (
             <button
               onClick={() => savePlan(false)}
               disabled={saving}
               className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save & share"}
+              {saving ? t.common.saving : t.header.saveShare}
             </button>
           )}
           {curId && !frozen && (
             <span
               className="flex items-center gap-1.5 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-300"
-              title="This plan is live: your edits save automatically and everyone with the link sees them within a few seconds."
+              title={t.header.liveHint}
             >
               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
               {syncStatus === "saving"
-                ? "Saving…"
+                ? t.header.liveSaving
                 : syncStatus === "error"
-                  ? "Sync error — retrying"
-                  : "Live · auto-saving"}
+                  ? t.header.liveError
+                  : t.header.live}
             </span>
           )}
           {curId && frozen && (
             <span
               className="flex items-center gap-1.5 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-400"
-              title="This plan is completed — the plan itself can no longer be changed."
+              title={t.header.completedRoHint}
             >
               <span className="inline-block h-2 w-2 rounded-full bg-zinc-500" />
-              Completed · read-only
+              {t.header.completedRo}
             </span>
           )}
           {shareUrl && (
@@ -2959,7 +3148,7 @@ export default function StintPlanner({
               onClick={() => navigator.clipboard?.writeText(shareUrl)}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
             >
-              Copy link
+              {t.header.copyLink}
             </button>
           )}
           {curId && !frozen && (
@@ -2968,24 +3157,24 @@ export default function StintPlanner({
               disabled={postingDiscord}
               className="rounded border border-indigo-700/60 bg-indigo-950/40 px-3 py-2 text-sm text-indigo-200 hover:bg-indigo-900/40 disabled:opacity-50"
             >
-              {postingDiscord ? "Posting…" : "Post to Discord"}
+              {postingDiscord ? t.header.postingDiscord : t.header.postDiscord}
             </button>
           )}
           {curId && !frozen && (
             <button
               onClick={onToggleArchived}
               disabled={archiveBusy}
-              title="Freeze the plan after the race — the debrief stays open, and you can reopen it any time."
+              title={t.header.markCompletedHint}
               className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
             >
-              {archiveBusy ? "Completing…" : "✓ Mark completed"}
+              {archiveBusy ? t.header.completing : t.header.markCompleted}
             </button>
           )}
           <button
             onClick={() => window.print()}
             className="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
           >
-            Print
+            {t.header.print}
           </button>
         </div>
       </div>
@@ -3009,13 +3198,22 @@ export default function StintPlanner({
                 : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
             }`}
           >
-            {ph.label}
+            {t.phases[ph.key]}
             <span className="ml-1.5 hidden text-xs font-normal opacity-70 sm:inline">
-              {ph.hint}
+              {t.phases[ph.hintKey]}
             </span>
           </button>
         ))}
       </div>
+
+      {/* Only while building the plan: during and after the race the numbers
+          are what they are and a checklist would be in the way. */}
+      {phase === "pre" && !frozen && (
+        <>
+          <PlanChecklist items={checklist} />
+          <PlanWarnings items={warnings} />
+        </>
+      )}
       {/* ===== PRE ===== */}
       {/* A completed plan freezes everything in PRE and DURING. One disabled
           fieldset does that for every input, select, textarea and button
@@ -3025,10 +3223,11 @@ export default function StintPlanner({
       <fieldset disabled={frozen} className="contents">
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Event config */}
-        <div className={card}>
+        <div className={card} id="card-event">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-              Event
+              {t.ev.title}
+              <GuideLink section="setup" />
             </h2>
             {/* League or official. This changes NOTHING about the plan itself —
                 it only decides what the post-race debrief measures against. In
@@ -3039,10 +3238,10 @@ export default function StintPlanner({
             <div className="flex gap-1 print:hidden">
               {(
                 [
-                  ["league", "League race"],
-                  ["official", "Official race"],
+                  ["league", t.ev.leagueRace, t.ev.leagueRaceHint],
+                  ["official", t.ev.officialRace, t.ev.officialRaceHint],
                 ] as const
-              ).map(([kind, label]) => (
+              ).map(([kind, label, hint]) => (
                 <button
                   key={kind}
                   onClick={() => patchEvent("raceKind", kind)}
@@ -3051,11 +3250,7 @@ export default function StintPlanner({
                       ? "bg-[#ff6b35] text-zinc-950"
                       : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                   }`}
-                  title={
-                    kind === "league"
-                      ? "Debrief compares every driver against the fastest lap in class."
-                      : "Debrief compares every driver against the lap time his own iRating was worth, plus a fixed 10k reference."
-                  }
+                  title={hint}
                 >
                   {label}
                 </button>
@@ -3063,45 +3258,40 @@ export default function StintPlanner({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={lbl}>Track</label>
+            <Field label={t.ev.track} hint={t.ev.trackHint}>
               <select className={inp} value={s.event.track}
                 onChange={(e) => patchEvent("track", e.target.value)}>
-                <option value="">— Select track —</option>
-                {trackOptions.map((t) => (
-                  <option key={t} value={t}>{t}</option>
+                <option value="">{t.common.selectTrack}</option>
+                {trackOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={lbl}>Car</label>
+            </Field>
+            <Field label={t.ev.car} hint={t.ev.carHint}>
               <select className={inp} value={s.event.car}
                 onChange={(e) => patchEvent("car", e.target.value)}>
-                <option value="">— Select car —</option>
+                <option value="">{t.common.selectCar}</option>
                 {carOptions.map((c) => (
                   <option key={c.name} value={c.name}>{c.name}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={lbl}>Race ends on</label>
+            </Field>
+            <Field label={t.ev.raceEndsOn} hint={t.ev.raceEndsOnHint}>
               <select
                 className={inp}
                 value={s.event.raceLimit}
                 onChange={(e) => patchEvent("raceLimit", e.target.value)}
-                title="Time: the flag falls on the clock. Laps / Distance: it falls when the distance is covered — the finish time is then a projection."
               >
-                <option value="time">Time</option>
-                <option value="laps">Laps</option>
-                <option value="distance">Distance</option>
+                <option value="time">{t.ev.optTime}</option>
+                <option value="laps">{t.ev.optLaps}</option>
+                <option value="distance">{t.ev.optDistance}</option>
               </select>
-            </div>
+            </Field>
             {s.event.raceLimit === "time" && (
-              <div>
-                <label className={lbl}>Race duration (h:mm:ss)</label>
+              <Field label={t.ev.raceDuration} hint={t.ev.raceDurationHint}>
                 <input className={inp} value={s.event.raceDuration}
                   onChange={(e) => patchEvent("raceDuration", e.target.value)} />
-              </div>
+              </Field>
             )}
             {s.event.raceLimit === "time" && (
               <div className="col-span-2">
@@ -3114,15 +3304,13 @@ export default function StintPlanner({
                   />
                   <span>
                     <span className="font-medium text-zinc-300">
-                      Finish on a whole lap (+ 1)
+                      {t.ev.roundRaceEnd}
                     </span>{" "}
-                    — the race runs to the end of the lap the clock expires on and
-                    one more after it, instead of being cut mid-lap. Those laps
-                    cost fuel, so the plan may show a splash the old rule hid.
+                    {t.ev.roundRaceEndBody}
                     {result.raceEndRounded && (
                       <>
                         {" "}
-                        Projected finish:{" "}
+                        {t.ev.projectedFinishLabel}{" "}
                         <strong className="text-zinc-300">
                           {fmtDuration(result.raceSec)}
                         </strong>{" "}
@@ -3134,21 +3322,19 @@ export default function StintPlanner({
               </div>
             )}
             {s.event.raceLimit === "laps" && (
-              <div>
-                <label className={lbl}>Race laps</label>
+              <Field label={t.ev.raceLaps} hint={t.ev.raceLapsHint}>
                 <input className={inp} value={s.event.raceLaps}
                   onChange={(e) => patchEvent("raceLaps", e.target.value)}
-                  placeholder="e.g. 500" />
-              </div>
+                  placeholder={t.ev.raceLapsPlaceholder} />
+              </Field>
             )}
             {s.event.raceLimit === "distance" && (
               <>
-                <div>
-                  <label className={lbl}>Race distance</label>
+                <Field label={t.ev.raceDistance} hint={t.ev.raceDistanceHint}>
                   <div className="flex gap-1">
                     <input className={inp} value={s.event.raceDistance}
                       onChange={(e) => patchEvent("raceDistance", e.target.value)}
-                      placeholder="e.g. 1000" />
+                      placeholder={t.ev.raceDistancePlaceholder} />
                     <select
                       className={`${inp} w-20 shrink-0`}
                       value={s.event.distanceUnit}
@@ -3158,14 +3344,12 @@ export default function StintPlanner({
                       <option value="mi">mi</option>
                     </select>
                   </div>
-                </div>
-                <div>
-                  <label className={lbl}>Lap length (km)</label>
+                </Field>
+                <Field label={t.ev.lapLength} hint={t.ev.lapLengthHint}>
                   <input className={inp} value={s.event.lapDistanceKm}
                     onChange={(e) => patchEvent("lapDistanceKm", e.target.value)}
-                    placeholder="e.g. 7.004"
-                    title="Length of one lap of this track configuration, in kilometres." />
-                </div>
+                    placeholder={t.ev.lapLengthPlaceholder} />
+                </Field>
               </>
             )}
             {lapTarget != null && (
@@ -3174,53 +3358,53 @@ export default function StintPlanner({
                   <>
                     {s.event.raceDistance} {s.event.distanceUnit} ÷{" "}
                     {s.event.lapDistanceKm} km ={" "}
-                    <strong className="text-zinc-300">{lapTarget} laps</strong> (rounded up
-                    — the distance has to be covered).{" "}
+                    <strong className="text-zinc-300">{t.ev.laps(lapTarget)}</strong>{" "}
+                    {t.ev.roundedUp}{" "}
                   </>
                 ) : (
-                  <>Race ends after <strong className="text-zinc-300">{lapTarget} laps</strong>. </>
+                  <>
+                    {t.ev.raceEndsAfter}{" "}
+                    <strong className="text-zinc-300">{t.ev.laps(lapTarget)}</strong>.{" "}
+                  </>
                 )}
-                Projected finish:{" "}
+                {t.ev.projectedFinishLabel}{" "}
                 <strong className="text-zinc-300">{fmtDuration(result.raceSec)}</strong>
                 {result.lapsShort > 0 && (
                   <span className="text-amber-300">
                     {" "}
-                    — {fmtLaps(result.lapsShort)} laps unplanned, add stints
+                    {t.ev.lapsUnplanned(fmtLaps(result.lapsShort))}
                   </span>
                 )}
               </div>
             )}
-            <div>
-              <label className={lbl}>Race start</label>
+            <Field label={t.ev.raceStart} hint={t.ev.raceStartHint}>
               <div className="flex gap-1">
                 <input type="datetime-local" step="1" className={inp}
                   value={s.event.sessionStartLocal}
-                  onChange={(e) => patchEvent("sessionStartLocal", e.target.value)}
-                  title="When the race really starts — the moment the green flag falls. Everything on the plan is counted from here. If you set a green-flag offset below, this is the session start and the flag falls that much later." />
+                  onChange={(e) => patchEvent("sessionStartLocal", e.target.value)} />
                 <button
                   type="button"
                   onClick={setRaceStartNow}
                   title={
                     greenOffsetSec > 0
-                      ? `Stamp the exact moment the race starts. The ${s.event.greenFlagOffset} green-flag offset is taken off automatically, so the flag lands on now.`
-                      : "Stamp the exact moment the race starts — to the second."
+                      ? t.ev.nowHintOffset(s.event.greenFlagOffset)
+                      : t.ev.nowHint
                   }
                   className="shrink-0 rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/40 print:hidden"
                 >
-                  Now
+                  {t.ev.now}
                 </button>
               </div>
               {greenOffsetSec > 0 && (
                 <p className="mt-1 text-[10px] leading-tight text-zinc-500">
-                  Green flag {s.event.greenFlagOffset} later — “Now” accounts for it.
+                  {t.ev.greenLater(s.event.greenFlagOffset)}
                 </p>
               )}
-            </div>
-            <div>
-              <label className={lbl}>Green-flag offset (m:ss)</label>
+            </Field>
+            <Field label={t.ev.greenOffset} hint={t.ev.greenOffsetHint}>
               <input className={inp} value={s.event.greenFlagOffset}
                 onChange={(e) => patchEvent("greenFlagOffset", e.target.value)} />
-            </div>
+            </Field>
             {/* Everything a STOP costs now lives in one card. It used to be
                 split — flat pit loss, refuel time and driver swap here, the
                 measured constants two cards down — which is exactly the
@@ -3230,55 +3414,48 @@ export default function StintPlanner({
             <p className="col-span-2 -mt-1 rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-[11px] leading-snug text-zinc-500">
               {pitOn ? (
                 <>
-                  A stop is computed from the litres actually taken — a full
-                  service costs{" "}
+                  {t.ev.stopComputedPre}{" "}
                   <strong className="text-zinc-300">
                     {fullServiceStopSec(s).toFixed(1)} s
                   </strong>{" "}
-                  here.
+                  {t.ev.stopComputedPost}
                 </>
               ) : (
                 <>
-                  Every stop costs a flat{" "}
+                  {t.ev.stopFlatPre}{" "}
                   <strong className="text-zinc-300">
                     {s.event.pitLoss || "—"} s
                   </strong>
-                  .
+                  {t.ev.stopFlatPost}
                 </>
               )}{" "}
-              Pit times, driver swap and the measured constants are set under{" "}
-              <span className="text-orange-300">Pit-stop model</span>.
+              {t.ev.stopWhere}{" "}
+              <span className="text-orange-300">{t.pit.title}</span>.
             </p>
-            <div>
-              <label className={lbl}>Fuel tank (L)</label>
+            <Field label={t.ev.tank} hint={t.ev.tankHint}>
               <input className={inp} value={s.event.tankSize}
                 onChange={(e) => patchEvent("tankSize", e.target.value)} />
-            </div>
-            <div>
-              <label className={lbl}>Fuel reserve (L)</label>
+            </Field>
+            <Field label={t.ev.reserve} hint={t.ev.reserveHint}>
               <input className={inp} value={s.event.fuelReserve}
                 onChange={(e) => patchEvent("fuelReserve", e.target.value)}
-                placeholder="0"
-                title="Fuel kept in the tank as a safety margin — reduces laps per stint." />
-            </div>
-            <div>
-              <label className={lbl}>Fuel to the grid (L)</label>
+                placeholder="0" />
+            </Field>
+            <Field label={t.ev.gridFuel} hint={t.ev.gridFuelHint}>
               <input className={inp} value={s.event.gridFuelL}
                 onChange={(e) => patchEvent("gridFuelL", e.target.value)}
-                placeholder="e.g. 1.6"
-                title="Fuel burned between leaving the box and the green flag — the lap to the grid plus the laps behind the pace car. It is gone before the race starts, so it comes off the FIRST stint only." />
-            </div>
+                placeholder={t.ev.gridFuelPlaceholder} />
+            </Field>
             {official && (
               /* Boxed, not just sub-headed: these two only exist for an
                  official race, and a field that applies conditionally should
                  look conditional. */
               <div className="col-span-2 rounded border border-cyan-900/50 bg-cyan-950/10 p-3">
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
-                  Official race — comparison basis
+                  {t.ev.officialBox}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={lbl}>Reference lap (10k)</label>
+                <Field label={t.ev.refLap} hint={t.ev.refLapHint}>
                   <input
                     className={inp}
                     value={s.event.refLap}
@@ -3288,98 +3465,90 @@ export default function StintPlanner({
                         ? fmtPaceSec(targetLapSec(paceCurve.points, 10000)?.sec ?? null)
                         : "1:58.775"
                     }
-                    title="The lap a very strong (≈10k iRating) driver sets here. Replaces the class best as the yardstick, so the number stays comparable across races instead of moving with whoever showed up. Leave empty to read it off the pace curve."
                   />
-                </div>
-                <div>
-                  <label className={lbl}>Pace curve (iRating → lap)</label>
+                </Field>
+                <Field label={t.ev.paceCurve} hint={t.ev.paceCurveHint}>
                   <select
                     className={inp}
                     value={s.event.paceCurveId}
                     onChange={(e) => patchEvent("paceCurveId", e.target.value)}
                   >
-                    <option value="">— none —</option>
+                    <option value="">{t.ev.curveNone}</option>
                     {paceReferences.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.label} ({r.sessionType})
                       </option>
                     ))}
                   </select>
-                </div>
+                </Field>
                 <p className="col-span-2 -mt-1 text-[11px] leading-snug text-zinc-500">
                   {paceCurve ? (
                     <>
-                      Each driver is measured against the lap his own iRating was
-                      worth here — {paceCurve.points.length} points,{" "}
-                      {fmtPaceSec(targetLapSec(paceCurve.points, 1000)?.sec ?? null)} at
-                      1000 iR to{" "}
+                      {t.ev.curveExplainPre}{" "}
+                      {t.ev.curveExplainPoints(paceCurve.points.length)}{" "}
+                      {fmtPaceSec(targetLapSec(paceCurve.points, 1000)?.sec ?? null)}{" "}
+                      {t.ev.curveExplainAt1000}{" "}
                       <span className="text-cyan-300">
                         {fmtPaceSec(targetLapSec(paceCurve.points, 10000)?.sec ?? null)}
                       </span>{" "}
-                      at 10k. Their iRating comes out of the uploaded{" "}
+                      {t.ev.curveExplainAt10k}{" "}
                       <span className="font-mono">eventresult.json</span>.
                     </>
                   ) : paceSuggestion ? (
                     <>
-                      The library has{" "}
+                      {t.ev.curveSuggestPre}{" "}
                       <button
                         onClick={() => patchEvent("paceCurveId", paceSuggestion.id)}
                         className="text-[#ff6b35] underline print:hidden"
                       >
                         {paceSuggestion.label}
                       </button>{" "}
-                      for this track — pick it to get per-driver target lap times.
+                      {t.ev.curveSuggestPost}
                     </>
                   ) : (
                     <>
-                      No curve for this track yet. Anyone on a team roster can add
-                      one under{" "}
+                      {t.ev.curveNonePre}{" "}
                       <a
                         href="/teams/statistics/pace-references"
                         className="text-[#ff6b35] underline print:hidden"
                       >
-                        Team statistics → Pace references
+                        {t.ev.curveNoneLink}
                       </a>
-                      ; without it only the reference lap above is used.
+                      {t.ev.curveNonePost}
                     </>
                   )}
                 </p>
                 </div>
               </div>
             )}
-            <div>
-              <label className={lbl}>Track temp (°C)</label>
+            <Field label={t.ev.trackTemp} hint={t.ev.trackTempHint}>
               <input className={inp} value={s.event.trackTempC}
                 onChange={(e) => patchEvent("trackTempC", e.target.value)}
                 onBlur={(e) => applyTempFromInput(e.target.value)}
-                placeholder="e.g. 30"
-                title="Expected race-day track temperature. Lap times are adjusted to it using the Garage 61 temperature fit (or the manual coefficient). Applied when you leave the field." />
-            </div>
-            <div>
-              <label className={lbl}>Tyres still raceable at (%)</label>
+                placeholder={t.ev.trackTempPlaceholder} />
+            </Field>
+            <Field label={t.ev.tyreMin} hint={t.ev.tyreMinHint}>
               <input className={inp} value={s.event.tyreMinPct}
                 onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
-                placeholder="50"
-                title="Stints that end below this are flagged — the floor for double-stinting a set. Your call, not something a session can measure." />
-            </div>
-            <div>
-              <label className={lbl}>Stint length</label>
+                placeholder="50" />
+            </Field>
+            <Field label={t.ev.stintLength} hint={t.ev.stintLengthHint}>
               <select className={inp} value={s.event.stintMode}
                 onChange={(e) => patchEvent("stintMode", e.target.value)}>
-                <option value="fuel">Fuel-limited</option>
-                <option value="time">Fixed time</option>
-                <option value="laps">Fixed laps</option>
+                <option value="fuel">{t.ev.stintFuel}</option>
+                <option value="time">{t.ev.stintTime}</option>
+                <option value="laps">{t.ev.stintLaps}</option>
               </select>
-            </div>
+            </Field>
             {s.event.stintMode !== "fuel" && (
-              <div>
-                <label className={lbl}>
-                  {s.event.stintMode === "time" ? "Stint minutes" : "Stint laps"}
-                </label>
+              <Field
+                label={s.event.stintMode === "time" ? t.ev.stintMinutes : t.ev.stintLapsField}
+                hint={t.ev.stintValueHint}
+              >
                 <input className={inp} value={s.event.stintValue}
                   onChange={(e) => patchEvent("stintValue", e.target.value)}
                   placeholder={s.event.stintMode === "time" ? "45" : "20"} />
-              </div>
+              </Field>
             )}
           </div>
           {(s.tempModel || s.event.trackTempC.trim() !== "") && (
@@ -3390,13 +3559,7 @@ export default function StintPlanner({
                 const hasRaceT =
                   s.event.trackTempC.trim() !== "" && isFinite(raceT);
                 if (!tm) {
-                  return (
-                    <span>
-                      Set the expected track temp, then import or pull Garage 61
-                      laps — with laps across a range of temps it calibrates how
-                      much lap time changes per degree and adjusts the pace.
-                    </span>
-                  );
+                  return <span>{t.ev.tempNoModel}</span>;
                 }
                 const per10 = round1(tm.slopePerC * 10);
                 const pending =
@@ -3406,37 +3569,39 @@ export default function StintPlanner({
                 return (
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span>
-                      Pace set at{" "}
+                      {t.ev.tempPaceSetAt}{" "}
                       <strong className="text-zinc-200">
                         {tm.appliedTempC != null
                           ? `${round1(tm.appliedTempC)}°C`
                           : "—"}
                       </strong>{" "}
-                      · sensitivity{" "}
+                      {t.ev.tempSensitivity}{" "}
                       <strong className="text-zinc-200">
                         {per10 >= 0 ? "+" : ""}
                         {per10.toFixed(1)} s/10°C
                       </strong>{" "}
                       <span className="text-zinc-500">
-                        ({tm.fromData ? "from Garage 61 data" : "manual estimate"})
+                        {tm.fromData ? t.ev.tempFromData : t.ev.tempManual}
                       </span>
                     </span>
                     {Math.abs(pending) > 0.05 && (
                       <span className="text-amber-300">
-                        → leaving the field shifts lap times{" "}
-                        {pending > 0 ? "+" : ""}
-                        {pending.toFixed(1)}s for {round1(raceT)}°C
+                        {t.ev.tempPending(
+                          `${pending > 0 ? "+" : ""}${pending.toFixed(1)}`,
+                          round1(raceT)
+                        )}
                       </span>
                     )}
                     {!tm.fromData && (
                       <label className="flex items-center gap-1 text-zinc-500 print:hidden">
-                        s/10°C:
+                        {t.ev.tempPer10}
                         <input
                           className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
                           defaultValue={String(per10)}
                           onBlur={(e) => setManualSlopePer10(e.target.value)}
-                          title="Manual lap-time sensitivity (seconds per 10°C), used when the data has no temperature spread to fit."
+                          title={t.ev.tempPer10Hint}
                         />
+                        <Hint text={t.ev.tempPer10Hint} />
                       </label>
                     )}
                   </div>
@@ -3448,7 +3613,10 @@ export default function StintPlanner({
           {/* Pace penalties: weather per stint, traffic on every stint. */}
           <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">Full wet</span>
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.fullWet}
+                <Hint text={t.ev.fullWetHint} />
+              </span>
               <label className="flex items-center gap-1 text-zinc-400 print:hidden">
                 +
                 <input
@@ -3456,18 +3624,21 @@ export default function StintPlanner({
                   className="w-16 rounded border border-sky-900/60 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
                   defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
                   onBlur={(e) => setWetDelta(e.target.value)}
-                  title="Seconds per lap on a soaked track. Measured from your rain laps when available; edit to override."
+                  title={t.ev.fullWetHint}
                 />
-                s/lap
+                {t.ev.perLap}
               </label>
               {s.wetModel && (
                 <span className="text-zinc-500">
-                  ({s.wetModel.fromData ? "measured from rain laps" : "manual estimate"})
+                  {s.wetModel.fromData ? t.ev.wetMeasured : t.ev.wetManual}
                 </span>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">Half wet</span>
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.halfWet}
+                <Hint text={t.ev.halfWetHint} />
+              </span>
               <label className="flex items-center gap-1 text-zinc-400 print:hidden">
                 +
                 <input
@@ -3480,18 +3651,21 @@ export default function StintPlanner({
                   }
                   placeholder={String(round1(halfWetDeltaSec(s)))}
                   onBlur={(e) => setHalfWetDelta(e.target.value)}
-                  title="Seconds per lap on a damp or drying track — slippery, but nothing like full wet. Leave empty to use a share of the full-wet penalty."
+                  title={t.ev.halfWetHint}
                 />
-                s/lap
+                {t.ev.perLap}
               </label>
               <span className="text-zinc-500">
                 {s.wetModel?.manualHalfDeltaSec != null
-                  ? "your figure"
-                  : `default: ${Math.round(DEFAULT_HALF_WET_FRACTION * 100)}% of full wet`}
+                  ? t.ev.halfYours
+                  : t.ev.halfDefault(Math.round(DEFAULT_HALF_WET_FRACTION * 100))}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">Race traffic</span>
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.traffic}
+                <Hint text={t.ev.trafficHint} />
+              </span>
               <label className="flex items-center gap-1 text-zinc-400 print:hidden">
                 +
                 <input
@@ -3499,29 +3673,24 @@ export default function StintPlanner({
                   value={s.event.trafficPenaltySec}
                   onChange={(e) => patchEvent("trafficPenaltySec", e.target.value)}
                   placeholder="0"
-                  title="Seconds per lap the team is slower in the race than in practice: traffic, dirty air, cars to pass and to be passed by. Added to EVERY stint — practice pace is always optimistic."
+                  title={t.ev.trafficHint}
                 />
-                s/lap
+                {t.ev.perLap}
               </label>
-              <span className="text-zinc-500">
-                on every stint — practice pace is set alone, a race is not
-              </span>
+              <span className="text-zinc-500">{t.ev.trafficNote}</span>
             </div>
-            <p className="text-zinc-600">
-              Weather is picked per stint in the schedule below; traffic applies to all of them.
-            </p>
+            <p className="text-zinc-600">{t.ev.weatherNote}</p>
           </div>
 
           {/* Pit strategy: single vs double stints */}
           <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
-            <label className="flex items-center gap-2 text-zinc-300 print:hidden">
-              <input
-                type="checkbox"
-                checked={s.event.doubleStint}
-                onChange={(e) => setDoubleStint(e.target.checked)}
-              />
-              Double stints (each driver runs 2 stints between swaps)
-            </label>
+            <CheckField
+              className="print:hidden"
+              checked={s.event.doubleStint}
+              onChange={setDoubleStint}
+              label={t.ev.doubleStint}
+              hint={t.ev.doubleStintHint}
+            />
             {(() => {
               const stops = Math.max(0, result.stints.length - 1);
               const swap = parseTypedNumber(s.event.driverSwapSec) || 30;
@@ -3540,40 +3709,41 @@ export default function StintPlanner({
               if (!refuelSet) {
                 return (
                   <p className="mt-1 text-zinc-500">
-                    Enter a <strong className="text-zinc-400">Refuel time</strong>{" "}
-                    above to compare single vs double-stinting (a driver swap only
-                    costs time when it&rsquo;s longer than fuelling).
+                    {t.ev.dsNeedRefuelPre}{" "}
+                    <strong className="text-zinc-400">{t.ev.dsNeedRefuelBold}</strong>{" "}
+                    {t.ev.dsNeedRefuelPost}
                   </p>
                 );
               }
               if (saveSec < 0.05) {
                 return (
-                  <p className="mt-1 text-amber-300">
-                    At {refuel}s refuel the {swap}s swap is hidden under fuelling —
-                    a driver change costs no extra time, so double-stinting saves
-                    nothing here (decide on driver stamina).
-                  </p>
+                  <p className="mt-1 text-amber-300">{t.ev.dsHidden(refuel, swap)}</p>
                 );
               }
               return (
                 <div className="mt-1 space-y-0.5 text-zinc-400">
                   <div>
-                    A driver change costs{" "}
+                    {t.ev.dsCostPre}{" "}
                     <strong className="text-zinc-200">+{saveSec.toFixed(0)}s</strong>{" "}
-                    (swap {swap}s − refuel {refuel}s).
+                    {t.ev.dsCostPost(swap, refuel)}
                   </div>
                   <div>
-                    This plan: {sameStops}/{stops} stops refuel-only → saves{" "}
+                    {t.ev.dsThisPlan(sameStops, stops)}{" "}
                     <strong className="text-emerald-300">
-                      ~{(sameStops * saveSec).toFixed(0)}s (~{laps(sameStops * saveSec).toFixed(1)} laps)
+                      {t.ev.dsSaves(
+                        (sameStops * saveSec).toFixed(0),
+                        laps(sameStops * saveSec).toFixed(1)
+                      )}
                     </strong>{" "}
-                    vs single-stinting.
+                    {t.ev.dsVsSingle}
                   </div>
                   <div className="text-zinc-500">
-                    Full double-stint plan: {doubleSame}/{stops} refuel-only → saves
-                    ~{(doubleSame * saveSec).toFixed(0)}s (~
-                    {laps(doubleSame * saveSec).toFixed(1)} laps). Trade-off: a
-                    driver runs two stints back-to-back.
+                    {t.ev.dsFull(
+                      doubleSame,
+                      stops,
+                      (doubleSame * saveSec).toFixed(0),
+                      laps(doubleSame * saveSec).toFixed(1)
+                    )}
                   </div>
                 </div>
               );
@@ -3584,149 +3754,144 @@ export default function StintPlanner({
         {/* Pit-stop model — measured constants instead of one flat number.
             Off by default: an existing plan keeps its flat pit loss until
             somebody switches this on. */}
-        <div className={card}>
+        <div className={card} id="card-pit">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-              Pit-stop model
+              {t.pit.title}
+              <GuideLink section="setup" />
             </h2>
-            <div className="flex flex-wrap items-center gap-3">
-              {(pitRef.exact || pitRef.carDefault) && (
-                <button
-                  onClick={() => applyPitReference((pitRef.exact ?? pitRef.carDefault)!)}
-                  className="rounded border border-emerald-800/60 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200 hover:bg-emerald-900/40 print:hidden"
-                  title={
-                    pitRef.exact
-                      ? `Measured for ${pitRef.exact.car} at ${pitRef.exact.track}` +
-                        (pitRef.exact.source ? ` — ${pitRef.exact.source}` : "")
-                      : `Measured for ${pitRef.carDefault!.car} (car default)` +
-                        (pitRef.carDefault!.source ? ` — ${pitRef.carDefault!.source}` : "")
-                  }
-                >
-                  📥 Load measured values{pitRef.exact ? "" : " (car default)"}
-                </button>
-              )}
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
-                <input
-                  type="checkbox"
+            {/* Both of these only steer the DETAILED model, so Easy mode has
+                no use for either. */}
+            <AdvancedOnly>
+              <div className="flex flex-wrap items-center gap-3">
+                {(pitRef.exact || pitRef.carDefault) && (
+                  <button
+                    onClick={() => applyPitReference((pitRef.exact ?? pitRef.carDefault)!)}
+                    className="rounded border border-emerald-800/60 bg-emerald-950/30 px-2 py-1 text-xs text-emerald-200 hover:bg-emerald-900/40 print:hidden"
+                    title={
+                      pitRef.exact
+                        ? t.pit.loadMeasuredExact(
+                            pitRef.exact.car,
+                            pitRef.exact.track,
+                            pitRef.exact.source ?? null
+                          )
+                        : t.pit.loadMeasuredDefault(
+                            pitRef.carDefault!.car,
+                            pitRef.carDefault!.source ?? null
+                          )
+                    }
+                  >
+                    {pitRef.exact ? t.pit.loadMeasured : t.pit.loadMeasuredCarDefault}
+                  </button>
+                )}
+                <CheckField
                   checked={s.event.pitModelOn}
-                  onChange={(e) => patchEvent("pitModelOn", e.target.checked)}
+                  onChange={(v) => patchEvent("pitModelOn", v)}
+                  label={t.pit.computeEvery}
+                  hint={t.pit.computeEveryHint}
                 />
-                compute every stop
-              </label>
-            </div>
+              </div>
+            </AdvancedOnly>
           </div>
           {!s.event.pitModelOn ? (
             <>
               {/* The two numbers the SIMPLE model runs on, plus the swap floor
                   it shares with the detailed one. */}
               <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3">
-                <div>
-                  <label className={lbl}>Pit time loss (s)</label>
+                <Field label={t.pit.pitLoss} hint={t.pit.pitLossHint}>
                   <input className={inp} value={s.event.pitLoss}
-                    onChange={(e) => patchEvent("pitLoss", e.target.value)}
-                    title="Total time lost at a normal (driver-change) pit stop." />
-                </div>
-                <div>
-                  <label className={lbl}>Refuel time (s)</label>
+                    onChange={(e) => patchEvent("pitLoss", e.target.value)} />
+                </Field>
+                <Field label={t.pit.refuelSec} hint={t.pit.refuelSecHint}>
                   <input className={inp} value={s.event.refuelSec}
                     onChange={(e) => patchEvent("refuelSec", e.target.value)}
-                    placeholder="e.g. 40"
-                    title="How long fuelling takes at a full stop. If ≥ driver swap, a swap is hidden under fuelling (free) and double-stinting saves no time." />
-                </div>
-                <div>
-                  <label className={lbl}>Driver swap (s)</label>
+                    placeholder={t.pit.refuelSecPlaceholder} />
+                </Field>
+                <Field label={t.pit.driverSwap} hint={t.pit.driverSwapHint}>
                   <input className={inp} value={s.event.driverSwapSec}
                     onChange={(e) => patchEvent("driverSwapSec", e.target.value)}
-                    placeholder="30"
-                    title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this. Used by the detailed model too." />
-                </div>
+                    placeholder="30" />
+                </Field>
               </div>
-              <p className="text-xs text-zinc-500">
-                Every stop currently costs the same flat{" "}
-                <strong className="text-zinc-300">{s.event.pitLoss || "—"} s</strong>. Switch
-                this on to compute each stop from the litres actually taken, whether tyres are
-                changed and whether the driver changes — that is what makes a splash cheaper
-                than a full service, and it is measured once per car and track.
-              </p>
+              {/* The invitation to switch the detailed model on only makes
+                  sense next to the switch, which Easy mode does not show. */}
+              <AdvancedOnly>
+                <p className="text-xs text-zinc-500">
+                  {t.pit.flatPre}{" "}
+                  <strong className="text-zinc-300">{s.event.pitLoss || "—"} s</strong>
+                  {t.pit.flatPost}
+                </p>
+              </AdvancedOnly>
             </>
           ) : (
-            <>
+            /* The detailed model is the one Advanced-only block: it is nine
+               fields, a session upload and a measuring protocol, and a team
+               that has never measured a stop will not miss it. Easy mode still
+               says the model is ON and what a full service costs — a schedule
+               whose stop times came from nowhere visible would be worse than
+               a longer page. */
+            <AdvancedOnly
+              activeNote={t.pit.easyNoteDetailed(fullServiceStopSec(s).toFixed(1))}
+            >
               {/* Everything left in this card is a MEASURED value — the three
                   numbers a session export produces, plus how the crew works.
                   Anything you have to decide yourself lives in Event or, when
                   it differs per driver, in the driver table. */}
               <p className="mb-3 text-[11px] text-zinc-500">
-                <strong className="text-emerald-300">Measured values.</strong> These three
-                come out of a session export (or the pit-reference library) — see{" "}
-                <em>Measure these from a session</em> below. Type them by hand only if you
-                have measured them another way.
+                <strong className="text-emerald-300">{t.pit.measuredTitle}</strong>{" "}
+                {t.pit.measuredBodyPre} <em>{t.pit.measuredBodyEm}</em>{" "}
+                {t.pit.measuredBodyPost}
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={lbl}>Pit lane loss (s)</label>
+                <Field label={t.pit.laneLoss} hint={t.pit.laneLossHint}>
                   <input
                     className={inp}
                     value={s.event.pitLaneLossSec}
                     onChange={(e) => patchEvent("pitLaneLossSec", e.target.value)}
                     placeholder="41"
-                    title="Time lost entering, stopping and leaving the pits WITHOUT any service, measured against a green lap."
                   />
-                </div>
-                <div>
-                  <label className={lbl}>Refuel rate (L/s)</label>
+                </Field>
+                <Field label={t.pit.refuelRate} hint={t.pit.refuelRateHint}>
                   <input
                     className={inp}
                     value={s.event.refuelLps}
                     onChange={(e) => patchEvent("refuelLps", e.target.value)}
                     placeholder="2.5"
-                    title="GT3 ≈ 2.5 L/s, LMP ≈ 1.81 L/s."
                   />
-                </div>
-                <div>
-                  <label className={lbl}>Tyre change (s)</label>
+                </Field>
+                <Field label={t.pit.tyreChange} hint={t.pit.tyreChangeHint}>
                   <input
                     className={inp}
                     value={s.event.tyreChangeSec}
                     onChange={(e) => patchEvent("tyreChangeSec", e.target.value)}
                     placeholder="20"
                   />
-                </div>
-                <div className="flex items-end">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
-                    <input
-                      type="checkbox"
-                      checked={s.event.tyreSequential !== false}
-                      onChange={(e) => patchEvent("tyreSequential", e.target.checked)}
-                    />
-                    tyres AFTER fuelling
-                  </label>
-                </div>
+                </Field>
+                <CheckField
+                  className="flex items-end"
+                  checked={s.event.tyreSequential !== false}
+                  onChange={(v) => patchEvent("tyreSequential", v)}
+                  label={t.pit.tyresAfter}
+                  hint={t.pit.tyresAfterHint}
+                />
                 {/* Not measured but part of the stop: the swap floor the
                     detailed model uses as driverChangeSec. */}
-                <div>
-                  <label className={lbl}>Driver swap (s)</label>
+                <Field label={t.pit.driverSwap} hint={t.pit.driverSwapHintShort}>
                   <input
                     className={inp}
                     value={s.event.driverSwapSec}
                     onChange={(e) => patchEvent("driverSwapSec", e.target.value)}
                     placeholder="30"
-                    title="Mandatory driver-swap floor. iRacing = 30s; it runs concurrently with fuelling, so it only costs time when fuelling is shorter than this."
                   />
-                </div>
+                </Field>
               </div>
               {(() => {
                 const model = planPitModel(s);
                 if (!model) {
                   return (
                     <>
-                      <p className="mt-3 text-xs text-amber-300">
-                        Enter the pit lane loss — without it there is nothing to compute a stop
-                        from, so the flat pit loss stays in use.
-                      </p>
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        Type them in, take them from the pit-reference library, or measure
-                        them from a session export — see just below.
-                      </p>
+                      <p className="mt-3 text-xs text-amber-300">{t.pit.noModelWarn}</p>
+                      <p className="mt-1 text-[11px] text-zinc-500">{t.pit.noModelHow}</p>
                     </>
                   );
                 }
@@ -3747,16 +3912,17 @@ export default function StintPlanner({
                 return (
                   <div className="mt-3 space-y-1 text-xs text-zinc-400">
                     <div>
-                      Full service ({fmtFuel(usable)} L + tyres + driver change):{" "}
+                      {t.pit.fullService(fmtFuel(usable))}{" "}
                       <strong className="text-zinc-200">{full.totalSec.toFixed(1)} s</strong>{" "}
-                      <span className="text-zinc-500">({stopBreakdownText(full, model)})</span>
+                      <span className="text-zinc-500">
+                        ({stopBreakdownText(full, model, t)})
+                      </span>
                     </div>
                     <div>
-                      Half fill, no tyres, same driver:{" "}
+                      {t.pit.halfFill}{" "}
                       <strong className="text-emerald-300">{splash.totalSec.toFixed(1)} s</strong>{" "}
                       <span className="text-zinc-500">
-                        — {(full.totalSec - splash.totalSec).toFixed(0)} s cheaper than a full
-                        stop
+                        {t.pit.cheaperThanFull((full.totalSec - splash.totalSec).toFixed(0))}
                       </span>
                     </div>
                   </div>
@@ -3769,10 +3935,10 @@ export default function StintPlanner({
               <div className="mt-4 rounded border border-zinc-800 bg-zinc-950/40 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                    Measure these from a session
+                    {t.pit.measureTitle}
                   </div>
                   <label className="cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 print:hidden">
-                    {g61Busy ? "Reading…" : "Upload session export (.xlsx)"}
+                    {g61Busy ? t.pit.reading : t.pit.uploadXlsx}
                     <input
                       type="file"
                       accept=".xlsx"
@@ -3790,7 +3956,7 @@ export default function StintPlanner({
                     instead of living two cards away. */}
                 <label
                   className="mt-2 flex cursor-pointer items-start gap-1.5 text-[11px] text-zinc-500 print:hidden"
-                  title="The same file also carries the green laps. On: they are added to the plan's lap pool. Off: they replace the Garage 61 data this plan holds."
+                  title={t.pit.poolHint}
                 >
                   <input
                     type="checkbox"
@@ -3801,31 +3967,28 @@ export default function StintPlanner({
                     }
                   />
                   <span>
-                    A file dropped here also fills the{" "}
-                    <strong className="text-zinc-400">lap pool</strong> in the
-                    Garage 61 card — pace and fuel come out of the same laps.
-                    Ticked, it is <strong className="text-zinc-400">added</strong>{" "}
-                    to the laps already there
+                    {t.pit.poolPre}{" "}
+                    <strong className="text-zinc-400">{t.pit.poolBoldPool}</strong>{" "}
+                    {t.pit.poolMid}{" "}
+                    <strong className="text-zinc-400">{t.pit.poolBoldAdded}</strong>
+                    {t.pit.poolMid2 ? ` ${t.pit.poolMid2}` : ""}
                     {(s.g61Sources?.length ?? 0) > 0
-                      ? ` (${poolLapCount(s.g61Sources)} laps from ${s.g61Sources.length} import${s.g61Sources.length === 1 ? "" : "s"} right now)`
+                      ? t.pit.poolCount(poolLapCount(s.g61Sources), s.g61Sources.length)
                       : ""}
-                    ; unticked it replaces them. Same switch as down there.
+                    {t.pit.poolPost}
                   </span>
                 </label>
                 <p className="mt-2 text-[11px] text-zinc-500">
-                  The fields above are filled from a Garage 61{" "}
-                  <strong className="text-zinc-400">session export</strong> — in Garage 61
-                  open the session and choose Export, then drop the .xlsx here. A Garage 61{" "}
-                  <em>pull</em> cannot do it: the API leaves out in- and out-laps and never
-                  reports the fuel added, and those are exactly what a stop is measured from.
-                  CLS finds the stops in the file, you say what happened at each, and one
-                  click puts the numbers in the fields above.
+                  {t.pit.exportExplainPre}
+                  <strong className="text-zinc-400">{t.pit.exportExplainBold}</strong>{" "}
+                  {t.pit.exportExplainMid}
+                  <em>{t.pit.exportExplainEm}</em> {t.pit.exportExplainPost}
                 </p>
                 <details className="mt-2 print:hidden">
                   <summary className="cursor-pointer text-[11px] text-zinc-500 hover:text-zinc-300">
-                    How to drive the measuring session
+                    {t.pit.howToDrive}
                   </summary>
-                  <p className="mt-1 text-[11px] text-zinc-500">{PIT_PROTOCOL}</p>
+                  <p className="mt-1 text-[11px] text-zinc-500">{t.pit.protocol}</p>
                 </details>
                 {g61Msg && <p className="mt-2 text-xs text-amber-300">{g61Msg}</p>}
                 {/* Pit stops found in the uploaded session — Johann's measuring sheet,
@@ -3834,35 +3997,34 @@ export default function StintPlanner({
                 {pitScan && !pitScan.ok && (
                   <div className="mb-3 rounded border border-amber-900/50 bg-amber-950/10 p-3">
                     <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
-                      No pit stops measured
+                      {t.pit.noStops}
                     </div>
                     <p className="text-[11px] text-zinc-400">{pitScan.error}</p>
-                    <p className="mt-2 text-[11px] text-zinc-500">{PIT_PROTOCOL}</p>
+                    <p className="mt-2 text-[11px] text-zinc-500">{t.pit.protocol}</p>
                   </div>
                 )}
 
                 {pitScan && pitScan.ok && (
                   <div className="mb-3 rounded border border-orange-900/50 bg-orange-950/10 p-3">
                     <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-orange-300">
-                      {pitScan.stops.length} pit stop{pitScan.stops.length === 1 ? "" : "s"} measured in
-                      this session
+                      {t.pit.stopsFound(pitScan.stops.length)}
                     </div>
                     <p className="mb-2 text-[11px] text-zinc-500">
-                      Reference lap section: {pitScan.referenceSec?.toFixed(1)} s (median of{" "}
-                      {pitScan.referenceSamples} clean lap pairs). Each stop is the last sector before
-                      the pits plus the first sector after, minus that reference. Say what happened at
-                      each stop — the export records the fuel, never the tyres.
+                      {t.pit.referenceSection(
+                        pitScan.referenceSec?.toFixed(1) ?? "—",
+                        pitScan.referenceSamples
+                      )}
                     </p>
-                    <p className="mb-2 text-[11px] text-zinc-500">{PIT_PROTOCOL}</p>
+                    <p className="mb-2 text-[11px] text-zinc-500">{t.pit.protocol}</p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-sm tabular-nums">
                         <thead className="text-xs uppercase tracking-wide text-zinc-500">
                           <tr className="border-b border-zinc-800">
-                            <th className="py-1 pr-2">Lap</th>
-                            <th className="py-1 pr-2">Driver</th>
-                            <th className="py-1 pr-2 text-right">Time lost</th>
-                            <th className="py-1 pr-2 text-right">Fuel</th>
-                            <th className="py-1 pr-2">What happened</th>
+                            <th className="py-1 pr-2">{t.pit.colLap}</th>
+                            <th className="py-1 pr-2">{t.pit.colDriver}</th>
+                            <th className="py-1 pr-2 text-right">{t.pit.colTimeLost}</th>
+                            <th className="py-1 pr-2 text-right">{t.pit.colFuel}</th>
+                            <th className="py-1 pr-2">{t.pit.colWhatHappened}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3886,11 +4048,11 @@ export default function StintPlanner({
                                   }
                                   className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100"
                                 >
-                                  <option value="drivethrough">drove through</option>
-                                  <option value="stop">stopped, no service</option>
-                                  <option value="tyres">tyres only</option>
-                                  <option value="fuel">fuel only</option>
-                                  <option value="fuel+tyres">fuel + tyres</option>
+                                  <option value="drivethrough">{t.pit.kindDrivethrough}</option>
+                                  <option value="stop">{t.pit.kindStop}</option>
+                                  <option value="tyres">{t.pit.kindTyres}</option>
+                                  <option value="fuel">{t.pit.kindFuel}</option>
+                                  <option value="fuel+tyres">{t.pit.kindFuelTyres}</option>
                                 </select>
                               </td>
                             </tr>
@@ -3906,26 +4068,26 @@ export default function StintPlanner({
                         <div className="mt-3 space-y-2">
                           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
                             <span>
-                              Lane loss:{" "}
+                              {t.pit.derivedLane}{" "}
                               <strong className={c.laneLossSec != null ? "text-emerald-300" : "text-zinc-500"}>
                                 {fmtOrDash(c.laneLossSec, "s")}
                               </strong>
                             </span>
                             <span>
-                              Tyre change:{" "}
+                              {t.pit.derivedTyre}{" "}
                               <strong className={c.tyreChangeSec != null ? "text-emerald-300" : "text-zinc-500"}>
                                 {fmtOrDash(c.tyreChangeSec, "s")}
                               </strong>
                             </span>
                             <span>
-                              Refuel:{" "}
+                              {t.pit.derivedRefuel}{" "}
                               <strong className={c.refuelLps != null ? "text-emerald-300" : "text-zinc-500"}>
                                 {fmtOrDash(c.refuelLps, "L/s", 2)}
                               </strong>
                             </span>
                             {c.tyreSequential != null && (
                               <span className="text-zinc-400">
-                                tyres {c.tyreSequential ? "after fuelling" : "under fuelling"}
+                                {c.tyreSequential ? t.pit.derivedSequential : t.pit.derivedParallel}
                               </span>
                             )}
                           </div>
@@ -3941,15 +4103,15 @@ export default function StintPlanner({
                               onClick={applyDerivedPit}
                               className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500"
                             >
-                              Use in this plan
+                              {t.pit.useInPlan}
                             </button>
                             {viewerIsAdmin && (
                               <button
                                 onClick={() => void saveDerivedPitToLibrary()}
                                 className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
-                                title={`Save as the measured values for ${s.event.car || "this car"}${s.event.track ? ` @ ${s.event.track}` : ""}`}
+                                title={t.pit.saveToLibraryHint(s.event.car, s.event.track)}
                               >
-                                Save to pit-reference library
+                                {t.pit.saveToLibrary}
                               </button>
                             )}
                             <button
@@ -3959,7 +4121,7 @@ export default function StintPlanner({
                               }}
                               className="rounded px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-300"
                             >
-                              Dismiss
+                              {t.pit.dismiss}
                             </button>
                           </div>
                           {pitSaveMsg && <p className="text-xs text-emerald-300">{pitSaveMsg}</p>}
@@ -3969,29 +4131,30 @@ export default function StintPlanner({
                   </div>
                 )}
               </div>
-            </>
+            </AdvancedOnly>
           )}
         </div>
 
         {/* Fuel profiles */}
-        <div className={card}>
+        <div className={card} id="card-fuel">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-              Fuel profiles
+              {t.fuel.title}
+              <GuideLink section="pace" />
             </h2>
             {deltaSaving && (
               <button
                 onClick={() => setShowFuelProfiles((v) => !v)}
                 className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-800 print:hidden"
               >
-                {showFuelProfiles ? "Hide fallback profiles" : "Edit fallback profiles"}
+                {showFuelProfiles ? t.fuel.hideFallback : t.fuel.editFallback}
               </button>
             )}
           </div>
 
           {profilesOpen ? (
             <ProfileRow
-              title={deltaSaving ? "Standard (roster fallback)" : "Standard"}
+              title={deltaSaving ? t.fuel.standardFallback : t.fuel.standard}
               laptime={s.standard.laptime}
               fuelPerLap={s.standard.fuelPerLap}
               onLaptime={(v) => patchStd("laptime", v)}
@@ -4003,8 +4166,7 @@ export default function StintPlanner({
             />
           ) : (
             <p className="rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-xs leading-snug text-zinc-500">
-              Every stint runs on the driver&rsquo;s own pace and fuel. Only a driver
-              with no numbers of their own falls back to{" "}
+              {t.fuel.fallbackPre}{" "}
               <strong className="text-zinc-300">
                 {s.standard.laptime || "—"}
               </strong>{" "}
@@ -4014,7 +4176,7 @@ export default function StintPlanner({
               </strong>
               {s.savingEnabled && (
                 <>
-                  , and to the plan&rsquo;s fuel-save default of{" "}
+                  {t.fuel.fallbackSavingPre}{" "}
                   <strong className="text-cyan-300">
                     +{planDelta.sec.toFixed(1)} s / &minus;{planDelta.litres.toFixed(2)} L
                   </strong>
@@ -4030,13 +4192,13 @@ export default function StintPlanner({
               (fuel-save stints). The delta model below fixes both. */}
           <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/50 p-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-              Where a stint gets its numbers
+              {t.fuel.whereNumbers}
             </div>
             <div className="flex flex-wrap gap-2">
               {(
                 [
-                  ["delta", "Per driver"],
-                  ["absolute", "Profile only (legacy)"],
+                  ["delta", t.fuel.modeDelta],
+                  ["absolute", t.fuel.modeAbsolute],
                 ] as const
               ).map(([mode, label]) => (
                 <button
@@ -4055,32 +4217,27 @@ export default function StintPlanner({
             <p className="mt-2 text-xs text-zinc-500">
               {deltaSaving ? (
                 <>
-                  Every stint runs on the{" "}
-                  <strong className="text-zinc-300">driver&rsquo;s own average pace and
-                  fuel</strong> from the Drivers table; the Standard profile above is only
-                  the fallback for a driver who has none. A fuel-save stint adds that
-                  driver&rsquo;s fuel-save delta on top.
+                  {t.fuel.deltaExplainPre}{" "}
+                  <strong className="text-zinc-300">{t.fuel.deltaExplainBold}</strong>{" "}
+                  {t.fuel.deltaExplainPost}
                 </>
               ) : (
-                <>
-                  Legacy model: the profiles below are the numbers, and a driver&rsquo;s own
-                  figures simply replace them &mdash; which makes the fuel-saving profile a
-                  no-op for anyone who has their own pace and fuel. Kept so plans that were
-                  built and signed off this way still read exactly as they did.
-                </>
+                t.fuel.absoluteExplain
               )}
             </p>
           </div>
 
-          <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
-            <input type="checkbox" checked={s.savingEnabled}
-              onChange={(e) => setS((p) => ({ ...p, savingEnabled: e.target.checked }))} />
-            Enable a fuel-saving profile
-          </label>
+          <CheckField
+            className="mt-3"
+            checked={s.savingEnabled}
+            onChange={(v) => setS((p) => ({ ...p, savingEnabled: v }))}
+            label={t.fuel.enableSaving}
+            hint={t.fuel.enableSavingHint}
+          />
           {s.savingEnabled && sav && profilesOpen && (
             <div className="mt-2">
               <ProfileRow
-                title={deltaSaving ? "Fuel-saving (roster default)" : "Fuel-saving"}
+                title={deltaSaving ? t.fuel.savingFallback : t.fuel.savingProfile}
                 laptime={s.saving.laptime}
                 fuelPerLap={s.saving.fuelPerLap}
                 onLaptime={(v) => patchSav("laptime", v)}
@@ -4092,31 +4249,26 @@ export default function StintPlanner({
               />
               {deltaSaving && (
                 <p className="mt-2 text-xs text-zinc-500">
-                  Against Standard that is{" "}
+                  {t.fuel.againstStandardPre}{" "}
                   <strong className="text-cyan-300">
-                    +{planDelta.sec.toFixed(1)} s/lap for &minus;{planDelta.litres.toFixed(2)} L/lap
-                  </strong>
-                  {" "}&mdash; the effort a driver gives up on an{" "}
-                  <span className="text-zinc-400">FS</span> stint unless they carry their own
-                  figures in the <strong className="text-zinc-400">FS +s</strong> /{" "}
-                  <strong className="text-zinc-400">FS &minus;L</strong> columns of the Drivers
-                  table. Lifting and coasting is a skill: not everyone buys the same litres at
-                  the same price.
+                    +{planDelta.sec.toFixed(1)} s/{t.units.lap} / &minus;
+                    {planDelta.litres.toFixed(2)} L/{t.units.lap}
+                  </strong>{" "}
+                  {t.fuel.againstStandardMid}{" "}
+                  <span className="text-zinc-400">{t.fuel.fsShort}</span>
+                  {t.fuel.againstStandardMid2}{" "}
+                  <strong className="text-zinc-400">{t.fuel.fsPlusS}</strong> /{" "}
+                  <strong className="text-zinc-400">{t.fuel.fsMinusL}</strong>{" "}
+                  {t.fuel.againstStandardPost}
                   {planDelta.sec <= 0 && planDelta.litres <= 0 && (
-                    <span className="text-amber-400">
-                      {" "}Right now both are zero, so a fuel-save stint is identical to a
-                      normal one.
-                    </span>
+                    <span className="text-amber-400"> {t.fuel.deltaZero}</span>
                   )}
                 </p>
               )}
             </div>
           )}
           {(std.overFuel || (sav != null && sav.overFuel)) && (
-            <p className="mt-3 text-xs text-amber-400">
-              ⚠ This stint length needs more fuel than the usable tank holds.
-              Reduce the stint length or fuel reserve, or increase the tank.
-            </p>
+            <p className="mt-3 text-xs text-amber-400">{t.fuel.overFuel}</p>
           )}
         </div>
 
@@ -4125,10 +4277,11 @@ export default function StintPlanner({
             the Garage 61 charts, because that is the order the work happens
             in), which left no obvious place to build the line-up while setting
             the race up. This is that place; the numbers stay down there. */}
-        <div className={card}>
+        <div className={card} id="card-drivers">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-              Roster
+              {t.roster.title}
+              <GuideLink section="setup" />
             </h2>
             <ClsDriverPicker
               options={clsDrivers.filter(
@@ -4138,11 +4291,7 @@ export default function StintPlanner({
             />
           </div>
           {s.drivers.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              No drivers yet — type a name in the field above. A driver has to be
-              registered in CLS to appear there. Add them before pulling from Garage 61:
-              the pull matches on name, so anyone not on this list is ignored.
-            </p>
+            <p className="text-sm text-zinc-500">{t.roster.empty}</p>
           ) : (
             (() => {
               const missing = s.drivers.filter(
@@ -4158,8 +4307,8 @@ export default function StintPlanner({
                           key={d.id}
                           title={
                             gap
-                              ? "No pace or fuel of their own yet — their stints run on the Standard profile"
-                              : `${d.laptime} · ${d.fuelPerLap} L/lap`
+                              ? t.roster.gapHint
+                              : t.roster.ownFigures(d.laptime, d.fuelPerLap ?? "—")
                           }
                           className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm ${
                             gap
@@ -4176,15 +4325,13 @@ export default function StintPlanner({
                     })}
                   </div>
                   <p className="mt-3 text-xs text-zinc-500">
-                    {s.drivers.length} driver{s.drivers.length === 1 ? "" : "s"}. Pace, fuel
-                    and tyre wear are set in the <strong className="text-zinc-400">Drivers</strong>{" "}
-                    table further down — it sits after the Garage 61 block, so the figures you
-                    settle on there are the last word.
+                    {t.roster.countPre(s.drivers.length)} {t.roster.countPost}{" "}
+                    <strong className="text-zinc-400">{t.roster.driversWord}</strong>{" "}
+                    {t.roster.countPost2}
                     {missing.length > 0 && (
                       <span className="text-amber-300">
                         {" "}
-                        {missing.length} of them {missing.length === 1 ? "has" : "have"} no
-                        figures of their own yet and would run on the Standard profile.
+                        {t.roster.missing(missing.length)}
                       </span>
                     )}
                   </p>
@@ -4196,26 +4343,21 @@ export default function StintPlanner({
       </div>
 
       {/* Fuel-save strategy optimizer */}
-      <div className={card}>
+      <div className={card} id="card-fuelsave">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Fuel-save strategy
+            {t.fs.title}
+            <GuideLink section="pace" />
           </h2>
           <button
             onClick={runFuelSaveOptimizer}
+            title={t.fs.optimizeHint}
             className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
           >
-            Optimize
+            {t.fs.optimize}
           </button>
         </div>
-        <p className="mb-3 text-xs text-zinc-500">
-          Race time is fixed, so this finds the pace &amp; fuel that covers the
-          most distance — trading lap time for fewer pit stops. It uses your
-          Standard and Fuel-save profiles as the pace/fuel band, weights the
-          pace by your real per-driver lap times (by stints driven), and only
-          saves the minimum needed to drop a stop. The best strategy is applied
-          straight to the Standard profile, so the schedule below updates.
-        </p>
+        <p className="mb-3 text-xs text-zinc-500">{t.fs.lead}</p>
         {fuelSaveMsg && (
           <p className="mb-3 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
             ✓ {fuelSaveMsg}
@@ -4237,30 +4379,34 @@ export default function StintPlanner({
             return (
               <div className="space-y-3">
                 <div className="rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
-                  Best: <strong>{best.stops} stops</strong> · target lap{" "}
-                  <strong>{fmtLap(best.laptimeSec)}</strong> · ≤{" "}
-                  {best.fuelPerLap.toFixed(2)} L/lap →{" "}
+                  {t.fs.bestPre} <strong>{t.fs.bestStops(best.stops)}</strong>{" "}
+                  {t.fs.bestTargetLap}{" "}
+                  <strong>{fmtLap(best.laptimeSec)}</strong> {t.fs.bestFuelPre}{" "}
+                  {best.fuelPerLap.toFixed(2)} {t.fs.bestFuelPost}{" "}
                   <strong>
                     {byTime
                       ? fmtDuration(best.totalTimeSec)
-                      : `${best.totalLaps.toFixed(1)} laps`}
+                      : t.fs.lapsValue(best.totalLaps.toFixed(1))}
                   </strong>
                   {fuelSaveOpt.bestIndex !== fuelSaveOpt.fullPushIndex
                     ? byTime
-                      ? ` — ${fmtDuration(Math.abs(gain))} ${gain > 0 ? "faster" : "slower"} than full push (${push.stops} stops).`
-                      : ` — ${gain > 0 ? "+" : ""}${gain.toFixed(1)} laps vs full push (${push.stops} stops).`
-                    : " — full push is optimal here."}
+                      ? t.fs.gainTime(fmtDuration(Math.abs(gain)), gain > 0, push.stops)
+                      : t.fs.gainLaps(
+                          `${gain > 0 ? "+" : ""}${gain.toFixed(1)}`,
+                          push.stops
+                        )
+                    : t.fs.fullPushOptimal}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm tabular-nums">
                     <thead className="text-zinc-500">
                       <tr className="border-b border-zinc-800">
-                        <th className="py-1 pr-2">Stops</th>
-                        <th className="py-1 pr-2 text-right">Target lap</th>
-                        <th className="py-1 pr-2 text-right">Fuel/lap</th>
-                        <th className="py-1 pr-2 text-right">Laps/stint</th>
+                        <th className="py-1 pr-2">{t.fs.colStops}</th>
+                        <th className="py-1 pr-2 text-right">{t.fs.colTargetLap}</th>
+                        <th className="py-1 pr-2 text-right">{t.fs.colFuelPerLap}</th>
+                        <th className="py-1 pr-2 text-right">{t.fs.colLapsPerStint}</th>
                         <th className="py-1 pr-2 text-right">
-                          {byTime ? "Race time" : "Total laps"}
+                          {byTime ? t.fs.colRaceTime : t.fs.colTotalLaps}
                         </th>
                       </tr>
                     </thead>
@@ -4273,7 +4419,9 @@ export default function StintPlanner({
                           <td className="py-1 pr-2">
                             {r.stops}
                             {i === fuelSaveOpt.bestIndex && (
-                              <span className="ml-1 text-[10px] uppercase text-emerald-400">best · applied</span>
+                              <span className="ml-1 text-[10px] uppercase text-emerald-400">
+                                {t.fs.bestApplied}
+                              </span>
                             )}
                           </td>
                           <td className="py-1 pr-2 text-right">{fmtLap(r.laptimeSec)}</td>
@@ -4288,10 +4436,8 @@ export default function StintPlanner({
                   </table>
                 </div>
                 <p className="text-[11px] text-zinc-600">
-                  Assumes lap time varies linearly between your two profiles.{" "}
-                  {byTime
-                    ? "The distance is fixed here, so the measure is the time it takes to cover it — saving fuel pays when it removes a stop."
-                    : "“Total laps” is the distance measure (track length is constant)."}
+                  {t.fs.assumesPre}{" "}
+                  {byTime ? t.fs.assumesTime : t.fs.assumesLaps}
                 </p>
               </div>
             );
@@ -4299,35 +4445,36 @@ export default function StintPlanner({
       </div>
 
       {/* Garage 61 import */}
-      <div className={card}>
+      <div className={card} id="card-g61">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Garage 61 import
+            {t.g61.title}
+            <GuideLink section="pace" />
           </h2>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
             <select
               value={s.event.g61Age}
               onChange={(e) => patchEvent("g61Age", e.target.value)}
-              title="How far back to look. Pace from an old season was set on a different BoP, a different tyre model and often a different track surface — usually worse than no data at all."
+              title={t.g61.ageHint}
               className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-200 print:hidden"
             >
-              <option value="-1">Current season</option>
-              <option value="-2">This + last season</option>
-              <option value="30">Last 30 days</option>
-              <option value="60">Last 60 days</option>
-              <option value="90">Last 90 days</option>
-              <option value="">All data</option>
+              <option value="-1">{t.g61.ageCurrent}</option>
+              <option value="-2">{t.g61.agePrev}</option>
+              <option value="30">{t.g61.age30}</option>
+              <option value="60">{t.g61.age60}</option>
+              <option value="90">{t.g61.age90}</option>
+              <option value="">{t.g61.ageAll}</option>
             </select>
             <button
               onClick={onGarage61Pull}
               disabled={g61PullBusy || g61Busy}
               className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
-              title="Fetch your team's laps for the selected Track + Car directly from Garage 61."
+              title={t.g61.pullHint}
             >
-              {g61PullBusy ? "Pulling…" : "Pull from Garage 61"}
+              {g61PullBusy ? t.g61.pulling : t.g61.pull}
             </button>
             <label className="cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
-              {g61Busy ? "Reading…" : "Upload session export(s)"}
+              {g61Busy ? t.g61.reading : t.g61.upload}
               <input
                 type="file"
                 accept=".xlsx"
@@ -4346,7 +4493,7 @@ export default function StintPlanner({
                   ? "border-emerald-700/70 bg-emerald-950/30 text-emerald-200"
                   : "border-zinc-700 bg-zinc-900 text-zinc-400"
               }`}
-              title="On: the next pull or upload is ADDED to the laps this plan already holds, and pace, fuel and the temperature fit are recomputed over all of them. Off: each import replaces everything."
+              title={t.g61.cumulativeHint}
             >
               <input
                 type="checkbox"
@@ -4355,7 +4502,7 @@ export default function StintPlanner({
                   setS((p) => ({ ...p, g61Cumulative: e.target.checked }))
                 }
               />
-              Add to existing data
+              {t.g61.cumulative}
             </label>
             {/* Clearing is two clicks, and wiping the pace/fuel the import wrote
                 into the driver table is a separate opt-in — by then those are
@@ -4363,20 +4510,20 @@ export default function StintPlanner({
             {(s.g61Analysis || g61 || pitScan) &&
               (clearArmed ? (
                 <span className="flex flex-wrap items-center gap-2 rounded border border-red-900/60 bg-red-950/20 px-2 py-1">
-                  <span className="text-xs text-red-200">Clear it?</span>
+                  <span className="text-xs text-red-200">{t.g61.clearAsk}</span>
                   <label className="flex cursor-pointer items-center gap-1 text-[11px] text-zinc-300">
                     <input
                       type="checkbox"
                       checked={clearDriverFigures}
                       onChange={(e) => setClearDriverFigures(e.target.checked)}
                     />
-                    also the pace &amp; fuel it filled in
+                    {t.g61.clearAlsoFigures}
                   </label>
                   <button
                     onClick={() => clearGarage61(clearDriverFigures)}
                     className="rounded bg-red-800 px-2 py-1 text-xs font-semibold text-red-50 hover:bg-red-700"
                   >
-                    Yes, clear
+                    {t.g61.clearYes}
                   </button>
                   <button
                     onClick={() => {
@@ -4385,32 +4532,25 @@ export default function StintPlanner({
                     }}
                     className="px-1 text-xs text-zinc-400 hover:text-zinc-200"
                   >
-                    Cancel
+                    {t.g61.cancel}
                   </button>
                 </span>
               ) : (
                 <button
                   onClick={() => setClearArmed(true)}
                   className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                  title="Remove the Garage 61 analysis from this plan — the tables go empty and you can pull again."
+                  title={t.g61.clearHint}
                 >
-                  Clear Garage 61 data
+                  {t.g61.clearBtn}
                 </button>
               ))}
           </div>
         </div>
         <p className="mb-3 text-xs text-zinc-500">
-          <strong className="text-zinc-400">Pull from Garage 61</strong> fetches
-          your team&rsquo;s laps for the selected Track + Car straight from the
-          Garage 61 API — or upload session exports (.xlsx) manually. Either way,
-          real race pace &amp; fuel/lap per driver are read from the practice laps
-          and fill the Standard profile plus each matching driver&rsquo;s lap
-          time. Only laps from the drivers on this plan (add them under
-          <strong className="text-zinc-400"> Drivers</strong> first) are
-          included. Uploaded files are read in your browser — nothing is stored.
-          Pit-stop constants come from an uploaded export too, but they are
-          handled up in <strong className="text-zinc-400">Pit-stop model</strong>,
-          next to the fields they fill.
+          <strong className="text-zinc-400">{t.g61.leadBold}</strong> {t.g61.leadMid}
+          <strong className="text-zinc-400"> {t.g61.leadDrivers}</strong>{" "}
+          {t.g61.leadMid2} <strong className="text-zinc-400">{t.g61.leadPit}</strong>
+          {t.g61.leadPost}
         </p>
 
         {/* The lap pool: every import the plan's figures are computed from.
@@ -4421,13 +4561,10 @@ export default function StintPlanner({
           <div className="mb-3 rounded border border-zinc-800 bg-zinc-950/40 p-3 print:hidden">
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-xs font-semibold text-zinc-300">
-                Lap pool — {poolLapCount(s.g61Sources)} laps from{" "}
-                {s.g61Sources.length} import
-                {s.g61Sources.length === 1 ? "" : "s"}
+                {t.g61.poolTitle(poolLapCount(s.g61Sources), s.g61Sources.length)}
               </span>
               <span className="text-[11px] text-zinc-500">
-                Pace, fuel and the temperature fit are computed over all of them.
-                Cap {MAX_POOL_LAPS} laps — the oldest import goes first.
+                {t.g61.poolNote(MAX_POOL_LAPS)}
               </span>
             </div>
             <ul className="space-y-1">
@@ -4446,7 +4583,7 @@ export default function StintPlanner({
                             : "bg-zinc-800 text-zinc-400"
                         }`}
                       >
-                        {src.kind === "pull" ? "pull" : "file"}
+                        {src.kind === "pull" ? t.g61.kindPull : t.g61.kindFile}
                       </span>
                       <span className="truncate text-zinc-200" title={src.label}>
                         {src.label}
@@ -4454,19 +4591,21 @@ export default function StintPlanner({
                     </span>
                     <span className="flex items-center gap-3 text-zinc-500">
                       <span className="tabular-nums">
-                        {sum.laps} laps · {sum.drivers} driver
-                        {sum.drivers === 1 ? "" : "s"}
-                        {sum.oldestMs != null && sum.newestMs != null
-                          ? ` · ${fmtDay(sum.oldestMs)}–${fmtDay(sum.newestMs)}`
-                          : ""}
+                        {t.g61.sourceSummary(
+                          sum.laps,
+                          sum.drivers,
+                          sum.oldestMs != null && sum.newestMs != null
+                            ? ` · ${fmtDay(sum.oldestMs)}–${fmtDay(sum.newestMs)}`
+                            : ""
+                        )}
                       </span>
-                      <span title={`Imported ${fmtDay(Date.parse(src.importedAt))}`}>
+                      <span title={t.g61.importedOn(fmtDay(Date.parse(src.importedAt)))}>
                         {fmtDay(Date.parse(src.importedAt))}
                       </span>
                       <button
                         onClick={() => removeG61Source(src.id)}
                         className="rounded px-1 text-zinc-500 hover:bg-red-950/40 hover:text-red-300"
-                        title="Remove this import and recompute from the rest"
+                        title={t.g61.removeSource}
                       >
                         ×
                       </button>
@@ -4484,17 +4623,15 @@ export default function StintPlanner({
             <span className="text-xs text-zinc-400">
               {g61Status?.connected ? (
                 <span className="text-emerald-300">
-                  ● Connected to Garage 61
+                  {t.g61.connected}
                   {g61Status.teamName
-                    ? ` · team ${g61Status.teamName}`
-                    : " · no team selected"}
+                    ? t.g61.connectedTeam(g61Status.teamName)
+                    : t.g61.connectedNoTeam}
                 </span>
               ) : g61Status?.globalFallback ? (
-                <span className="text-zinc-400">
-                  ● Using the site&rsquo;s shared Garage 61 token
-                </span>
+                <span className="text-zinc-400">{t.g61.sharedToken}</span>
               ) : (
-                <span className="text-zinc-500">● Not connected to Garage 61</span>
+                <span className="text-zinc-500">{t.g61.notConnected}</span>
               )}
             </span>
             {curId && viewerCanManage && (
@@ -4505,33 +4642,28 @@ export default function StintPlanner({
                     disabled={g61ConnBusy}
                     className="rounded border border-red-900/60 px-2.5 py-1 text-xs text-red-300 hover:bg-red-950/40 disabled:opacity-50"
                   >
-                    Disconnect
+                    {t.g61.disconnect}
                   </button>
                 )}
                 <button
                   onClick={() => setG61ShowConnect((v) => !v)}
                   className="rounded border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
                 >
-                  {g61Status?.connected ? "Change token" : "Connect my token"}
+                  {g61Status?.connected ? t.g61.changeToken : t.g61.connectToken}
                 </button>
               </div>
             )}
           </div>
 
           {!curId && (
-            <p className="mt-2 text-[11px] text-zinc-500">
-              Save &amp; share the plan first to connect your own Garage 61
-              account to it.
-            </p>
+            <p className="mt-2 text-[11px] text-zinc-500">{t.g61.saveFirst}</p>
           )}
 
           {curId && viewerCanManage && g61ShowConnect && (
             <div className="mt-3 space-y-2">
               <p className="text-[11px] text-zinc-500">
-                Paste a Garage 61 <strong>personal access token</strong> (create
-                one at garage61.net/developer). It&rsquo;s encrypted, stored with
-                this plan only, and never shown again — everyone on the plan can
-                then pull with it, but only you (the creator) can change it.
+                {t.g61.tokenExplainPre}
+                <strong>{t.g61.tokenExplainBold}</strong> {t.g61.tokenExplainPost}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
@@ -4539,7 +4671,7 @@ export default function StintPlanner({
                   className={`${inp} max-w-xs`}
                   value={g61Token}
                   onChange={(e) => setG61Token(e.target.value)}
-                  placeholder="Garage 61 token"
+                  placeholder={t.g61.tokenPlaceholder}
                   autoComplete="off"
                 />
                 <button
@@ -4547,13 +4679,13 @@ export default function StintPlanner({
                   disabled={g61ConnBusy}
                   className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
                 >
-                  {g61ConnBusy ? "Connecting…" : "Connect"}
+                  {g61ConnBusy ? t.g61.connecting : t.g61.connect}
                 </button>
               </div>
               {g61Teams.length > 1 && (
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="text-[11px] uppercase tracking-wider text-zinc-500">
-                    Team
+                    {t.g61.team}
                   </label>
                   <select
                     className={`${inp} max-w-xs`}
@@ -4561,10 +4693,10 @@ export default function StintPlanner({
                     onChange={(e) => onG61PickTeam(e.target.value)}
                     disabled={g61ConnBusy}
                   >
-                    <option value="">— Select team —</option>
-                    {g61Teams.map((t) => (
-                      <option key={t.slug} value={t.slug}>
-                        {t.name}
+                    <option value="">{t.g61.selectTeam}</option>
+                    {g61Teams.map((team) => (
+                      <option key={team.slug} value={team.slug}>
+                        {team.name}
                       </option>
                     ))}
                   </select>
@@ -4592,7 +4724,7 @@ export default function StintPlanner({
                 one below, so the team can see the delta before committing. */}
             <div className="rounded border border-zinc-800 bg-zinc-950/60 p-3">
               <div className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
-                What “Apply to plan” changes
+                {t.g61.applyChangesTitle}
               </div>
               <ul className="space-y-1.5 text-sm">
                 {pending.drivers.map((d) => {
@@ -4602,7 +4734,7 @@ export default function StintPlanner({
                   if (!row) {
                     return (
                       <li key={d.driver} className="text-zinc-500">
-                        {d.driver} — {d.laps} laps, not on this plan&rsquo;s roster (ignored)
+                        {t.g61.notOnRoster(d.driver, d.laps)}
                       </li>
                     );
                   }
@@ -4613,7 +4745,7 @@ export default function StintPlanner({
                   const fuelKept = !!row.manual?.fuelPerLap;
                   const arrow = (from: string, to: string, kept: boolean) =>
                     kept ? (
-                      <span className="text-amber-300">{from} (kept — yours)</span>
+                      <span className="text-amber-300">{t.g61.kept(from)}</span>
                     ) : from === to || from === "" ? (
                       <span className="text-emerald-300">{to}</span>
                     ) : (
@@ -4625,33 +4757,38 @@ export default function StintPlanner({
                   return (
                     <li key={d.driver} className="text-zinc-300">
                       <span className="text-zinc-100">{d.driver}</span>{" "}
-                      <span className="text-zinc-600">({d.laps} clean laps)</span> · pace{" "}
-                      {arrow(row.laptime, newPace, paceKept)} · fuel{" "}
-                      {arrow(row.fuelPerLap ?? "", `${newFuel} L`, fuelKept)}
+                      <span className="text-zinc-600">{t.g61.cleanLaps(d.laps)}</span> ·{" "}
+                      {t.g61.pace} {arrow(row.laptime, newPace, paceKept)} ·{" "}
+                      {t.g61.fuelWord} {arrow(row.fuelPerLap ?? "", `${newFuel} L`, fuelKept)}
                     </li>
                   );
                 })}
               </ul>
               {g61Projection(pending) !== 0 && (
                 <p className="mt-2 text-[11px] text-zinc-500">
-                  Pace is projected to the plan&rsquo;s track temperature (
-                  {g61Projection(pending) > 0 ? "+" : ""}
-                  {g61Projection(pending).toFixed(1)} s/lap vs the temperature these laps were
-                  set at), which is why it differs from the raw race pace of the laps.
+                  {t.g61.projectedNote(
+                    `${g61Projection(pending) > 0 ? "+" : ""}${g61Projection(pending).toFixed(1)}`
+                  )}
                 </p>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs text-zinc-500">
-                Standard profile → {fmtLap(pending.overall.laptimeSec)} ·{" "}
-                {pending.overall.fuelPerLap.toFixed(2)} L/lap ({pending.overall.cleanLaps}{" "}
-                clean laps)
+                {t.g61.standardSummary(
+                  fmtLap(pending.overall.laptimeSec),
+                  pending.overall.fuelPerLap.toFixed(2),
+                  pending.overall.cleanLaps
+                )}
                 {pending.temp.sourceTempC != null && (
                   <>
                     {" · "}
                     {pending.temp.slopePerC != null
-                      ? `temp fit ${(pending.temp.slopePerC * 10).toFixed(1)} s/10°C (${pending.temp.minTempC?.toFixed(0)}–${pending.temp.maxTempC?.toFixed(0)}°C)`
-                      : `all ~${round1(pending.temp.sourceTempC)}°C (no temp spread)`}
+                      ? t.g61.tempFit(
+                          (pending.temp.slopePerC * 10).toFixed(1),
+                          pending.temp.minTempC?.toFixed(0) ?? "—",
+                          pending.temp.maxTempC?.toFixed(0) ?? "—"
+                        )
+                      : t.g61.tempFlat(round1(pending.temp.sourceTempC))}
                   </>
                 )}
               </span>
@@ -4659,7 +4796,7 @@ export default function StintPlanner({
                 onClick={() => applyGarage61(pending)}
                 className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
               >
-                Apply to plan
+                {t.g61.applyToPlan}
               </button>
             </div>
           </div>
@@ -4685,26 +4822,28 @@ export default function StintPlanner({
             when you set a race up. This table is for the numbers. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Drivers
+            {t.drv.title}
+            <GuideLink section="pace" />
           </h2>
         </div>
         {s.drivers.length === 0 ? (
           <p className="text-sm text-zinc-500">
-            No drivers on this plan yet — add them in the{" "}
-            <strong className="text-zinc-400">Roster</strong> box at the top of the page.
+            {t.drv.emptyPre}{" "}
+            <strong className="text-zinc-400">{t.drv.emptyRoster}</strong>{" "}
+            {t.drv.emptyPost}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <p className="mb-2 text-xs text-zinc-500">
-              This table is what the schedule runs on.{" "}
-              <strong className="text-zinc-400">Pace</strong> and{" "}
-              <strong className="text-zinc-400">L/lap</strong> decide how long each
-              driver&rsquo;s stint lasts and how many laps come out of a tank. Type in any
-              cell and the schedule below updates on the spot &mdash; there is nothing to
-              apply. Garage 61 only <em>pre-fills</em> these fields:{" "}
-              <span className="text-emerald-300">green</span> came from the data,{" "}
-              <span className="text-amber-200">amber</span> is a figure you typed (a new
-              pull leaves it alone; ↺ hands the row back to the data).
+              {t.drv.leadPre}{" "}
+              <strong className="text-zinc-400">{t.drv.leadPace}</strong>{" "}
+              {t.drv.leadAnd}{" "}
+              <strong className="text-zinc-400">{t.drv.leadFuel}</strong>{" "}
+              {t.drv.leadMid} <em>{t.drv.leadPrefills}</em>
+              {t.drv.leadMid2}{" "}
+              <span className="text-emerald-300">{t.drv.leadGreen}</span>{" "}
+              {t.drv.leadMid3}{" "}
+              <span className="text-amber-200">{t.drv.leadAmber}</span> {t.drv.leadPost}
             </p>
             {/* One honest status line for the whole roster. An empty Pace or
                 L/lap cell is easy to miss in a twelve-column table, and it
@@ -4727,33 +4866,30 @@ export default function StintPlanner({
                 <div className="mb-2 rounded border border-amber-900/50 bg-amber-950/20 p-2.5 text-xs text-amber-200">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span>
-                      Running on the <strong>Standard profile</strong>, not their own
-                      numbers: <strong>{gaps.map((d) => d.name).join(", ")}</strong>. Their
-                      stints are marked <span className="uppercase">est</span> in the
-                      schedule.
+                      {t.drv.gapsPre} <strong>{t.drv.gapsBold}</strong>
+                      {t.drv.gapsMid}{" "}
+                      <strong>{gaps.map((d) => d.name).join(", ")}</strong>
+                      {t.drv.gapsPost}{" "}
+                      <span className="uppercase">{t.drv.gapsEst}</span>{" "}
+                      {t.drv.gapsPost2}
                     </span>
                     {pending && fixable.length > 0 && (
                       <button
                         onClick={() => applyGarage61(pending)}
                         className="shrink-0 rounded bg-[#ff6b35] px-2.5 py-1 text-xs font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
                       >
-                        Apply Garage 61 to {fixable.length}{" "}
-                        {fixable.length === 1 ? "driver" : "drivers"}
+                        {t.drv.applyG61To(fixable.length)}
                       </button>
                     )}
                   </div>
                   {pending && fixable.length > 0 && (
                     <p className="mt-1.5 text-[11px] text-amber-300/70">
-                      Garage 61 has laps for{" "}
-                      {fixable.map((d) => d.name).join(", ")} — the figures are sitting in
-                      those cells as a placeholder, but a placeholder is not a value.
+                      {t.drv.fixableNote(fixable.map((d) => d.name).join(", "))}
                     </p>
                   )}
                   {manualOnly.length > 0 && (
                     <p className="mt-1.5 text-[11px] text-amber-300/70">
-                      No Garage 61 laps for{" "}
-                      {manualOnly.map((d) => d.name).join(", ")} — type their pace and
-                      fuel by hand, or pull again with a wider window.
+                      {t.drv.manualOnlyNote(manualOnly.map((d) => d.name).join(", "))}
                     </p>
                   )}
                 </div>
@@ -4762,33 +4898,59 @@ export default function StintPlanner({
             <table className="w-full text-left text-sm tabular-nums">
               <thead className="text-xs uppercase tracking-wide text-zinc-500">
                 <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-2">Driver</th>
-                  <th className="py-1 pr-2 text-right" title="Clean laps Garage 61 measured for this driver on this track + car.">Laps</th>
-                  <th className="py-1 pr-2 text-right" title="Fastest clean lap in the Garage 61 data.">Best</th>
-                  <th className="py-1 pr-2 text-right" title="Mean of the driver's clean laps — how they really run, not their one hot lap.">Ø lap</th>
-                  <th className="py-1 pr-2 text-right" title="Track temperature the Garage 61 laps were set at.">°C</th>
-                  <th className="py-1 pr-2 text-right" title="Race pace used by the planner. Filled from Garage 61 (median clean lap, projected to the plan's track temp) — type to override.">Pace</th>
-                  <th className="py-1 pr-2 text-right" title="Fuel per lap used by the planner. Filled from Garage 61 — type to override.">L/lap</th>
-                  <th className="py-1 pr-2 text-right" title="Tyre wear in % per lap. Garage 61 does not measure this, so it is yours to enter; blank falls back to the plan default.">%/lap</th>
+                  <th className="py-1 pr-2">{t.drv.colDriver}</th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colLaps}
+                    <Hint text={t.drv.colLapsHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colBest}
+                    <Hint text={t.drv.colBestHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colAvg}
+                    <Hint text={t.drv.colAvgHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colTemp}
+                    <Hint text={t.drv.colTempHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colPace}
+                    <Hint text={t.drv.colPaceHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colFuel}
+                    <Hint text={t.drv.colFuelHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colWear}
+                    <Hint text={t.drv.colWearHint} />
+                  </th>
                   {s.savingEnabled && deltaSaving && (
                     <>
-                      <th
-                        className="py-1 pr-2 text-right text-cyan-300/80"
-                        title="Seconds per lap THIS driver gives up on a fuel-save stint, added to their own pace. Blank = the plan default (the gap between the Standard and Fuel-saving profiles)."
-                      >
-                        FS +s
+                      <th className="py-1 pr-2 text-right text-cyan-300/80">
+                        {t.drv.colFsSec}
+                        <Hint text={t.drv.colFsSecHint} />
                       </th>
-                      <th
-                        className="py-1 pr-2 text-right text-cyan-300/80"
-                        title="Litres per lap THIS driver saves on a fuel-save stint, taken off their own consumption. Blank = the plan default."
-                      >
-                        FS −L
+                      <th className="py-1 pr-2 text-right text-cyan-300/80">
+                        {t.drv.colFsFuel}
+                        <Hint text={t.drv.colFsFuelHint} />
                       </th>
                     </>
                   )}
-                  <th className="py-1 pr-2 text-right" title="How far this driver gets on one tank: laps, and how long that takes at their pace including the race-traffic penalty (dry).">Range/stint</th>
-                  <th className="py-1 pr-2 text-right" title="Laps this driver runs in the current schedule.">Laps tot.</th>
-                  <th className="py-1 pr-2 text-right" title="Stints this driver runs in the current schedule.">Stints</th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colRange}
+                    <Hint text={t.drv.colRangeHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colLapsTotal}
+                    <Hint text={t.drv.colLapsTotalHint} />
+                  </th>
+                  <th className="py-1 pr-2 text-right">
+                    {t.drv.colStints}
+                    <Hint text={t.drv.colStintsHint} />
+                  </th>
                   <th className="py-1" />
                 </tr>
               </thead>
@@ -4835,13 +4997,20 @@ export default function StintPlanner({
                         className="py-1 pr-2 text-right text-zinc-500"
                         title={
                           gd
-                            ? `Track temperature of this driver's Garage 61 laps` +
-                              (analysisTemp?.minTempC != null && analysisTemp?.maxTempC != null
-                                ? ` — the import spans ${analysisTemp.minTempC.toFixed(0)}–${analysisTemp.maxTempC.toFixed(0)}°C` +
-                                  (analysisTemp.slopePerC != null
-                                    ? `, fitted at ${(analysisTemp.slopePerC * 10).toFixed(1)} s per 10°C`
-                                    : "")
-                                : "")
+                            ? t.drv.tempCellHint(
+                                analysisTemp?.minTempC != null &&
+                                  analysisTemp?.maxTempC != null
+                                  ? t.drv.tempCellSpan(
+                                      analysisTemp.minTempC.toFixed(0),
+                                      analysisTemp.maxTempC.toFixed(0),
+                                      analysisTemp.slopePerC != null
+                                        ? t.drv.tempCellFit(
+                                            (analysisTemp.slopePerC * 10).toFixed(1)
+                                          )
+                                        : ""
+                                    )
+                                  : ""
+                              )
                             : undefined
                         }
                       >
@@ -4858,9 +5027,7 @@ export default function StintPlanner({
                           onChange={(e) => patchDriverLaptime(d.id, e.target.value)}
                           placeholder={gd ? fmtLap(gd.racePaceSec) : "m:ss"}
                           title={
-                            d.manual?.laptime
-                              ? "Your own figure — a Garage 61 pull will not overwrite it."
-                              : "From Garage 61 (or blank = Standard profile pace)."
+                            d.manual?.laptime ? t.drv.ownFigure : t.drv.fromG61Pace
                           }
                         />
                       </td>
@@ -4872,9 +5039,7 @@ export default function StintPlanner({
                           onChange={(e) => patchDriverField(d.id, "fuelPerLap", e.target.value)}
                           placeholder={gd ? gd.fuelPerLap.toFixed(2) : "L"}
                           title={
-                            d.manual?.fuelPerLap
-                              ? "Your own figure — a Garage 61 pull will not overwrite it."
-                              : "From Garage 61 (median of the clean laps)."
+                            d.manual?.fuelPerLap ? t.drv.ownFigure : t.drv.fromG61Fuel
                           }
                         />
                       </td>
@@ -4885,7 +5050,7 @@ export default function StintPlanner({
                           value={d.tyreWear ?? ""}
                           onChange={(e) => patchDriverField(d.id, "tyreWear", e.target.value)}
                           placeholder={s.event.tyreWearPctPerLap || "%"}
-                          title="Tyre wear in % per lap. Not measured by Garage 61 — read it off the car or leave blank for the plan default."
+                          title={t.drv.wearHint}
                         />
                       </td>
                       <td className="hidden py-1 pr-2 text-right print:table-cell">{d.tyreWear || "—"}</td>
@@ -4901,7 +5066,7 @@ export default function StintPlanner({
                               value={d.savingSec ?? ""}
                               onChange={(e) => patchDriverSaving(d.id, "savingSec", e.target.value)}
                               placeholder={planDelta.sec ? planDelta.sec.toFixed(1) : "s"}
-                              title="Seconds/lap this driver gives up when saving fuel. Blank = the plan default."
+                              title={t.drv.fsSecCellHint}
                             />
                           </td>
                           <td className="hidden py-1 pr-2 text-right print:table-cell">
@@ -4917,7 +5082,7 @@ export default function StintPlanner({
                               value={d.savingFuel ?? ""}
                               onChange={(e) => patchDriverSaving(d.id, "savingFuel", e.target.value)}
                               placeholder={planDelta.litres ? planDelta.litres.toFixed(2) : "L"}
-                              title="Litres/lap this driver saves when saving fuel. Blank = the plan default."
+                              title={t.drv.fsFuelCellHint}
                             />
                           </td>
                           <td className="hidden py-1 pr-2 text-right print:table-cell">
@@ -4944,7 +5109,7 @@ export default function StintPlanner({
                         }`}
                         title={
                           driverPerf.evenShare > 0
-                            ? `An even share would be ~${driverPerf.evenShare} laps each`
+                            ? t.drv.evenShareHint(driverPerf.evenShare)
                             : undefined
                         }
                       >
@@ -4960,7 +5125,7 @@ export default function StintPlanner({
                               resetDriverField(d.id, "tyreWear");
                             }}
                             className="mr-1 rounded border border-zinc-700 px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
-                            title="Drop your own figures and let the next Garage 61 pull fill them again"
+                            title={t.drv.resetHint}
                           >
                             ↺
                           </button>
@@ -4968,7 +5133,8 @@ export default function StintPlanner({
                         <button
                           onClick={() => removeDriver(d.id)}
                           className="rounded border border-red-900/60 px-2 py-1 text-sm text-red-300 hover:bg-red-950/40"
-                          aria-label="Remove driver"
+                          aria-label={t.drv.removeDriver}
+                          title={t.drv.removeDriver}
                         >
                           ✕
                         </button>
@@ -4980,12 +5146,12 @@ export default function StintPlanner({
               {driverPerf.rows.length > 0 && (
                 <tfoot>
                   <tr className="border-t-2 border-zinc-700 text-zinc-400">
-                    <td className="py-1 pr-2 font-medium text-zinc-300">Team</td>
+                    <td className="py-1 pr-2 font-medium text-zinc-300">{t.drv.teamRow}</td>
                     <td className="py-1 pr-2 text-right" />
                     <td className="py-1 pr-2 text-right" />
                     <td className="py-1 pr-2 text-right" />
                     <td className="py-1 pr-2 text-right" />
-                    <td className="py-1 pr-2 text-right" title="Weighted by the laps each driver runs">
+                    <td className="py-1 pr-2 text-right" title={t.drv.weightedHint}>
                       {driverPerf.avg.paceSec > 0 ? fmtLap(driverPerf.avg.paceSec) : "—"}
                     </td>
                     <td className="py-1 pr-2 text-right">
@@ -5017,92 +5183,80 @@ export default function StintPlanner({
                 it. Nothing measures it; it belongs next to the column it
                 fills. */}
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 print:hidden">
-              <label className="text-[11px] uppercase tracking-wider text-zinc-500">
-                Default tyre wear (%/lap)
+              <label className="flex items-center text-[11px] uppercase tracking-wider text-zinc-500">
+                {t.drv.defaultWear}
+                <Hint text={t.drv.defaultWearNote} />
               </label>
               <input
                 className="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-right text-sm text-zinc-100"
                 value={s.event.tyreWearPctPerLap}
                 onChange={(e) => patchEvent("tyreWearPctPerLap", e.target.value)}
-                placeholder="0 = off"
+                placeholder={t.drv.defaultWearPlaceholder}
               />
-              <span className="text-[11px] text-zinc-500">
-                Used for drivers with no %/lap of their own. Nobody measures this for you —
-                Garage 61 records the compound, never the wear — so it is yours to judge, per
-                driver where they differ.
-              </span>
+              <span className="text-[11px] text-zinc-500">{t.drv.defaultWearNote}</span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-500">
               {s.g61Analysis && (
                 <span className="text-emerald-300/80">
-                  Data:{" "}
+                  {t.drv.dataPrefix}{" "}
                   {s.g61Analysis.source?.kind === "upload"
-                    ? "session export"
-                    : `Garage 61${s.g61Analysis.source?.window ? ` · ${s.g61Analysis.source.window}` : ""}`}
+                    ? t.drv.dataSessionExport
+                    : t.drv.dataG61(s.g61Analysis.source?.window ?? "")}
                   {s.g61Analysis.source?.oldestLapMs != null &&
                   s.g61Analysis.source?.newestLapMs != null
                     ? ` · ${fmtDay(s.g61Analysis.source.oldestLapMs)}–${fmtDay(s.g61Analysis.source.newestLapMs)}`
                     : ""}
                   {" · "}
-                  {s.g61Analysis.overall.cleanLaps} clean laps
+                  {t.drv.dataCleanLaps(s.g61Analysis.overall.cleanLaps)}
                   {s.g61Analysis.source?.lapsTooOld
-                    ? ` · ${s.g61Analysis.source.lapsTooOld} older left out`
+                    ? t.drv.dataTooOld(s.g61Analysis.source.lapsTooOld)
                     : ""}
-                  {" · pulled "}
-                  {fmtDay(Date.parse(s.g61Analysis.generatedAt))}
+                  {t.drv.dataPulled(fmtDay(Date.parse(s.g61Analysis.generatedAt)))}
                 </span>
               )}
               <span>
-                Even share:{" "}
-                <strong className="text-zinc-300">{driverPerf.evenShare} laps</strong> per driver
-                {" "}— anyone under 85 % of it is flagged amber.
+                {t.drv.evenSharePre}{" "}
+                <strong className="text-zinc-300">
+                  {t.drv.evenShareValue(driverPerf.evenShare)}
+                </strong>{" "}
+                {t.drv.evenSharePost}
               </span>
               {driverPerf.traffic > 0 && (
                 <span className="text-amber-300/80">
-                  Range includes +{driverPerf.traffic} s/lap race traffic.
+                  {t.drv.trafficNote(driverPerf.traffic)}
                 </span>
               )}
               {s.event.trackTempC.trim() !== "" && (
                 <span>
-                  Pace is at {s.event.trackTempC} °C
-                  {s.tempModel?.slopePerC
-                    ? ` (${(s.tempModel.slopePerC * 10).toFixed(1)} s/10 °C fit)`
-                    : ""}
-                  ; per-stint temperatures, ½ wet and wet are applied in the schedule.
+                  {t.drv.paceAt(
+                    s.event.trackTempC,
+                    s.tempModel?.slopePerC
+                      ? t.drv.paceFit((s.tempModel.slopePerC * 10).toFixed(1))
+                      : ""
+                  )}
                 </span>
               )}
             </div>
           </div>
         )}
-        <p className="mt-2 text-xs text-zinc-500">
-          Drivers come from CLS — anyone with a registration. Tyre wear is not something
-          Garage 61 measures (it records the compound, never the wear), and neither is a
-          fuel-save delta, so those columns are always yours to judge.
-        </p>
+        <p className="mt-2 text-xs text-zinc-500">{t.drv.footer}</p>
       </div>
 
       {/* Availability */}
       {s.drivers.length > 0 && hourCount > 0 && (
         <div className={card}>
           <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Availability &amp; stint preferences
+            {t.avail.title}
+            <GuideLink section="stints" />
           </h2>
-          <p className="mb-2 text-xs text-zinc-500">
-            Everyone is available by default — untick an hour to mark a driver
-            unavailable. Stint driver &amp; spotter menus only offer drivers
-            available for that stint&rsquo;s hour.
-          </p>
+          <p className="mb-2 text-xs text-zinc-500">{t.avail.lead1}</p>
           <p className="mb-3 text-xs text-zinc-500">
-            The columns on the right are what each driver would{" "}
-            <em>rather</em> do. They are used by{" "}
-            <strong className="text-zinc-400">Auto-fill drivers</strong> only — a
-            seat you pick by hand and a
-            correction during the race ignore them completely. They are also
-            wishes, not rules: the fill will break one rather than leave a stint
-            empty, and it says so afterwards.
+            {t.avail.lead2Pre} <em>{t.avail.lead2Em}</em> {t.avail.lead2Mid}{" "}
+            <strong className="text-zinc-400">{t.avail.lead2Bold}</strong>{" "}
+            {t.avail.lead2Post}
           </p>
           <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-zinc-400 print:hidden">
-            <span>Night counts from</span>
+            <span>{t.avail.nightFrom}</span>
             <input
               type="number"
               min={0}
@@ -5111,7 +5265,7 @@ export default function StintPlanner({
               onChange={(e) => patchEvent("nightFromHour", e.target.value)}
               className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
             />
-            <span>to</span>
+            <span>{t.avail.nightTo}</span>
             <input
               type="number"
               min={0}
@@ -5121,12 +5275,9 @@ export default function StintPlanner({
               className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
             />
             <span className="text-zinc-500">
-              o&rsquo;clock, real time on your clock — not the sim&rsquo;s time of
-              day.
+              {t.avail.nightNote}
               {s.event.sessionStartLocal.trim() === "" && (
-                <span className="ml-1 text-amber-400">
-                  Set a Race start above, or night cannot be worked out at all.
-                </span>
+                <span className="ml-1 text-amber-400">{t.avail.nightNoStart}</span>
               )}
             </span>
           </div>
@@ -5134,23 +5285,31 @@ export default function StintPlanner({
             <table className="text-left text-sm tabular-nums">
               <thead className="text-zinc-500">
                 <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-3">Driver</th>
+                  <th className="py-1 pr-3">{t.avail.colDriver}</th>
                   {Array.from({ length: hourCount }, (_, h) => (
-                    <th key={h} className="px-1.5 py-1 text-center font-normal" title={`Hour ${h + 1}`}>
-                      H{h + 1}
+                    <th
+                      key={h}
+                      className="px-1.5 py-1 text-center font-normal"
+                      title={t.avail.hourLabel(h + 1)}
+                    >
+                      {t.avail.hourShort(h + 1)}
                     </th>
                   ))}
-                  <th className="border-l border-zinc-800 px-2 py-1 font-normal" title="Driving in the real-world night, in the window set above.">
-                    Night
+                  <th className="border-l border-zinc-800 px-2 py-1 font-normal">
+                    {t.avail.colNight}
+                    <Hint text={t.avail.colNightHint} />
                   </th>
-                  <th className="px-2 py-1 font-normal" title="Stints marked half wet or wet in the schedule.">
-                    Rain
+                  <th className="px-2 py-1 font-normal">
+                    {t.avail.colRain}
+                    <Hint text={t.avail.colRainHint} />
                   </th>
-                  <th className="px-2 py-1 font-normal" title="Being in the car when the flag drops.">
-                    Start
+                  <th className="px-2 py-1 font-normal">
+                    {t.avail.colStart}
+                    <Hint text={t.avail.colStartHint} />
                   </th>
-                  <th className="px-2 py-1 text-right font-normal" title="Most stints in a row this driver wants. Empty = no limit.">
-                    Max row
+                  <th className="px-2 py-1 text-right font-normal">
+                    {t.avail.colMaxRow}
+                    <Hint text={t.avail.colMaxRowHint} />
                   </th>
                 </tr>
               </thead>
@@ -5167,18 +5326,18 @@ export default function StintPlanner({
                           type="checkbox"
                           checked={!isBlocked(d.id, h)}
                           onChange={() => toggleAvail(d.id, h)}
-                          title={`${d.name} — Hour ${h + 1}`}
+                          title={t.avail.availCell(d.name, h + 1)}
                         />
                       </td>
                     ))}
                     <td className="border-l border-zinc-800 px-2 py-1">
-                      {prefSelect(d.id, "prefNight", d.prefNight, "night")}
+                      {prefSelect(d.id, "prefNight", d.prefNight, t.avail.prefNight)}
                     </td>
                     <td className="px-2 py-1">
-                      {prefSelect(d.id, "prefRain", d.prefRain, "the wet")}
+                      {prefSelect(d.id, "prefRain", d.prefRain, t.avail.prefRain)}
                     </td>
                     <td className="px-2 py-1">
-                      {prefSelect(d.id, "prefStart", d.prefStart, "the start")}
+                      {prefSelect(d.id, "prefStart", d.prefStart, t.avail.prefStart)}
                     </td>
                     <td className="px-2 py-1 text-right">
                       <input
@@ -5188,7 +5347,7 @@ export default function StintPlanner({
                         value={d.maxConsecutive ?? ""}
                         placeholder="—"
                         onChange={(e) => patchDriverPref(d.id, { maxConsecutive: e.target.value })}
-                        title={`Most stints in a row ${d.name} wants. Empty = no limit.`}
+                        title={t.avail.maxRowHint(d.name)}
                         className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
                       />
                     </td>
@@ -5203,12 +5362,13 @@ export default function StintPlanner({
           {fillReport && (
             <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-3 text-xs">
               <div className="mb-2 font-semibold text-zinc-300">
-                Last auto-fill — {fillReport.perDriver.length} driver
-                {fillReport.perDriver.length === 1 ? "" : "s"}, fair share{" "}
-                {fillReport.fairShare.toFixed(1)} stints each
+                {t.avail.fillTitle(
+                  fillReport.perDriver.length,
+                  fillReport.fairShare.toFixed(1)
+                )}
                 {fillReport.perDriver.every((r) => r.broken.length === 0) && (
                   <span className="ml-2 text-emerald-300">
-                    every preference honoured
+                    {t.avail.fillAllHonoured}
                   </span>
                 )}
               </div>
@@ -5220,15 +5380,15 @@ export default function StintPlanner({
                       {r.name}
                     </span>
                     <span className="tabular-nums text-zinc-500">
-                      {r.stints} stint{r.stints === 1 ? "" : "s"}
-                      {r.longestRun > 1 ? ` · up to ${r.longestRun} in a row` : ""}
-                      {r.nightStints > 0 ? ` · ${r.nightStints} at night` : ""}
-                      {r.rainStints > 0 ? ` · ${r.rainStints} wet` : ""}
-                      {r.takesStart ? " · takes the start" : ""}
+                      {t.avail.fillStints(r.stints)}
+                      {r.longestRun > 1 ? t.avail.fillLongestRun(r.longestRun) : ""}
+                      {r.nightStints > 0 ? t.avail.fillNight(r.nightStints) : ""}
+                      {r.rainStints > 0 ? t.avail.fillRain(r.rainStints) : ""}
+                      {r.takesStart ? t.avail.fillTakesStart : ""}
                     </span>
                     {r.broken.length > 0 && (
                       <span className="text-amber-300">
-                        against their wish: {r.broken.join(", ")}
+                        {t.avail.fillBroken(r.broken.map(brokenWishText).join(", "))}
                       </span>
                     )}
                   </li>
@@ -5236,17 +5396,15 @@ export default function StintPlanner({
               </ul>
               {fillReport.unavailableUsed.length > 0 && (
                 <p className="mt-2 text-amber-300">
-                  {fillReport.unavailableUsed.length} stint
-                  {fillReport.unavailableUsed.length === 1 ? "" : "s"} had to go to
-                  a driver marked unavailable (stint{" "}
-                  {fillReport.unavailableUsed.map((i) => i + 1).join(", ")}) —
-                  there was nobody else.
+                  {t.avail.fillUnavailable(
+                    fillReport.unavailableUsed.length,
+                    fillReport.unavailableUsed.map((i) => i + 1).join(", ")
+                  )}
                 </p>
               )}
               {fillReport.unfilled.length > 0 && (
                 <p className="mt-1 text-red-300">
-                  Nobody could take stint{" "}
-                  {fillReport.unfilled.map((i) => i + 1).join(", ")}.
+                  {t.avail.fillUnfilled(fillReport.unfilled.map((i) => i + 1).join(", "))}
                 </p>
               )}
             </div>
@@ -5264,7 +5422,7 @@ export default function StintPlanner({
 
       {/* Pre-Race notes */}
       <NotesField
-        label="Pre-Race notes"
+        label={t.live.notesPre}
         value={s.notes["pre"]}
         onChange={(v) => patchNote("pre", v)}
       />
@@ -5275,21 +5433,19 @@ export default function StintPlanner({
       <fieldset disabled={frozen} className="contents">
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Stints" value={String(result.totals.stintCount)} />
-        <Stat label="Pit stops" value={String(result.totals.pitStops)} />
-        <Stat label="Total laps" value={fmtLaps(result.totals.laps)} />
-        <Stat label="Total fuel" value={`${fmtFuel(result.totals.fuel)} L`} />
-        <Stat label="Drivers" value={String(result.totals.driverCount)} />
+        <Stat label={t.live.stints} value={String(result.totals.stintCount)} />
+        <Stat label={t.live.pitStops} value={String(result.totals.pitStops)} />
+        <Stat label={t.live.totalLaps} value={fmtLaps(result.totals.laps)} />
+        <Stat label={t.live.totalFuel} value={`${fmtFuel(result.totals.fuel)} L`} />
+        <Stat label={t.live.drivers} value={String(result.totals.driverCount)} />
         <Stat
-          label="Projected finish"
+          label={t.live.projectedFinish}
           value={lastStint ? fmtDuration(lastStint.endSec) : "—"}
         />
       </div>
       {lastStint && (
         <p className="-mt-2 text-xs text-zinc-500">
-          Fair share ≈ {result.fairShareStints ?? "—"} stints each. “Projected
-          finish” is the race-clock time the plan currently ends at — it moves
-          away from the race length as you enter ± corrections during the race.
+          {t.live.fairShare(String(result.fairShareStints ?? "—"))}
         </p>
       )}
 
@@ -5298,18 +5454,16 @@ export default function StintPlanner({
         <div className="rounded-lg border border-emerald-700/50 bg-emerald-950/30 px-4 py-3 text-sm">
           {now < result.raceStartUtcMs ? (
             <span className="text-emerald-300">
-              ● Green flag in{" "}
+              {t.live.greenFlagIn}{" "}
               <span className="font-semibold tabular-nums">
                 {fmtCountdown(result.raceStartUtcMs - now)}
               </span>
             </span>
           ) : lastStint.wallEndMs != null && now >= lastStint.wallEndMs ? (
-            <span className="text-zinc-400">● Race finished</span>
+            <span className="text-zinc-400">{t.live.raceFinished}</span>
           ) : currentStint ? (
             <span className="text-emerald-300">
-              ● LIVE — Stint {currentStint.index}
-              {currentStint.driverName ? ` · ${currentStint.driverName}` : ""} ·
-              next pit in{" "}
+              {t.live.liveStint(currentStint.index, currentStint.driverName ?? "")}{" "}
               <span className="font-semibold tabular-nums">
                 {fmtCountdown((currentStint.wallEndMs ?? now) - now)}
               </span>
@@ -5317,7 +5471,7 @@ export default function StintPlanner({
                 ` (${fmtClock(currentStint.wallEndMs)})`}
             </span>
           ) : (
-            <span className="text-emerald-300">● LIVE</span>
+            <span className="text-emerald-300">{t.live.liveOnly}</span>
           )}
         </div>
       )}
@@ -5329,17 +5483,17 @@ export default function StintPlanner({
       {result.perDriver.length > 0 && (
         <div className={card}>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Per-driver totals
+            {t.totals.title}
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm tabular-nums">
               <thead className="text-zinc-500">
                 <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-2">Driver</th>
-                  <th className="py-1 pr-2 text-right">Stints</th>
-                  <th className="py-1 pr-2 text-right">Drive time</th>
-                  <th className="py-1 pr-2 text-right">Laps</th>
-                  <th className="py-1 pr-2 text-right">Fuel</th>
+                  <th className="py-1 pr-2">{t.totals.colDriver}</th>
+                  <th className="py-1 pr-2 text-right">{t.totals.colStints}</th>
+                  <th className="py-1 pr-2 text-right">{t.totals.colDriveTime}</th>
+                  <th className="py-1 pr-2 text-right">{t.totals.colLaps}</th>
+                  <th className="py-1 pr-2 text-right">{t.totals.colFuel}</th>
                 </tr>
               </thead>
               <tbody>
@@ -5363,7 +5517,7 @@ export default function StintPlanner({
 
       {/* During-Race notes */}
       <NotesField
-        label="During-Race notes"
+        label={t.live.notesDuring}
         value={s.notes["during"]}
         onChange={(v) => patchNote("during", v)}
       />
@@ -5374,7 +5528,7 @@ export default function StintPlanner({
       {/* Poster & impressions — the team's memory of the race */}
       <div className={card}>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-orange-300">
-          Poster &amp; impressions
+          {t.post.galleryTitle}
         </h2>
         {galleryError && (
           <p className="mb-3 rounded border border-red-800/60 bg-red-950/40 px-3 py-2 text-sm text-red-200">
@@ -5398,14 +5552,15 @@ export default function StintPlanner({
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Race log (pace & stints)
+            {t.post.logTitle}
+            <GuideLink section="danach" />
           </h2>
           <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
             {uploadingLog
-              ? "Parsing…"
+              ? t.post.logParsing
               : s.raceLog
-                ? "Replace race-log .jsonl"
-                : "Upload race-log .jsonl"}
+                ? t.post.logReplace
+                : t.post.logUpload}
             <input
               type="file"
               accept=".jsonl,.log,.ndjson,application/x-ndjson,text/plain"
@@ -5422,10 +5577,8 @@ export default function StintPlanner({
         )}
         {!s.raceLog ? (
           <p className="text-sm text-zinc-500">
-            Upload the race-logger{" "}
-            <span className="font-mono">.jsonl</span> from the session to see the
-            pace each driver actually ran, the real stint lengths and pit-stop
-            times — and to feed those numbers straight back into the plan.
+            {t.post.logEmptyPre} <span className="font-mono">.jsonl</span>{" "}
+            {t.post.logEmptyPost}
           </p>
         ) : (
           <div className="space-y-4">
@@ -5443,13 +5596,15 @@ export default function StintPlanner({
                 {[
                   s.raceLog.track,
                   s.raceLog.sessionName,
-                  s.raceLog.ownCarNumber ? `car #${s.raceLog.ownCarNumber}` : null,
+                  s.raceLog.ownCarNumber
+                    ? t.post.logCarNumber(s.raceLog.ownCarNumber)
+                    : null,
                   s.raceLog.ownCarClass,
                   s.raceLog.trackTempC != null
-                    ? `track ${s.raceLog.trackTempC} °C`
+                    ? t.post.logTrackTemp(s.raceLog.trackTempC)
                     : null,
                   s.raceLog.classBestSec != null
-                    ? `class best ${fmtSec(s.raceLog.classBestSec)}`
+                    ? t.post.logClassBest(fmtSec(s.raceLog.classBestSec))
                     : null,
                 ]
                   .filter(Boolean)
@@ -5460,21 +5615,21 @@ export default function StintPlanner({
                   onClick={applyLogPaceToDrivers}
                   className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
                 >
-                  Use measured pace for drivers
+                  {t.post.logUsePace}
                 </button>
                 {s.raceLog.trackTempC != null && (
                   <button
                     onClick={applyLogTrackTemp}
                     className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
                   >
-                    Use track temp
+                    {t.post.logUseTemp}
                   </button>
                 )}
                 <button
                   onClick={removeRaceLog}
                   className="text-xs text-red-300/80 hover:text-red-200"
                 >
-                  Remove
+                  {t.post.logRemove}
                 </button>
               </div>
             </div>
@@ -5483,34 +5638,30 @@ export default function StintPlanner({
               (s.eventResult?.ownDrivers?.length ?? 0) === 0 &&
               s.eventResult != null && (
                 <p className="rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
-                  This event result was uploaded before team-driver splitting
-                  existed. Upload the{" "}
-                  <span className="font-mono">eventresult.json</span> again to
-                  break the log down per driver.
+                  {t.post.logOldEventResultPre}{" "}
+                  <span className="font-mono">eventresult.json</span>{" "}
+                  {t.post.logOldEventResultPost}
                 </p>
               )}
             {raceLogNeedsReparse && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
                 <span>
-                  {raceLogNoTimestamps
-                    ? "This log was analysed before lap timestamps were stored, so it can't be matched to the driver order in your stint schedule — the dashboard is falling back to a reconstruction. The raw file is still archived; one click fixes it."
-                    : "This log was analysed before the average learned to leave out the formation and start laps, the laps under a full-course yellow and the restart lap — right now only the in and out laps are dropped. The raw file is still archived; one click re-runs the whole analysis."}
+                  {raceLogNoTimestamps ? t.post.logNoTimestamps : t.post.logOldAverage}
                 </span>
                 <button
                   onClick={reanalyseRaceLog}
                   disabled={uploadingLog}
                   className="print:hidden shrink-0 rounded bg-amber-500 px-3 py-1 font-semibold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"
                 >
-                  {uploadingLog ? "Re-analysing…" : "Re-analyse log"}
+                  {uploadingLog ? t.post.logReanalysing : t.post.logReanalyse}
                 </button>
               </div>
             )}
             {s.raceLog.stints.length > 0 && s.eventResult == null && (
               <p className="rounded border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
-                For a team race, also upload the{" "}
-                <span className="font-mono">eventresult.json</span> above — the
-                race logger records only one driver name per car, so the split
-                per team driver comes from there.
+                {t.post.logNeedEventResultPre}{" "}
+                <span className="font-mono">eventresult.json</span>{" "}
+                {t.post.logNeedEventResultPost}
               </p>
             )}
             <RaceLogDashboard
@@ -5564,14 +5715,15 @@ export default function StintPlanner({
       <div className={card}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            Event result
+            {t.post.resultTitle}
+            <GuideLink section="danach" />
           </h2>
           <label className="print:hidden cursor-pointer rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">
             {uploadingResult
-              ? "Parsing…"
+              ? t.post.resultParsing
               : s.eventResult
-                ? "Replace eventresult.json"
-                : "Upload eventresult.json"}
+                ? t.post.resultReplace
+                : t.post.resultUpload}
             <input
               type="file"
               accept=".json,application/json"
@@ -5588,10 +5740,9 @@ export default function StintPlanner({
         )}
         {!s.eventResult ? (
           <p className="text-sm text-zinc-500">
-            After the session, upload the iRacing{" "}
-            <span className="font-mono">eventresult.json</span> to archive it with
-            this plan and show the finishing order. Team events are listed per
-            team; your own entry is highlighted.
+            {t.post.resultEmptyPre}{" "}
+            <span className="font-mono">eventresult.json</span>{" "}
+            {t.post.resultEmptyPost}
           </p>
         ) : (
           <div className="space-y-3">
@@ -5609,7 +5760,7 @@ export default function StintPlanner({
                 onClick={removeEventResult}
                 className="print:hidden text-xs text-red-300/80 hover:text-red-200"
               >
-                Remove
+                {t.post.resultRemove}
               </button>
             </div>
             {s.eventResult.summary.length > 0 && (
@@ -5617,21 +5768,21 @@ export default function StintPlanner({
                 <table className="w-full text-left text-sm tabular-nums">
                   <thead className="text-zinc-500">
                     <tr className="border-b border-zinc-800">
-                      <th className="py-1 pr-2">Pos</th>
+                      <th className="py-1 pr-2">{t.post.colPos}</th>
                       {resultHasClasses && (
                         <>
-                          <th className="py-1 pr-2">Class</th>
-                          <th className="py-1 pr-2">Cls</th>
+                          <th className="py-1 pr-2">{t.post.colClass}</th>
+                          <th className="py-1 pr-2">{t.post.colClassPos}</th>
                         </>
                       )}
-                      <th className="py-1 pr-2">#</th>
+                      <th className="py-1 pr-2">{t.post.colNumber}</th>
                       <th className="py-1 pr-2">
-                        {resultIsTeamEvent ? "Team / drivers" : "Driver"}
+                        {resultIsTeamEvent ? t.post.colTeam : t.post.colDriver}
                       </th>
-                      <th className="py-1 pr-2">Car</th>
-                      <th className="py-1 pr-2 text-right">Laps</th>
-                      <th className="py-1 pr-2 text-right">Best</th>
-                      <th className="py-1 pr-2 text-right">Inc</th>
+                      <th className="py-1 pr-2">{t.post.colCar}</th>
+                      <th className="py-1 pr-2 text-right">{t.post.colLaps}</th>
+                      <th className="py-1 pr-2 text-right">{t.post.colBest}</th>
+                      <th className="py-1 pr-2 text-right">{t.post.colInc}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -5677,7 +5828,7 @@ export default function StintPlanner({
                     onClick={() => setShowAllResults(true)}
                     className="print:hidden mt-2 text-xs text-orange-300 underline hover:text-orange-200"
                   >
-                    Show all {s.eventResult.summary.length} entries
+                    {t.post.showAll(s.eventResult.summary.length)}
                   </button>
                 ) : (
                   s.eventResult.summary.length > 12 && (
@@ -5685,7 +5836,7 @@ export default function StintPlanner({
                       onClick={() => setShowAllResults(false)}
                       className="print:hidden mt-2 text-xs text-zinc-400 underline hover:text-zinc-300"
                     >
-                      Show our class only
+                      {t.post.showOurClass}
                     </button>
                   )
                 )}
@@ -5697,7 +5848,7 @@ export default function StintPlanner({
 
       {/* Post-Race notes */}
       <NotesField
-        label="Post-Race notes"
+        label={t.live.notesPost}
         value={s.notes["post"]}
         onChange={(v) => patchNote("post", v)}
       />
@@ -5734,6 +5885,7 @@ function ClsDriverPicker({
   options: ClsDriverOption[];
   onPick: (id: string) => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const [open, setOpen] = useState(false);
@@ -5779,7 +5931,8 @@ function ClsDriverPicker({
         aria-autocomplete="list"
         aria-controls="cls-driver-hits"
         value={query}
-        placeholder="🔍 Add driver — type a name…"
+        placeholder={t.picker.placeholder}
+        title={t.roster.pickerHint}
         onChange={(e) => {
           setQuery(e.target.value);
           setHighlight(0);
@@ -5814,7 +5967,7 @@ function ClsDriverPicker({
         >
           {matches.length === 0 ? (
             <li className="px-3 py-2 text-sm text-zinc-500">
-              No CLS driver matches “{query.trim()}”.
+              {t.picker.noMatch(query.trim())}
             </li>
           ) : (
             matches.map((d, i) => (
@@ -5839,7 +5992,7 @@ function ClsDriverPicker({
           )}
           {options.length > 0 && (
             <li className="border-t border-zinc-800 px-3 pt-1.5 pb-1 text-[11px] text-zinc-600">
-              {options.length} CLS drivers available · ↑↓ + Enter
+              {t.picker.available(options.length)}
             </li>
           )}
         </ul>
@@ -5869,28 +6022,27 @@ function ProfileRow({
   total: number;
   fuel: number;
 }) {
+  const t = useT();
   return (
     <div className="rounded border border-zinc-800 bg-zinc-950/50 p-3">
       <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
         {title}
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={lbl}>Lap time (m:ss)</label>
+        <Field label={t.fuel.lapTime} hint={t.fuel.lapTimeHint}>
           <input className={inp} value={laptime}
             onChange={(e) => onLaptime(e.target.value)} />
-        </div>
-        <div>
-          <label className={lbl}>Fuel / lap (L)</label>
+        </Field>
+        <Field label={t.fuel.fuelPerLap} hint={t.fuel.fuelPerLapHint}>
           <input className={inp} value={fuelPerLap}
             onChange={(e) => onFuel(e.target.value)} />
-        </div>
+        </Field>
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-        <span><span className="text-zinc-500">Laps/stint:</span> {laps}</span>
-        <span><span className="text-zinc-500">On-track:</span> {fmtDuration(green)}</span>
-        <span><span className="text-zinc-500">+pit:</span> {fmtDuration(total)}</span>
-        <span><span className="text-zinc-500">Fuel/stint:</span> {fuel.toFixed(1)} L</span>
+        <span><span className="text-zinc-500">{t.fuel.lapsPerStint}</span> {laps}</span>
+        <span><span className="text-zinc-500">{t.fuel.onTrack}</span> {fmtDuration(green)}</span>
+        <span><span className="text-zinc-500">{t.fuel.plusPit}</span> {fmtDuration(total)}</span>
+        <span><span className="text-zinc-500">{t.fuel.fuelPerStint}</span> {fuel.toFixed(1)} L</span>
       </div>
     </div>
   );

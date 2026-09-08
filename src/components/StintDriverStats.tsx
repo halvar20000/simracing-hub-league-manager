@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 import type { G61ImportResult } from "@/lib/garage61-import";
 import { fmtLap } from "@/lib/stint-planner";
+import { useT } from "@/components/planner/PlannerUi";
 
 const COLORS = [
   "#ff6b35",
@@ -49,6 +50,7 @@ export default function StintDriverStats({
   analysis: G61ImportResult;
   rosterNames?: string[];
 }) {
+  const t = useT();
   // Filter to the plan roster at render time too, so a stale saved analysis
   // (pulled before the driver was removed) can't show non-roster drivers.
   const roster = rosterNames.filter((n) => n.trim() !== "");
@@ -142,15 +144,15 @@ export default function StintDriverStats({
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-          Driver performance
+          {t.perf.title}
         </h2>
         <span className="text-[11px] text-zinc-500">
-          {analysis.overall.cleanLaps} clean laps
+          {t.perf.cleanLaps(analysis.overall.cleanLaps)}
           {analysis.temp.sourceTempC != null
             ? ` · ~${Math.round(analysis.temp.sourceTempC)}°C`
             : ""}
           {analysis.temp.slopePerC != null
-            ? ` · ${(analysis.temp.slopePerC * 10).toFixed(1)} s/10°C fit`
+            ? t.perf.tempFit((analysis.temp.slopePerC * 10).toFixed(1))
             : ""}
         </span>
       </div>
@@ -170,13 +172,13 @@ export default function StintDriverStats({
         <table className="w-full text-left text-sm tabular-nums">
           <thead className="text-zinc-500">
             <tr className="border-b border-zinc-800">
-              <th className="py-1 pr-2 font-normal">Driver</th>
-              <th className={th}>Laps</th>
-              <th className={th}>Best</th>
-              <th className={th}>Median</th>
-              <th className={th}>Δ fastest</th>
-              <th className={th}>Consistency (σ)</th>
-              <th className={th}>Fuel/lap</th>
+              <th className="py-1 pr-2 font-normal">{t.perf.colDriver}</th>
+              <th className={th}>{t.perf.colLaps}</th>
+              <th className={th}>{t.perf.colBest}</th>
+              <th className={th}>{t.perf.colMedian}</th>
+              <th className={th}>{t.perf.colGap}</th>
+              <th className={th}>{t.perf.colConsistency}</th>
+              <th className={th}>{t.perf.colFuel}</th>
             </tr>
           </thead>
           <tbody>
@@ -190,7 +192,7 @@ export default function StintDriverStats({
                 <td className={td}>{fmtLap(d.bestSec)}</td>
                 <td className={td}>{fmtLap(d.racePaceSec)}</td>
                 <td className={`${td} ${i === 0 ? "text-emerald-400" : "text-zinc-400"}`}>
-                  {i === 0 ? "fastest" : fmtGap(d.racePaceSec - fastest)}
+                  {i === 0 ? t.perf.fastest : fmtGap(d.racePaceSec - fastest)}
                 </td>
                 <td className={`${td} ${d.stdSec === mostConsistent ? "text-emerald-400" : ""}`}>
                   ±{d.stdSec.toFixed(2)}s
@@ -209,25 +211,27 @@ export default function StintDriverStats({
         <div className="mb-4 rounded border border-sky-900/50 bg-sky-950/20 p-3">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-[11px] font-medium uppercase tracking-wider text-sky-300">
-              Wet weather
+              {t.perf.wetTitle}
             </h3>
             <span className="text-[11px] text-zinc-400">
-              {analysis.wet.laps} wet laps ·{" "}
-              {Math.round(analysis.wet.minWetness)}–
-              {Math.round(analysis.wet.maxWetness)}% wet
-              {analysis.wet.deltaSec != null
-                ? ` · +${analysis.wet.deltaSec.toFixed(1)}s/lap vs dry`
-                : ""}
+              {t.perf.wetSummary(
+                analysis.wet.laps,
+                Math.round(analysis.wet.minWetness),
+                Math.round(analysis.wet.maxWetness),
+                analysis.wet.deltaSec != null
+                  ? t.perf.wetDelta(analysis.wet.deltaSec.toFixed(1))
+                  : ""
+              )}
             </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm tabular-nums">
               <thead className="text-zinc-500">
                 <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-2 font-normal">Driver</th>
-                  <th className={th}>Wet laps</th>
-                  <th className={th}>Wet pace</th>
-                  <th className={th}>Fuel/lap</th>
+                  <th className="py-1 pr-2 font-normal">{t.perf.colDriver}</th>
+                  <th className={th}>{t.perf.colWetLaps}</th>
+                  <th className={th}>{t.perf.colWetPace}</th>
+                  <th className={th}>{t.perf.colFuel}</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,11 +246,7 @@ export default function StintDriverStats({
               </tbody>
             </table>
           </div>
-          <p className="mt-1 text-[10px] text-zinc-600">
-            Wet pace is highly variable (line, standing water, tyres) — treat as
-            a rough reference. Use the Dry/Wet toggle in Event to re-plan the
-            race at wet pace.
-          </p>
+          <p className="mt-1 text-[10px] text-zinc-600">{t.perf.wetNote}</p>
         </div>
       )}
 
@@ -254,7 +254,7 @@ export default function StintDriverStats({
         {/* Pace & consistency box/whisker */}
         <div>
           <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Pace &amp; consistency
+            {t.perf.paceTitle}
           </h3>
           <svg viewBox={`0 0 ${B.right + 8} ${boxH}`} className="w-full" role="img">
             {tickVals.map((v, i) => (
@@ -283,15 +283,18 @@ export default function StintDriverStats({
             })}
           </svg>
           <p className="mt-1 text-[10px] text-zinc-600">
-            Box = middle 50% of laps, line = median, dot = best. Tighter box =
-            more consistent. Normalised to {analysis.temp.sourceTempC != null ? `${Math.round(analysis.temp.sourceTempC)}°C` : "one temp"}.
+            {t.perf.paceNote(
+              analysis.temp.sourceTempC != null
+                ? `${Math.round(analysis.temp.sourceTempC)}°C`
+                : t.perf.paceNoteOneTemp
+            )}
           </p>
         </div>
 
         {/* Fuel per lap */}
         <div>
           <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Fuel per lap
+            {t.perf.fuelTitle}
           </h3>
           <svg viewBox={`0 0 ${F.right + 40} ${fuelH}`} className="w-full" role="img">
             {drivers.map((d, i) => {
@@ -307,27 +310,24 @@ export default function StintDriverStats({
               );
             })}
           </svg>
-          <p className="mt-1 text-[10px] text-zinc-600">
-            Median fuel burned on clean laps — lower can drop a pit stop.
-          </p>
+          <p className="mt-1 text-[10px] text-zinc-600">{t.perf.fuelNote}</p>
         </div>
 
         {/* Lap time vs track temp */}
         <div className="lg:col-span-2">
           <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Lap time vs track temp
+            {t.perf.scatterTitle}
           </h3>
           {scatter ?? (
-            <p className="text-[11px] text-zinc-500">
-              Not enough laps across different track temperatures to plot the
-              temperature relationship yet.
-            </p>
+            <p className="text-[11px] text-zinc-500">{t.perf.scatterEmpty}</p>
           )}
           {scatter && (
             <p className="mt-1 text-[10px] text-zinc-600">
-              Each point is a clean lap shown as its gap to that driver&rsquo;s own
-              median, so drivers overlay. Dashed line = the fitted temperature
-              trend{analysis.temp.slopePerC != null ? ` (${(analysis.temp.slopePerC * 10).toFixed(1)} s/10°C)` : ""}.
+              {t.perf.scatterNote(
+                analysis.temp.slopePerC != null
+                  ? t.perf.scatterTrend((analysis.temp.slopePerC * 10).toFixed(1))
+                  : ""
+              )}
             </p>
           )}
         </div>

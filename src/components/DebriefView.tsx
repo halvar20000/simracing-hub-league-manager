@@ -11,6 +11,8 @@ import DebriefRaceCharts from "@/components/DebriefRaceCharts";
 import DebriefFieldBox from "@/components/DebriefFieldBox";
 import type { DebriefRaceDetail } from "@/lib/debrief-stints";
 import type { FieldBench } from "@/lib/debrief-field";
+import { useT } from "@/components/planner/PlannerUi";
+import type { PlannerDict } from "@/lib/i18n/planner";
 
 /**
  * The post-race de-briefing, as the team reads it.
@@ -137,6 +139,7 @@ export default function DebriefView({
   field: FieldBench | null;
 }) {
   const [pending, start] = useTransition();
+  const t = useT();
   const [msg, setMsg] = useState<string | null>(null);
   const d = data.drivers;
 
@@ -147,7 +150,7 @@ export default function DebriefView({
       {/* ---- header ---------------------------------------------------- */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">De-briefing</h1>
+          <h1 className="text-2xl font-bold">{t.dbf.title}</h1>
           <p className="text-sm text-zinc-400 print:text-zinc-600">
             {data.title}
             {subtitle && <span className="text-zinc-500"> — {subtitle}</span>}
@@ -158,14 +161,14 @@ export default function DebriefView({
             href={`/api/export/debriefing?id=${encodeURIComponent(planId)}`}
             className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
           >
-            ⬇ PowerPoint (.pptx)
+            {t.dbf.pptx}
           </a>
           <button
             type="button"
             onClick={() => window.print()}
             className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
           >
-            Drucken / PDF
+            {t.dbf.print}
           </button>
           {canManage && (
             <button
@@ -174,16 +177,12 @@ export default function DebriefView({
               onClick={() =>
                 start(async () => {
                   const r = await refreshDebriefHistory(planId);
-                  setMsg(
-                    r.ok
-                      ? `Historie aktualisiert (${r.drivers} Fahrer).`
-                      : r.error
-                  );
+                  setMsg(r.ok ? t.dbf.historyRefreshed(r.drivers) : r.error);
                 })
               }
               className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-60"
             >
-              {pending ? "Speichere…" : "Historie aktualisieren"}
+              {pending ? t.dbf.saving : t.dbf.refreshHistory}
             </button>
           )}
         </div>
@@ -212,7 +211,7 @@ export default function DebriefView({
 
       {/* ---- awards ----------------------------------------------------- */}
       <section className={card}>
-        <h2 className={h2}>Auszeichnungen (schnell und sicher)</h2>
+        <h2 className={h2}>{t.dbf.awardsTitle}</h2>
         <table className="w-full text-sm">
           <tbody>
             {data.awards.map((a) => (
@@ -232,21 +231,21 @@ export default function DebriefView({
 
       {/* ---- evaluation ------------------------------------------------- */}
       <section className={card}>
-        <h2 className={h2}>Auswertung</h2>
+        <h2 className={h2}>{t.dbf.evalTitle}</h2>
         <MetricBars drivers={d} />
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[820px] text-xs">
             <thead>
               <tr>
-                <th className={th}>Fahrer</th>
-                <th className={`${th} text-right`}>gesamt vs. clean</th>
-                <th className={`${th} text-right`}>gesamt vs. Prognose</th>
-                <th className={`${th} text-right`}>clean vs. Best</th>
-                <th className={`${th} text-right`}>beste Runde vs. Referenz</th>
-                <th className={`${th} text-right`}>Incs/h</th>
-                <th className={`${th} text-right`}>Relativperformance</th>
-                <th className={`${th} text-right`}>10k-Performance</th>
-                <th className={`${th} text-right`}>Konstanz</th>
+                <th className={th}>{t.dbf.colDriver}</th>
+                <th className={`${th} text-right`}>{t.dbf.colAllVsClean}</th>
+                <th className={`${th} text-right`}>{t.dbf.colAllVsPlan}</th>
+                <th className={`${th} text-right`}>{t.dbf.colCleanVsBest}</th>
+                <th className={`${th} text-right`}>{t.dbf.colBestVsRef}</th>
+                <th className={`${th} text-right`}>{t.dbf.colIncPerHour}</th>
+                <th className={`${th} text-right`}>{t.dbf.colRelPerf}</th>
+                <th className={`${th} text-right`}>{t.dbf.col10k}</th>
+                <th className={`${th} text-right`}>{t.dbf.colConsistency}</th>
               </tr>
             </thead>
             <tbody>
@@ -278,15 +277,10 @@ export default function DebriefView({
           </table>
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 print:text-zinc-600">
-          <b>Relativperformance</b> = die Rundenzeit, die das eigene iRating hier
-          wert war, geteilt durch die tatsächlich gefahrene beste Runde — über
-          100 % heißt schneller als das eigene Rating.{" "}
-          <b>10k-Performance</b> misst dasselbe gegen die feste
-          10k-Referenzrunde und ist damit über Rennen hinweg vergleichbar.{" "}
-          <b>Konstanz</b> = 1 − σ ÷ Ø über die sauberen Runden, je Fahrer gegen
-          die eigenen Runden gemessen, nie Fahrer gegen Fahrer.{" "}
-          <b>Incs/h</b> statt Incidents gesamt, damit nicht bestraft wird, wer
-          die meisten Stints übernommen hat.
+          <b>{t.dbf.legendRelPerf}</b> {t.dbf.legendRelPerfBody}{" "}
+          <b>{t.dbf.legend10k}</b> {t.dbf.legend10kBody}{" "}
+          <b>{t.dbf.legendConsistency}</b> {t.dbf.legendConsistencyBody}{" "}
+          <b>{t.dbf.legendIncs}</b> {t.dbf.legendIncsBody}
         </p>
       </section>
 
@@ -299,7 +293,7 @@ export default function DebriefView({
       {history.races.length >= 2 ? (
         <div className="grid gap-4 md:grid-cols-2 print:grid-cols-2">
           <section className={card}>
-            <h2 className={h2}>Relativperformance im Verlauf</h2>
+            <h2 className={h2}>{t.dbf.trendRelTitle}</h2>
             <TrendChart
               races={history.races}
               series={history.byDriver.map((x, i) => ({
@@ -310,7 +304,7 @@ export default function DebriefView({
             />
           </section>
           <section className={card}>
-            <h2 className={h2}>Konstanz im Verlauf</h2>
+            <h2 className={h2}>{t.dbf.trendConsistencyTitle}</h2>
             <TrendChart
               races={history.races}
               series={history.byDriver.map((x, i) => ({
@@ -323,33 +317,31 @@ export default function DebriefView({
         </div>
       ) : (
         <section className={`${card} print:hidden`}>
-          <h2 className={h2}>Verlauf über die Saison</h2>
+          <h2 className={h2}>{t.dbf.trendSeasonTitle}</h2>
           <p className="text-sm text-zinc-400">
-            {history.races.length === 0
-              ? "Noch keine Historie. Sie entsteht, sobald ein Plan als abgeschlossen markiert wird — oder sofort über „Historie aktualisieren“ oben."
-              : "Ein Rennen ist in der Historie. Ab dem zweiten wird hier eine Kurve daraus."}
+            {history.races.length === 0 ? t.dbf.trendEmpty : t.dbf.trendOne}
           </p>
         </section>
       )}
 
       {/* ---- appendix ---------------------------------------------------- */}
       <section className={card}>
-        <h2 className={h2}>Anhang — die Rohdaten</h2>
+        <h2 className={h2}>{t.dbf.appendixTitle}</h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-xs">
             <thead>
               <tr>
-                <th className={th}>Fahrer</th>
-                <th className={`${th} text-right`}>Ø gesamt</th>
-                <th className={`${th} text-right`}>Ø clean</th>
-                <th className={`${th} text-right`}>Prognose</th>
-                <th className={`${th} text-right`}>beste Runde</th>
-                <th className={`${th} text-right`}>Referenz</th>
-                <th className={`${th} text-right`}>Runden</th>
-                <th className={`${th} text-right`}>Stints</th>
-                <th className={`${th} text-right`}>Fahrzeit</th>
-                <th className={`${th} text-right`}>Incs</th>
-                <th className={`${th} text-right`}>iRating</th>
+                <th className={th}>{t.dbf.colDriver}</th>
+                <th className={`${th} text-right`}>{t.dbf.colAvgAll}</th>
+                <th className={`${th} text-right`}>{t.dbf.colAvgClean}</th>
+                <th className={`${th} text-right`}>{t.dbf.colForecast}</th>
+                <th className={`${th} text-right`}>{t.dbf.colBestLap}</th>
+                <th className={`${th} text-right`}>{t.dbf.colReference}</th>
+                <th className={`${th} text-right`}>{t.dbf.colLaps}</th>
+                <th className={`${th} text-right`}>{t.dbf.colStints}</th>
+                <th className={`${th} text-right`}>{t.dbf.colDriveTime}</th>
+                <th className={`${th} text-right`}>{t.dbf.colIncs}</th>
+                <th className={`${th} text-right`}>{t.dbf.colIRating}</th>
               </tr>
             </thead>
             <tbody>
@@ -360,7 +352,7 @@ export default function DebriefView({
                   <td className={`${td} text-right tabular-nums`}>{fmtLap(r.avgCleanSec)}</td>
                   <td className={`${td} text-right tabular-nums`}>{fmtLap(r.planSec)}</td>
                   <td className={`${td} text-right tabular-nums`}>{fmtLap(r.bestSec)}</td>
-                  <td className={`${td} text-right tabular-nums`} title={baselineLabel(r)}>
+                  <td className={`${td} text-right tabular-nums`} title={baselineLabel(r, t)}>
                     {fmtLap(r.baselineSec)}
                   </td>
                   <td className={`${td} text-right tabular-nums`}>{r.laps ?? "—"}</td>
@@ -376,49 +368,43 @@ export default function DebriefView({
           </table>
         </div>
         <p className="mt-3 text-[11px] text-zinc-500 print:text-zinc-600">
-          Referenz ={" "}
-          {data.official
-            ? "die Rundenzeit des eigenen iRatings aus der Pace-Kurve, sonst die feste 10k-Referenz"
-            : "die schnellste Runde der eigenen Klasse"}
-          . Die Zuordnung der Stints stammt{" "}
+          {t.dbf.appendixRefPre}{" "}
+          {data.official ? t.dbf.appendixRefOfficial : t.dbf.appendixRefLeague}
+          {t.dbf.appendixAttrPre}{" "}
           {data.attribution === "plan"
-            ? "aus dem Stintplan"
+            ? t.dbf.appendixAttrPlan
             : data.attribution === "log"
-              ? "aus dem Race-Log selbst"
-              : "aus einer Rekonstruktion der Ergebnisse"}
+              ? t.dbf.appendixAttrLog
+              : t.dbf.appendixAttrInferred}
           .
         </p>
       </section>
 
       {/* ---- discussion --------------------------------------------------- */}
       <section className={card}>
-        <h2 className={h2}>Diskussion</h2>
+        <h2 className={h2}>{t.dbf.discussionTitle}</h2>
         {postNotes.trim() ? (
           <p className="whitespace-pre-wrap break-words text-sm text-zinc-200 print:text-zinc-900">
             {postNotes}
           </p>
         ) : (
-          <p className="text-sm text-zinc-500">
-            Noch keine Notizen. Die Post-Race-Notes des Plans erscheinen hier —
-            und die PowerPoint bringt eine leere Diskussionsfolie mit den
-            Stichworten mit.
-          </p>
+          <p className="text-sm text-zinc-500">{t.dbf.discussionEmpty}</p>
         )}
       </section>
     </div>
   );
 }
 
-function baselineLabel(r: DebriefDriver): string {
+function baselineLabel(r: DebriefDriver, t: PlannerDict): string {
   switch (r.baseline) {
     case "irating":
-      return `Zielzeit für ${r.iRating} iR`;
+      return t.dbf.baselineIrating(r.iRating ?? "?");
     case "ref10k":
-      return "feste 10k-Referenz";
+      return t.dbf.baselineRef10k;
     case "classbest":
-      return "schnellste Runde der Klasse";
+      return t.dbf.baselineClassBest;
     default:
-      return "schnellste Runde des Teams";
+      return t.dbf.baselineTeamBest;
   }
 }
 
@@ -454,6 +440,7 @@ function Cell({
  * its driver's name, so identity never rests on colour alone.
  */
 function MetricBars({ drivers }: { drivers: DebriefDriver[] }) {
+  const t = useT();
   const panels: {
     key: string;
     title: string;
@@ -464,21 +451,21 @@ function MetricBars({ drivers }: { drivers: DebriefDriver[] }) {
   }[] = [
     {
       key: "rel",
-      title: "Relativperformance",
+      title: t.dbf.legendRelPerf,
       pick: (d) => d.relPerf ?? d.perf10k,
       fmt: (x) => fmtPct(x, 2),
       zeroBased: false,
     },
     {
       key: "kon",
-      title: "Konstanz",
+      title: t.dbf.colConsistency,
       pick: (d) => d.consistency,
       fmt: (x) => fmtPct(x, 2),
       zeroBased: false,
     },
     {
       key: "inc",
-      title: "Incidents pro Stunde",
+      title: t.dbf.metricIncPerHour,
       pick: (d) => d.incPerHour,
       fmt: (x) => fmtNum(x, 2),
       zeroBased: true,
@@ -495,7 +482,7 @@ function MetricBars({ drivers }: { drivers: DebriefDriver[] }) {
           return (
             <div key={p.key}>
               <p className="mb-2 text-xs font-medium text-zinc-400">{p.title}</p>
-              <p className="text-xs text-zinc-600">keine Daten</p>
+              <p className="text-xs text-zinc-600">{t.dbf.noData}</p>
             </div>
           );
         const hi = Math.max(...vals.map((x) => x.v));
@@ -555,6 +542,7 @@ function TrendChart({
   races: DebriefHistoryProp["races"];
   series: { name: string; slot: number; values: (number | null)[] }[];
 }) {
+  const t = useT();
   const all = series.flatMap((s) =>
     s.values.filter((v): v is number => v != null && Number.isFinite(v))
   );
@@ -634,8 +622,7 @@ function TrendChart({
         })}
       </div>
       <p className="mt-2 text-[11px] text-zinc-500 print:text-zinc-600">
-        Gleiche Skala in allen Feldern ({fmtPct(yMin, 1)} – {fmtPct(yMax, 1)}).
-        Rennen von links nach rechts:{" "}
+        {t.dbf.trendScale(fmtPct(yMin, 1), fmtPct(yMax, 1))}{" "}
         <span style={{ color: AXIS }}>{races.map((r) => r.label).join(" · ")}</span>
       </p>
     </div>
@@ -662,6 +649,7 @@ function TeamBox({
   options: { id: string; name: string; label: string }[];
   canManage: boolean;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
@@ -670,7 +658,7 @@ function TeamBox({
     <section className={`${card} print:hidden`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
-          <span className="text-zinc-400">Zählt zur Team-Statistik von </span>
+          <span className="text-zinc-400">{t.dbf.teamCountsFor}</span>
           {team.teamGroupName ? (
             <a
               href={`/teams/statistics/${team.slug}`}
@@ -679,14 +667,14 @@ function TeamBox({
               {team.teamGroupName}
             </a>
           ) : (
-            <span className="text-zinc-300">keinem Team</span>
+            <span className="text-zinc-300">{t.dbf.teamNone}</span>
           )}
           <span className="ml-2 text-xs text-zinc-500">
             {team.teamGroupName == null
-              ? "— keiner der Fahrer ist in CLS einem Team zugeordnet."
+              ? t.dbf.teamNoneNote
               : team.inferred
-                ? `automatisch aus den Fahrern (${team.votes} von ${team.matched})`
-                : "von Hand gesetzt"}
+                ? t.dbf.teamInferred(team.votes, team.matched)
+                : t.dbf.teamManual}
           </span>
         </div>
         {canManage && (
@@ -695,7 +683,7 @@ function TeamBox({
             onClick={() => setOpen((v) => !v)}
             className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
           >
-            {open ? "Abbrechen" : "Team ändern"}
+            {open ? t.dbf.teamCancel : t.dbf.teamChange}
           </button>
         )}
       </div>
@@ -709,23 +697,19 @@ function TeamBox({
               const v = e.target.value;
               start(async () => {
                 const r = await setStintPlanTeam(planId, v === "" ? null : v);
-                setMsg(
-                  r.ok
-                    ? `Gespeichert${r.team ? ` — jetzt ${r.team}` : ""}. Seite neu laden, um es überall zu sehen.`
-                    : r.error
-                );
+                setMsg(r.ok ? t.dbf.teamSaved(r.team ?? "") : r.error);
               });
             }}
             className="max-w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
           >
-            <option value="">Automatisch aus den Fahrern</option>
+            <option value="">{t.dbf.teamAuto}</option>
             {options.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.label}
               </option>
             ))}
           </select>
-          {pending && <span className="text-xs text-zinc-500">Speichere…</span>}
+          {pending && <span className="text-xs text-zinc-500">{t.dbf.saving}</span>}
         </div>
       )}
       {msg && <p className="mt-2 text-xs text-zinc-400">{msg}</p>}

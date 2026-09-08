@@ -19,6 +19,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.16.0",
+    date: "2026-09-08",
+    changes: [
+      "Stint planner speaks German. The whole planner — plan, live race and debrief, plus the plan list, the race-log dashboard, the Garage 61 analysis and the gallery — now runs in German by default, with an EN/DE switch in the header next to the plan title. The choice is remembered per browser. Everything else on CLS stays English; the planner is the team's own tool and the team is German.",
+      "Every field explains itself on hover. Point at a field — the label or the box, either one — and a line appears saying what belongs in it and what it changes: what \"Fuel to the grid\" is for, why the refuel time decides whether double-stinting saves anything, what \"Tyres still raceable at\" is actually asking. Roughly 200 explanations, on the fields that had none as well as the ones that used the old browser tooltip.",
+      "New Easy / Advanced switch. Easy hides the detailed pit-stop model — the nine measured constants and the session-export measuring workflow — which is the one part of the planner most teams never touch. Nothing stops computing: if the detailed model is switched on, Easy says so and what a full service costs, with one click back to Advanced. A printout is always complete regardless of the mode.",
+      "A new plan now says what it still needs. Instead of opening on an empty schedule under one sentence, there is a checklist above it — track, car, race length, lap time, fuel per lap, tank, drivers, session start — that ticks itself off and jumps to the card that owns each missing step. It disappears once the plan is complete.",
+      "And it flags numbers that look wrong without blocking anything: a lap time typed as \"118.8\" instead of \"1:58.8\", a tank that lasts two laps or two hundred, a stint longer than the race, a track temperature with nothing measuring how lap time reacts to it. All of those produce a perfectly plausible-looking schedule and nothing on the page contradicted them.",
+      "Every card heading has a \"?\" that opens the manual at the section covering it, in a new tab. The manual itself stays German.",
+    ],
+  },
+  {
     version: "2.15.1",
     date: "2026-09-07",
     changes: [

@@ -7,6 +7,7 @@ import {
 } from "@/lib/actions/stint-plan-people";
 import type { PlanPeople } from "@/lib/stint-plan-people";
 import type { ClsDriverOption } from "@/lib/cls-drivers";
+import { useT } from "@/components/planner/PlannerUi";
 
 /**
  * "Who can open this plan" box on a saved plan page.
@@ -25,6 +26,7 @@ export default function StintPlanAccessPanel({
   initial: PlanPeople;
   clsDrivers: ClsDriverOption[];
 }) {
+  const t = useT();
   const [people, setPeople] = useState<PlanPeople>(initial);
   const [pick, setPick] = useState("");
   const [busy, setBusy] = useState(false);
@@ -68,47 +70,39 @@ export default function StintPlanAccessPanel({
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <span className="text-sm font-semibold text-zinc-200">
-          🔒 Who can open this plan
+          {t.access.title}
           <span className="ml-2 font-normal text-zinc-500">
-            {total} {total === 1 ? "person" : "people"} + admins
+            {t.access.count(total)}
           </span>
         </span>
-        <span className="text-xs text-zinc-500">{open ? "hide" : "show"}</span>
+        <span className="text-xs text-zinc-500">
+          {open ? t.access.hide : t.access.show}
+        </span>
       </button>
 
       {open && (
         <div className="space-y-4 border-t border-zinc-800 px-4 py-4 text-sm">
-          <p className="text-xs text-zinc-500">
-            A stint plan is private. The driver who created it, everyone in the
-            line-up and the people added below can open and edit it — nobody
-            else, even with the link. CLS admins can always get in.
-          </p>
+          <p className="text-xs text-zinc-500">{t.access.lead}</p>
 
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Created by
+              {t.access.createdBy}
             </h3>
             <p className="text-zinc-300">
               {people.owner ? (
                 people.owner.name
               ) : (
-                <span className="text-zinc-500">
-                  Not recorded — this plan is older than the access rules. The
-                  drivers in it (and admins) can open it.
-                </span>
+                <span className="text-zinc-500">{t.access.ownerUnknown}</span>
               )}
             </p>
           </div>
 
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Drivers in the plan
+              {t.access.driversTitle}
             </h3>
             {people.drivers.length === 0 ? (
-              <p className="text-zinc-500">
-                No CLS drivers in the line-up yet — add drivers below in the
-                planner and they get access automatically.
-              </p>
+              <p className="text-zinc-500">{t.access.driversEmpty}</p>
             ) : (
               <ul className="flex flex-wrap gap-1.5">
                 {people.drivers.map((d) => (
@@ -125,10 +119,10 @@ export default function StintPlanAccessPanel({
 
           <div>
             <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Also allowed in
+              {t.access.extraTitle}
             </h3>
             {people.extra.length === 0 ? (
-              <p className="text-zinc-500">Nobody yet.</p>
+              <p className="text-zinc-500">{t.access.extraEmpty}</p>
             ) : (
               <ul className="flex flex-wrap gap-1.5">
                 {people.extra.map((d) => (
@@ -142,7 +136,7 @@ export default function StintPlanAccessPanel({
                         onClick={() => remove(d.id)}
                         disabled={busy}
                         className="text-zinc-500 hover:text-red-400 disabled:opacity-50"
-                        title={`Remove ${d.name}`}
+                        title={t.access.removePerson(d.name)}
                       >
                         ✕
                       </button>
@@ -161,7 +155,7 @@ export default function StintPlanAccessPanel({
                 disabled={busy}
                 className="min-w-[14rem] rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
               >
-                <option value="">Add someone who isn&rsquo;t driving…</option>
+                <option value="">{t.access.addPlaceholder}</option>
                 {options.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
@@ -173,11 +167,9 @@ export default function StintPlanAccessPanel({
                 disabled={busy || !pick}
                 className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
               >
-                {busy ? "…" : "Add"}
+                {busy ? "…" : t.access.add}
               </button>
-              <span className="text-xs text-zinc-500">
-                Team boss, spotter, engineer — same rights as a driver.
-              </span>
+              <span className="text-xs text-zinc-500">{t.access.addNote}</span>
             </div>
           )}
 
