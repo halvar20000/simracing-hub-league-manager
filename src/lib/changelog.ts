@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.18.1",
+    date: "2026-09-08",
+    changes: [
+      "RSVP: the no-show notice named the wrong series, and in three leagues it announced a penalty that does not exist. \"…may incur a penalty point in GT3 WCT\" was hardcoded, so a Combined Cup driver looking at his own round was told about a rule from a series he was not racing. Spotted by Thomas Kübler on a Combined Cup round.",
+      "The sentence now reads the season it belongs to. Combined Cup, GT3 WCT and SFL Cup do penalise a no-show, and each is named by its own name. IEC, PCCD and NASCAR CAS Cup do not — and there the sentence is simply gone, rather than threatening a penalty nobody would ever receive.",
+      "It also counts properly: the notice states the points that season actually deducts instead of always saying \"a penalty point\".",
+      "The Discord attendance post had the same claim in its footer, equally unconditional. Both now come from one shared helper, so the website and the Discord message cannot drift apart again.",
+    ],
+  },
+  {
     version: "2.18.0",
     date: "2026-09-08",
     changes: [

@@ -820,6 +820,12 @@ export default async function PublicRoundResults({
           currentStatus={driverRsvpStatus}
           isRegistered={driverIsRegistered}
           rsvpMode={round.season.league.rsvpMode}
+          leagueName={round.season.league.name}
+          noShowRule={{
+            penaltyPoolMode: round.season.scoringSystem.penaltyPoolMode,
+            noRsvpNoShowPenaltyPoints:
+              round.season.scoringSystem.noRsvpNoShowPenaltyPoints,
+          }}
           isClosed={isRsvpClosed({
             startsAt: round.startsAt,
             status: round.status,

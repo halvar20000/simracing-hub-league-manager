@@ -28,6 +28,8 @@ export type RsvpDriverSummary = {
   status: RsvpStatus;
 };
 
+import { noShowNoticeFooter, type NoShowRule } from "@/lib/no-show-notice";
+
 export type RsvpEmbedInput = {
   leagueName: string;
   leagueLogoUrl?: string | null;   // resolved to an absolute URL by the caller, or null
@@ -45,6 +47,9 @@ export type RsvpEmbedInput = {
   rsvpMode?: RsvpMode;             // default FULL
   closed?: boolean;                // when true, render disabled buttons + "Closed"
   embedColor?: string | null;      // hex like "#EB459E" or "EB459E"; defaults to orange
+  /** How this season treats a no-show. Omitted / OFF = the footer says nothing
+   *  about a penalty, because there is none — see `no-show-notice.ts`. */
+  noShowRule?: NoShowRule | null;
 };
 
 const DEFAULT_EMBED_COLOR = 0xff6b35; // orange
@@ -260,9 +265,12 @@ function buildDeclineOnlyPayload(
     fields,
     timestamp: new Date().toISOString(),
     footer: {
+      // Only claim a penalty where one exists, and only for the number of
+       // points this season actually deducts.
       text: input.closed
         ? "Registration closed"
-        : "No-shows without a Decline incur a penalty point.",
+        : (noShowNoticeFooter(input.noShowRule) ??
+          "Clicking Decline again removes it."),
     },
     ...(input.leagueLogoUrl ? { image: { url: input.leagueLogoUrl } } : {}),
   };

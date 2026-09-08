@@ -42,6 +42,14 @@ export async function postRsvpForRound(
       season: {
         include: {
           league: true,
+          // The footer must not claim a no-show penalty in a season that has
+          // none — see no-show-notice.ts.
+          scoringSystem: {
+            select: {
+              penaltyPoolMode: true,
+              noRsvpNoShowPenaltyPoints: true,
+            },
+          },
           _count: { select: { registrations: { where: { excludedAt: null, retiredAt: null, isTeamManager: false } } } },
         },
       },
@@ -104,6 +112,7 @@ export async function postRsvpForRound(
       totalRegistered: round.season._count.registrations,
       maxDrivers: round.season.maxDrivers,
       rsvpMode: round.season.league.rsvpMode,
+      noShowRule: round.season.scoringSystem,
       embedColor: round.season.league.discordEmbedColor,
     },
     round.id

@@ -12,6 +12,11 @@
 import type { RsvpStatus, RsvpMode } from "@prisma/client";
 import { submitRsvpAction, toggleDeclineAction } from "@/lib/actions/rsvp";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import {
+  noShowNoticeDeclineOnly,
+  noShowNoticeFull,
+  type NoShowRule,
+} from "@/lib/no-show-notice";
 
 const STATUS_META: Record<
   RsvpStatus,
@@ -50,6 +55,8 @@ export function RsvpWidget({
   isRegistered,
   rsvpMode = "FULL",
   isClosed = false,
+  leagueName,
+  noShowRule = null,
 }: {
   roundId: string;
   roundStatus: "UPCOMING" | "IN_PROGRESS" | "COMPLETED";
@@ -57,6 +64,11 @@ export function RsvpWidget({
   isRegistered: boolean;
   rsvpMode?: RsvpMode;
   isClosed?: boolean;
+  /** The league this round belongs to — named in the no-show notice, because
+   *  a driver on a phone has no other way to tell whose rules apply. */
+  leagueName: string;
+  /** How this season treats a no-show. Null / OFF = say nothing at all. */
+  noShowRule?: NoShowRule | null;
 }) {
   if (roundStatus !== "UPCOMING") return null;
 
@@ -128,7 +140,9 @@ export function RsvpWidget({
           Status: <span className="font-medium text-zinc-300">
             {declined ? "Declined" : "Expected on the grid"}
           </span>.
-          {!declined && " No-shows without a decline incur a penalty point in GT3 WCT."}
+          {!declined &&
+            noShowNoticeDeclineOnly(noShowRule, leagueName) &&
+            ` ${noShowNoticeDeclineOnly(noShowRule, leagueName)}`}
         </p>
       </div>
     );
@@ -164,7 +178,8 @@ export function RsvpWidget({
       {currentStatus && (
         <p className="mt-3 text-xs text-zinc-500">
           Current response: <span className="font-medium text-zinc-300">{currentStatus}</span>.
-          Drivers who don&apos;t respond AND don&apos;t show up may incur a penalty point in GT3 WCT.
+          {noShowNoticeFull(noShowRule, leagueName) &&
+            ` ${noShowNoticeFull(noShowRule, leagueName)}`}
         </p>
       )}
     </div>
