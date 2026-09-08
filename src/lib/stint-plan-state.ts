@@ -16,7 +16,7 @@ import {
 } from "@/lib/stint-planner";
 import type { G61ImportResult } from "@/lib/garage61-import";
 import type { G61Source } from "@/lib/garage61-pool";
-import type { StintPref } from "@/lib/stint-autofill";
+import type { StintPref, StintPref3 } from "@/lib/stint-autofill";
 
 /** Garage 61 performance analysis saved with a plan (per-driver stats + the
  *  temperature fit) so the dashboard renders on the shared link too. */
@@ -68,8 +68,25 @@ export type PlannerDriverState = {
   prefNight?: StintPref; // real wall-clock night (the plan's local time)
   prefRain?: StintPref; // stints marked half wet / wet
   prefStart?: StintPref; // being in the car at the green flag
-  /** Most stints in a row this driver wants; "" = no limit stated. */
+  /** Most stints in a row this driver wants; "" = no limit stated.
+   *  Superseded by `prefDouble` / `prefTriple` below — kept so a plan built
+   *  before those still reads back with the limit it was signed off with. */
   maxConsecutive?: string;
+  /** How this driver feels about two stints back to back, and about three.
+   *  Empty = not stated. The automatic line-up prefers "happy" seats and only
+   *  reaches for "ok" when it has to; "avoid" is the last resort. */
+  prefDouble?: StintPref3;
+  prefTriple?: StintPref3;
+  /** iRating for an OFFICIAL race — the pace curve turns it into a target lap
+   *  time for this driver. Typed here because before the race there is no
+   *  eventresult to read it from; the upload overwrites it afterwards. */
+  iRating?: string;
+  /** Seconds/lap THIS driver loses in the full wet / on a damp track / in
+   *  traffic, and their own temperature sensitivity. "" = the plan's figure. */
+  wetSec?: string;
+  halfWetSec?: string;
+  trafficSec?: string;
+  tempSlopePer10?: string;
 };
 
 /** One row of the parsed eventresult finishing order (stored in the payload so
@@ -344,11 +361,25 @@ export const DEFAULT_WET_DELTA_SEC = 12;
 export const DEFAULT_HALF_WET_FRACTION = 0.45;
 
 /** The half-wet penalty of a plan: the entered value, else a share of full wet. */
+/**
+ * Seconds/lap a FULL WET stint costs.
+ *
+ * The rain profile wins when the plan has one: a measured wet lap time beside
+ * the dry one IS the delta, and having two independent sources for the same
+ * number is how they drift apart. Falls back to the measured/typed wet model,
+ * then to the default.
+ */
+export function wetDeltaSecOf(s: PlannerState): number {
+  const rain = rainProfileOf(s);
+  const dry = parseDurationToSec(s.standard.laptime);
+  if (rain && dry && dry > 0) return Math.max(0, rain.laptimeSec - dry);
+  return s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC;
+}
+
 export function halfWetDeltaSec(s: PlannerState): number {
   const manual = s.wetModel?.manualHalfDeltaSec;
   if (manual != null && isFinite(manual) && manual >= 0) return manual;
-  const full = s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC;
-  return full * DEFAULT_HALF_WET_FRACTION;
+  return wetDeltaSecOf(s) * DEFAULT_HALF_WET_FRACTION;
 }
 export type PlannerState = {
   title: string;
@@ -441,6 +472,13 @@ export type PlannerState = {
     /** Lowest tyre condition (%) still considered raceable; stints ending
      *  below it are flagged. "" = don't check. */
     tyreMinPct: string;
+    /** Aim for an even share of the race per driver, and flag anyone who ends
+     *  up under a minimum. Off leaves the line-up entirely to whoever builds
+     *  it. */
+    fairShare: boolean;
+    /** Plan one lap of fuel in hand on every fuel-limited stint. Scales with
+     *  consumption, unlike the fixed-litre reserve. */
+    marginLap: boolean;
   };
   /** The roster default: the pace and consumption used for any driver who has
    *  no figures of their own. In delta mode this is a fallback, not the plan. */
@@ -458,6 +496,11 @@ export type PlannerState = {
    *  to `standard` is the effort (+s/lap, −L/lap) applied to each driver's own
    *  figures, for every driver who has not typed their own. */
   saving: { laptime: string; fuelPerLap: string };
+  /** The RAIN profile: pace and consumption in the full wet. Blank = the plan
+   *  has no rain data and falls back to the wet lap-time delta alone, which is
+   *  what every plan did before this existed. Half wet is taken as half the
+   *  effect on both. */
+  rain: { laptime: string; fuelPerLap: string };
   drivers: PlannerDriverState[];
   assignments: PlannerAssignmentState[];
   /** Track-temperature pace model, or null until data/temp is set. */
@@ -540,11 +583,14 @@ export function defaultPlannerState(): PlannerState {
       tyreSequential: true,
       tyreWearPctPerLap: "",
       tyreMinPct: "",
+      fairShare: true,
+      marginLap: false,
     },
     standard: { laptime: "1:55", fuelPerLap: "3.29" },
     savingEnabled: false,
     savingMode: "delta",
     saving: { laptime: "1:56", fuelPerLap: "3.20" },
+    rain: { laptime: "", fuelPerLap: "" },
     drivers: [],
     assignments: [],
     tempModel: null,
@@ -707,6 +753,20 @@ export function savingDeltas(s: PlannerState): { sec: number; litres: number } {
   };
 }
 
+/**
+ * The plan's RAIN profile, or null when it has none.
+ *
+ * Both halves have to be there to be worth anything: a wet lap time without a
+ * wet consumption is what the wet delta already expressed, and a consumption
+ * without a lap time has nothing to attach itself to.
+ */
+export function rainProfileOf(s: PlannerState): FuelProfile | null {
+  const lap = parseDurationToSec(s.rain?.laptime ?? "");
+  const fuel = num(s.rain?.fuelPerLap ?? "");
+  if (!lap || lap <= 0 || fuel <= 0) return null;
+  return { laptimeSec: lap, fuelPerLap: fuel };
+}
+
 export function stateToInput(s: PlannerState): PlannerInput {
   const sessionMs =
     s.event.sessionStartLocal.trim() !== ""
@@ -723,6 +783,7 @@ export function stateToInput(s: PlannerState): PlannerInput {
       fuelPerLap: num(s.standard.fuelPerLap),
     },
     saving: savingProfileOf(s),
+    rain: rainProfileOf(s),
     savingMode: isDeltaSaving(s) ? "delta" : "absolute",
     savingDeltaSec: savingDeltas(s).sec,
     savingFuelDelta: savingDeltas(s).litres,
@@ -733,6 +794,7 @@ export function stateToInput(s: PlannerState): PlannerInput {
     stintLaps:
       s.event.stintMode === "laps" ? num(s.event.stintValue) : undefined,
     fuelReserve: num(s.event.fuelReserve),
+    marginLap: s.event.marginLap === true,
     gridFuelL: num(s.event.gridFuelL),
     drivers: s.drivers.map((d) => ({
       id: d.id,
@@ -742,6 +804,12 @@ export function stateToInput(s: PlannerState): PlannerInput {
       tyreWearPctPerLap: d.tyreWear?.trim() ? num(d.tyreWear) : null,
       savingDeltaSec: d.savingSec?.trim() ? num(d.savingSec) : null,
       savingFuelDelta: d.savingFuel?.trim() ? num(d.savingFuel) : null,
+      wetDeltaSec: d.wetSec?.trim() ? num(d.wetSec) : null,
+      halfWetDeltaSec: d.halfWetSec?.trim() ? num(d.halfWetSec) : null,
+      trafficDeltaSec: d.trafficSec?.trim() ? num(d.trafficSec) : null,
+      // The column is per 10 °C, which is the readable unit; the engine works
+      // per degree.
+      tempSlopePerC: d.tempSlopePer10?.trim() ? num(d.tempSlopePer10) / 10 : null,
     })),
     assignments: s.assignments.map((a) => ({
       profile: a.profile,
@@ -757,9 +825,9 @@ export function stateToInput(s: PlannerState): PlannerInput {
     // Only a timed race can be rounded up to a whole lap — a distance race
     // already ends on one.
     roundRaceEnd: s.event.raceLimit === "time" && s.event.roundRaceEnd === true,
-    // Fall back to the default wet penalty when no Garage 61 rain model exists,
-    // so ticking a stint wet still lengthens it (the field shows this default).
-    wetDeltaSec: s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC,
+    // The rain profile when there is one, else the measured/typed wet model,
+    // else the default — so ticking a stint wet always lengthens it.
+    wetDeltaSec: wetDeltaSecOf(s),
     halfWetDeltaSec: halfWetDeltaSec(s),
     trafficPenaltySec: num(s.event.trafficPenaltySec),
     // Per-stint temperatures are measured against the plan's Track temp, using

@@ -11,6 +11,7 @@ import {
   buildSchedule,
   fmtDuration,
   fmtLap,
+  fuelSaveTargets,
   optimizeFuelSave,
   parseDurationToSec,
   pitStopSeconds,
@@ -44,8 +45,10 @@ import {
   planLapTarget,
   parseTypedNumber,
   isDeltaSaving,
+  rainProfileOf,
   savingDeltas,
   halfWetDeltaSec,
+  wetDeltaSecOf,
   DEFAULT_HALF_WET_FRACTION,
   DEFAULT_TEMP_SLOPE_PER_C,
   DEFAULT_WET_DELTA_SEC,
@@ -68,6 +71,7 @@ import {
   type AutofillStint,
   type BrokenWish,
   type StintPref,
+  type StintPref3,
 } from "@/lib/stint-autofill";
 import {
   addSource,
@@ -106,7 +110,7 @@ import {
   type G61TeamOption,
   type G61Status,
 } from "@/lib/actions/garage61-connect";
-import { useT } from "@/components/planner/PlannerUi";
+import { usePlannerUi, useT } from "@/components/planner/PlannerUi";
 import { Field, CheckField, Hint } from "@/components/planner/Field";
 import PlannerUiSwitch from "@/components/planner/PlannerUiSwitch";
 import AdvancedOnly from "@/components/planner/AdvancedOnly";
@@ -437,7 +441,7 @@ export default function StintPlanner({
   pitReferences = [],
   paceReferences = [],
 }: StintPlannerProps) {
-  const t = useT();
+  const { t, advanced } = usePlannerUi();
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
   /** "Per driver" mode keeps the two profile rows collapsed — there they are
@@ -556,8 +560,38 @@ export default function StintPlanner({
   );
 
   const result = useMemo(() => buildSchedule(stateToInput(s)), [s]);
+  /**
+   * The fair-share floor: a quarter of an even share of the race.
+   *
+   * Not the same question as "is the workload balanced" — the drivers table
+   * already flags anyone under 85 % of an even share for that. This is the
+   * coarser one Johann Solowej asked for (Sept 2026): did this driver do
+   * enough of the race to count as having driven it at all? A quarter of a
+   * share is deliberately far below balanced, so it only fires on a seat that
+   * is nearly empty rather than on a merely light stint load.
+   *
+   * Off entirely when the plan is not aiming for an even share.
+   */
+  const fairShareMin = useMemo(() => {
+    if (s.event.fairShare === false) return null;
+    const n = result.perDriver.length;
+    if (n === 0 || result.totals.laps <= 0) return null;
+    const even = result.totals.laps / n;
+    return { min: Math.floor(even / 4), even: Math.round(even) };
+  }, [s.event.fairShare, result.perDriver.length, result.totals.laps]);
+
   /** True when this plan prices its stops from measured constants. */
   const pitOn = planPitModel(s) !== null;
+  /**
+   * The schedule's detail columns — fill, tyres, stop cost, track temperature.
+   *
+   * They need a pit model to mean anything AND they are the columns Johann
+   * Solowej asked to have out of the way in simple mode (Sept 2026). Unlike a
+   * hidden card, these are dropped from the printout too: a pit-wall sheet in
+   * Easy mode should be the short one, and the numbers behind them are not
+   * being tracked by a team that chose Easy in the first place.
+   */
+  const showPitCols = pitOn && advanced;
 
   /**
    * Numbers that are legal but look wrong.
@@ -878,6 +912,25 @@ export default function StintPlanner({
       ),
     }));
   /** Per-driver fuel consumption / tyre wear, typed by hand. */
+  /**
+   * Per-driver fields that only a human ever fills: the iRating and the
+   * condition deltas. They deliberately do NOT set a `manual` flag — that flag
+   * exists to stop a Garage 61 pull overwriting a hand-typed figure, and
+   * nothing pulls these.
+   */
+  const patchRain = (key: "laptime" | "fuelPerLap", v: string) =>
+    setS((p) => ({ ...p, rain: { ...(p.rain ?? { laptime: "", fuelPerLap: "" }), [key]: v } }));
+
+  const patchDriverPlain = (
+    id: string,
+    key: "iRating" | "wetSec" | "halfWetSec" | "trafficSec" | "tempSlopePer10",
+    v: string
+  ) =>
+    setS((p) => ({
+      ...p,
+      drivers: p.drivers.map((d) => (d.id === id ? { ...d, [key]: v } : d)),
+    }));
+
   const patchDriverField = (
     id: string,
     key: "fuelPerLap" | "tyreWear",
@@ -1009,10 +1062,54 @@ export default function StintPlanner({
         return t.wish.notOnStart;
       case "runTooLong":
         return t.wish.runTooLong(w.n ?? 0);
+      case "doubleAgainstWish":
+        return t.wish.doubleAgainstWish;
+      case "tripleAgainstWish":
+        return t.wish.tripleAgainstWish;
       case "outsideAvailability":
         return t.wish.outsideAvailability(w.n ?? 0);
     }
   };
+
+  /**
+   * The three-state preference picker for a run of stints.
+   *
+   * The two-state one says yes or no and has no room for the answer most
+   * drivers actually give about a double stint — "fine, if that is what the
+   * plan needs". Johann Solowej asked for the third state (Sept 2026).
+   */
+  /** The old single limit is only worth a column on a plan that actually uses
+   *  one — on a new plan the Double/Triple pair says the same thing better. */
+  const showLegacyMaxRow = s.drivers.some((d) => (d.maxConsecutive ?? "").trim() !== "");
+
+  const runPrefSelect = (
+    driverId: string,
+    key: "prefDouble" | "prefTriple",
+    value: StintPref3 | undefined,
+    hint: string
+  ) => (
+    <select
+      value={value ?? ""}
+      onChange={(e) =>
+        patchDriverPref(driverId, { [key]: e.target.value as StintPref3 })
+      }
+      title={hint}
+      className={`rounded border bg-zinc-950 px-1.5 py-1 text-xs ${
+        value === "happy"
+          ? "border-emerald-700/70 text-emerald-200"
+          : value === "avoid"
+            ? "border-amber-700/70 text-amber-200"
+            : value === "ok"
+              ? "border-zinc-600 text-zinc-200"
+              : "border-zinc-700 text-zinc-400"
+      }`}
+    >
+      <option value="">—</option>
+      <option value="happy">{t.jo.prefHappy}</option>
+      <option value="ok">{t.jo.prefOk}</option>
+      <option value="avoid">{t.jo.prefAvoid}</option>
+    </select>
+  );
 
   const coveredHours = (startSec: number, endSec: number): number[] => {
     const h0 = Math.floor(startSec / 3600);
@@ -1075,6 +1172,8 @@ export default function StintPlanner({
         rain: d.prefRain ?? "",
         start: d.prefStart ?? "",
         maxConsecutive: parseTypedNumber(d.maxConsecutive, 0),
+        double: d.prefDouble ?? "",
+        triple: d.prefTriple ?? "",
       })),
       {
         doubleStint: double,
@@ -1314,6 +1413,34 @@ export default function StintPlanner({
     setStatus(`Track temperature set to ${t} °C from the race log.`);
   };
 
+  /**
+   * "What would I have to save to get one more lap out of the tank?"
+   *
+   * The question a pit wall asks, answered directly instead of by sweeping the
+   * whole fuel band. It reads the consumption the schedule is ACTUALLY running
+   * on — the team average when the drivers carry their own figures — so the
+   * "now" row matches the plan above rather than a profile nobody uses.
+   */
+  const fsTargets = useMemo(() => {
+    const own = s.drivers
+      .map((d) => parseTypedNumber(d.fuelPerLap ?? ""))
+      .filter((v) => v > 0);
+    const teamAvg = own.length
+      ? own.reduce((a, b) => a + b, 0) / own.length
+      : 0;
+    const current = teamAvg > 0 ? teamAvg : parseTypedNumber(s.standard.fuelPerLap);
+    return fuelSaveTargets({
+      tankSize: parseTypedNumber(s.event.tankSize),
+      fuelReserve: parseTypedNumber(s.event.fuelReserve),
+      fuelPerLap: current,
+      totalLaps: result.totals.laps,
+      floorFuelPerLap: s.savingEnabled
+        ? parseTypedNumber(s.saving.fuelPerLap)
+        : 0,
+      marginLap: s.event.marginLap === true,
+    });
+  }, [s, result.totals.laps]);
+
   const [fuelSaveOpt, setFuelSaveOpt] = useState<FuelSaveOptimization | null>(
     null
   );
@@ -1357,35 +1484,13 @@ export default function StintPlanner({
       trafficPenaltySec: inp.trafficPenaltySec ?? 0,
     });
     setFuelSaveOpt(opt);
-    // Auto-apply the best (max-distance) strategy into the Standard profile so
-    // the stint schedule below immediately runs at the fuel-save-optimal pace.
-    if (opt.ok) {
-      const best = opt.strategies[opt.bestIndex];
-      setS((p) => ({
-        ...p,
-        standard: {
-          laptime: fmtLap(best.laptimeSec),
-          fuelPerLap: best.fuelPerLap.toFixed(2),
-        },
-      }));
-      const paceNote =
-        Math.abs(paceScale - 1) > 0.002
-          ? ` (weighted for real driver pace, ${fmtLap(avgLap)} avg)`
-          : "";
-      setFuelSaveMsg(
-        t.msg.fsApplied(
-          best.stops,
-          fmtLap(best.laptimeSec),
-          best.fuelPerLap.toFixed(2),
-          opt.lapLimited
-            ? t.msg.fsOutcomeTime(fmtDuration(best.totalTimeSec), best.totalLaps)
-            : t.msg.fsOutcomeLaps(best.totalLaps.toFixed(1)),
-          paceNote
-        )
-      );
-    } else {
-      setFuelSaveMsg(null);
-    }
+    // NOTHING is applied. This used to write the winning strategy straight
+    // into the Standard profile, which meant a measured lap time and a measured
+    // consumption were silently replaced by a computed target — and the target
+    // was some consumption between the two profiles that no driver can aim at.
+    // Johann Solowej asked for the opposite (Sept 2026) and he is right: show
+    // what a longer stint would cost, leave the plan's own numbers alone.
+    setFuelSaveMsg(null);
   };
 
   // ---- Garage 61 session import (client-side .xlsx parse) ----
@@ -2610,7 +2715,7 @@ export default function StintPlanner({
                     {t.sched.colLeft}
                     <Hint text={t.sched.colLeftHint} />
                   </th>
-                  {pitOn && (
+                  {showPitCols && (
                     <>
                       <th className="py-1 pr-2 text-center">
                         {t.sched.colFull}
@@ -2634,10 +2739,12 @@ export default function StintPlanner({
                       </th>
                     </>
                   )}
-                  <th className="py-1 pr-2 text-right">
-                    {t.sched.colTemp}
-                    <Hint text={t.sched.colTempHint} />
-                  </th>
+                  {advanced && (
+                    <th className="py-1 pr-2 text-right">
+                      {t.sched.colTemp}
+                      <Hint text={t.sched.colTempHint} />
+                    </th>
+                  )}
                   <th className="py-1 pr-2 text-center">
                     {t.sched.colTrack}
                     <Hint text={t.sched.colTrackHint} />
@@ -2868,7 +2975,7 @@ export default function StintPlanner({
                       >
                         {fmtFuel(st.fuelAtEnd)} L
                       </td>
-                      {pitOn && (
+                      {showPitCols && (
                         <>
                           <td className="py-1 pr-2 text-center print:hidden">
                             {st.isFinal ? (
@@ -2965,6 +3072,8 @@ export default function StintPlanner({
                           </td>
                         </>
                       )}
+                      {advanced && (
+                      <>
                       <td className="py-1 pr-2 text-right print:hidden">
                         <input
                           type="number"
@@ -3000,6 +3109,8 @@ export default function StintPlanner({
                       <td className="hidden py-1 pr-2 text-right print:table-cell">
                         {st.trackTempC != null ? `${st.trackTempC}°` : "—"}
                       </td>
+                      </>
+                      )}
                       <td className="py-1 pr-2 text-center print:hidden">
                         <select
                           value={conditionOf(a)}
@@ -3446,6 +3557,22 @@ export default function StintPlanner({
                 onChange={(e) => patchEvent("gridFuelL", e.target.value)}
                 placeholder={t.ev.gridFuelPlaceholder} />
             </Field>
+            {/* Both of these change the shape of the plan rather than a single
+                number, so they sit under the fuel fields they qualify. */}
+            <CheckField
+              className="flex items-end"
+              checked={s.event.marginLap === true}
+              onChange={(v) => patchEvent("marginLap", v)}
+              label={t.jo.marginLap}
+              hint={t.jo.marginLapHint}
+            />
+            <CheckField
+              className="flex items-end"
+              checked={s.event.fairShare !== false}
+              onChange={(v) => patchEvent("fairShare", v)}
+              label={t.jo.fairShare}
+              hint={t.jo.fairShareHint}
+            />
             {official && (
               /* Boxed, not just sub-headed: these two only exist for an
                  official race, and a field that applies conditionally should
@@ -3527,29 +3654,6 @@ export default function StintPlanner({
                 onBlur={(e) => applyTempFromInput(e.target.value)}
                 placeholder={t.ev.trackTempPlaceholder} />
             </Field>
-            <Field label={t.ev.tyreMin} hint={t.ev.tyreMinHint}>
-              <input className={inp} value={s.event.tyreMinPct}
-                onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
-                placeholder="50" />
-            </Field>
-            <Field label={t.ev.stintLength} hint={t.ev.stintLengthHint}>
-              <select className={inp} value={s.event.stintMode}
-                onChange={(e) => patchEvent("stintMode", e.target.value)}>
-                <option value="fuel">{t.ev.stintFuel}</option>
-                <option value="time">{t.ev.stintTime}</option>
-                <option value="laps">{t.ev.stintLaps}</option>
-              </select>
-            </Field>
-            {s.event.stintMode !== "fuel" && (
-              <Field
-                label={s.event.stintMode === "time" ? t.ev.stintMinutes : t.ev.stintLapsField}
-                hint={t.ev.stintValueHint}
-              >
-                <input className={inp} value={s.event.stintValue}
-                  onChange={(e) => patchEvent("stintValue", e.target.value)}
-                  placeholder={s.event.stintMode === "time" ? "45" : "20"} />
-              </Field>
-            )}
           </div>
           {(s.tempModel || s.event.trackTempC.trim() !== "") && (
             <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px] text-zinc-400">
@@ -4152,6 +4256,36 @@ export default function StintPlanner({
             )}
           </div>
 
+          {/* How long a stint is, and how far the tyres may go — moved up from
+              the Event card on Johann Solowej's layout (Sept 2026). They
+              qualify the profiles directly below them; Event answers what the
+              race is. */}
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            <Field label={t.ev.stintLength} hint={t.ev.stintLengthHint}>
+              <select className={inp} value={s.event.stintMode}
+                onChange={(e) => patchEvent("stintMode", e.target.value)}>
+                <option value="fuel">{t.ev.stintFuel}</option>
+                <option value="time">{t.ev.stintTime}</option>
+                <option value="laps">{t.ev.stintLaps}</option>
+              </select>
+            </Field>
+            {s.event.stintMode !== "fuel" && (
+              <Field
+                label={s.event.stintMode === "time" ? t.ev.stintMinutes : t.ev.stintLapsField}
+                hint={t.ev.stintValueHint}
+              >
+                <input className={inp} value={s.event.stintValue}
+                  onChange={(e) => patchEvent("stintValue", e.target.value)}
+                  placeholder={s.event.stintMode === "time" ? "45" : "20"} />
+              </Field>
+            )}
+            <Field label={t.ev.tyreMin} hint={t.ev.tyreMinHint}>
+              <input className={inp} value={s.event.tyreMinPct}
+                onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
+                placeholder="50" />
+            </Field>
+          </div>
+
           {profilesOpen ? (
             <ProfileRow
               title={deltaSaving ? t.fuel.standardFallback : t.fuel.standard}
@@ -4189,7 +4323,12 @@ export default function StintPlanner({
           {/* How a stint gets its pace and fuel. The old model let the profile
               decide for everyone, which meant a driver's own averages either
               replaced it wholesale (standard stints) or were quietly ignored
-              (fuel-save stints). The delta model below fixes both. */}
+              (fuel-save stints). The delta model below fixes both.
+
+              Advanced-only: it is a choice a plan makes once, and the wrong
+              answer is not recoverable by guessing. It keeps computing either
+              way — Easy hides the switch, never the effect. */}
+          <AdvancedOnly>
           <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/50 p-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
               {t.fuel.whereNumbers}
@@ -4226,6 +4365,7 @@ export default function StintPlanner({
               )}
             </p>
           </div>
+          </AdvancedOnly>
 
           <CheckField
             className="mt-3"
@@ -4270,6 +4410,52 @@ export default function StintPlanner({
           {(std.overFuel || (sav != null && sav.overFuel)) && (
             <p className="mt-3 text-xs text-amber-400">{t.fuel.overFuel}</p>
           )}
+
+          {/* The rain profile.
+              Johann Solowej asked for this (Sept 2026) and the gap was real:
+              the wet model was a lap-time penalty only, so a wet stint was
+              fuelled at the DRY consumption and came up short. A wet lap is
+              slower and therefore burns less, which is exactly the case where
+              being wrong costs a stop. */}
+          <div className="mt-3 rounded border border-sky-900/50 bg-sky-950/10 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sky-300">
+              {t.jo.rainProfile}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t.fuel.lapTime} hint={t.jo.rainLead}>
+                <input
+                  className={inp}
+                  value={s.rain?.laptime ?? ""}
+                  onChange={(e) => patchRain("laptime", e.target.value)}
+                  placeholder={s.standard.laptime || "m:ss.s"}
+                />
+              </Field>
+              <Field label={t.fuel.fuelPerLap} hint={t.jo.rainLead}>
+                <input
+                  className={inp}
+                  value={s.rain?.fuelPerLap ?? ""}
+                  onChange={(e) => patchRain("fuelPerLap", e.target.value)}
+                  placeholder={s.standard.fuelPerLap || "L"}
+                />
+              </Field>
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-zinc-500">
+              {(() => {
+                const rain = rainProfileOf(s);
+                const dry = parseDurationToSec(s.standard.laptime);
+                if (rain && dry && dry > 0) {
+                  return t.jo.rainActive(
+                    round1(rain.laptimeSec - dry).toFixed(1),
+                    rain.fuelPerLap.toFixed(2)
+                  );
+                }
+                const half =
+                  (s.rain?.laptime ?? "").trim() !== "" ||
+                  (s.rain?.fuelPerLap ?? "").trim() !== "";
+                return half ? t.jo.rainNeedsBoth : t.jo.rainLead;
+              })()}
+            </p>
+          </div>
         </div>
 
         {/* Roster — who is on this plan, and the one place to add someone.
@@ -4357,7 +4543,72 @@ export default function StintPlanner({
             {t.fs.optimize}
           </button>
         </div>
-        <p className="mb-3 text-xs text-zinc-500">{t.fs.lead}</p>
+        {/* The targets lead, because they are the half a driver can act on:
+            "hold 3.14 L/lap and the stint reaches 24 laps" is an instruction.
+            The stop-count sweep below is the analysis behind it and folds away. */}
+        <p className="mb-2 text-xs text-zinc-500">{t.jo.targetsLead}</p>
+        {fsTargets.length === 0 ? (
+          <p className="mb-3 text-xs text-zinc-500">{t.jo.targetsNone}</p>
+        ) : (
+          <div className="mb-3 overflow-x-auto">
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="text-zinc-500">
+                <tr className="border-b border-zinc-800">
+                  <th className="py-1 pr-2">{t.jo.colLapsPerStint}</th>
+                  <th className="py-1 pr-2 text-right">{t.jo.colNeeds}</th>
+                  <th className="py-1 pr-2 text-right">{t.jo.colSave}</th>
+                  <th className="py-1 pr-2 text-right">{t.jo.colStops}</th>
+                  <th className="py-1 pr-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {fsTargets.map((r) => (
+                  <tr
+                    key={r.lapsPerStint}
+                    className={`border-t border-zinc-800/60 ${
+                      r.current
+                        ? "text-zinc-200"
+                        : r.reachable
+                          ? "text-emerald-200"
+                          : "text-zinc-500"
+                    }`}
+                  >
+                    <td className="py-1 pr-2 font-medium">
+                      {r.lapsPerStint}
+                      {r.current && (
+                        <span className="ml-1.5 text-[10px] uppercase text-zinc-500">
+                          {t.jo.rowCurrent}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1 pr-2 text-right">{r.fuelPerLap.toFixed(2)} L</td>
+                    <td className="py-1 pr-2 text-right">
+                      {r.current
+                        ? "—"
+                        : `−${r.savePerLap.toFixed(2)} L (${r.savePct.toFixed(1)} %)`}
+                    </td>
+                    <td className="py-1 pr-2 text-right">{r.stops}</td>
+                    <td className="py-1 pr-2 text-xs">
+                      {r.current
+                        ? ""
+                        : !r.reachable
+                          ? t.jo.unreachable
+                          : t.jo.targetsSaves(
+                              Math.max(0, fsTargets[0].stops - r.stops)
+                            )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <details className="mb-3 print:hidden">
+          <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+            {t.jo.analysisDetails}
+          </summary>
+          <p className="mt-2 text-xs text-zinc-500">{t.fs.lead}</p>
+        </details>
         {fuelSaveMsg && (
           <p className="mb-3 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
             ✓ {fuelSaveMsg}
@@ -4444,7 +4695,14 @@ export default function StintPlanner({
           })()}
       </div>
 
-      {/* Garage 61 import */}
+      {/* Garage 61 import.
+          Johann Solowej asked for an option to hide this whole section
+          (Sept 2026) — which is what Easy mode is, so it goes behind it. */}
+      <AdvancedOnly
+        activeNote={
+          s.g61Analysis || g61 ? t.jo.easyPitNote : null
+        }
+      >
       <div className={card} id="card-g61">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
@@ -4814,6 +5072,7 @@ export default function StintPlanner({
           />
         ) : null;
       })()}
+      </AdvancedOnly>
 
       {/* Drivers */}
       <div className={card}>
@@ -4927,6 +5186,45 @@ export default function StintPlanner({
                     {t.drv.colWear}
                     <Hint text={t.drv.colWearHint} />
                   </th>
+                  {/* An official race measures a driver against their own
+                      rating, so the rating and the target it buys belong here
+                      — not in a second place to type the same number. */}
+                  {official && (
+                    <>
+                      <th className="py-1 pr-2 text-right text-cyan-300/80">
+                        {t.jo.iRating}
+                        <Hint text={t.jo.iRatingHint} />
+                      </th>
+                      {paceCurve && (
+                        <th className="py-1 pr-2 text-right text-cyan-300/80">
+                          {t.jo.colTarget}
+                          <Hint text={t.jo.colTargetHint} />
+                        </th>
+                      )}
+                    </>
+                  )}
+                  {/* Fine-tuning per driver: real, but four more columns on an
+                      already wide table, so Advanced only. */}
+                  {advanced && (
+                    <>
+                      <th className="py-1 pr-2 text-right">
+                        {t.jo.colWet}
+                        <Hint text={t.jo.colWetHint} />
+                      </th>
+                      <th className="py-1 pr-2 text-right">
+                        {t.jo.colHalfWet}
+                        <Hint text={t.jo.colHalfWetHint} />
+                      </th>
+                      <th className="py-1 pr-2 text-right">
+                        {t.jo.colTraffic}
+                        <Hint text={t.jo.colTrafficHint} />
+                      </th>
+                      <th className="py-1 pr-2 text-right">
+                        {t.jo.colTempSlope}
+                        <Hint text={t.jo.colTempSlopeHint} />
+                      </th>
+                    </>
+                  )}
                   {s.savingEnabled && deltaSaving && (
                     <>
                       <th className="py-1 pr-2 text-right text-cyan-300/80">
@@ -5054,6 +5352,73 @@ export default function StintPlanner({
                         />
                       </td>
                       <td className="hidden py-1 pr-2 text-right print:table-cell">{d.tyreWear || "—"}</td>
+                      {official && (
+                        <>
+                          <td className="py-1 pr-2 text-right print:hidden">
+                            <input
+                              className={`w-20 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                                d.iRating?.trim()
+                                  ? "border-cyan-800/70 text-cyan-100"
+                                  : "border-zinc-700 text-zinc-100"
+                              }`}
+                              value={d.iRating ?? ""}
+                              onChange={(e) =>
+                                patchDriverPlain(d.id, "iRating", e.target.value)
+                              }
+                              placeholder={t.jo.iRatingPlaceholder}
+                              title={t.jo.iRatingHint}
+                            />
+                          </td>
+                          <td className="hidden py-1 pr-2 text-right print:table-cell">
+                            {d.iRating || "—"}
+                          </td>
+                          {paceCurve && (
+                            <td
+                              className="py-1 pr-2 text-right tabular-nums text-cyan-300"
+                              title={t.jo.colTargetHint}
+                            >
+                              {(() => {
+                                const ir = parseTypedNumber(d.iRating ?? "");
+                                if (!(ir > 0)) return "—";
+                                const target = targetLapSec(paceCurve.points, ir);
+                                return target ? fmtPaceSec(target.sec) : "—";
+                              })()}
+                            </td>
+                          )}
+                        </>
+                      )}
+                      {advanced && (
+                        <>
+                          {(
+                            [
+                              ["wetSec", d.wetSec, t.jo.colWetHint,
+                                round1(wetDeltaSecOf(s)).toFixed(1)],
+                              ["halfWetSec", d.halfWetSec, t.jo.colHalfWetHint,
+                                round1(halfWetDeltaSec(s)).toFixed(1)],
+                              ["trafficSec", d.trafficSec, t.jo.colTrafficHint,
+                                s.event.trafficPenaltySec || "0"],
+                              ["tempSlopePer10", d.tempSlopePer10, t.jo.colTempSlopeHint,
+                                round1((s.tempModel?.slopePerC ?? 0) * 10).toFixed(1)],
+                            ] as const
+                          ).map(([key, value, hint, placeholder]) => (
+                            <td key={key} className="py-1 pr-2 text-right print:hidden">
+                              <input
+                                className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
+                                  value?.trim()
+                                    ? "border-sky-800/70 text-sky-100"
+                                    : "border-zinc-700 text-zinc-100"
+                                }`}
+                                value={value ?? ""}
+                                onChange={(e) =>
+                                  patchDriverPlain(d.id, key, e.target.value)
+                                }
+                                placeholder={placeholder}
+                                title={hint}
+                              />
+                            </td>
+                          ))}
+                        </>
+                      )}
                       {s.savingEnabled && deltaSaving && (
                         <>
                           <td className="py-1 pr-2 text-right print:hidden">
@@ -5160,6 +5525,23 @@ export default function StintPlanner({
                     <td className="py-1 pr-2 text-right">
                       {driverPerf.avg.wear > 0 ? driverPerf.avg.wear.toFixed(2) : "—"}
                     </td>
+                    {/* The team row has nothing to say about a rating, a target
+                        or a per-driver delta — but the cells have to be there
+                        or every column after them shifts. */}
+                    {official && (
+                      <>
+                        <td className="py-1 pr-2 text-right" />
+                        {paceCurve && <td className="py-1 pr-2 text-right" />}
+                      </>
+                    )}
+                    {advanced && (
+                      <>
+                        <td className="py-1 pr-2 text-right" />
+                        <td className="py-1 pr-2 text-right" />
+                        <td className="py-1 pr-2 text-right" />
+                        <td className="py-1 pr-2 text-right" />
+                      </>
+                    )}
                     {s.savingEnabled && deltaSaving && (
                       <>
                         <td className="py-1 pr-2 text-right" />
@@ -5307,10 +5689,23 @@ export default function StintPlanner({
                     {t.avail.colStart}
                     <Hint text={t.avail.colStartHint} />
                   </th>
-                  <th className="px-2 py-1 text-right font-normal">
-                    {t.avail.colMaxRow}
-                    <Hint text={t.avail.colMaxRowHint} />
+                  <th className="px-2 py-1 font-normal">
+                    {t.jo.colDouble}
+                    <Hint text={t.jo.colDoubleHint} />
                   </th>
+                  <th className="px-2 py-1 font-normal">
+                    {t.jo.colTriple}
+                    <Hint text={t.jo.colTripleHint} />
+                  </th>
+                  {/* The single old limit only still matters to a plan that was
+                      signed off with one — otherwise it is noise beside the two
+                      columns that replaced it. */}
+                  {showLegacyMaxRow && (
+                    <th className="px-2 py-1 text-right font-normal">
+                      {t.jo.maxRowLegacy}
+                      <Hint text={t.jo.maxRowLegacyHint} />
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -5339,18 +5734,26 @@ export default function StintPlanner({
                     <td className="px-2 py-1">
                       {prefSelect(d.id, "prefStart", d.prefStart, t.avail.prefStart)}
                     </td>
-                    <td className="px-2 py-1 text-right">
-                      <input
-                        type="number"
-                        min={1}
-                        max={12}
-                        value={d.maxConsecutive ?? ""}
-                        placeholder="—"
-                        onChange={(e) => patchDriverPref(d.id, { maxConsecutive: e.target.value })}
-                        title={t.avail.maxRowHint(d.name)}
-                        className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
-                      />
+                    <td className="px-2 py-1">
+                      {runPrefSelect(d.id, "prefDouble", d.prefDouble, t.jo.colDoubleHint)}
                     </td>
+                    <td className="px-2 py-1">
+                      {runPrefSelect(d.id, "prefTriple", d.prefTriple, t.jo.colTripleHint)}
+                    </td>
+                    {showLegacyMaxRow && (
+                      <td className="px-2 py-1 text-right">
+                        <input
+                          type="number"
+                          min={1}
+                          max={12}
+                          value={d.maxConsecutive ?? ""}
+                          placeholder="—"
+                          onChange={(e) => patchDriverPref(d.id, { maxConsecutive: e.target.value })}
+                          title={t.avail.maxRowHint(d.name)}
+                          className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-1 text-right text-sm text-zinc-100"
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -5505,13 +5908,35 @@ export default function StintPlanner({
                     </td>
                     <td className="py-1 pr-2 text-right">{d.stints}</td>
                     <td className="py-1 pr-2 text-right">{fmtDuration(d.driveSec)}</td>
-                    <td className="py-1 pr-2 text-right">{fmtLaps(d.laps)}</td>
+                    <td
+                      className={`py-1 pr-2 text-right ${
+                        fairShareMin == null
+                          ? ""
+                          : d.laps < fairShareMin.min
+                            ? "font-semibold text-amber-300"
+                            : "text-emerald-300"
+                      }`}
+                      title={
+                        fairShareMin == null
+                          ? undefined
+                          : d.laps < fairShareMin.min
+                            ? t.jo.fairShareLow(Math.round(d.laps), fairShareMin.min)
+                            : t.jo.fairShareOk(Math.round(d.laps))
+                      }
+                    >
+                      {fmtLaps(d.laps)}
+                    </td>
                     <td className="py-1 pr-2 text-right">{fmtFuel(d.fuel)} L</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {fairShareMin != null && (
+            <p className="mt-2 text-[11px] text-zinc-500">
+              {t.jo.fairShareMinNote(fairShareMin.min, fairShareMin.even)}
+            </p>
+          )}
         </div>
       )}
 

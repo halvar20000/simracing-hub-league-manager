@@ -19,6 +19,22 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.17.0",
+    date: "2026-09-08",
+    changes: [
+      "Stint planner: worked through Johann Solowej's layout proposal. Three of his points were bugs rather than wishes, and those are the ones worth reading twice.",
+      "The schedule no longer disappears when the Standard profile is empty. It was a chicken-and-egg: an unassigned stint has no driver to borrow pace from, so it fell back to the Standard profile, got zero laps, and the loop stopped at stint 1 — but you cannot assign the drivers of a schedule that does not exist yet. An empty field now falls back to the team's own average. A Standard profile that IS filled still wins, so no existing plan re-times itself.",
+      "The fuel-save optimiser no longer overwrites what you entered. It used to write its winning strategy straight into the Standard profile, silently replacing a measured lap time and a measured consumption with a computed target nobody can drive to. It now leads with the question a pit wall actually asks — what would I have to hold to get one more lap out of the tank, and does that save a stop — in three rows: now, one lap more, two laps more. The full stop-count sweep is still there, folded away, as the analysis it always was.",
+      "Rain is a real profile now: a wet lap time AND a wet consumption. The wet model was a lap-time penalty only, so a wet stint was fuelled at the dry figure and came up short — precisely the case where being wrong costs a stop. A wet lap is slower and therefore burns less. Half wet takes half of both. Leave it empty and nothing changes.",
+      "New per-driver columns for what a driver personally loses in the wet, on a damp track, in traffic, and per 10 °C — rain is the widest spread there is between two people with the same dry pace. In Advanced mode; blank means the plan's own figure.",
+      "Availability: \"max stints in a row\" is replaced by separate Double and Triple columns with three answers — happy to, ok, rather not. The old single limit was a number where the honest answer is \"fine, if that is what the plan needs\". Auto-fill reaches for \"happy\" first and treats \"rather not\" as the last resort before leaving a stint empty. Plans that used the old limit keep it.",
+      "Margin lap: plan every fuel-limited stint one lap shorter than the tank allows. Unlike the litre reserve it scales with consumption, so it stays one lap in hand whether the car is thirsty in the wet or sipping at night.",
+      "An official race now takes each driver's iRating in the drivers table and shows the target lap time the pace curve says it is worth — before the race, where it is useful, instead of only after the result file is uploaded.",
+      "Fair share is a switch, and with it on the per-driver totals mark anyone under a quarter of an even share. Not the same question as the 85 % balance flag already there: this one asks whether a driver did enough of the race to have driven it at all.",
+      "Easy mode is now the master switch it should have been: it also puts away Garage 61, the pace/fuel model choice and the schedule's tyre, stop-cost and track-temperature columns. It still only hides — a plan keeps computing exactly as it did, and where a hidden model is running, Easy says so.",
+    ],
+  },
+  {
     version: "2.16.0",
     date: "2026-09-08",
     changes: [

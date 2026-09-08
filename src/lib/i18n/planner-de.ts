@@ -456,9 +456,9 @@ export const de: PlannerDict = {
     title: "Spritspar-Strategie",
     optimize: "Optimieren",
     optimizeHint:
-      "Probiert jede Stoppzahl durch und rechnet aus, wie viel Rundenzeit du dafür hergeben müsstest. Der Sieger wird direkt auf das Standard-Profil übernommen.",
+      "Probiert jede Stoppzahl durch und rechnet aus, wie viel Rundenzeit du dafür hergeben müsstest. Es wird nichts in den Plan übernommen — das ist eine Analyse, keine Anweisung.",
     lead:
-      "Die Rennzeit steht fest, also sucht das hier die Kombination aus Pace und Verbrauch, die die größte Distanz zurücklegt — Rundenzeit gegen weniger Boxenstopps getauscht. Als Pace-/Verbrauchsband dienen dein Standard- und dein Spritspar-Profil, die Pace wird mit den echten Rundenzeiten pro Fahrer gewichtet (nach gefahrenen Stints), und es wird nur so viel gespart wie nötig, um einen Stopp zu streichen. Die beste Strategie wird direkt auf das Standard-Profil übernommen, der Zeitplan unten aktualisiert sich also.",
+      "Die Rennzeit steht fest, also durchsucht das hier das Pace-/Verbrauchsband nach der Kombination, die die größte Distanz zurücklegt — Rundenzeit gegen weniger Boxenstopps getauscht. Als Band dienen dein Standard- und dein Spritspar-Profil, die Pace wird mit den echten Rundenzeiten pro Fahrer gewichtet (nach gefahrenen Stints). Lies es als Analyse: die Zahlen des Plans bleiben genau so, wie sie sind.",
     bestPre: "Beste:",
     bestStops: (n: number) => `${n} Stopps`,
     bestTargetLap: "· Zielrunde",
@@ -476,7 +476,7 @@ export const de: PlannerDict = {
     colLapsPerStint: "Runden/Stint",
     colRaceTime: "Rennzeit",
     colTotalLaps: "Runden gesamt",
-    bestApplied: "beste · übernommen",
+    bestApplied: "beste",
     assumesPre:
       "Nimmt an, dass die Rundenzeit zwischen deinen beiden Profilen linear verläuft.",
     assumesTime:
@@ -727,6 +727,8 @@ export const de: PlannerDict = {
     takesStart: "fährt den Start",
     notOnStart: "nicht am Start",
     runTooLong: (n: number) => `${n} Stints am Stück`,
+    doubleAgainstWish: "ein Doppelstint",
+    tripleAgainstWish: "ein Tripelstint",
     outsideAvailability: (n: number) =>
       `${n} Stint${n === 1 ? "" : "s"} außerhalb seiner Verfügbarkeit`,
   },
@@ -1528,6 +1530,79 @@ export const de: PlannerDict = {
       `${n} Stint${n === 1 ? "" : "s"} braucht mehr Sprit, als das Auto mitführt. Entweder wurden die Runden von Hand eingetragen, oder der Tank ist zu klein.`,
     tempWithoutModel:
       "Es ist eine Streckentemperatur gesetzt, aber nichts misst, wie die Rundenzeit darauf reagiert — die Pace wird also nicht angepasst. Hol Garage-61-Runden oder trag die s/10°C unter Event von Hand ein.",
+  },
+  jo: {
+    fairShare: "Gleichmäßig aufteilen",
+    fairShareHint:
+      "Verteilt das Rennen gleichmäßig auf die Fahrer und markiert, wer deutlich unter seinem Anteil landet. Aus überlässt dir die Aufstellung vollständig.",
+    marginLap: "Sicherheitsrunde",
+    marginLapHint:
+      "Plant jeden spritbegrenzten Stint eine Runde kürzer, als der Tank hergibt — es bleibt also immer eine Runde in der Hinterhand. Anders als die Liter-Reserve skaliert das mit dem Verbrauch: eine Runde bleibt eine Runde, ob das Auto im Nassen säuft oder nachts nippt.",
+    iRating: "iRating",
+    iRatingHint:
+      "Das iRating dieses Fahrers, für ein Official-Rennen. Die Pace-Kurve macht daraus seine Zielrundenzeit. Vor dem Rennen gibt es keine Ergebnisdatei, aus der man es lesen könnte; ein späterer Upload überschreibt, was hier steht.",
+    iRatingPlaceholder: "z. B. 4200",
+
+    rainProfile: "Regen",
+    rainProfileFallback: "Regen (Kader-Standard)",
+    rainLead:
+      "Pace UND Verbrauch bei voller Nässe. Eine nasse Runde ist langsamer und verbraucht deshalb weniger pro Runde — ohne das hat der Plan einen Nass-Stint mit dem Trocken-Verbrauch betankt und kam zu kurz. Halb nass nimmt die Hälfte von beidem. Leer lassen behält das alte Verhalten (nur Rundenzeit-Aufschlag).",
+    rainActive: (delta: string, fuel: string) =>
+      `Ein Nass-Stint läuft ${delta} s/Runde langsamer bei ${fuel} L/Runde.`,
+    rainNeedsBoth:
+      "Es braucht beide Hälften — eine nasse Rundenzeit ohne nassen Verbrauch ist das, was der Nass-Aufschlag schon gesagt hat.",
+
+    colWet: "Nass +s",
+    colWetHint:
+      "Sekunden pro Runde, die DIESER Fahrer bei voller Nässe verliert, zusätzlich zu seiner eigenen Trockenpace. Leer = der Wert des Plans. Regen ist die größte Spreizung, die es zwischen zwei Fahrern mit gleicher Trockenpace gibt.",
+    colHalfWet: "½ nass +s",
+    colHalfWetHint:
+      "Sekunden pro Runde, die DIESER Fahrer auf feuchter oder abtrocknender Strecke verliert. Leer = der Wert des Plans.",
+    colTraffic: "Verkehr +s",
+    colTrafficHint:
+      "Sekunden pro Runde, die DIESER Fahrer im Renn-Verkehr verliert. Leer = der Wert des Plans. Sich durch Nachzügler zu fädeln ist Können wie alles andere.",
+    colTempSlope: "s/10°C",
+    colTempSlopeHint:
+      "Wie stark sich die Rundenzeit DIESES Fahrers pro 10 °C Streckentemperatur verschiebt. Leer = die gemessene Steigung des Plans.",
+    colTarget: "Ziel",
+    colTargetHint:
+      "Die Rundenzeit, die das eigene iRating dieses Fahrers hier wert ist, von der Pace-Kurve abgelesen. Wird nur bei einem Official-Rennen mit gewählter Kurve angezeigt.",
+
+    colDouble: "Doppel",
+    colDoubleHint:
+      "Zwei Stints am Stück. „Gerne“ ist das, wonach die automatische Besetzung zuerst greift; „ok“ heißt: wenn der Plan es braucht; „lieber nicht“ ist die letzte Möglichkeit, bevor ein Stint leer bleibt.",
+    colTriple: "Tripel",
+    colTripleHint: "Drei Stints am Stück. Dieselben drei Antworten.",
+    prefHappy: "gerne",
+    prefOk: "ok",
+    prefAvoid: "lieber nicht",
+    maxRowLegacy: "Max. am Stück (alt)",
+    maxRowLegacyHint:
+      "Das alte einzelne Limit für Stints am Stück. Bleibt erhalten, weil Pläne von vor den Doppel-/Tripel-Spalten damit abgesegnet wurden; bei einem neuen Plan leer lassen.",
+
+    fairShareOk: (laps: number) => `${laps} Runden — fairer Anteil`,
+    fairShareLow: (laps: number, min: number) =>
+      `${laps} Runden — unter dem Minimum von ${min} Runden für diesen Plan`,
+    fairShareMinNote: (min: number, even: number) =>
+      `Mindestens ${min} Runden pro Fahrer (ein Viertel des gleichen Anteils von ${even} Runden). Wer darunter liegt, wird markiert.`,
+
+    targetsTitle: "Was eine Runde mehr kosten würde",
+    targetsLead:
+      "Womit der Plan gerade rechnet, und welchen Verbrauch es bräuchte, um noch eine Runde aus dem Tank zu holen. Nichts davon wird in den Plan übernommen — das sind Ziele zum Hinfahren, keine Werte, die gemessene ersetzen.",
+    colLapsPerStint: "Runden/Stint",
+    colNeeds: "Braucht",
+    colSave: "Sparen",
+    colStops: "Stopps",
+    rowCurrent: "jetzt",
+    unreachable: "jenseits des Spritspar-Profils",
+    targetsSaves: (n: number) =>
+      n === 0 ? "gleich viele Stopps" : `${n} Stopp${n === 1 ? "" : "s"} weniger`,
+    targetsNone:
+      "Trag Tankgröße und Verbrauch ein, um zu sehen, was ein längerer Stint bräuchte.",
+    analysisDetails: "Vollständiger Stoppzahl-Durchlauf",
+
+    easyPitNote:
+      "Detaillierte Boxenwerte und der Garage-61-Import stehen im Erweitert-Modus.",
   },
   // <<SECTIONS>>
 };

@@ -465,9 +465,9 @@ export const en = {
     title: "Fuel-save strategy",
     optimize: "Optimize",
     optimizeHint:
-      "Tries every stop count and works out how much lap time you would have to give up to reach it. The winner is applied to the Standard profile straight away.",
+      "Tries every stop count and works out how much lap time you would have to give up to reach it. Nothing is applied to the plan — it is an analysis, not an instruction.",
     lead:
-      "Race time is fixed, so this finds the pace & fuel that covers the most distance — trading lap time for fewer pit stops. It uses your Standard and Fuel-save profiles as the pace/fuel band, weights the pace by your real per-driver lap times (by stints driven), and only saves the minimum needed to drop a stop. The best strategy is applied straight to the Standard profile, so the schedule below updates.",
+      "Race time is fixed, so this sweeps the pace & fuel band for the combination that covers the most distance — trading lap time for fewer pit stops. It uses your Standard and Fuel-save profiles as the band and weights the pace by your real per-driver lap times (by stints driven). Read it as an analysis: the plan's own numbers are left exactly as they are.",
     bestPre: "Best:",
     bestStops: (n: number) => `${n} stops`,
     bestTargetLap: "· target lap",
@@ -485,7 +485,7 @@ export const en = {
     colLapsPerStint: "Laps/stint",
     colRaceTime: "Race time",
     colTotalLaps: "Total laps",
-    bestApplied: "best · applied",
+    bestApplied: "best",
     assumesPre: "Assumes lap time varies linearly between your two profiles.",
     assumesTime:
       "The distance is fixed here, so the measure is the time it takes to cover it — saving fuel pays when it removes a stop.",
@@ -733,6 +733,8 @@ export const en = {
     takesStart: "takes the start",
     notOnStart: "not on the start",
     runTooLong: (n: number) => `${n} stints in a row`,
+    doubleAgainstWish: "a double stint",
+    tripleAgainstWish: "a triple stint",
     outsideAvailability: (n: number) =>
       `${n} stint${n === 1 ? "" : "s"} outside their availability`,
   },
@@ -1529,6 +1531,86 @@ export const en = {
       `${n} stint${n === 1 ? " needs" : "s need"} more fuel than the car carries. Their laps were typed in by hand or the tank is too small.`,
     tempWithoutModel:
       "A track temperature is set but nothing measures how lap time reacts to it, so the pace is not adjusted. Pull Garage 61 laps, or enter the s/10°C by hand under Event.",
+  },
+  // ---- everything from Johann's layout proposal (Sept 2026) --------------
+  jo: {
+    // Event card
+    fairShare: "Aim for an even share",
+    fairShareHint:
+      "Spread the race evenly over the drivers and flag anyone who ends up well under their share. Off leaves the line-up entirely to you.",
+    marginLap: "Margin lap",
+    marginLapHint:
+      "Plan every fuel-limited stint one lap shorter than the tank allows, so there is always a lap in hand. Unlike the litre reserve this scales with consumption — it stays one lap when the car is thirsty in the wet and when it sips at night.",
+    iRating: "iRating",
+    iRatingHint:
+      "This driver's iRating, for an official race. The pace curve turns it into a target lap time for them. Before the race there is no result file to read it from; uploading one afterwards overwrites what is typed here.",
+    iRatingPlaceholder: "e.g. 4200",
+
+    // Rain profile
+    rainProfile: "Rain",
+    rainProfileFallback: "Rain (roster default)",
+    rainLead:
+      "Pace AND consumption in the full wet. A wet lap is slower, so it burns less per lap — without this the plan fuelled a wet stint at the dry figure and came up short. Half wet takes half of both. Leave it empty to keep the old behaviour (lap-time penalty only).",
+    rainActive: (delta: string, fuel: string) =>
+      `A wet stint runs ${delta} s/lap slower on ${fuel} L/lap.`,
+    rainNeedsBoth:
+      "Both halves are needed — a wet lap time without a wet consumption is what the wet penalty already said.",
+
+    // Per-driver condition columns
+    colWet: "Wet +s",
+    colWetHint:
+      "Seconds per lap THIS driver loses in the full wet, on top of their own dry pace. Blank = the plan's figure. Rain is the widest spread there is between two drivers with the same dry pace.",
+    colHalfWet: "½ wet +s",
+    colHalfWetHint:
+      "Seconds per lap THIS driver loses on a damp or drying track. Blank = the plan's figure.",
+    colTraffic: "Traffic +s",
+    colTrafficHint:
+      "Seconds per lap THIS driver loses in race traffic. Blank = the plan's figure. Picking a way through backmarkers is a skill like any other.",
+    colTempSlope: "s/10°C",
+    colTempSlopeHint:
+      "How much THIS driver's lap time moves per 10 °C of track temperature. Blank = the plan's measured slope.",
+    colTarget: "Target",
+    colTargetHint:
+      "The lap time this driver's own iRating is worth here, read off the pace curve. Only shown for an official race with a curve chosen.",
+
+    // Availability: double / triple stints
+    colDouble: "Double",
+    colDoubleHint:
+      "Two stints back to back. “Happy to” is what the automatic line-up reaches for first; “ok” is fine when the plan needs it; “rather not” is the last resort before a stint stays empty.",
+    colTriple: "Triple",
+    colTripleHint: "Three stints back to back. Same three answers.",
+    prefHappy: "happy to",
+    prefOk: "ok",
+    prefAvoid: "rather not",
+    maxRowLegacy: "Max row (old)",
+    maxRowLegacyHint:
+      "The old single limit on stints in a row. Kept because plans built before the Double/Triple columns were signed off with it; leave it empty on a new plan.",
+
+    // Fair-share check in the per-driver totals
+    fairShareOk: (laps: number) => `${laps} laps — a fair share`,
+    fairShareLow: (laps: number, min: number) =>
+      `${laps} laps — under the ${min}-lap minimum for this plan`,
+    fairShareMinNote: (min: number, even: number) =>
+      `Minimum ${min} laps per driver (a quarter of the ${even}-lap even share). Anyone under it is marked.`,
+
+    // Fuel-save targets
+    targetsTitle: "What one more lap would cost",
+    targetsLead:
+      "What the plan runs on now, and the consumption it would take to get another lap out of the tank. Nothing here is applied to the plan — these are targets to drive to, not values to replace measured ones with.",
+    colLapsPerStint: "Laps/stint",
+    colNeeds: "Needs",
+    colSave: "Save",
+    colStops: "Stops",
+    rowCurrent: "now",
+    unreachable: "beyond the fuel-save profile",
+    targetsSaves: (n: number) =>
+      n === 0 ? "same stops" : `${n} stop${n === 1 ? "" : "s"} fewer`,
+    targetsNone:
+      "Enter the tank size and a consumption to see what a longer stint would take.",
+    analysisDetails: "Full stop-count sweep",
+
+    // Easy mode
+    easyPitNote: "Detailed pit values and the Garage 61 import are in Advanced.",
   },
   // <<SECTIONS>>
 };

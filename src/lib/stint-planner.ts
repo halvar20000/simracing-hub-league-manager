@@ -38,6 +38,20 @@ export type PlannerDriver = {
   /** Litres/lap THIS driver saves on a fuel-save stint, off their own
    *  consumption. Null = use the plan's default. */
   savingFuelDelta?: number | null;
+  /** Seconds/lap THIS driver loses in the full wet, on top of their own dry
+   *  pace. Null = use the plan's figure. Rain is the biggest spread there is
+   *  between two drivers of the same dry pace, so it belongs per driver. */
+  wetDeltaSec?: number | null;
+  /** Seconds/lap THIS driver loses on a damp / drying track. Null = the plan's
+   *  figure (itself derived from the wet delta when not typed). */
+  halfWetDeltaSec?: number | null;
+  /** Seconds/lap THIS driver loses in race traffic. Null = the plan's figure.
+   *  A driver who picks their way through backmarkers well pays less for the
+   *  same lap of traffic than one who follows. */
+  trafficDeltaSec?: number | null;
+  /** Seconds/lap per °C THIS driver's pace moves with track temperature.
+   *  Null = the plan's measured slope. */
+  tempSlopePerC?: number | null;
 };
 
 export type StintProfileKey = "standard" | "saving";
@@ -175,6 +189,13 @@ export type PlannerInput = {
    *  same absolute lap time — a 1:54 driver lifting and coasting does not
    *  suddenly run the 1:56 of the slowest man on the roster. */
   savingMode?: "absolute" | "delta";
+  /** Optional RAIN profile: the pace and — the part the wet delta could never
+   *  express — the CONSUMPTION in the wet. A wet lap is slower, so it burns
+   *  less fuel per lap than the dry figure and a wet stint genuinely runs
+   *  longer. Without this the plan quietly fuelled a wet stint as if it were
+   *  dry and came up short. Null = fall back to the dry consumption plus the
+   *  wet lap-time delta, which is what every plan did before. */
+  rain?: FuelProfile | null;
   /** DEFAULT seconds/lap a fuel-save stint costs on top of a driver's own pace,
    *  used for any driver who has no `savingDeltaSec` of their own. Derived from
    *  the plan's Standard ↔ Fuel-saving profile pair. */
@@ -221,6 +242,14 @@ export type PlannerInput = {
   /** Lowest tyre condition (%) considered raceable — stints ending below this
    *  are flagged. Default 0 (never flag). */
   tyreMinPct?: number;
+  /** Plan one lap of fuel in hand on every stint.
+   *
+   *  Not the same thing as `fuelReserve`, which is a fixed number of litres:
+   *  a margin lap scales with consumption, so it stays one lap of margin when
+   *  the car is thirsty in the wet and when it sips in the cool of the night.
+   *  Applied to the fuel-limited stint length only — a time- or lap-limited
+   *  stint is already shorter than the tank by definition. */
+  marginLap?: boolean;
   /** Litres burned between leaving the box and the green flag — the lap to the
    *  grid and the laps behind the pace car. The car starts the race with that
    *  much less on board, so it comes off the FIRST stint only. */
@@ -256,6 +285,8 @@ export type StintTemplateOpts = {
   stintLaps?: number;
   /** Fuel kept in reserve (litres) — subtracted from the tank for all modes. */
   fuelReserve?: number;
+  /** Keep one lap of fuel in hand on a fuel-limited stint. */
+  marginLap?: boolean;
 };
 
 export type StintTemplate = {
@@ -276,7 +307,12 @@ export function stintTemplate(
   opts: StintTemplateOpts = {}
 ): StintTemplate {
   const usable = Math.max(0, tankSize - Math.max(0, opts.fuelReserve ?? 0));
-  const fuelLaps = p.fuelPerLap > 0 ? Math.floor(usable / p.fuelPerLap) : 0;
+  // The margin lap comes off the LAP COUNT, not off the litres: one lap of
+  // margin has to stay one lap however thirsty the car is at the time.
+  const fuelLaps =
+    p.fuelPerLap > 0
+      ? Math.max(0, Math.floor(usable / p.fuelPerLap) - (opts.marginLap ? 1 : 0))
+      : 0;
   let laps: number;
   if (opts.mode === "time" && opts.stintSec && p.laptimeSec > 0) {
     laps = Math.max(0, Math.floor(opts.stintSec / p.laptimeSec));
@@ -451,6 +487,45 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     : null;
   const driverById = new Map(drivers.map((d) => [d.id, d]));
 
+  /**
+   * What the roster actually runs, averaged over the drivers who have numbers.
+   *
+   * This is the fallback for an unassigned stint and for a driver with nothing
+   * entered — the Standard profile is only consulted after it. Before, the
+   * order was the other way round, and an empty Standard profile blanked the
+   * whole schedule: an unassigned stint has no driver to borrow from, so it
+   * fell to Standard, got zero laps, and the loop stopped at stint 1. You
+   * cannot assign the drivers of a schedule that does not exist yet, so the
+   * plan stayed empty until somebody typed a Standard profile it was never
+   * going to use. The team's own average is both a better estimate and always
+   * available once one driver has been measured.
+   */
+  const teamAvg = (() => {
+    const laps = drivers
+      .map((d) => d.laptimeSec)
+      .filter((v): v is number => v != null && v > 0);
+    const fuels = drivers
+      .map((d) => d.fuelPerLap)
+      .filter((v): v is number => v != null && v > 0);
+    const mean = (xs: number[]) =>
+      xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+    return { laptimeSec: mean(laps), fuelPerLap: mean(fuels) };
+  })();
+  /**
+   * Pace/fuel for a driver who has none.
+   *
+   * The Standard profile still wins WHENEVER IT IS FILLED IN. That matters:
+   * preferring the team average outright would re-time every existing plan the
+   * moment this shipped, and an archived plan has to re-open with the schedule
+   * it was signed off with. The team average is a fallback for the empty
+   * field, which is exactly what Johann asked for — "otherwise the field
+   * should be set in background by team average values".
+   */
+  const fallbackLap =
+    standard.laptimeSec > 0 ? standard.laptimeSec : teamAvg.laptimeSec;
+  const fallbackFuel =
+    standard.fuelPerLap > 0 ? standard.fuelPerLap : teamAvg.fuelPerLap;
+
   const raceStartUtcMs =
     sessionStartUtcMs != null
       ? sessionStartUtcMs + greenFlagOffsetSec * 1000
@@ -504,9 +579,10 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     const prof: FuelProfile = useSaving ? saving! : standard;
     const tpl = useSaving && savTpl ? savTpl : stdTpl;
     // In delta mode the template is only a display default — a plan may leave
-    // the Standard profile empty and carry all its numbers on the drivers, so
-    // an empty template must not abort the schedule. `plannedLaps <= 0` below
-    // still stops cleanly when there is genuinely nothing to run on.
+    // the Standard profile empty and carry all its numbers on the drivers (or
+    // on the team average), so an empty template must not abort the schedule.
+    // `plannedLaps <= 0` below still stops cleanly when there is genuinely
+    // nothing to run on.
     if (!deltaMode && tpl.laps <= 0) break; // no valid stint (bad inputs)
     const driver = assign.driverId ? driverById.get(assign.driverId) : null;
 
@@ -518,8 +594,8 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     if (deltaMode) {
       // The driver's own averages are the truth; the fuel-save profile is an
       // effort ON TOP of them. Standard is the fallback for an unfilled row.
-      const ownLap = paceFallback ? standard.laptimeSec : driver!.laptimeSec!;
-      const ownFuel = fuelFallback ? standard.fuelPerLap : driver!.fuelPerLap!;
+      const ownLap = paceFallback ? fallbackLap : driver!.laptimeSec!;
+      const ownFuel = fuelFallback ? fallbackFuel : driver!.fuelPerLap!;
       // Each driver may carry their own fuel-save effort; the plan's default
       // (derived from the Standard ↔ Fuel-saving pair) covers the rest.
       const dSec =
@@ -552,17 +628,38 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     const correctionMin = assign.correctionMin ?? 0;
     const corrSec = correctionMin * 60;
 
-    // Weather: a damp track costs less than a soaked one, and both leave
-    // fuel/laps alone (a stint stays fuel-limited) — only the clock grows.
+    // Weather.
+    //
+    // The lap-time side is a delta, and it is per driver where the driver has
+    // one: rain is the widest spread there is between two people with the same
+    // dry pace. The FUEL side is new and only exists when the plan carries a
+    // rain profile — a wet lap is slower, so it burns less per lap, and
+    // fuelling a wet stint at the dry figure made it come up short.
     const cond = conditionOf(assign);
+    const perDriverOr = (own: number | null | undefined, plan: number) =>
+      own != null && own >= 0 ? own : plan;
+    // A rain profile IS the wet delta — the gap between its lap time and the
+    // dry one. Derived here rather than only in the caller, so a direct call
+    // with a rain profile cannot get the fuel half of the effect without the
+    // pace half (which is exactly what the first run of the spot-check did).
+    const dryBase = standard.laptimeSec > 0 ? standard.laptimeSec : fallbackLap;
+    const planWet =
+      input.rain && dryBase > 0
+        ? Math.max(0, input.rain.laptimeSec - dryBase)
+        : (wetDeltaSec ?? 0);
+    const planHalfWet =
+      input.rain && dryBase > 0 ? planWet / 2 : (input.halfWetDeltaSec ?? 0);
     const wetAdd =
       cond === "wet"
-        ? Math.max(0, wetDeltaSec ?? 0)
+        ? Math.max(0, perDriverOr(driver?.wetDeltaSec, planWet))
         : cond === "half"
-          ? Math.max(0, input.halfWetDeltaSec ?? 0)
+          ? Math.max(0, perDriverOr(driver?.halfWetDeltaSec, planHalfWet))
           : 0;
     // Race traffic applies to every stint, wet or dry.
-    const trafficAdd = Math.max(0, input.trafficPenaltySec ?? 0);
+    const trafficAdd = Math.max(
+      0,
+      perDriverOr(driver?.trafficDeltaSec, input.trafficPenaltySec ?? 0)
+    );
 
     // Per-stint track temperature. A stint without one runs at the plan's base
     // temperature, i.e. exactly the entered pace — an empty field is always
@@ -574,10 +671,30 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       baseTempC != null &&
       Number.isFinite(stintTemp) &&
       Number.isFinite(baseTempC)
-        ? (tempSlopePerC ?? 0) * (stintTemp - baseTempC)
+        ? perDriverOr(driver?.tempSlopePerC, tempSlopePerC ?? 0) *
+          (stintTemp - baseTempC)
         : 0;
     const paceAdd = wetAdd + tempAdd + trafficAdd;
     const effLaptime = driverLapSec + paceAdd;
+
+    // Consumption in the wet. The rain profile is a whole-team figure, so it
+    // is applied as the RATIO it bears to the dry profile rather than as an
+    // absolute — that way a driver who is 3 % under the team's dry consumption
+    // stays 3 % under it in the rain. Half wet takes half the effect, which is
+    // the same convention the half-wet lap delta uses.
+    const rainFuelRatio =
+      input.rain && input.rain.fuelPerLap > 0 && standard.fuelPerLap > 0
+        ? input.rain.fuelPerLap / standard.fuelPerLap
+        : 1;
+    const condFuelFactor =
+      rainFuelRatio === 1
+        ? 1
+        : cond === "wet"
+          ? rainFuelRatio
+          : cond === "half"
+            ? 1 + (rainFuelRatio - 1) / 2
+            : 1;
+    const fuelPerLapCond = Math.max(0, fuelPerLapEff * condFuelFactor);
 
     // How many laps this stint runs. In fuel mode that is what is actually in
     // the tank — which after a splash is less than a full stint. time/laps mode
@@ -587,8 +704,11 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     // gave everyone the same count.
     const modelLaps =
       (stintMode ?? "fuel") === "fuel"
-        ? fuelPerLapEff > 0
-          ? Math.floor(fuelAtStart / fuelPerLapEff)
+        ? fuelPerLapCond > 0
+          ? Math.max(
+              0,
+              Math.floor(fuelAtStart / fuelPerLapCond) - (input.marginLap ? 1 : 0)
+            )
           : 0
         : deltaMode && stintMode === "time" && stintSec && effLaptime > 0
           ? Math.max(0, Math.floor(stintSec / effLaptime))
@@ -616,7 +736,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
     );
 
     let laps = plannedLaps;
-    let fuel = laps * fuelPerLapEff;
+    let fuel = laps * fuelPerLapCond;
     let endSec: number;
     let isFinal = false;
     let partial = false;
@@ -629,7 +749,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
         isFinal = true;
         partial = plannedLaps > lapsLeft;
         laps = lapsLeft;
-        fuel = laps * fuelPerLapEff;
+        fuel = laps * fuelPerLapCond;
         greenSec = effLaptime * laps;
       }
     } else if (roundEnd) {
@@ -645,7 +765,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
         isFinal = true;
         partial = plannedLaps > need;
         laps = need;
-        fuel = laps * fuelPerLapEff;
+        fuel = laps * fuelPerLapCond;
         greenSec = effLaptime * laps;
         finished = true;
       }
@@ -655,7 +775,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       partial = true;
       greenSec = raceDurationSec - t;
       laps = effLaptime > 0 ? greenSec / effLaptime : 0;
-      fuel = laps * fuelPerLapEff;
+      fuel = laps * fuelPerLapCond;
     }
 
     // --- the stop that ends this stint ------------------------------------
@@ -725,7 +845,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       tempDeltaSec: Math.round(tempAdd * 1000) / 1000,
       lapSec: effLaptime,
       baseLapSec: driverLapSec,
-      fuelPerLapUsed: fuelPerLapEff,
+      fuelPerLapUsed: fuelPerLapCond,
       paceFallback,
       fuelFallback,
       stopSec: isFinal ? 0 : stopLoss,
@@ -836,6 +956,87 @@ export type FuelSaveOptimization =
        *  laps in a set time. */
       lapLimited: boolean;
     };
+
+/** One row of the fuel-save target table: what a longer stint would cost. */
+export type FuelSaveTarget = {
+  /** Laps per stint this row buys. */
+  lapsPerStint: number;
+  /** The consumption you must not exceed to get them, in l/lap. */
+  fuelPerLap: number;
+  /** Litres/lap that is below where the plan runs today (0 on the current row). */
+  savePerLap: number;
+  /** Percent below today's consumption — the number a driver can actually aim
+   *  at, because nobody lifts "0.14 litres". */
+  savePct: number;
+  /** Pit stops over the race at this stint length. */
+  stops: number;
+  /** The row the plan runs on today. */
+  current: boolean;
+  /** False when even the plan's fuel-save profile cannot get this low, i.e.
+   *  the target is arithmetic rather than an option. */
+  reachable: boolean;
+};
+
+/**
+ * "What would I have to save to get one more lap out of the tank?"
+ *
+ * This is the question a pit wall actually asks, and `optimizeFuelSave` below
+ * answers a different one: it sweeps the whole fuel band and picks a winner.
+ * That is a good analysis and a poor instruction — the number it lands on is
+ * some consumption between the two profiles that nobody can aim at, and it
+ * used to be written straight into the Standard profile, quietly replacing a
+ * measured figure with a computed target.
+ *
+ * So: three rows. Where the plan is now, one lap more per stint, two laps
+ * more — each with the consumption it needs and the stops it saves. Nothing is
+ * applied to anything. Johann Solowej asked for exactly this (Sept 2026) and
+ * he is right that it is the more useful half.
+ */
+export function fuelSaveTargets(args: {
+  tankSize: number;
+  fuelReserve?: number;
+  /** Consumption the plan runs on today, l/lap. */
+  fuelPerLap: number;
+  /** Total race laps as the plan currently projects them. */
+  totalLaps: number;
+  /** Lowest consumption the team believes is reachable (the fuel-save
+   *  profile). Undefined/0 = do not judge reachability. */
+  floorFuelPerLap?: number;
+  /** How many extra laps to show targets for (default 2). */
+  extra?: number;
+  /** Keep a lap of fuel in hand, as the schedule does. */
+  marginLap?: boolean;
+}): FuelSaveTarget[] {
+  const usable = Math.max(0, args.tankSize - Math.max(0, args.fuelReserve ?? 0));
+  const F0 = args.fuelPerLap;
+  if (usable <= 0 || !(F0 > 0) || !(args.totalLaps > 0)) return [];
+
+  const margin = args.marginLap ? 1 : 0;
+  const base = Math.max(0, Math.floor(usable / F0) - margin);
+  if (base <= 0) return [];
+
+  const rows: FuelSaveTarget[] = [];
+  for (let k = 0; k <= (args.extra ?? 2); k++) {
+    const laps = base + k;
+    // The consumption that exactly fills `laps + margin` laps out of the tank.
+    // Anything above it and the stint is one lap shorter again.
+    const need = usable / (laps + margin);
+    const stints = Math.ceil(args.totalLaps / laps);
+    rows.push({
+      lapsPerStint: laps,
+      fuelPerLap: need,
+      savePerLap: Math.max(0, F0 - need),
+      savePct: F0 > 0 ? Math.max(0, (F0 - need) / F0) * 100 : 0,
+      stops: Math.max(0, stints - 1),
+      current: k === 0,
+      reachable:
+        k === 0 ||
+        !(args.floorFuelPerLap && args.floorFuelPerLap > 0) ||
+        need >= args.floorFuelPerLap,
+    });
+  }
+  return rows;
+}
 
 export function optimizeFuelSave(args: {
   raceDurationSec: number;

@@ -38,12 +38,25 @@ export type BrokenWish = {
     | "takesStart"
     | "notOnStart"
     | "runTooLong"
+    | "doubleAgainstWish"
+    | "tripleAgainstWish"
     | "outsideAvailability";
   /** The number the phrase needs, where the kind has one. */
   n?: number;
 };
 
 export type StintPref = "" | "prefer" | "avoid";
+
+/**
+ * A three-state preference: happy to, will if needed, would rather not.
+ *
+ * The two-state `StintPref` says "yes please" or "no thanks" and has no way to
+ * express the answer most drivers actually give about a double stint — "fine,
+ * if that is what the plan needs". The automatic line-up fills "happy" seats
+ * first, reaches for "ok" when it has to, and treats "avoid" as the last
+ * resort before leaving a stint empty.
+ */
+export type StintPref3 = "" | "happy" | "ok" | "avoid";
 
 export type AutofillDriver = {
   id: string;
@@ -53,8 +66,15 @@ export type AutofillDriver = {
   night?: StintPref;
   rain?: StintPref;
   start?: StintPref;
-  /** Most stints in a row this driver wants. 0/undefined = no limit stated. */
+  /** Most stints in a row this driver wants. 0/undefined = no limit stated.
+   *  Superseded by `double` / `triple`; still honoured for plans built before
+   *  those existed. */
   maxConsecutive?: number;
+  /** How the driver feels about a second stint back to back, and about a
+   *  third. "" = not stated, which is treated as "ok" — the fill has to seat
+   *  somebody, and silence is not a refusal. */
+  double?: StintPref3;
+  triple?: StintPref3;
 };
 
 export type AutofillStint = {
@@ -183,14 +203,15 @@ export function autofillDrivers(
       const continuing = d.id === prevId;
       const wouldRun = continuing ? runLen + 1 : 1;
       const maxRun = d.maxConsecutive && d.maxConsecutive > 0 ? d.maxConsecutive : Infinity;
+      // What this driver said about a run of this length. Silence is "ok":
+      // somebody has to sit in the car, and not answering is not a refusal.
+      const runPref: StintPref3 =
+        wouldRun === 2 ? (d.double ?? "") : wouldRun >= 3 ? (d.triple ?? "") : "";
 
       let cost = 0;
       // Availability is a fact, not a wish: never chosen while anyone else can
       // go, but not an absolute veto — an unseated stint helps nobody.
       if (!free) cost += 10_000;
-      // Past the driver's own limit on stints in a row.
-      if (wouldRun > maxRun) cost += 1_000;
-
       // Balance: the further ahead of the least-used driver, the more expensive.
       cost += ((count.get(d.id) ?? 0) - minCount) * 30;
 
@@ -199,18 +220,27 @@ export function autofillDrivers(
       if (rain) cost += d.rain === "avoid" ? 60 : d.rain === "prefer" ? -25 : 0;
       if (isStart) cost += d.start === "avoid" ? 60 : d.start === "prefer" ? -40 : 0;
 
-      // Double stints: a refuel-only stop is quicker, so keep the same driver in
-      // for a second stint when their own limit allows it. Never a third —
-      // that is what maxConsecutive is for.
-      if (opts.doubleStint && continuing && wouldRun === 2 && wouldRun <= maxRun) {
-        // Bigger than one stint's balance penalty on purpose: the second half
-        // of a pair must beat "somebody else has driven less", or no pair ever
-        // forms. Two ahead still costs more than the pairing is worth, so the
-        // rotation resumes by itself.
-        cost -= 45;
-      } else if (!opts.doubleStint && continuing) {
-        // Otherwise rotate: back-to-back stints are the exception.
-        cost += 15;
+      // A longer run than one stint is now a matter of what the driver said.
+      // "happy" is what the fill reaches for first, "ok" is neutral-ish, and
+      // "avoid" is expensive but never an outright veto — an unseated stint
+      // helps nobody.
+      if (continuing && wouldRun >= 2) {
+        if (runPref === "avoid") cost += 250;
+        else if (runPref === "happy") {
+          // Bigger than one stint's balance penalty on purpose: the second half
+          // of a pair must beat "somebody else has driven less", or no pair
+          // ever forms. Two ahead still costs more than the pairing is worth,
+          // so the rotation resumes by itself.
+          cost -= 45;
+        } else if (opts.doubleStint && wouldRun === 2 && wouldRun <= maxRun) {
+          // The plan-wide double-stint switch, for a driver who said nothing.
+          cost -= 45;
+        } else if (!opts.doubleStint) {
+          // Otherwise rotate: back-to-back stints are the exception.
+          cost += 15;
+        }
+        // Past the driver's own stated ceiling on top of all that.
+        if (wouldRun > maxRun) cost += 1_000;
       }
 
       return { d, cost, free };
@@ -274,6 +304,11 @@ export function autofillDrivers(
     if (d.start === "avoid" && takesStart) broken.push({ kind: "takesStart" });
     if (d.start === "prefer" && !takesStart) broken.push({ kind: "notOnStart" });
     if (longestRun > maxRun) broken.push({ kind: "runTooLong", n: longestRun });
+    // Said "rather not" to a double or a triple and got one anyway.
+    if (d.double === "avoid" && longestRun >= 2)
+      broken.push({ kind: "doubleAgainstWish" });
+    if (d.triple === "avoid" && longestRun >= 3)
+      broken.push({ kind: "tripleAgainstWish" });
     const blockedUsed = stints.filter((st, i) => assignment[i] === d.id && !isFree(d, st)).length;
     if (blockedUsed > 0)
       broken.push({ kind: "outsideAvailability", n: blockedUsed });
