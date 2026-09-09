@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.29.0",
+    date: "2026-09-09",
+    changes: [
+      "Basics, Easy mode: the Pit-stop model card is gone entirely — it is Advanced-only now. What a stop costs is settled once per car; Easy mode is for the run-up to a race.",
+      "The Event card still states what a stop costs in Easy mode, and only points at the Pit-stop model card in Advanced, where the card actually exists. Nothing about the computation changed, and the printout still carries the whole card.",
+    ],
+  },
+  {
     version: "2.28.0",
     date: "2026-09-09",
     changes: [

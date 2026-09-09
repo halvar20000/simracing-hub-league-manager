@@ -3611,9 +3611,16 @@ export default function StintPlanner({
                   </strong>
                   {t.ev.stopFlatPost}
                 </>
-              )}{" "}
-              {t.ev.stopWhere}{" "}
-              <span className="text-orange-300">{t.pit.title}</span>.
+              )}
+              {/* Where to change it — only where there is something to click:
+                  the pit card is Advanced-only. */}
+              {advanced && (
+                <>
+                  {" "}
+                  {t.ev.stopWhere}{" "}
+                  <span className="text-orange-300">{t.pit.title}</span>.
+                </>
+              )}
             </p>
             <Field label={t.ev.tank} hint={t.ev.tankHint}>
               <input className={inp} value={s.event.tankSize}
@@ -3795,7 +3802,13 @@ export default function StintPlanner({
 
         {/* Pit-stop model — measured constants instead of one flat number.
             Off by default: an existing plan keeps its flat pit loss until
-            somebody switches this on. */}
+            somebody switches this on.
+
+            Advanced only since v2.29.0, on Thomas's call: what a stop costs is
+            settled once for a car and then left alone, and Easy mode is for
+            the run-up to a race. Easy still SAYS what a stop costs — the Event
+            card carries the figure — it just offers no way to change it. */}
+        <AdvancedOnly>
         <div className={card} id="card-pit">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
@@ -4206,6 +4219,7 @@ export default function StintPlanner({
           </>
           )}
         </div>
+        </AdvancedOnly>
       </div>
 
       </fieldset>
