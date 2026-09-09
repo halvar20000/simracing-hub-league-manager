@@ -3630,15 +3630,13 @@ export default function StintPlanner({
                 onChange={(e) => patchEvent("gridFuelL", e.target.value)}
                 placeholder={t.ev.gridFuelPlaceholder} />
             </Field>
-            {/* Both of these change the shape of the plan rather than a single
-                number, so they sit under the fuel fields they qualify. */}
-            <CheckField
-              className="flex items-end"
-              checked={s.event.marginLap === true}
-              onChange={(v) => patchEvent("marginLap", v)}
-              label={t.jo.marginLap}
-              hint={t.jo.marginLapHint}
-            />
+            {/* The stint-margin checkbox lived here until v2.21.0 — one lap off
+                every fuel-limited stint. Removed on Thomas's call: "Margin Lap"
+                now names the +1 lap at the finish, and two controls cannot wear
+                the same name. No saved plan had it on (checked against the live
+                DB), so nothing re-times. `PlannerInput.marginLap` still exists
+                and is still honoured, so an archived payload that carries it
+                computes exactly as it was signed off. */}
             <CheckField
               className="flex items-end"
               checked={s.event.fairShare !== false}

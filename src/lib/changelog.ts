@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.21.0",
+    date: "2026-09-09",
+    changes: [
+      "The +1-lap finish is called \"Margin Lap\" now, in both languages — the term drivers actually use for it. The explanation next to it is unchanged: the race runs to the end of the lap the clock expires on and one more after it.",
+      "The old \"Margin lap\" checkbox (one lap off every fuel-limited stint) is gone, because two controls on one card cannot wear the same name. Checked against the live database first: no saved plan had it switched on, so no schedule moved. An archived plan that carries the flag is still computed with it, so it re-opens exactly as it was signed off.",
+      "The litre-based safety margin — Fuel reserve — is untouched and still on screen; that is where a margin belongs when you want it in litres rather than laps.",
+    ],
+  },
+  {
     version: "2.20.2",
     date: "2026-09-09",
     changes: [

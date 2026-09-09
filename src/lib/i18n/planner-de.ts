@@ -125,7 +125,7 @@ export const de: PlannerDict = {
     raceDuration: "Renndauer (h:mm:ss)",
     raceDurationHint:
       "Wie lange das Rennen ab der grünen Flagge läuft. 6:00:00 für ein 6-Stunden-Rennen, 0:45:00 für einen 45-Minuten-Sprint.",
-    roundRaceEnd: "Auf voller Runde beenden (+ 1)",
+    roundRaceEnd: "Margin Lap",
     roundRaceEndBody:
       "— das Rennen läuft bis zum Ende der Runde, in der die Uhr abläuft, und danach noch eine weitere, statt mitten in der Runde abgeschnitten zu werden. Diese Runden kosten Sprit, deshalb kann der Plan einen Splash zeigen, den die alte Regel verdeckt hat.",
     projectedFinishLabel: "Hochgerechnetes Ziel:",
@@ -1523,9 +1523,6 @@ export const de: PlannerDict = {
     fairShare: "Fair Share",
     fairShareHint:
       "Verteilt das Rennen gleichmäßig auf die Fahrer und markiert, wer deutlich unter seinem Anteil landet. Aus überlässt dir die Aufstellung vollständig.",
-    marginLap: "Sicherheitsrunde",
-    marginLapHint:
-      "Plant jeden spritbegrenzten Stint eine Runde kürzer, als der Tank hergibt — es bleibt also immer eine Runde in der Hinterhand. Anders als die Liter-Reserve skaliert das mit dem Verbrauch: eine Runde bleibt eine Runde, ob das Auto im Nassen säuft oder nachts nippt.",
     iRating: "iRating",
     iRatingHint:
       "Das iRating dieses Fahrers, für ein Official-Rennen. Die Pace-Kurve macht daraus seine Zielrundenzeit. Vor dem Rennen gibt es keine Ergebnisdatei, aus der man es lesen könnte; ein späterer Upload überschreibt, was hier steht.",

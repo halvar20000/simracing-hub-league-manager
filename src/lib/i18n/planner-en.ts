@@ -132,7 +132,7 @@ export const en = {
     raceDuration: "Race duration (h:mm:ss)",
     raceDurationHint:
       "How long the race runs, from the green flag. 6:00:00 for a 6 h, 0:45:00 for a 45-minute sprint.",
-    roundRaceEnd: "Finish on a whole lap (+ 1)",
+    roundRaceEnd: "Margin Lap",
     roundRaceEndBody:
       "— the race runs to the end of the lap the clock expires on and one more after it, instead of being cut mid-lap. Those laps cost fuel, so the plan may show a splash the old rule hid.",
     projectedFinishLabel: "Projected finish:",
@@ -1525,9 +1525,6 @@ export const en = {
     fairShare: "Fair share",
     fairShareHint:
       "Spread the race evenly over the drivers and flag anyone who ends up well under their share. Off leaves the line-up entirely to you.",
-    marginLap: "Margin lap",
-    marginLapHint:
-      "Plan every fuel-limited stint one lap shorter than the tank allows, so there is always a lap in hand. Unlike the litre reserve this scales with consumption — it stays one lap when the car is thirsty in the wet and when it sips at night.",
     iRating: "iRating",
     iRatingHint:
       "This driver's iRating, for an official race. The pace curve turns it into a target lap time for them. Before the race there is no result file to read it from; uploading one afterwards overwrites what is typed here.",
