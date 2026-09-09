@@ -1612,10 +1612,8 @@ export const en = {
   tabs: {
     basis: "Basics",
     basisHint: "event, pit stop, roster",
-    pace: "Pace & fuel",
-    paceHint: "what the team runs",
-    data: "Per driver",
-    dataHint: "figures, availability",
+    prep: "Preparation",
+    prepHint: "pace, fuel, driver figures",
     during: "During race",
     duringHint: "schedule & live",
     post: "After race",

@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.20.0",
+    date: "2026-09-09",
+    changes: [
+      "The stint planner's two setup tabs \"Pace & fuel\" and \"Per driver\" are one tab now: Preparation. They were one sitting of the same work — a profile and the driver figures it falls back to when a driver has none — and having them apart meant changing tab to compare the two halves of one decision.",
+      "Building a plan is now Basics → Preparation: settle what the race is, then feed it numbers. The card order inside is unchanged, and the totals strip appears once instead of twice.",
+    ],
+  },
+  {
     version: "2.19.0",
     date: "2026-09-09",
     changes: [

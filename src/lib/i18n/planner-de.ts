@@ -1603,10 +1603,8 @@ export const de: PlannerDict = {
   tabs: {
     basis: "Basisdaten",
     basisHint: "Event, Boxenstopp, Kader",
-    pace: "Pace & Verbrauch",
-    paceHint: "was das Team fährt",
-    data: "Pro Fahrer",
-    dataHint: "Werte, Verfügbarkeit",
+    prep: "Vorbereitung",
+    prepHint: "Pace, Verbrauch, Fahrerwerte",
     during: "Im Rennen",
     duringHint: "Zeitplan & live",
     post: "Nach dem Rennen",

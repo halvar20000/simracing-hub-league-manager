@@ -274,15 +274,16 @@ Per-round recognition badge — **no championship points, never touches standing
 - **The manual `/stint-planner/anleitung` is German-only by design** (the team's own document). The EN switch labels the link "Guide (German)" rather than pretending.
 - **Easy mode HIDES, it never changes the plan.** A view toggle that silently re-timed a schedule on race day would be a trap. Where a hidden block is actually in effect, `AdvancedOnly activeNote` says so. The one deliberate exception is the schedule's tyre/stop/temperature columns, which are dropped from the printout too — a pit-wall sheet in Easy mode should be the short one.
 
-## Stint planner: the five tabs
+## Stint planner: the four tabs
 
-`PlanPhase` (`pre | during | post`) is still the unit the race clock reasons about — `autoPhase` picks one from the wall clock and `DEFAULT_TAB` maps it to a tab. `PlanTab` (`basis | pace | data | during | post`) is what is on screen: PRE is split three ways in the order the work happens.
+`PlanPhase` (`pre | during | post`) is still the unit the race clock reasons about — `autoPhase` picks one from the wall clock and `DEFAULT_TAB` maps it to a tab. `PlanTab` (`basis | prep | during | post`) is what is on screen: PRE is split in two, in the order the work happens.
 
 | Tab | Cards |
 |---|---|
 | `basis` | Event, Pit-stop model, Roster |
-| `pace` | Fuel profiles (standard / fuel-save / rain, stint length, tyre floor), Fuel-save targets |
-| `data` | Garage 61 + driver stats, Drivers table, Availability, schedule preview, pre-race notes |
+| `prep` | Fuel profiles (standard / fuel-save / rain, stint length, tyre floor), Fuel-save targets, Garage 61 + driver stats, Drivers table, Availability, schedule preview, pre-race notes |
+
+- `prep` was two tabs (`pace` = what the team runs, `data` = what each driver runs) until 2.20.0. One sitting of the same work, and splitting it meant changing tab to compare a profile with the driver figures it falls back to. One `tabBox("prep")` box holds both halves so the totals strip renders once.
 
 - Every tab stays in the DOM (`tabBox()` = `hidden print:block`) so a printout is the whole plan.
 - `summaryStrip` repeats six totals at the top of each setup tab — the split cost the always-a-scroll-away schedule, this is the cheap half of that feedback. `print:hidden`, because paper has the real table.

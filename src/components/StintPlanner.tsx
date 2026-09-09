@@ -150,27 +150,29 @@ type PlanPhase = "pre" | "during" | "post";
 /**
  * The tabs on screen.
  *
- * Building a plan is three jobs, not one, and putting them on one page meant a
- * scroll past nine cards with no stated order. Johann Solowej's proposal
- * (Sept 2026) draws them as separate pages and he is right — so PRE is split
- * three ways, in the order the work actually happens:
+ * Building a plan is two jobs, not one long scroll: settle what the race is,
+ * then feed it numbers. Johann Solowej's proposal (Sept 2026) drew them as
+ * separate pages and he was right about the split; the first cut made it three
+ * pages, which was one too many — "what the TEAM runs" and "what each DRIVER
+ * runs" are the same sitting of the same work, and splitting them meant
+ * jumping tabs to compare a profile with the driver figures it falls back to.
+ * So PRE is two tabs:
  *
- *   basis  — what the race is, what a stop costs, who is in the car
- *   pace   — what the TEAM runs: the profiles and what a longer stint costs
- *   data   — what each DRIVER runs: imported figures, the table, availability
+ *   basis — what the race is, what a stop costs, who is in the car
+ *   prep  — the numbers: profiles, fuel-save targets, imported figures, the
+ *           driver table, availability
  *
  * Labels come from the dictionary; this only fixes the order and which phase
  * each tab belongs to.
  */
-type PlanTab = "basis" | "pace" | "data" | "during" | "post";
+type PlanTab = "basis" | "prep" | "during" | "post";
 const TABS: {
   key: PlanTab;
   phase: PlanPhase;
-  labelKey: "basis" | "pace" | "data" | "during" | "post";
+  labelKey: "basis" | "prep" | "during" | "post";
 }[] = [
   { key: "basis", phase: "pre", labelKey: "basis" },
-  { key: "pace", phase: "pre", labelKey: "pace" },
-  { key: "data", phase: "pre", labelKey: "data" },
+  { key: "prep", phase: "pre", labelKey: "prep" },
   { key: "during", phase: "during", labelKey: "during" },
   { key: "post", phase: "post", labelKey: "post" },
 ];
@@ -2453,9 +2455,9 @@ export default function StintPlanner({
       "card-event": "basis",
       "card-pit": "basis",
       "card-drivers": "basis",
-      "card-fuel": "pace",
-      "card-fuelsave": "pace",
-      "card-g61": "data",
+      "card-fuel": "prep",
+      "card-fuelsave": "prep",
+      "card-g61": "prep",
     };
     const target = CARD_TAB[anchor];
     if (target && target !== tab) setTab(target);
@@ -4384,7 +4386,7 @@ export default function StintPlanner({
       </div>
 
       {/* ===== PACE & FUEL — what the TEAM runs ===== */}
-      <div className={tabBox("pace")}>
+      <div className={tabBox("prep")}>
       <fieldset disabled={frozen} className="contents">
       {summaryStrip}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -4775,13 +4777,10 @@ export default function StintPlanner({
       </div>
 
       </div>
-      </fieldset>
-      </div>
 
-      {/* ===== PER DRIVER — what each DRIVER runs ===== */}
-      <div className={tabBox("data")}>
-      <fieldset disabled={frozen} className="contents">
-      {summaryStrip}
+      {/* ===== the same tab, second half: what each DRIVER runs. One box, so
+          the totals strip appears once and a profile sits next to the driver
+          figures it falls back to. ===== */}
 
       {/* Garage 61 import.
           Johann Solowej asked for an option to hide this whole section
