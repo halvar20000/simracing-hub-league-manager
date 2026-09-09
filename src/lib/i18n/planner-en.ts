@@ -161,16 +161,10 @@ export const en = {
     lapsUnplanned: (n: string) => `— ${n} laps unplanned, add stints`,
     raceStart: "Race start",
     raceStartHint:
-      "When the race really starts — the moment the green flag falls. Everything on the plan is counted from here. If you set a green-flag offset below, this is the session start and the flag falls that much later.",
+      "The moment the green flag falls. Everything on the plan is counted from here: put in the expected time beforehand, and hit “Now” when the flag actually drops.",
     now: "Now",
-    nowHint: "Stamp the exact moment the race starts — to the second.",
-    nowHintOffset: (offset: string) =>
-      `Stamp the exact moment the race starts. The ${offset} green-flag offset is taken off automatically, so the flag lands on now.`,
-    greenLater: (offset: string) =>
-      `Green flag ${offset} later — “Now” accounts for it.`,
-    greenOffset: "Green-flag offset (m:ss)",
-    greenOffsetHint:
-      "Time between the session start and the green flag — the lap to the grid plus the formation laps. Leave at 0:00 when the clock starts with the flag.",
+    nowHint: "Stamp the green flag on this second. Every stint shifts with it.",
+    nowAlsoDuring: "Hit “Now” when the flag falls — also on the During-Race tab.",
     stopComputedPre: "A stop is computed from the litres actually taken — a full service costs",
     stopComputedPost: "here.",
     stopFlatPre: "Every stop costs a flat",
@@ -749,6 +743,9 @@ export const en = {
     fairShare: (stints: string) =>
       `Fair share ≈ ${stints} stints each. “Projected finish” is the race-clock time the plan currently ends at — it moves away from the race length as you enter ± corrections during the race.`,
     greenFlagIn: "● Green flag in",
+    greenFlagLabel: "Green flag",
+    greenFlagNotStamped: "not stamped yet",
+    greenFlagPress: "Press it the moment the flag falls — the whole plan shifts with it.",
     raceFinished: "● Race finished",
     liveStint: (index: number, driver: string) =>
       `● LIVE — Stint ${index}${driver ? ` · ${driver}` : ""} · next pit in`,
@@ -974,9 +971,8 @@ export const en = {
     reanalyseFailed: "Re-analysing failed — please try again.",
     saveFailed: "Saving failed — please try again.",
 
-    raceStartStamped: "Race start stamped to the second.",
-    raceStartStampedOffset: (offset: string) =>
-      `Race start stamped — green flag now, ${offset} offset accounted for.`,
+    raceStartStamped:
+      "Green flag stamped — the whole plan now runs from this second.",
 
     resultParsed: (n: number, teams: boolean) =>
       `Eventresult parsed — ${n} ${teams ? "teams" : "drivers"}. Saved with the plan.`,

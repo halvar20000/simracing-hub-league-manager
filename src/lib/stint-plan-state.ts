@@ -634,6 +634,12 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
       roundRaceEnd:
         migrated.event?.roundRaceEnd ??
         (migrated.event ? false : base.event.roundRaceEnd),
+      // The green-flag offset field is gone (v2.19.0). "Race start" now means
+      // the moment the flag falls, full stop. A plan saved under the old
+      // meaning stored the SESSION start plus an offset, so fold the offset
+      // into the start once — the flag stays on exactly the same wall-clock
+      // second and no saved schedule moves under anyone.
+      ...foldGreenFlagOffset(migrated.event),
     },
     // A plan saved before the delta model keeps the absolute pair: an archived
     // plan must re-open with exactly the schedule it was signed off with, and
@@ -648,6 +654,35 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
     availability: stored.availability ?? base.availability,
     impressions: stored.impressions ?? base.impressions,
     alertsSent: stored.alertsSent ?? base.alertsSent,
+  };
+}
+
+/**
+ * One-time migration: fold a stored green-flag offset into the race start.
+ *
+ * Until v2.19.0 `sessionStartLocal` was the SESSION start and the flag fell
+ * `greenFlagOffset` later; the field is gone and the start now IS the flag.
+ * Adding the offset to the stored start keeps the green flag on the same
+ * second it was on before — the alternative (just dropping the offset) would
+ * silently pull every stint of every saved plan forward by up to a few
+ * minutes. Idempotent: the offset is zeroed in the same pass.
+ */
+function foldGreenFlagOffset(
+  event: Partial<PlannerState["event"]> | undefined
+): Partial<PlannerState["event"]> {
+  const off = parseDurationToSec(event?.greenFlagOffset ?? "") ?? 0;
+  if (off <= 0) return {};
+  const start = (event?.sessionStartLocal ?? "").trim();
+  if (start === "") return { greenFlagOffset: "0:00" };
+  const d = new Date(start);
+  if (Number.isNaN(d.getTime())) return { greenFlagOffset: "0:00" };
+  d.setSeconds(d.getSeconds() + off);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    greenFlagOffset: "0:00",
+    sessionStartLocal:
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+      `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
   };
 }
 
@@ -780,6 +815,9 @@ export function stateToInput(s: PlannerState): PlannerInput {
   return {
     raceDurationSec: parseDurationToSec(s.event.raceDuration) ?? 0,
     raceLaps: planLapTarget(s),
+    // Always 0 since v2.19.0 — the race start IS the green flag. The field
+    // stays in the engine input so an archived payload still computes the
+    // same schedule it was signed off with.
     greenFlagOffsetSec: parseDurationToSec(s.event.greenFlagOffset) ?? 0,
     pitLossSec: num(s.event.pitLoss),
     tankSize: num(s.event.tankSize),

@@ -834,23 +834,19 @@ export default function StintPlanner({
   }, [s.g61Analysis]);
 
   // ---- Race start ---------------------------------------------------------
-  // The stored value is what the schedule counts from; the green-flag offset
-  // (if any) is added on top of it. So when the flag actually drops and someone
-  // hits "Now", the moment to store is now MINUS that offset — then the green
-  // flag lands exactly on the click and every stint shifts with it.
-  const greenOffsetSec = parseDurationToSec(s.event.greenFlagOffset) ?? 0;
+  // One rule since v2.19.0: the stored race start IS the green flag, and "Now"
+  // stamps this second. There used to be an offset field on top of it, and it
+  // earned its removal — on race day nobody types m:ss into a field, somebody
+  // watches the flag and hits the button. Plans saved under the old meaning had
+  // their offset folded into the start on load (see hydratePlanState).
   const setRaceStartNow = () => {
-    const green = new Date(Date.now() - greenOffsetSec * 1000);
+    const green = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const local =
       `${green.getFullYear()}-${pad(green.getMonth() + 1)}-${pad(green.getDate())}` +
       `T${pad(green.getHours())}:${pad(green.getMinutes())}:${pad(green.getSeconds())}`;
     patchEvent("sessionStartLocal", local);
-    setStatus(
-      greenOffsetSec > 0
-        ? t.msg.raceStartStampedOffset(s.event.greenFlagOffset)
-        : t.msg.raceStartStamped
-    );
+    setStatus(t.msg.raceStartStamped);
   };
 
   // The shared library entry that fits this plan's car (+ track, when measured
@@ -3581,25 +3577,15 @@ export default function StintPlanner({
                 <button
                   type="button"
                   onClick={setRaceStartNow}
-                  title={
-                    greenOffsetSec > 0
-                      ? t.ev.nowHintOffset(s.event.greenFlagOffset)
-                      : t.ev.nowHint
-                  }
+                  title={t.ev.nowHint}
                   className="shrink-0 rounded border border-emerald-800/60 bg-emerald-950/40 px-2 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/40 print:hidden"
                 >
                   {t.ev.now}
                 </button>
               </div>
-              {greenOffsetSec > 0 && (
-                <p className="mt-1 text-[10px] leading-tight text-zinc-500">
-                  {t.ev.greenLater(s.event.greenFlagOffset)}
-                </p>
-              )}
-            </Field>
-            <Field label={t.ev.greenOffset} hint={t.ev.greenOffsetHint}>
-              <input className={inp} value={s.event.greenFlagOffset}
-                onChange={(e) => patchEvent("greenFlagOffset", e.target.value)} />
+              <p className="mt-1 text-[10px] leading-tight text-zinc-500">
+                {t.ev.nowAlsoDuring}
+              </p>
             </Field>
             {/* Everything a STOP costs now lives in one card. It used to be
                 split — flat pit loss, refuel time and driver swap here, the
@@ -5936,6 +5922,32 @@ export default function StintPlanner({
       {/* ===== DURING ===== */}
       <div className={tabBox("during")}>
       <fieldset disabled={frozen} className="contents">
+      {/* The green flag, on the tab the race is actually run from. Re-stamping
+          is the normal case, not an edge case: races go green late, get red
+          flagged, or the plan is opened after the start — and that used to
+          mean switching back to the first tab mid-race. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 print:hidden">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+          {t.live.greenFlagLabel}
+        </span>
+        <span className="text-sm tabular-nums text-zinc-200">
+          {s.event.sessionStartLocal ? (
+            s.event.sessionStartLocal.replace("T", " ")
+          ) : (
+            <span className="text-amber-300">{t.live.greenFlagNotStamped}</span>
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={setRaceStartNow}
+          title={t.ev.nowHint}
+          className="shrink-0 rounded border border-emerald-800/60 bg-emerald-950/40 px-2.5 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-900/40"
+        >
+          {t.ev.now}
+        </button>
+        <span className="text-[11px] text-zinc-500">{t.live.greenFlagPress}</span>
+      </div>
+
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label={t.live.stints} value={String(result.totals.stintCount)} />

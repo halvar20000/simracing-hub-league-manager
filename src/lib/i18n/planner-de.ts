@@ -153,16 +153,10 @@ export const de: PlannerDict = {
     lapsUnplanned: (n: string) => `— ${n} Runden ungeplant, Stints ergänzen`,
     raceStart: "Rennstart",
     raceStartHint:
-      "Wann das Rennen wirklich losgeht — der Moment, in dem die grüne Flagge fällt. Alles im Plan wird ab hier gerechnet. Wenn du unten einen Grünflaggen-Versatz setzt, ist das hier der Session-Start und die Flagge fällt entsprechend später.",
+      "Der Moment, in dem die grüne Flagge fällt. Alles im Plan wird ab hier gerechnet: vorher die erwartete Zeit eintragen, und wenn die Flagge wirklich fällt, auf „Jetzt“ drücken.",
     now: "Jetzt",
-    nowHint: "Stempelt den exakten Moment des Rennstarts — auf die Sekunde.",
-    nowHintOffset: (offset: string) =>
-      `Stempelt den exakten Moment des Rennstarts. Der Grünflaggen-Versatz von ${offset} wird automatisch abgezogen, die Flagge fällt also jetzt.`,
-    greenLater: (offset: string) =>
-      `Grüne Flagge ${offset} später — „Jetzt“ rechnet das ein.`,
-    greenOffset: "Grünflaggen-Versatz (m:ss)",
-    greenOffsetHint:
-      "Zeit zwischen Session-Start und grüner Flagge — die Runde zum Grid plus die Formationsrunden. Auf 0:00 lassen, wenn die Uhr mit der Flagge startet.",
+    nowHint: "Stempelt die grüne Flagge auf diese Sekunde. Jeder Stint verschiebt sich mit.",
+    nowAlsoDuring: "„Jetzt“ drücken, wenn die Flagge fällt — steht auch im Reiter „Im Rennen“.",
     stopComputedPre:
       "Ein Stopp wird aus den tatsächlich getankten Litern berechnet — ein voller Service kostet hier",
     stopComputedPost: ".",
@@ -742,6 +736,9 @@ export const de: PlannerDict = {
     fairShare: (stints: string) =>
       `Fairer Anteil ≈ ${stints} Stints pro Person. „Hochgerechnetes Ziel“ ist die Rennuhr-Zeit, bei der der Plan derzeit endet — sie entfernt sich von der Renndauer, sobald du im Rennen ±-Korrekturen einträgst.`,
     greenFlagIn: "● Grüne Flagge in",
+    greenFlagLabel: "Grüne Flagge",
+    greenFlagNotStamped: "noch nicht gestempelt",
+    greenFlagPress: "Drücken, sobald die Flagge fällt — der ganze Plan verschiebt sich mit.",
     raceFinished: "● Rennen beendet",
     liveStint: (index: number, driver: string) =>
       `● LIVE — Stint ${index}${driver ? ` · ${driver}` : ""} · nächster Stopp in`,
@@ -972,9 +969,8 @@ export const de: PlannerDict = {
     reanalyseFailed: "Neuauswertung fehlgeschlagen — bitte noch einmal versuchen.",
     saveFailed: "Speichern fehlgeschlagen — bitte noch einmal versuchen.",
 
-    raceStartStamped: "Rennstart auf die Sekunde gestempelt.",
-    raceStartStampedOffset: (offset: string) =>
-      `Rennstart gestempelt — grüne Flagge jetzt, ${offset} Versatz eingerechnet.`,
+    raceStartStamped:
+      "Grüne Flagge gestempelt — der ganze Plan läuft ab dieser Sekunde.",
 
     resultParsed: (n: number, teams: boolean) =>
       `Ergebnisdatei eingelesen — ${n} ${teams ? "Teams" : "Fahrer"}. Beim Plan gespeichert.`,

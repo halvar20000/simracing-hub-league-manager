@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.19.0",
+    date: "2026-09-09",
+    changes: [
+      "The green-flag offset field is gone. \"Race start\" now simply means the moment the flag falls — on race day nobody types an offset in m:ss, somebody watches the flag and hits a button.",
+      "That button is now on the During-Race tab as well, at the top, next to the stamped time. Re-stamping is the normal case rather than an edge case — races go green late, get red-flagged, or the plan is opened after the start — and until now it meant switching back to the first tab mid-race.",
+      "Saved plans keep their green flag on exactly the same second: an existing offset is folded into the stored start once, on load. A plan reading \"17:29:18 + 2:30 offset\" now reads 17:31:48 — same flag, one field instead of two. Simply dropping the offset would have pulled every stint of every saved plan minutes forward.",
+    ],
+  },
+  {
     version: "2.18.1",
     date: "2026-09-08",
     changes: [
