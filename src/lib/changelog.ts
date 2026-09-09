@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.23.0",
+    date: "2026-09-09",
+    changes: [
+      "Preparation: Garage 61 can be hidden. Once a pull or an upload has data in the plan, a Hide button sits in the section header and folds the whole block away — import controls, lap pool, tables and the driver charts. The plan keeps every number it read; only the display goes.",
+      "The choice is remembered per device, next to the language and Easy/Advanced settings, so the section stays folded on the pit-wall laptop and stays open on the one you import from.",
+    ],
+  },
+  {
     version: "2.22.0",
     date: "2026-09-09",
     changes: [

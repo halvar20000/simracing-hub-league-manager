@@ -509,6 +509,13 @@ export const en = {
     clearBtn: "Clear Garage 61 data",
     clearHint:
       "Remove the Garage 61 analysis from this plan — the tables go empty and you can pull again.",
+    hide: "Hide",
+    show: "Show Garage 61",
+    hideHint:
+      "Fold the Garage 61 tables and charts away. The data stays in the plan and keeps feeding pace and fuel — only the display is hidden, on this device.",
+    showHint: "Show the Garage 61 tables and charts again.",
+    collapsedNote:
+      "Garage 61 data is loaded and still feeding the plan — the tables and charts are hidden on this device.",
     leadBold: "Pull from Garage 61",
     leadMid:
       "fetches your team’s laps for the selected Track + Car straight from the Garage 61 API — or upload session exports (.xlsx) manually. Either way, real race pace & fuel/lap per driver are read from the practice laps and fill the Standard profile plus each matching driver’s lap time. Only laps from the drivers on this plan (add them under",

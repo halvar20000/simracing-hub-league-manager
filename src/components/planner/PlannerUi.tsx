@@ -25,14 +25,20 @@ export type PlannerMode = "easy" | "advanced";
 
 const LANG_KEY = "cls.planner.lang";
 const MODE_KEY = "cls.planner.mode";
+/** Garage 61 folded away. A per-device preference like the two above: once the
+ *  pull is done the block is a wall of numbers and charts you scroll past on
+ *  every visit, and whether that bothers you is a matter of how you work. */
+const G61_KEY = "cls.planner.g61";
 
 const isLang = (v: unknown): v is Lang => v === "de" || v === "en";
 const isMode = (v: unknown): v is PlannerMode => v === "easy" || v === "advanced";
 
-type Prefs = { lang: Lang; mode: PlannerMode };
+type Prefs = { lang: Lang; mode: PlannerMode; g61Collapsed: boolean };
 
-/** What the server renders, and what a browser with no stored choice gets. */
-const DEFAULTS: Prefs = { lang: DEFAULT_LANG, mode: "easy" };
+/** What the server renders, and what a browser with no stored choice gets.
+ *  Garage 61 starts OPEN: hiding a section nobody asked to hide is how data
+ *  goes missing without anyone noticing. */
+const DEFAULTS: Prefs = { lang: DEFAULT_LANG, mode: "easy", g61Collapsed: false };
 
 let prefs: Prefs = DEFAULTS;
 let loaded = false;
@@ -49,9 +55,11 @@ function getSnapshot(): Prefs {
     try {
       const lang = window.localStorage.getItem(LANG_KEY);
       const mode = window.localStorage.getItem(MODE_KEY);
+      const g61 = window.localStorage.getItem(G61_KEY);
       prefs = {
         lang: isLang(lang) ? lang : DEFAULTS.lang,
         mode: isMode(mode) ? mode : DEFAULTS.mode,
+        g61Collapsed: g61 === "collapsed",
       };
     } catch {
       // Private mode / blocked site data — the defaults are perfectly usable.
@@ -76,6 +84,9 @@ function update(next: Partial<Prefs>) {
   try {
     if (next.lang) window.localStorage.setItem(LANG_KEY, next.lang);
     if (next.mode) window.localStorage.setItem(MODE_KEY, next.mode);
+    if (next.g61Collapsed !== undefined) {
+      window.localStorage.setItem(G61_KEY, next.g61Collapsed ? "collapsed" : "open");
+    }
   } catch {
     // Not worth telling the user about — the choice still holds for this tab.
   }
@@ -91,16 +102,23 @@ export type PlannerUiValue = {
   setMode: (m: PlannerMode) => void;
   /** Shorthand — `advanced` reads better than `mode === "advanced"` inline. */
   advanced: boolean;
+  /** Garage 61 import + driver dashboard folded away on this device. */
+  g61Collapsed: boolean;
+  setG61Collapsed: (v: boolean) => void;
 };
 
 export function usePlannerUi(): PlannerUiValue {
-  const { lang, mode } = useSyncExternalStore(
+  const { lang, mode, g61Collapsed } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getServerSnapshot
   );
   const setLang = useCallback((l: Lang) => update({ lang: l }), []);
   const setMode = useCallback((m: PlannerMode) => update({ mode: m }), []);
+  const setG61Collapsed = useCallback(
+    (v: boolean) => update({ g61Collapsed: v }),
+    []
+  );
   return useMemo(
     () => ({
       lang,
@@ -109,8 +127,10 @@ export function usePlannerUi(): PlannerUiValue {
       mode,
       setMode,
       advanced: mode === "advanced",
+      g61Collapsed,
+      setG61Collapsed,
     }),
-    [lang, mode, setLang, setMode]
+    [lang, mode, g61Collapsed, setLang, setMode, setG61Collapsed]
   );
 }
 

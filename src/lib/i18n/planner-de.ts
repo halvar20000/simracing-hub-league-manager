@@ -501,6 +501,13 @@ export const de: PlannerDict = {
     clearBtn: "Garage-61-Daten löschen",
     clearHint:
       "Entfernt die Garage-61-Auswertung aus diesem Plan — die Tabellen werden leer, und du kannst neu abrufen.",
+    hide: "Ausblenden",
+    show: "Garage 61 einblenden",
+    hideHint:
+      "Klappt Tabellen und Grafiken von Garage 61 weg. Die Daten bleiben im Plan und liefern weiter Pace und Verbrauch — nur die Anzeige ist ausgeblendet, auf diesem Gerät.",
+    showHint: "Tabellen und Grafiken von Garage 61 wieder anzeigen.",
+    collapsedNote:
+      "Garage-61-Daten sind geladen und liefern weiter die Werte im Plan — Tabellen und Grafiken sind auf diesem Gerät ausgeblendet.",
     leadBold: "Aus Garage 61 holen",
     leadMid:
       "holt die Runden deines Teams für die gewählte Strecke + Auto direkt aus der Garage-61-API — alternativ lädst du Session-Exporte (.xlsx) von Hand hoch. So oder so werden echte Rennpace und Verbrauch pro Runde und Fahrer aus den Trainingsrunden gelesen und füllen das Standard-Profil sowie die Rundenzeit jedes passenden Fahrers. Nur Runden der Fahrer dieses Plans (füg sie vorher unter",

@@ -472,7 +472,7 @@ export default function StintPlanner({
   pitReferences = [],
   paceReferences = [],
 }: StintPlannerProps) {
-  const { t, advanced } = usePlannerUi();
+  const { t, advanced, g61Collapsed, setG61Collapsed } = usePlannerUi();
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
   /** "Per driver" mode keeps the two profile rows collapsed — there they are
@@ -4796,6 +4796,21 @@ export default function StintPlanner({
             <GuideLink section="pace" />
           </h2>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {/* Fold the whole block away once the data is in. After a pull the
+                numbers already sit in the plan's driver rows; the tables and
+                charts below are a screen you scroll past on every later visit.
+                Per device (localStorage), like language and Easy/Advanced. */}
+            {(s.g61Analysis || g61) && (
+              <button
+                onClick={() => setG61Collapsed(!g61Collapsed)}
+                className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                title={g61Collapsed ? t.g61.showHint : t.g61.hideHint}
+              >
+                {g61Collapsed ? t.g61.show : t.g61.hide}
+              </button>
+            )}
+            {!g61Collapsed && (
+              <>
             <select
               value={s.event.g61Age}
               onChange={(e) => patchEvent("g61Age", e.target.value)}
@@ -4888,8 +4903,14 @@ export default function StintPlanner({
                   {t.g61.clearBtn}
                 </button>
               ))}
+              </>
+            )}
           </div>
         </div>
+        {g61Collapsed ? (
+          <p className="text-xs text-zinc-500">{t.g61.collapsedNote}</p>
+        ) : (
+          <>
         <p className="mb-3 text-xs text-zinc-500">
           <strong className="text-zinc-400">{t.g61.leadBold}</strong> {t.g61.leadMid}
           <strong className="text-zinc-400"> {t.g61.leadDrivers}</strong>{" "}
@@ -5146,12 +5167,14 @@ export default function StintPlanner({
           </div>
           ) : null;
         })()}
+          </>
+        )}
       </div>
 
       {/* Driver performance dashboard (from a Garage 61 pull/import) */}
       {(() => {
         const a = g61 ?? s.g61Analysis;
-        return a ? (
+        return a && !g61Collapsed ? (
           <StintDriverStats
             analysis={a}
             rosterNames={s.drivers.map((d) => d.name)}
