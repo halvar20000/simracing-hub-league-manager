@@ -418,6 +418,10 @@ export const en = {
     gapHint:
       "No pace or fuel of their own yet — their stints run on the Standard profile",
     ownFigures: (lap: string, fuel: string) => `${lap} · ${fuel} L/lap`,
+    iRatingValue: (ir: number) => `${ir} iR`,
+    iRatingNone: "no iRating",
+    iRatingHint:
+      "Sports-car iRating from the last iRacing sync. \"no iRating\" means this driver has never been synced — it says nothing about their pace.",
     countPre: (n: number) => `${n} driver${n === 1 ? "" : "s"}.`,
     countPost: "Pace, fuel and tyre wear are set in the",
     driversWord: "Drivers",

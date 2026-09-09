@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.30.0",
+    date: "2026-09-09",
+    changes: [
+      "Basics: each driver in the Roster now carries their iRating under the name — the sports-car figure from the last iRacing sync. A driver who has never been synced says \"no iRating\" rather than a number that isn't one.",
+      "On an official-race plan, a driver with no synced figure falls back to the iRating typed into the driver table, which is the one the pace curve is read with anyway.",
+    ],
+  },
+  {
     version: "2.29.0",
     date: "2026-09-09",
     changes: [

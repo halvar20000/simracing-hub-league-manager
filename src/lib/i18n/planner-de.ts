@@ -410,6 +410,10 @@ export const de: PlannerDict = {
     gapHint:
       "Noch keine eigene Pace und kein eigener Verbrauch — die Stints laufen mit dem Standard-Profil",
     ownFigures: (lap: string, fuel: string) => `${lap} · ${fuel} L/Runde`,
+    iRatingValue: (ir: number) => `${ir} iR`,
+    iRatingNone: "kein iRating",
+    iRatingHint:
+      "Sportwagen-iRating aus dem letzten iRacing-Abgleich. \"kein iRating\" heißt: dieser Fahrer wurde noch nie abgeglichen — über seine Pace sagt es nichts.",
     countPre: (n: number) => `${n} Fahrer.`,
     countPost: "Pace, Verbrauch und Reifenverschleiß werden in der Tabelle",
     driversWord: "Fahrer",

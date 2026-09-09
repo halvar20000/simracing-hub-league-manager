@@ -3761,6 +3761,17 @@ export default function StintPlanner({
                   <div className="flex flex-wrap gap-1.5">
                     {s.drivers.map((d) => {
                       const gap = !d.laptime.trim() || !d.fuelPerLap?.trim();
+                      // The CLS snapshot first — that is the driver's real
+                      // iRating, kept up to date by the iRacing sync. The
+                      // number typed into the driver table is the fallback:
+                      // it only exists on an official-race plan, where it is
+                      // what the pace curve is read with. Somebody added by
+                      // hand (not a CLS member) has neither, and simply shows
+                      // a name, which is the honest thing to show.
+                      const fromCls =
+                        clsDrivers.find((c) => c.id === d.id)?.iRating ?? null;
+                      const typed = parseTypedNumber(d.iRating ?? "", 0);
+                      const ir = fromCls ?? (typed > 0 ? typed : 0);
                       return (
                         <span
                           key={d.id}
@@ -3778,7 +3789,15 @@ export default function StintPlanner({
                           <span
                             className={`h-2.5 w-2.5 shrink-0 rounded-full ${driverColour(d.id).dot}`}
                           />
-                          {d.name}
+                          <span className="flex flex-col leading-tight">
+                            <span>{d.name}</span>
+                            <span
+                              className="text-[10px] text-zinc-500"
+                              title={t.roster.iRatingHint}
+                            >
+                              {ir > 0 ? t.roster.iRatingValue(ir) : t.roster.iRatingNone}
+                            </span>
+                          </span>
                         </span>
                       );
                     })}
