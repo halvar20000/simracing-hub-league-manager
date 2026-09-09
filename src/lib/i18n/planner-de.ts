@@ -43,14 +43,6 @@ export const de: PlannerDict = {
     serverUnreachable: "Server nicht erreichbar — bitte noch einmal versuchen.",
   },
 
-  phases: {
-    pre: "Vor dem Rennen",
-    preHint: "Setup & Fahrer",
-    during: "Im Rennen",
-    duringHint: "Zeitplan & live",
-    post: "Nach dem Rennen",
-    postHint: "Ergebnis & Auswertung",
-  },
 
   header: {
     planTitle: "Plantitel",
@@ -1528,7 +1520,7 @@ export const de: PlannerDict = {
       "Es ist eine Streckentemperatur gesetzt, aber nichts misst, wie die Rundenzeit darauf reagiert — die Pace wird also nicht angepasst. Hol Garage-61-Runden oder trag die s/10°C unter Event von Hand ein.",
   },
   jo: {
-    fairShare: "Gleichmäßig aufteilen",
+    fairShare: "Fair Share",
     fairShareHint:
       "Verteilt das Rennen gleichmäßig auf die Fahrer und markiert, wer deutlich unter seinem Anteil landet. Aus überlässt dir die Aufstellung vollständig.",
     marginLap: "Sicherheitsrunde",

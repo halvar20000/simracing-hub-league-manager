@@ -47,15 +47,6 @@ export const en = {
     serverUnreachable: "Could not reach the server — please try again.",
   },
 
-  // ---- phase tabs -------------------------------------------------------
-  phases: {
-    pre: "Pre-Race",
-    preHint: "setup & drivers",
-    during: "During Race",
-    duringHint: "schedule & live",
-    post: "After Race",
-    postHint: "result & analysis",
-  },
 
   // ---- page header ------------------------------------------------------
   header: {
@@ -1531,7 +1522,7 @@ export const en = {
   // ---- everything from Johann's layout proposal (Sept 2026) --------------
   jo: {
     // Event card
-    fairShare: "Aim for an even share",
+    fairShare: "Fair share",
     fairShareHint:
       "Spread the race evenly over the drivers and flag anyone who ends up well under their share. Off leaves the line-up entirely to you.",
     marginLap: "Margin lap",

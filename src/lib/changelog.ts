@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.20.2",
+    date: "2026-09-09",
+    changes: [
+      "\"Aim for an even share\" is called \"Fair share\" now, in the German planner too — it is the term drivers already use, and a checkbox is easier to find under the name people say out loud than under a description of what it does.",
+      "Dropped a dead translation block: both dictionaries still carried the phase labels from before the tab split. Nothing read them, and a stale duplicate is exactly what somebody translates by mistake.",
+    ],
+  },
+  {
     version: "2.20.1",
     date: "2026-09-09",
     changes: [
