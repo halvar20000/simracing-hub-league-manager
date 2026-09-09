@@ -23,8 +23,6 @@ export const en = {
       "Easy hides the parts most teams never touch. Nothing stops working — it is only off screen.",
     advancedHint:
       "Advanced shows every knob: the detailed pit-stop model and the values measured from a session.",
-    hiddenInEasy: "Hidden in Easy mode",
-    showAdvanced: "Switch to Advanced",
     guide: "Guide",
     guideHint:
       "Open the manual for this section in a new tab. The manual is the team's own document and is written in German.",
@@ -239,8 +237,6 @@ export const en = {
 
     /** Heading of the Pace-corrections card on Preparation. */
     paceAdjTitle: "Pace corrections",
-    paceAdjEasyNote:
-      "A traffic allowance is on every lap of this plan — it is set under Pace corrections on the Preparation tab.",
   },
   // ---- Pit-stop model card ----------------------------------------------
   pit: {
@@ -352,10 +348,6 @@ export const en = {
     saveToLibraryHint: (car: string, track: string) =>
       `Save as the measured values for ${car}${track ? ` @ ${track}` : ""}`,
     dismiss: "Dismiss",
-    easyNoteFlat: (sec: string) =>
-      `Pit-stop model: every stop costs a flat ${sec} s.`,
-    easyNoteDetailed: (sec: string) =>
-      `Pit-stop model: stops are computed from measured values — a full service costs ${sec} s.`,
   },
   // ---- what a pit stop is made of (the Stop-column tooltip) -------------
   breakdown: {
@@ -1592,9 +1584,6 @@ export const en = {
     targetsNone:
       "Enter the tank size and a consumption to see what a longer stint would take.",
     analysisDetails: "Full stop-count sweep",
-
-    // Easy mode
-    easyPitNote: "Detailed pit values and the Garage 61 import are in Advanced.",
   },
   // ---- the five tabs ----------------------------------------------------
   tabs: {

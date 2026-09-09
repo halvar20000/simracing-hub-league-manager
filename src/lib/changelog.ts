@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.27.0",
+    date: "2026-09-09",
+    changes: [
+      "The \"Switch to Advanced\" buttons inside the cards are gone, along with the grey note lines that carried them. The Easy/Advanced switch in the top bar is on every page and is the one place to do this.",
+    ],
+  },
+  {
     version: "2.26.0",
     date: "2026-09-09",
     changes: [

@@ -21,8 +21,6 @@ export const de: PlannerDict = {
       "Einfach blendet aus, was die meisten Teams nie anfassen. Es hört nichts auf zu funktionieren — es ist nur nicht auf dem Bildschirm.",
     advancedHint:
       "Erweitert zeigt jede Stellschraube: das detaillierte Boxenstopp-Modell und die aus einer Session gemessenen Werte.",
-    hiddenInEasy: "Im Einfach-Modus ausgeblendet",
-    showAdvanced: "Zu Erweitert wechseln",
     guide: "Anleitung",
     guideHint: "Öffnet das Handbuch zu diesem Abschnitt in einem neuen Tab.",
   },
@@ -233,8 +231,6 @@ export const de: PlannerDict = {
       "Das Wetter wird pro Stint im Zeitplan unten gesetzt; der Verkehr gilt für alle.",
 
     paceAdjTitle: "Pace-Zuschläge",
-    paceAdjEasyNote:
-      "Auf jede Runde dieses Plans wird ein Verkehrszuschlag gerechnet — gesetzt wird er unter Pace-Zuschläge auf dem Tab Preparation.",
   },
   pit: {
     title: "Boxenstopp-Modell",
@@ -346,10 +342,6 @@ export const de: PlannerDict = {
     saveToLibraryHint: (car: string, track: string) =>
       `Als gemessene Werte für ${car}${track ? ` @ ${track}` : ""} speichern`,
     dismiss: "Ausblenden",
-    easyNoteFlat: (sec: string) =>
-      `Boxenstopp-Modell: jeder Stopp kostet pauschal ${sec} s.`,
-    easyNoteDetailed: (sec: string) =>
-      `Boxenstopp-Modell: die Stopps werden aus gemessenen Werten berechnet — ein voller Service kostet ${sec} s.`,
   },
   breakdown: {
     lane: "Boxengasse",
@@ -1584,9 +1576,6 @@ export const de: PlannerDict = {
     targetsNone:
       "Trag Tankgröße und Verbrauch ein, um zu sehen, was ein längerer Stint bräuchte.",
     analysisDetails: "Vollständiger Stoppzahl-Durchlauf",
-
-    easyPitNote:
-      "Detaillierte Boxenwerte und der Garage-61-Import stehen im Erweitert-Modus.",
   },
   tabs: {
     basis: "Basisdaten",

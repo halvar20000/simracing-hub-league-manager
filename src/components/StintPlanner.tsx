@@ -3901,13 +3901,8 @@ export default function StintPlanner({
           ) : (
             /* The detailed model is the one Advanced-only block: it is nine
                fields, a session upload and a measuring protocol, and a team
-               that has never measured a stop will not miss it. Easy mode still
-               says the model is ON and what a full service costs — a schedule
-               whose stop times came from nowhere visible would be worse than
-               a longer page. */
-            <AdvancedOnly
-              activeNote={t.pit.easyNoteDetailed(fullServiceStopSec(s).toFixed(1))}
-            >
+               that has never measured a stop will not miss it. */
+            <AdvancedOnly>
               {/* Everything left in this card is a MEASURED value — the three
                   numbers a session export produces, plus how the crew works.
                   Anything you have to decide yourself lives in Event or, when
@@ -4445,14 +4440,8 @@ export default function StintPlanner({
           is where the number gets typed but not where the work happens: you
           settle them once the pace itself is settled, which is this tab.
           Advanced only — in Easy mode a plan runs on the standard lap time
-          alone, and a traffic allowance that is actually in effect says so. */}
-      <AdvancedOnly
-        activeNote={
-          parseTypedNumber(s.event.trafficPenaltySec, 0) > 0
-            ? t.ev.paceAdjEasyNote
-            : null
-        }
-      >
+          alone. */}
+      <AdvancedOnly>
       <div className={card} id="card-paceadj">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
@@ -4769,11 +4758,7 @@ export default function StintPlanner({
       {/* Garage 61 import.
           Johann Solowej asked for an option to hide this whole section
           (Sept 2026) — which is what Easy mode is, so it goes behind it. */}
-      <AdvancedOnly
-        activeNote={
-          s.g61Analysis || g61 ? t.jo.easyPitNote : null
-        }
-      >
+      <AdvancedOnly>
       <div className={card} id="card-g61">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
