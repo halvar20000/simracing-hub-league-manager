@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.28.0",
+    date: "2026-09-09",
+    changes: [
+      "Preparation, Easy mode: the \"Enable a fuel-saving profile\" checkbox and the saving profile it opens are Advanced-only now. Saving is a decision you take against the Fuel-save card, which is Advanced too. A plan that already has it on keeps computing with it, and it is all on the printout as before.",
+    ],
+  },
+  {
     version: "2.27.0",
     date: "2026-09-09",
     changes: [

@@ -4344,6 +4344,13 @@ export default function StintPlanner({
           </div>
           </AdvancedOnly>
 
+          {/* Fuel saving is an Advanced decision: a second pace/fuel profile
+              only pays off once you are weighing a lap time against a pit
+              stop, which is the Fuel-save card further down — also Advanced.
+              The switch and the profile it opens travel together, so Easy
+              mode does not show a "Fuel saving" row with nothing explaining
+              it. A plan that already has it on keeps computing with it. */}
+          <AdvancedOnly>
           <CheckField
             className="mt-3"
             checked={s.savingEnabled}
@@ -4384,6 +4391,7 @@ export default function StintPlanner({
               )}
             </div>
           )}
+          </AdvancedOnly>
           {(std.overFuel || (sav != null && sav.overFuel)) && (
             <p className="mt-3 text-xs text-amber-400">{t.fuel.overFuel}</p>
           )}
