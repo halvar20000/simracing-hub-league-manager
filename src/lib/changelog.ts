@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.25.0",
+    date: "2026-09-09",
+    changes: [
+      "Pace corrections — temperature sensitivity, full/half wet and the traffic allowance — moved off Basics into their own card on Preparation, next to the fuel profiles. Advanced only: in Easy mode a plan runs on the standard lap time alone. A traffic allowance that is actually in effect still says so in Easy mode.",
+      "The plan-wide \"double stints\" switch is gone. Doubling and tripling is each driver's own answer under Availability & stint preferences, which is where it belongs — the fill now pairs stints for the drivers who said they are happy to, leaves the ones who said \"ok\" to the balance figure, and rotates past everybody who said nothing.",
+      "Basics is down to what the race is, who drives it and what a stop costs.",
+    ],
+  },
+  {
     version: "2.24.0",
     date: "2026-09-09",
     changes: [

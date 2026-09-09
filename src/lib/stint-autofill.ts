@@ -88,9 +88,6 @@ export type AutofillStint = {
 };
 
 export type AutofillOptions = {
-  /** Keep a driver in for two stints where the preferences allow it — the
-   *  refuel-only stop is quicker, which is why teams do it. */
-  doubleStint?: boolean;
   /** Wall-clock hours [from, to) counted as night, in the plan's local time.
    *  Default 23:00 → 06:00. */
   nightFromHour?: number;
@@ -232,11 +229,14 @@ export function autofillDrivers(
           // ever forms. Two ahead still costs more than the pairing is worth,
           // so the rotation resumes by itself.
           cost -= 45;
-        } else if (opts.doubleStint && wouldRun === 2 && wouldRun <= maxRun) {
-          // The plan-wide double-stint switch, for a driver who said nothing.
-          cost -= 45;
-        } else if (!opts.doubleStint) {
-          // Otherwise rotate: back-to-back stints are the exception.
+        } else if (runPref === "ok") {
+          // Said yes without asking for it: neither sought nor avoided, so the
+          // run stands or falls on the balance figure alone.
+        } else {
+          // Nothing said. Rotate — back-to-back stints are the exception, and
+          // the driver who has not answered is not the one to spring it on.
+          // (This is what the old plan-wide "double stints" switch overrode.
+          // It is gone: doubling is a driver's answer, not a plan setting.)
           cost += 15;
         }
         // Past the driver's own stated ceiling on top of all that.

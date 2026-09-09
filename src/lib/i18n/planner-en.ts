@@ -237,24 +237,10 @@ export const en = {
     weatherNote:
       "Weather is picked per stint in the schedule below; traffic applies to all of them.",
 
-    // single vs double stints
-    doubleStint: "Double stints (each driver runs 2 stints between swaps)",
-    doubleStintHint:
-      "Pairs the stints up when the drivers are filled in automatically: everyone does two in a row before the car is handed over. Saves the driver-change time at every second stop.",
-    dsNeedRefuelPre: "Enter a",
-    dsNeedRefuelBold: "Refuel time",
-    dsNeedRefuelPost:
-      "above to compare single vs double-stinting (a driver swap only costs time when it’s longer than fuelling).",
-    dsHidden: (refuel: number, swap: number) =>
-      `At ${refuel}s refuel the ${swap}s swap is hidden under fuelling — a driver change costs no extra time, so double-stinting saves nothing here (decide on driver stamina).`,
-    dsCostPre: "A driver change costs",
-    dsCostPost: (swap: number, refuel: number) => `(swap ${swap}s − refuel ${refuel}s).`,
-    dsThisPlan: (same: number, stops: number) =>
-      `This plan: ${same}/${stops} stops refuel-only → saves`,
-    dsVsSingle: "vs single-stinting.",
-    dsSaves: (sec: string, laps: string) => `~${sec}s (~${laps} laps)`,
-    dsFull: (same: number, stops: number, sec: string, laps: string) =>
-      `Full double-stint plan: ${same}/${stops} refuel-only → saves ~${sec}s (~${laps} laps). Trade-off: a driver runs two stints back-to-back.`,
+    /** Heading of the Pace-corrections card on Preparation. */
+    paceAdjTitle: "Pace corrections",
+    paceAdjEasyNote:
+      "A traffic allowance is on every lap of this plan — it is set under Pace corrections on the Preparation tab.",
   },
   // ---- Pit-stop model card ----------------------------------------------
   pit: {

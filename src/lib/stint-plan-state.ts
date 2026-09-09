@@ -456,7 +456,6 @@ export type PlannerState = {
     driverSwapSec: string; // mandatory driver-swap floor (iRacing = 30s)
     alertLeadMin: string; // minutes before a stint the driver gets a Discord DM
     refuelSec: string; // refuel service time per stop, "" = unknown
-    doubleStint: boolean; // auto-fill drivers in double-stint pairs
 
     // --- measured pit model (Tier 1) ---------------------------------------
     // With `pitModelOn` every stop is computed from the litres actually taken,
@@ -580,7 +579,6 @@ export function defaultPlannerState(): PlannerState {
       driverSwapSec: "30",
       alertLeadMin: String(DEFAULT_ALERT_LEAD_MIN),
       refuelSec: "",
-      doubleStint: false,
       pitModelOn: false,
       pitLaneLossSec: "",
       refuelLps: "",

@@ -232,24 +232,9 @@ export const de: PlannerDict = {
     weatherNote:
       "Das Wetter wird pro Stint im Zeitplan unten gesetzt; der Verkehr gilt für alle.",
 
-    doubleStint: "Doppelstints (jeder Fahrer fährt 2 Stints zwischen den Wechseln)",
-    doubleStintHint:
-      "Fasst die Stints beim automatischen Besetzen paarweise zusammen: jeder fährt zwei am Stück, bevor das Auto übergeben wird. Spart bei jedem zweiten Stopp die Fahrerwechselzeit.",
-    dsNeedRefuelPre: "Trag oben eine",
-    dsNeedRefuelBold: "Tankzeit",
-    dsNeedRefuelPost:
-      "ein, um Einzel- und Doppelstints zu vergleichen (ein Fahrerwechsel kostet nur dann Zeit, wenn er länger dauert als das Tanken).",
-    dsHidden: (refuel: number, swap: number) =>
-      `Bei ${refuel}s Tankzeit verschwindet der ${swap}s-Wechsel unter dem Tanken — ein Fahrerwechsel kostet keine Extrazeit, Doppelstints sparen hier also nichts (entscheide nach Fahrer-Kondition).`,
-    dsCostPre: "Ein Fahrerwechsel kostet",
-    dsCostPost: (swap: number, refuel: number) =>
-      `(Wechsel ${swap}s − Tanken ${refuel}s).`,
-    dsThisPlan: (same: number, stops: number) =>
-      `Dieser Plan: ${same}/${stops} Stopps nur Tanken → spart`,
-    dsVsSingle: "gegenüber Einzelstints.",
-    dsSaves: (sec: string, laps: string) => `~${sec}s (~${laps} Runden)`,
-    dsFull: (same: number, stops: number, sec: string, laps: string) =>
-      `Voller Doppelstint-Plan: ${same}/${stops} nur Tanken → spart ~${sec}s (~${laps} Runden). Preis: ein Fahrer fährt zwei Stints am Stück.`,
+    paceAdjTitle: "Pace-Zuschläge",
+    paceAdjEasyNote:
+      "Auf jede Runde dieses Plans wird ein Verkehrszuschlag gerechnet — gesetzt wird er unter Pace-Zuschläge auf dem Tab Preparation.",
   },
   pit: {
     title: "Boxenstopp-Modell",

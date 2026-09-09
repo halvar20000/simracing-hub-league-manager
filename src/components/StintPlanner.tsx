@@ -899,7 +899,7 @@ export default function StintPlanner({
   }, []);
 
   // ---- state helpers ----
-  // The event block holds strings and a few switches (doubleStint, pitModelOn,
+  // The event block holds strings and a few switches (pitModelOn,
   // tyreSequential), so the patcher takes either.
   const patchEvent = (k: keyof PlannerState["event"], v: string | boolean) =>
     setS((p) => ({ ...p, event: { ...p.event, [k]: v } }));
@@ -1177,8 +1177,7 @@ export default function StintPlanner({
   // does 2 consecutive stints, so every other stop is refuel-only); otherwise
   // single-stint round-robin. Preserves each stint's other fields (wet, note…).
   const fillDrivers = (
-    p: PlannerState,
-    double: boolean
+    p: PlannerState
   ): { state: PlannerState; report: AutofillResult | null } => {
     if (p.drivers.length === 0) return { state: p, report: null };
     const n = Math.max(result.stints.length, p.assignments.length);
@@ -1210,7 +1209,6 @@ export default function StintPlanner({
         triple: d.prefTriple ?? "",
       })),
       {
-        doubleStint: double,
         nightFromHour: parseTypedNumber(p.event.nightFromHour, 23),
         nightToHour: parseTypedNumber(p.event.nightToHour, 6),
         // The plan's times are shown in the browser's zone, so "night" is
@@ -1233,15 +1231,7 @@ export default function StintPlanner({
    *  seat is picked by hand — by then it describes a plan that no longer is. */
   const [fillReport, setFillReport] = useState<AutofillResult | null>(null);
   const autoFill = () => {
-    const { state, report } = fillDrivers(s, s.event.doubleStint);
-    setFillReport(report);
-    setS(state);
-  };
-  const setDoubleStint = (on: boolean) => {
-    const { state, report } = fillDrivers(
-      { ...s, event: { ...s.event, doubleStint: on } },
-      on
-    );
+    const { state, report } = fillDrivers(s);
     setFillReport(report);
     setS(state);
   };
@@ -2464,6 +2454,7 @@ export default function StintPlanner({
       "card-pit": "basis",
       "card-drivers": "basis",
       "card-fuel": "prep",
+      "card-paceadj": "prep",
       "card-fuelsave": "prep",
       "card-g61": "prep",
     };
@@ -3734,204 +3725,6 @@ export default function StintPlanner({
                 placeholder={t.ev.trackTempPlaceholder} />
             </Field>
           </div>
-          {(s.tempModel || s.event.trackTempC.trim() !== "") && (
-            <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px] text-zinc-400">
-              {(() => {
-                const tm = s.tempModel;
-                const raceT = parseTypedNumber(s.event.trackTempC, NaN);
-                const hasRaceT =
-                  s.event.trackTempC.trim() !== "" && isFinite(raceT);
-                if (!tm) {
-                  return <span>{t.ev.tempNoModel}</span>;
-                }
-                const per10 = round1(tm.slopePerC * 10);
-                const pending =
-                  hasRaceT && tm.appliedTempC != null
-                    ? tm.slopePerC * (raceT - tm.appliedTempC)
-                    : 0;
-                return (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span>
-                      {t.ev.tempPaceSetAt}{" "}
-                      <strong className="text-zinc-200">
-                        {tm.appliedTempC != null
-                          ? `${round1(tm.appliedTempC)}°C`
-                          : "—"}
-                      </strong>{" "}
-                      {t.ev.tempSensitivity}{" "}
-                      <strong className="text-zinc-200">
-                        {per10 >= 0 ? "+" : ""}
-                        {per10.toFixed(1)} s/10°C
-                      </strong>{" "}
-                      <span className="text-zinc-500">
-                        {tm.fromData ? t.ev.tempFromData : t.ev.tempManual}
-                      </span>
-                    </span>
-                    {Math.abs(pending) > 0.05 && (
-                      <span className="text-amber-300">
-                        {t.ev.tempPending(
-                          `${pending > 0 ? "+" : ""}${pending.toFixed(1)}`,
-                          round1(raceT)
-                        )}
-                      </span>
-                    )}
-                    {!tm.fromData && (
-                      <label className="flex items-center gap-1 text-zinc-500 print:hidden">
-                        {t.ev.tempPer10}
-                        <input
-                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
-                          defaultValue={String(per10)}
-                          onBlur={(e) => setManualSlopePer10(e.target.value)}
-                          title={t.ev.tempPer10Hint}
-                        />
-                        <Hint text={t.ev.tempPer10Hint} />
-                      </label>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* Pace penalties: weather per stint, traffic on every stint. */}
-          <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">
-                {t.ev.fullWet}
-                <Hint text={t.ev.fullWetHint} />
-              </span>
-              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
-                +
-                <input
-                  key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
-                  className="w-16 rounded border border-sky-900/60 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
-                  defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
-                  onBlur={(e) => setWetDelta(e.target.value)}
-                  title={t.ev.fullWetHint}
-                />
-                {t.ev.perLap}
-              </label>
-              {s.wetModel && (
-                <span className="text-zinc-500">
-                  {s.wetModel.fromData ? t.ev.wetMeasured : t.ev.wetManual}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">
-                {t.ev.halfWet}
-                <Hint text={t.ev.halfWetHint} />
-              </span>
-              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
-                +
-                <input
-                  key={`half-${round1(halfWetDeltaSec(s))}`}
-                  className="w-16 rounded border border-sky-900/40 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
-                  defaultValue={
-                    s.wetModel?.manualHalfDeltaSec != null
-                      ? String(round1(s.wetModel.manualHalfDeltaSec))
-                      : ""
-                  }
-                  placeholder={String(round1(halfWetDeltaSec(s)))}
-                  onBlur={(e) => setHalfWetDelta(e.target.value)}
-                  title={t.ev.halfWetHint}
-                />
-                {t.ev.perLap}
-              </label>
-              <span className="text-zinc-500">
-                {s.wetModel?.manualHalfDeltaSec != null
-                  ? t.ev.halfYours
-                  : t.ev.halfDefault(Math.round(DEFAULT_HALF_WET_FRACTION * 100))}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">
-                {t.ev.traffic}
-                <Hint text={t.ev.trafficHint} />
-              </span>
-              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
-                +
-                <input
-                  className="w-16 rounded border border-amber-900/60 bg-zinc-950 px-1.5 py-0.5 text-amber-100"
-                  value={s.event.trafficPenaltySec}
-                  onChange={(e) => patchEvent("trafficPenaltySec", e.target.value)}
-                  placeholder="0"
-                  title={t.ev.trafficHint}
-                />
-                {t.ev.perLap}
-              </label>
-              <span className="text-zinc-500">{t.ev.trafficNote}</span>
-            </div>
-            <p className="text-zinc-600">{t.ev.weatherNote}</p>
-          </div>
-
-          {/* Pit strategy: single vs double stints */}
-          <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
-            <CheckField
-              className="print:hidden"
-              checked={s.event.doubleStint}
-              onChange={setDoubleStint}
-              label={t.ev.doubleStint}
-              hint={t.ev.doubleStintHint}
-            />
-            {(() => {
-              const stops = Math.max(0, result.stints.length - 1);
-              const swap = parseTypedNumber(s.event.driverSwapSec) || 30;
-              const refuelSet = s.event.refuelSec.trim() !== "";
-              const refuel = parseTypedNumber(s.event.refuelSec);
-              const saveSec = refuelSet ? Math.max(0, swap - refuel) : 0;
-              let sameStops = 0;
-              for (let i = 0; i < result.stints.length - 1; i++) {
-                const a = result.stints[i].driverId;
-                const b = result.stints[i + 1].driverId;
-                if (a && b && a === b) sameStops++;
-              }
-              const doubleSame = Math.ceil(stops / 2);
-              const stdLap = parseDurationToSec(s.standard.laptime) || 0;
-              const laps = (sec: number) => (stdLap > 0 ? sec / stdLap : 0);
-              if (!refuelSet) {
-                return (
-                  <p className="mt-1 text-zinc-500">
-                    {t.ev.dsNeedRefuelPre}{" "}
-                    <strong className="text-zinc-400">{t.ev.dsNeedRefuelBold}</strong>{" "}
-                    {t.ev.dsNeedRefuelPost}
-                  </p>
-                );
-              }
-              if (saveSec < 0.05) {
-                return (
-                  <p className="mt-1 text-amber-300">{t.ev.dsHidden(refuel, swap)}</p>
-                );
-              }
-              return (
-                <div className="mt-1 space-y-0.5 text-zinc-400">
-                  <div>
-                    {t.ev.dsCostPre}{" "}
-                    <strong className="text-zinc-200">+{saveSec.toFixed(0)}s</strong>{" "}
-                    {t.ev.dsCostPost(swap, refuel)}
-                  </div>
-                  <div>
-                    {t.ev.dsThisPlan(sameStops, stops)}{" "}
-                    <strong className="text-emerald-300">
-                      {t.ev.dsSaves(
-                        (sameStops * saveSec).toFixed(0),
-                        laps(sameStops * saveSec).toFixed(1)
-                      )}
-                    </strong>{" "}
-                    {t.ev.dsVsSingle}
-                  </div>
-                  <div className="text-zinc-500">
-                    {t.ev.dsFull(
-                      doubleSame,
-                      stops,
-                      (doubleSame * saveSec).toFixed(0),
-                      laps(doubleSame * saveSec).toFixed(1)
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
         </div>
 
         {/* Roster — who is on this plan, and the one place to add someone.
@@ -4649,6 +4442,159 @@ export default function StintPlanner({
             </p>
           </div>
         </div>
+
+      {/* Pace corrections — temperature, weather, traffic.
+          These three sat on the Basics tab under the track temperature, which
+          is where the number gets typed but not where the work happens: you
+          settle them once the pace itself is settled, which is this tab.
+          Advanced only — in Easy mode a plan runs on the standard lap time
+          alone, and a traffic allowance that is actually in effect says so. */}
+      <AdvancedOnly
+        activeNote={
+          parseTypedNumber(s.event.trafficPenaltySec, 0) > 0
+            ? t.ev.paceAdjEasyNote
+            : null
+        }
+      >
+      <div className={card} id="card-paceadj">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            {t.ev.paceAdjTitle}
+            <GuideLink section="pace" />
+          </h2>
+        </div>
+          {(s.tempModel || s.event.trackTempC.trim() !== "") && (
+            <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px] text-zinc-400">
+              {(() => {
+                const tm = s.tempModel;
+                const raceT = parseTypedNumber(s.event.trackTempC, NaN);
+                const hasRaceT =
+                  s.event.trackTempC.trim() !== "" && isFinite(raceT);
+                if (!tm) {
+                  return <span>{t.ev.tempNoModel}</span>;
+                }
+                const per10 = round1(tm.slopePerC * 10);
+                const pending =
+                  hasRaceT && tm.appliedTempC != null
+                    ? tm.slopePerC * (raceT - tm.appliedTempC)
+                    : 0;
+                return (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span>
+                      {t.ev.tempPaceSetAt}{" "}
+                      <strong className="text-zinc-200">
+                        {tm.appliedTempC != null
+                          ? `${round1(tm.appliedTempC)}°C`
+                          : "—"}
+                      </strong>{" "}
+                      {t.ev.tempSensitivity}{" "}
+                      <strong className="text-zinc-200">
+                        {per10 >= 0 ? "+" : ""}
+                        {per10.toFixed(1)} s/10°C
+                      </strong>{" "}
+                      <span className="text-zinc-500">
+                        {tm.fromData ? t.ev.tempFromData : t.ev.tempManual}
+                      </span>
+                    </span>
+                    {Math.abs(pending) > 0.05 && (
+                      <span className="text-amber-300">
+                        {t.ev.tempPending(
+                          `${pending > 0 ? "+" : ""}${pending.toFixed(1)}`,
+                          round1(raceT)
+                        )}
+                      </span>
+                    )}
+                    {!tm.fromData && (
+                      <label className="flex items-center gap-1 text-zinc-500 print:hidden">
+                        {t.ev.tempPer10}
+                        <input
+                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
+                          defaultValue={String(per10)}
+                          onBlur={(e) => setManualSlopePer10(e.target.value)}
+                          title={t.ev.tempPer10Hint}
+                        />
+                        <Hint text={t.ev.tempPer10Hint} />
+                      </label>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Pace penalties: weather per stint, traffic on every stint. */}
+          <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.fullWet}
+                <Hint text={t.ev.fullWetHint} />
+              </span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
+                  className="w-16 rounded border border-sky-900/60 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
+                  defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
+                  onBlur={(e) => setWetDelta(e.target.value)}
+                  title={t.ev.fullWetHint}
+                />
+                {t.ev.perLap}
+              </label>
+              {s.wetModel && (
+                <span className="text-zinc-500">
+                  {s.wetModel.fromData ? t.ev.wetMeasured : t.ev.wetManual}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.halfWet}
+                <Hint text={t.ev.halfWetHint} />
+              </span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  key={`half-${round1(halfWetDeltaSec(s))}`}
+                  className="w-16 rounded border border-sky-900/40 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
+                  defaultValue={
+                    s.wetModel?.manualHalfDeltaSec != null
+                      ? String(round1(s.wetModel.manualHalfDeltaSec))
+                      : ""
+                  }
+                  placeholder={String(round1(halfWetDeltaSec(s)))}
+                  onBlur={(e) => setHalfWetDelta(e.target.value)}
+                  title={t.ev.halfWetHint}
+                />
+                {t.ev.perLap}
+              </label>
+              <span className="text-zinc-500">
+                {s.wetModel?.manualHalfDeltaSec != null
+                  ? t.ev.halfYours
+                  : t.ev.halfDefault(Math.round(DEFAULT_HALF_WET_FRACTION * 100))}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.traffic}
+                <Hint text={t.ev.trafficHint} />
+              </span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  className="w-16 rounded border border-amber-900/60 bg-zinc-950 px-1.5 py-0.5 text-amber-100"
+                  value={s.event.trafficPenaltySec}
+                  onChange={(e) => patchEvent("trafficPenaltySec", e.target.value)}
+                  placeholder="0"
+                  title={t.ev.trafficHint}
+                />
+                {t.ev.perLap}
+              </label>
+              <span className="text-zinc-500">{t.ev.trafficNote}</span>
+            </div>
+            <p className="text-zinc-600">{t.ev.weatherNote}</p>
+          </div>
+      </div>
+      </AdvancedOnly>
 
       {/* Fuel-save strategy optimizer */}
       <div className={card} id="card-fuelsave">
