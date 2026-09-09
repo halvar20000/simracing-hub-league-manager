@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.26.0",
+    date: "2026-09-09",
+    changes: [
+      "\"Fair share\" moved off Basics into Availability & stint preferences, under the night window. It decides how the automatic line-up divides the laps, so it now sits with the other answers that steer it instead of among the fuel fields.",
+    ],
+  },
+  {
     version: "2.25.0",
     date: "2026-09-09",
     changes: [

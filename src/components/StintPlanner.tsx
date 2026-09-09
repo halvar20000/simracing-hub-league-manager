@@ -3636,13 +3636,10 @@ export default function StintPlanner({
                 DB), so nothing re-times. `PlannerInput.marginLap` still exists
                 and is still honoured, so an archived payload that carries it
                 computes exactly as it was signed off. */}
-            <CheckField
-              className="flex items-end"
-              checked={s.event.fairShare !== false}
-              onChange={(v) => patchEvent("fairShare", v)}
-              label={t.jo.fairShare}
-              hint={t.jo.fairShareHint}
-            />
+            {/* "Fair share" moved out of here in v2.26.0 — it steers how the
+                automatic line-up divides the laps, so it belongs with the
+                availability and stint preferences it is weighed against, not
+                among the fuel fields. */}
             {official && (
               /* Boxed, not just sub-headed: these two only exist for an
                  official race, and a field that applies conditionally should
@@ -5770,6 +5767,16 @@ export default function StintPlanner({
                 <span className="ml-1 text-amber-400">{t.avail.nightNoStart}</span>
               )}
             </span>
+          </div>
+          {/* Same family as the night window and the per-driver answers below:
+              all three tell the automatic line-up how to divide the race. */}
+          <div className="mb-3 print:hidden">
+            <CheckField
+              checked={s.event.fairShare !== false}
+              onChange={(v) => patchEvent("fairShare", v)}
+              label={t.jo.fairShare}
+              hint={t.jo.fairShareHint}
+            />
           </div>
           <div className="overflow-x-auto">
             <table className="text-left text-sm tabular-nums">
