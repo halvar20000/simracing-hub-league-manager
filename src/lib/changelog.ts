@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.20.1",
+    date: "2026-09-09",
+    changes: [
+      "Renamed the planner's live tab to \"Schedule & Live\" (\"Zeitplan & Live\"). \"During race\" described when you open it; the new name says what is on it — which is also what you look for when the race is already running.",
+    ],
+  },
+  {
     version: "2.20.0",
     date: "2026-09-09",
     changes: [
