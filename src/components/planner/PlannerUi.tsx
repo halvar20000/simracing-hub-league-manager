@@ -29,16 +29,33 @@ const MODE_KEY = "cls.planner.mode";
  *  pull is done the block is a wall of numbers and charts you scroll past on
  *  every visit, and whether that bothers you is a matter of how you work. */
 const G61_KEY = "cls.planner.g61";
+/** Pit-stop model folded away. Same reasoning as G61, opposite default: the
+ *  measured constants are set once per car and then never touched again, so
+ *  the card is a wall of fields between the event and the line-up. */
+const PIT_KEY = "cls.planner.pit";
 
 const isLang = (v: unknown): v is Lang => v === "de" || v === "en";
 const isMode = (v: unknown): v is PlannerMode => v === "easy" || v === "advanced";
 
-type Prefs = { lang: Lang; mode: PlannerMode; g61Collapsed: boolean };
+type Prefs = {
+  lang: Lang;
+  mode: PlannerMode;
+  g61Collapsed: boolean;
+  pitCollapsed: boolean;
+};
 
 /** What the server renders, and what a browser with no stored choice gets.
  *  Garage 61 starts OPEN: hiding a section nobody asked to hide is how data
  *  goes missing without anyone noticing. */
-const DEFAULTS: Prefs = { lang: DEFAULT_LANG, mode: "easy", g61Collapsed: false };
+const DEFAULTS: Prefs = {
+  lang: DEFAULT_LANG,
+  mode: "easy",
+  g61Collapsed: false,
+  /** Pit starts CLOSED — asked for (Sept 2026). Unlike hiding Garage 61 this
+   *  loses nothing: the numbers keep counting, the summary line says so, and
+   *  the card is one click away. */
+  pitCollapsed: true,
+};
 
 let prefs: Prefs = DEFAULTS;
 let loaded = false;
@@ -56,10 +73,13 @@ function getSnapshot(): Prefs {
       const lang = window.localStorage.getItem(LANG_KEY);
       const mode = window.localStorage.getItem(MODE_KEY);
       const g61 = window.localStorage.getItem(G61_KEY);
+      const pit = window.localStorage.getItem(PIT_KEY);
       prefs = {
         lang: isLang(lang) ? lang : DEFAULTS.lang,
         mode: isMode(mode) ? mode : DEFAULTS.mode,
         g61Collapsed: g61 === "collapsed",
+        // Closed unless this device said otherwise, hence `!== "open"`.
+        pitCollapsed: pit !== "open",
       };
     } catch {
       // Private mode / blocked site data — the defaults are perfectly usable.
@@ -87,6 +107,9 @@ function update(next: Partial<Prefs>) {
     if (next.g61Collapsed !== undefined) {
       window.localStorage.setItem(G61_KEY, next.g61Collapsed ? "collapsed" : "open");
     }
+    if (next.pitCollapsed !== undefined) {
+      window.localStorage.setItem(PIT_KEY, next.pitCollapsed ? "collapsed" : "open");
+    }
   } catch {
     // Not worth telling the user about — the choice still holds for this tab.
   }
@@ -105,10 +128,13 @@ export type PlannerUiValue = {
   /** Garage 61 import + driver dashboard folded away on this device. */
   g61Collapsed: boolean;
   setG61Collapsed: (v: boolean) => void;
+  /** Pit-stop model card folded away on this device. */
+  pitCollapsed: boolean;
+  setPitCollapsed: (v: boolean) => void;
 };
 
 export function usePlannerUi(): PlannerUiValue {
-  const { lang, mode, g61Collapsed } = useSyncExternalStore(
+  const { lang, mode, g61Collapsed, pitCollapsed } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getServerSnapshot
@@ -117,6 +143,10 @@ export function usePlannerUi(): PlannerUiValue {
   const setMode = useCallback((m: PlannerMode) => update({ mode: m }), []);
   const setG61Collapsed = useCallback(
     (v: boolean) => update({ g61Collapsed: v }),
+    []
+  );
+  const setPitCollapsed = useCallback(
+    (v: boolean) => update({ pitCollapsed: v }),
     []
   );
   return useMemo(
@@ -129,8 +159,19 @@ export function usePlannerUi(): PlannerUiValue {
       advanced: mode === "advanced",
       g61Collapsed,
       setG61Collapsed,
+      pitCollapsed,
+      setPitCollapsed,
     }),
-    [lang, mode, g61Collapsed, setLang, setMode, setG61Collapsed]
+    [
+      lang,
+      mode,
+      g61Collapsed,
+      pitCollapsed,
+      setLang,
+      setMode,
+      setG61Collapsed,
+      setPitCollapsed,
+    ]
   );
 }
 

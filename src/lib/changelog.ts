@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.24.0",
+    date: "2026-09-09",
+    changes: [
+      "Basics: the Roster sits next to the Event card now, and the pit-stop model moved below it — the line-up is what you build first, the pit constants are set once per car.",
+      "The pit-stop model card folds away, and starts folded. One line stays behind saying what the plan is counting with (flat pit loss, or that the detailed model is on), so nothing goes quiet. Per device, like the language and Easy/Advanced settings.",
+      "The fold buttons on the pit and Garage 61 cards still work on a completed plan — they show a view, they are not part of the frozen data.",
+    ],
+  },
+  {
     version: "2.23.0",
     date: "2026-09-09",
     changes: [

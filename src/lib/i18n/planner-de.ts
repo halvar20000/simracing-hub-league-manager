@@ -254,6 +254,14 @@ export const de: PlannerDict = {
   pit: {
     title: "Boxenstopp-Modell",
     loadMeasured: "📥 Gemessene Werte laden",
+    hide: "Einklappen",
+    show: "Aufklappen",
+    hideHint:
+      "Klappt das Boxenstopp-Modell weg. Der Plan rechnet weiter mit allen Werten darin — nur die Karte ist ausgeblendet, auf diesem Gerät.",
+    showHint: "Boxenstopp-Modell wieder aufklappen.",
+    collapsedFlat: (sec: string) => `Pauschaler Boxenverlust ${sec} s.`,
+    collapsedDetailed: "Detailliertes Boxenstopp-Modell aktiv.",
+    collapsedNote: "Der Plan rechnet so oder so damit — nur die Karte ist eingeklappt.",
     loadMeasuredCarDefault: "📥 Gemessene Werte laden (Auto-Standard)",
     loadMeasuredExact: (car: string, track: string, source: string | null) =>
       `Gemessen für ${car} in ${track}${source ? ` — ${source}` : ""}`,

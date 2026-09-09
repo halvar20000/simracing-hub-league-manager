@@ -260,6 +260,14 @@ export const en = {
   pit: {
     title: "Pit-stop model",
     loadMeasured: "📥 Load measured values",
+    hide: "Hide",
+    show: "Show",
+    hideHint:
+      "Fold the pit-stop model away. The plan keeps using every value in it — only the card is hidden, on this device.",
+    showHint: "Open the pit-stop model again.",
+    collapsedFlat: (sec: string) => `Flat pit loss ${sec} s.`,
+    collapsedDetailed: "Detailed pit-stop model on.",
+    collapsedNote: "The plan counts with it either way — only the card is folded away.",
     loadMeasuredCarDefault: "📥 Load measured values (car default)",
     loadMeasuredExact: (car: string, track: string, source: string | null) =>
       `Measured for ${car} at ${track}${source ? ` — ${source}` : ""}`,
