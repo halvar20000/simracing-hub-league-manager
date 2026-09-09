@@ -1105,8 +1105,7 @@ export const de: PlannerDict = {
     extraTitle: "Zusätzlich zugelassen",
     extraEmpty: "Noch niemand.",
     removePerson: (name: string) => `${name} entfernen`,
-    addPlaceholder: "Jemanden hinzufügen, der nicht fährt…",
-    add: "Hinzufügen",
+    addPlaceholder: "🔍 Jemanden hinzufügen, der nicht fährt — Namen tippen…",
     addNote: "Teamchef, Spotter, Ingenieur — dieselben Rechte wie ein Fahrer.",
   },
   gallery: {

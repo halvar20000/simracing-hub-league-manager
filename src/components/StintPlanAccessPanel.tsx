@@ -8,6 +8,7 @@ import {
 import type { PlanPeople } from "@/lib/stint-plan-people";
 import type { ClsDriverOption } from "@/lib/cls-drivers";
 import { useT } from "@/components/planner/PlannerUi";
+import { ClsDriverPicker } from "@/components/planner/ClsDriverPicker";
 
 /**
  * "Who can open this plan" box on a saved plan page.
@@ -28,7 +29,6 @@ export default function StintPlanAccessPanel({
 }) {
   const t = useT();
   const [people, setPeople] = useState<PlanPeople>(initial);
-  const [pick, setPick] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -40,15 +40,15 @@ export default function StintPlanAccessPanel({
   ]);
   const options = clsDrivers.filter((d) => !taken.has(d.id));
 
-  async function add() {
-    if (!pick) return;
+  // The picker adds on Enter or on a click — the same gesture as the roster,
+  // so there is no separate "Add" button to reach for afterwards.
+  async function add(userId: string) {
+    if (!userId) return;
     setBusy(true);
     setError(null);
-    const res = await addStintPlanPerson(planId, pick);
-    if (res.ok) {
-      setPeople(res.people);
-      setPick("");
-    } else setError(res.error);
+    const res = await addStintPlanPerson(planId, userId);
+    if (res.ok) setPeople(res.people);
+    else setError(res.error);
     setBusy(false);
   }
 
@@ -149,26 +149,17 @@ export default function StintPlanAccessPanel({
 
           {people.canManage && (
             <div className="flex flex-wrap items-center gap-2 border-t border-zinc-800 pt-3">
-              <select
-                value={pick}
-                onChange={(e) => setPick(e.target.value)}
+              {/* Same type-ahead as the roster: the CLS list runs to hundreds
+                  of names, and picking one out of a dropdown means scrolling
+                  for a name you already know. */}
+              <ClsDriverPicker
+                options={options}
+                onPick={add}
+                placeholder={t.access.addPlaceholder}
+                title={t.access.addNote}
                 disabled={busy}
-                className="min-w-[14rem] rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
-              >
-                <option value="">{t.access.addPlaceholder}</option>
-                {options.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={add}
-                disabled={busy || !pick}
-                className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 disabled:opacity-50"
-              >
-                {busy ? "…" : t.access.add}
-              </button>
+                listId="plan-access-hits"
+              />
               <span className="text-xs text-zinc-500">{t.access.addNote}</span>
             </div>
           )}

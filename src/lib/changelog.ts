@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.22.0",
+    date: "2026-09-09",
+    changes: [
+      "\"Add someone who isn’t driving\" is a type-ahead now, the same one the roster uses: type two letters of the name instead of scrolling a dropdown of every CLS driver. ↑↓ and Enter work, and picking a name adds them straight away — the separate Add button is gone with the dropdown.",
+      "The picker moved into its own component so both places genuinely share it rather than drifting apart. Two of them can sit on one page now, each with its own listbox id, which a screen reader needs to tell them apart.",
+    ],
+  },
+  {
     version: "2.21.0",
     date: "2026-09-09",
     changes: [

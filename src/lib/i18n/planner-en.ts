@@ -1105,8 +1105,7 @@ export const en = {
     extraTitle: "Also allowed in",
     extraEmpty: "Nobody yet.",
     removePerson: (name: string) => `Remove ${name}`,
-    addPlaceholder: "Add someone who isn’t driving…",
-    add: "Add",
+    addPlaceholder: "🔍 Add someone who isn’t driving — type a name…",
     addNote: "Team boss, spotter, engineer — same rights as a driver.",
   },
   // ---- poster / impressions gallery + list-row buttons ------------------
