@@ -34,12 +34,17 @@ export function RaceByRaceDriverTable({
   rows,
   kind,
   participationInCombined,
+  dropKeepsParticipation = false,
 }: {
   rows: DriverStanding[];
   kind: StandingsKind;
   /** Mirrors ScoringSystem.participationInCombined — drives whether the
    *  per-round Bonus (B) sub-column renders in the Combined view. */
   participationInCombined: boolean;
+  /** Mirrors Season.dropWeekKeepsParticipation. When set, a drop week only
+   *  strikes the race points — the round's participation points still count,
+   *  so the B cell of a struck round must NOT be crossed out. */
+  dropKeepsParticipation?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("pos");
@@ -170,6 +175,9 @@ export function RaceByRaceDriverTable({
           {kind === "combined"
             ? "(Streicher der Gesamtwertung)"
             : "(Streicher der Klassenwertung)"}
+          {dropKeepsParticipation && showParticipationCol
+            ? " — nur die Rennpunkte (R) verfallen, die Teilnahmepunkte (B) zählen weiter"
+            : ""}
         </span>
       </div>
 
@@ -313,7 +321,9 @@ export function RaceByRaceDriverTable({
                         {showParticipationCol && (
                           <td
                             className={`px-1.5 py-1.5 text-right tabular-nums text-emerald-400${
-                              struck ? " line-through opacity-60" : ""
+                              struck && !dropKeepsParticipation
+                                ? " line-through opacity-60"
+                                : ""
                             }`}
                           >
                             {rp.hasResult && rp.participationPoints !== 0

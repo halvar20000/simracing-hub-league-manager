@@ -76,6 +76,12 @@ A round's results and their standings impact go public **only** when `Round.stat
 - **Admin preview**: gated by the soft, non-redirecting `isAdminOrSteward()` (`src/lib/auth-helpers.ts`). The public round page and standings page render the pending round's tables to admins/stewards with an orange "Preview — admin only" banner; the public sees a "results are being reviewed" note (round page) and standings frozen at the last COMPLETED round. The admin round page has a "👁 Preview public" link. Round OG metadata hides the podium until COMPLETED. Season schedule shows "Pending" (not a results link) until COMPLETED.
 - Consistent with existing COMPLETED-triggered side effects (Discord results post, penalty-pool/no-show settlement) — nothing publishes before COMPLETED.
 
+## Drop weeks (Streichresultate)
+
+`ScoringSystem.dropWorstNRounds` — a driver counts their best `(scheduled rounds − dropN)` rounds; nothing is dropped until a driver has more results than that allotment. The COMBINED and the CLASS total drop *different* sets (ranked by their own metric) — `RoundPoints.droppedCombined` / `droppedClass`; a table must strike the set belonging to ITS total.
+
+**`Season.dropWeekKeepsParticipation`** (v2.31.0, ON for GT3 WCT 14th Season, OFF everywhere else): a dropped round loses its race points only — the participation points (PCP) earned in it stay in the season total, so racing more than the counting rounds is worth a small bonus (up to `dropN × participationPoints`). It also changes the drop *ranking*: participation is subtracted out of the rank metric so rounds are ordered by what dropping one actually costs (a retirement that only banked the PCP costs 0 and goes first). Penalties, corrections and GDC are never dropped either way. Toggle on the admin season edit + new-season forms. Flipping it mid-season re-scores every completed round — the 13th Season was deliberately left off.
+
 ## Car Class vs Driver Class
 
 Two **independent** concepts — never conflate them:

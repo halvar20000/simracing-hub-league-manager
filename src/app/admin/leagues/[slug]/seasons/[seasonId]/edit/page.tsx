@@ -167,6 +167,21 @@ export default async function EditSeasonPage({
           GT3 WCT season 12).
         </p>
 
+        <label className="flex items-center gap-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            name="dropWeekKeepsParticipation"
+            defaultChecked={season.dropWeekKeepsParticipation}
+          />
+          Drop weeks keep participation points
+        </label>
+        <p className="-mt-2 text-xs text-zinc-500">
+          Drop-weeks only. When on, a dropped round loses its race points but
+          the participation points (PCP) earned in it stay in the season total —
+          so racing more than the counting rounds is worth a small bonus. When
+          off, a dropped round loses both.
+        </p>
+
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
             Team scoring mode

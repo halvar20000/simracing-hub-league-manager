@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.31.0",
+    date: "2026-09-10",
+    changes: [
+      "Drop weeks can now keep the participation points. A struck round loses its race points, as it always has, but the PCP earned in it stays in the season total — so a driver who turns up for more than the counting rounds is a few points ahead of one who does not, instead of racing for nothing.",
+      "Switched on for GT3 WCT 14th Season, where 9 of 12 rounds count. Every other season keeps the old behaviour, and the 13th Season is untouched: this changes how a season is scored and does not belong in one that is already being raced. The switch sits on the admin season form (\"Drop weeks keep participation points\").",
+      "The race-by-race table follows suit: on such a season the crossed-out round keeps its B column upright, and the legend says why.",
+      "Which round gets dropped is decided on what dropping it actually costs. With the participation points safe, a retirement that scored nothing but the PCP costs zero — so it goes before a race the driver finished for three points, which is the round the old ranking would have struck.",
+    ],
+  },
+  {
     version: "2.30.0",
     date: "2026-09-09",
     changes: [

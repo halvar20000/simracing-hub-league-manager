@@ -254,6 +254,15 @@ model Season {
   /// Rule change requested by Andreas for GT3 WCT season 13 onward.
   noShowForgivenessEnabled Boolean @default(false)
 
+  /// Drop-weeks (ScoringSystem.dropWorstNRounds): when true, a dropped round
+  /// only loses its RACE points — the participation points (PCP) earned in
+  /// that round stay in the season total. Turning up and finishing more than
+  /// the counting allotment of rounds is then worth a small bonus instead of
+  /// being scored away. When false (legacy behaviour) a dropped round loses
+  /// its race points AND its participation points.
+  /// Requested for GT3 WCT season 14 onward.
+  dropWeekKeepsParticipation Boolean @default(false)
+
   scoringSystemId String
   scoringSystem   ScoringSystem @relation(fields: [scoringSystemId], references: [id])
 

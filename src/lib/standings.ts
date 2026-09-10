@@ -239,6 +239,10 @@ export async function computeDriverStandings(
 
   const includeParticipationInCombined =
     season?.scoringSystem.participationInCombined ?? true;
+  // Drop-weeks: does a dropped round also give back its participation points?
+  // When true (GT3 WCT s14+) it does not — only the race points are struck,
+  // so racing more rounds than the counting allotment is worth a small bonus.
+  const dropKeepsParticipation = !!season?.dropWeekKeepsParticipation;
   const defersPenalties = !!season?.scoringSystem?.deferPenaltyPoints;
   const driverFprEnabled = !!season?.scoringSystem?.driverFprEnabled;
   const driverFprTiers = driverFprEnabled
@@ -475,7 +479,8 @@ export async function computeDriverStandings(
     // in-class order (Pro/Am) — so picking one set by combinedPoints and
     // applying it to the class total discards the wrong rounds and undercounts
     // class standings. Missed rounds (no result) are always dropped first.
-    // Penalties / GDC are never dropped.
+    // Penalties / GDC are never dropped, and neither is participation on a
+    // season with Season.dropWeekKeepsParticipation.
     let combRaw = raw;
     let combParticipation = participation;
     let classParticipation = participation;
@@ -491,7 +496,10 @@ export async function computeDriverStandings(
     const keepCount = Math.max(1, totalScheduledRounds - dropN);
     const numToDrop = Math.min(dropN, Math.max(0, resultRoundCount - keepCount));
     if (numToDrop > 0) {
-      const pickDropped = (metric: (rp: RoundPoints) => number) => {
+      const pickDropped = (
+        metric: (rp: RoundPoints) => number,
+        metricHasParticipation: boolean
+      ) => {
         // Only rounds that actually have a result are droppable; pick the
         // worst `numToDrop` of them by the given metric.
         //
@@ -500,24 +508,38 @@ export async function computeDriverStandings(
         // not the round is dropped, so letting it push a round down the drop
         // ranking would punish the driver twice (and would have silently
         // reshuffled live standings when per-round attribution was added).
+        //
+        // Participation is taken back out for the same reason whenever the
+        // season keeps it through a drop: the ranking must order rounds by
+        // what dropping one actually COSTS. Leaving it in would strike a
+        // 3-point race the driver finished (cost: 3) instead of a retirement
+        // that only carried the PCP bonus (cost: 0).
         const rank = (rp: RoundPoints) =>
-          metric(rp) + (rp.immediatePenaltyPoints ?? 0);
+          metric(rp) +
+          (rp.immediatePenaltyPoints ?? 0) -
+          (dropKeepsParticipation && metricHasParticipation
+            ? rp.participationPoints
+            : 0);
         const sorted = roundPoints
           .filter((rp) => rp.hasResult)
           .sort((a, b) => rank(a) - rank(b));
         return new Set(sorted.slice(0, numToDrop).map((rp) => rp.roundId));
       };
-      const droppedCombined = pickDropped((rp) => rp.combinedPoints);
-      const droppedClass = pickDropped((rp) => rp.classPoints);
+      const droppedCombined = pickDropped(
+        (rp) => rp.combinedPoints,
+        includeParticipationInCombined
+      );
+      const droppedClass = pickDropped((rp) => rp.classPoints, true);
       for (const rp of roundPoints) {
         if (!rp.hasResult) continue; // missed rounds contribute 0
         if (droppedCombined.has(rp.roundId)) {
           combRaw -= rp.rawPoints;
-          combParticipation -= rp.participationPoints;
+          if (!dropKeepsParticipation) combParticipation -= rp.participationPoints;
         }
         if (droppedClass.has(rp.roundId)) {
           classRaw -= rp.classRawPoints;
-          classParticipation -= rp.participationPoints;
+          if (!dropKeepsParticipation)
+            classParticipation -= rp.participationPoints;
         }
       }
       // Both sets are published, because a page can render either total and

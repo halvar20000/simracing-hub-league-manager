@@ -23,6 +23,9 @@ export type StandingsExportMeta = {
   scoringSystemName: string;
   /** Mirrors ScoringSystem.participationInCombined. */
   participationInCombined: boolean;
+  /** Mirrors Season.dropWeekKeepsParticipation — a drop week strikes the
+   *  race points only, the round's participation points still count. */
+  dropKeepsParticipation: boolean;
   proAmEnabled: boolean;
   generatedAt: Date;
   sourceUrl: string;
@@ -150,6 +153,12 @@ function infoSheet(meta: StandingsExportMeta, roundCount: number): XLSX.WorkShee
     ],
     ["", "Pen. is written as a negative number (0 when the driver has none)."],
     ["", "Blank round cell = no result for that round. The Dropped column lists rounds excluded by the drop-week rule."],
+    [
+      "",
+      meta.dropKeepsParticipation
+        ? "Drop weeks strike the RACE points only — the participation points of a dropped round still count toward the total."
+        : "A dropped round loses its race points and its participation points.",
+    ],
     ["", "Penalty points held in a deferred pool only count once released — see the penalty pool page."],
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);

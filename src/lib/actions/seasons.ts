@@ -23,6 +23,9 @@ export async function createSeason(leagueSlug: string, formData: FormData) {
   const proAmEnabled = formData.get("proAmEnabled") === "on";
   const noShowForgivenessEnabled =
     formData.get("noShowForgivenessEnabled") === "on";
+  // Drop weeks: strike the race points only, keep the round's participation.
+  const dropWeekKeepsParticipation =
+    formData.get("dropWeekKeepsParticipation") === "on";
   const teamScoringMode = String(
     formData.get("teamScoringMode") ?? "NONE"
   ) as TeamScoringMode;
@@ -81,6 +84,7 @@ export async function createSeason(leagueSlug: string, formData: FormData) {
       isMulticlass,
       proAmEnabled,
       noShowForgivenessEnabled,
+      dropWeekKeepsParticipation,
       teamScoringMode,
       teamScoringBestN,
     },
@@ -111,6 +115,9 @@ export async function updateSeason(
   // Penalty pool: do no-show points take part in auto-forgiveness?
   const noShowForgivenessEnabled =
     formData.get("noShowForgivenessEnabled") === "on";
+  // Drop weeks: strike the race points only, keep the round's participation.
+  const dropWeekKeepsParticipation =
+    formData.get("dropWeekKeepsParticipation") === "on";
   const teamScoringMode = String(
     formData.get("teamScoringMode") ?? "NONE"
   ) as TeamScoringMode;
@@ -165,6 +172,7 @@ export async function updateSeason(
       gdcEnabled,
       isArchived,
       noShowForgivenessEnabled,
+      dropWeekKeepsParticipation,
       teamScoringMode,
       teamScoringBestN,
       teamScoringWeeksCounted,

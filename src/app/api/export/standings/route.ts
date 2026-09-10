@@ -50,6 +50,7 @@ export async function GET(req: Request) {
     seasonYear: season.year,
     scoringSystemName: season.scoringSystem?.name ?? "—",
     participationInCombined: season.scoringSystem?.participationInCombined ?? true,
+    dropKeepsParticipation: season.dropWeekKeepsParticipation,
     proAmEnabled: season.proAmEnabled,
     generatedAt: new Date(),
     sourceUrl: `${

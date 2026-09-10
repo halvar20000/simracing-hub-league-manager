@@ -335,6 +335,7 @@ export default async function StandingsPage({
             participationInCombined={
               season.scoringSystem.participationInCombined ?? true
             }
+            dropKeepsParticipation={season.dropWeekKeepsParticipation}
           />
         ) : (
           <DriversTable
@@ -359,6 +360,7 @@ export default async function StandingsPage({
               participationInCombined={
                 season.scoringSystem.participationInCombined ?? true
               }
+              dropKeepsParticipation={season.dropWeekKeepsParticipation}
             />
           ) : (
             <DriversTable rows={proDrivers} previousRows={previousPro} kind="class" showTeam />
@@ -375,6 +377,7 @@ export default async function StandingsPage({
               participationInCombined={
                 season.scoringSystem.participationInCombined ?? true
               }
+              dropKeepsParticipation={season.dropWeekKeepsParticipation}
             />
           ) : (
             <DriversTable rows={amDrivers} previousRows={previousAm} kind="class" showTeam />
