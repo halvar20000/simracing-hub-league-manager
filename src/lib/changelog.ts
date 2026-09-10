@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.31.2",
+    date: "2026-09-13",
+    changes: [
+      "An iRacing ID pasted with a leading # (the way results tables and Discord render it) is now cleaned up instead of stored verbatim \u2014 \"#1189750\" becomes 1189750. Spaces and dots in a pasted number are handled the same way, on the team registration, Manage Team, profile and admin user forms alike. Two drivers had been registered as \"#1189750\" and \"#1346494\" and were invisible to the race import and the iRating sync.",
+      "Anything that is not a number is refused outright rather than having digits picked out of it, and the profile form's live \"we know this driver\" lookup now recognises a pasted ID too.",
+      "Registering a teammate whose name already exists in CLS under a different iRacing ID is now blocked, with the ID we already have quoted in the message. That is nearly always a mistyped ID, and it used to end with the same driver split across two accounts.",
+    ],
+  },
+  {
     version: "2.31.1",
     date: "2026-09-12",
     changes: [

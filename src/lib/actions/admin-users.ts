@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import type { Role } from "@prisma/client";
+import { normalizeIracingId } from "@/lib/iracing-member-id";
 
 export async function setUserRole(userId: string, role: Role) {
   const me = await requireAdmin();
@@ -52,15 +53,22 @@ export async function updateUserProfile(
   const firstName = input.firstName.trim() || null;
   const lastName = input.lastName.trim() || null;
   const email = input.email.trim() || null;
-  const iracingMemberId = input.iracingMemberId.trim() || null;
+  const iracingMemberIdRaw = input.iracingMemberId.trim();
+  // Accept what people paste ("#1189750") and store the digits.
+  const iracingMemberId = iracingMemberIdRaw
+    ? normalizeIracingId(iracingMemberIdRaw)
+    : null;
   const countryCode = input.countryCode.trim().toUpperCase() || null;
   const discordId = input.discordId.trim() || null;
 
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return { ok: false, error: "That email address looks invalid." };
   }
-  if (iracingMemberId && !/^\d+$/.test(iracingMemberId)) {
-    return { ok: false, error: "iRacing member ID must be a number." };
+  if (iracingMemberIdRaw && !iracingMemberId) {
+    return {
+      ok: false,
+      error: `"${iracingMemberIdRaw}" is not an iRacing ID — enter the numeric customer ID only.`,
+    };
   }
   if (countryCode && !/^[A-Z]{2,3}$/.test(countryCode)) {
     return {

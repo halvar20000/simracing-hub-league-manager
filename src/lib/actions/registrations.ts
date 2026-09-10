@@ -24,6 +24,48 @@ import {
   resolveTeamOwnership,
   isActiveTeamMember,
 } from "@/lib/team-ownership";
+import { parseIracingId, iracingIdError } from "@/lib/iracing-member-id";
+
+/**
+ * Guard against registering a driver who is already in CLS under a different
+ * iRacing ID — the failure that produced two `User` rows for the same human in
+ * June and September 2026. Matches on first+last name (case-insensitive), which
+ * measured zero false positives across the whole driver base: CLS has no two
+ * drivers sharing a real name. Deliberately NOT a "the ID looks one digit off"
+ * check — 55 of the 77 near-miss ID pairs in the live data are two genuinely
+ * different drivers (223281 Hendrik Augustin and 223282 Mario Herzog, to name
+ * one), so that would block far more valid registrations than bad ones.
+ *
+ * Returns the clashing driver, or null when the name is new or too thin to
+ * judge (no surname).
+ */
+async function findDriverWithSameName(
+  firstName: string,
+  lastName: string,
+  iracingId: string
+): Promise<{ iracingMemberId: string | null } | null> {
+  if (firstName.trim().length < 2 || lastName.trim().length < 2) return null;
+  return prisma.user.findFirst({
+    where: {
+      iracingMemberId: { not: iracingId },
+      firstName: { equals: firstName, mode: "insensitive" },
+      lastName: { equals: lastName, mode: "insensitive" },
+    },
+    select: { iracingMemberId: true },
+  });
+}
+
+/** The message shown when {@link findDriverWithSameName} finds one. */
+function sameNameError(
+  label: string,
+  name: string,
+  typedId: string,
+  existingId: string | null
+): string {
+  return existingId
+    ? `${label}: "${name}" is already in CLS with iRacing ID ${existingId}, but you entered ${typedId}. If that is the same driver, use ${existingId} — registering him again under a second ID splits his results and hides him from the race import. If it really is a different driver with the same name, a league admin has to add him.`
+    : `${label}: a driver called "${name}" already exists in CLS without an iRacing ID. A league admin has to sort that out before he can be registered.`;
+}
 
 // Append a query param to a redirect target, using "&" if the base already
 // carries a query string (e.g. the embedded Manage Team view passes
@@ -830,14 +872,23 @@ export async function createTeamRegistration(
   const teammates: TM[] = [];
   for (let i = 1; i <= 5; i++) {
     const name = String(formData.get(`teammate${i}Name`) ?? "").trim();
-    const iracingId = String(formData.get(`teammate${i}IracingId`) ?? "").trim();
+    const iracingIdRaw = String(
+      formData.get(`teammate${i}IracingId`) ?? ""
+    ).trim();
     const email = String(formData.get(`teammate${i}Email`) ?? "").trim();
-    if (!name && !iracingId) continue;
-    if (!name || !iracingId) {
+    if (!name && !iracingIdRaw) continue;
+    if (!name || !iracingIdRaw) {
       errBack(
         `Teammate row ${i}: both iRacing name and iRacing ID are required`
       );
     }
+    // Clean up what was pasted ("#1189750", "1 189 750") before it can reach
+    // the database — see src/lib/iracing-member-id.ts.
+    const idParse = parseIracingId(iracingIdRaw);
+    if (!idParse.ok) {
+      errBack(iracingIdError(`Teammate row ${i}`, idParse));
+    }
+    const iracingId = idParse.ok ? idParse.id : iracingIdRaw;
     const iratingRaw = String(formData.get(`teammate${i}IRating`) ?? "").trim();
     if (!iratingRaw || !/^\d+$/.test(iratingRaw)) {
       errBack(`Teammate row ${i}: iRating is required and must be a number`);
@@ -930,6 +981,24 @@ export async function createTeamRegistration(
       const parts = tm.name.split(/\s+/);
       const firstName = parts[0] || tm.name;
       const lastName = parts.slice(1).join(" ") || "";
+      // About to mint a brand-new driver. If someone of that name is already in
+      // CLS under a different ID, the ID is far more likely to be mistyped than
+      // the league to have two drivers with the same name.
+      const clash = await findDriverWithSameName(
+        firstName,
+        lastName,
+        tm.iracingId
+      );
+      if (clash) {
+        errBack(
+          sameNameError(
+            `Teammate row ${tm.rowIndex}`,
+            tm.name,
+            tm.iracingId,
+            clash.iracingMemberId
+          )
+        );
+      }
       mate = await prisma.user.create({
         data: {
           firstName,
@@ -1158,19 +1227,29 @@ export async function updateTeamRegistration(formData: FormData) {
     iracingId: string;
     email: string;
     iRating: number;
+    rowIndex: number;
   };
   const tmIn: TM[] = [];
   for (let i = 1; i <= MANAGE_TEAM_ROW_SCAN; i++) {
     const name = String(formData.get(`teammate${i}Name`) ?? "").trim();
-    const iracingId = String(formData.get(`teammate${i}IracingId`) ?? "").trim();
+    const iracingIdRaw = String(
+      formData.get(`teammate${i}IracingId`) ?? ""
+    ).trim();
     const email = String(formData.get(`teammate${i}Email`) ?? "").trim();
     const iratingRaw = String(formData.get(`teammate${i}IRating`) ?? "").trim();
-    if (!name && !iracingId && !iratingRaw) continue;
-    if (!name || !iracingId) {
+    if (!name && !iracingIdRaw && !iratingRaw) continue;
+    if (!name || !iracingIdRaw) {
       throw new Error(
         `Teammate row ${i}: both iRacing name and iRacing ID are required`
       );
     }
+    // Clean up what was pasted ("#1189750", "1 189 750") before it can reach
+    // the database — see src/lib/iracing-member-id.ts.
+    const idParse = parseIracingId(iracingIdRaw);
+    if (!idParse.ok) {
+      throw new Error(iracingIdError(`Teammate row ${i}`, idParse));
+    }
+    const iracingId = idParse.id;
     if (!iratingRaw || !/^\d+$/.test(iratingRaw)) {
       throw new Error(`Teammate row ${i}: iRating is required`);
     }
@@ -1185,7 +1264,7 @@ export async function updateTeamRegistration(formData: FormData) {
         `Teammate row ${i}: LMP2 requires iRating ${TEAM_LMP2_MIN_IRATING} or higher (entered ${iR})`
       );
     }
-    tmIn.push({ name, iracingId, email, iRating: iR });
+    tmIn.push({ name, iracingId, email, iRating: iR, rowIndex: i });
   }
 
   // Hard cap check. The form renders only `maxTeammateRows` empty rows, but a
@@ -1230,6 +1309,22 @@ export async function updateTeamRegistration(formData: FormData) {
       const parts = tm.name.split(/\s+/);
       const firstName = parts[0] || tm.name;
       const lastName = parts.slice(1).join(" ") || "";
+      // About to mint a brand-new driver — see findDriverWithSameName.
+      const clash = await findDriverWithSameName(
+        firstName,
+        lastName,
+        tm.iracingId
+      );
+      if (clash) {
+        throw new Error(
+          sameNameError(
+            `Teammate row ${tm.rowIndex}`,
+            tm.name,
+            tm.iracingId,
+            clash.iracingMemberId
+          )
+        );
+      }
       mate = await prisma.user.create({
         data: {
           firstName,

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-helpers";
 import { mergeUserAccounts } from "@/lib/merge-users";
+import { normalizeIracingId } from "@/lib/iracing-member-id";
 
 export async function updateProfile(formData: FormData) {
   const sessionUser = await requireAuth();
@@ -13,10 +14,17 @@ export async function updateProfile(formData: FormData) {
   const lastName = String(formData.get("lastName") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
   const iracingMemberIdRaw = String(formData.get("iracingMemberId") ?? "").trim();
-  const iracingMemberId = iracingMemberIdRaw || null;
+  // Accept what people paste ("#1189750", "1 189 750") and store the digits.
+  const iracingMemberId = iracingMemberIdRaw
+    ? normalizeIracingId(iracingMemberIdRaw)
+    : null;
 
-  if (iracingMemberId && !/^\d+$/.test(iracingMemberId)) {
-    redirect("/profile?error=iRacing+member+ID+must+be+a+number");
+  if (iracingMemberIdRaw && !iracingMemberId) {
+    redirect(
+      `/profile?error=${encodeURIComponent(
+        `"${iracingMemberIdRaw}" is not an iRacing ID — enter the numeric customer ID only.`
+      )}`
+    );
   }
 
   // If another account already holds this iRacing ID it is almost always a
@@ -79,8 +87,9 @@ export async function lookupIracingId(
   iracingMemberId: string
 ): Promise<IracingLookupResult> {
   const sessionUser = await requireAuth();
-  const id = String(iracingMemberId ?? "").trim();
-  if (!/^\d+$/.test(id)) return { status: "new" };
+  // Normalise first so the live lookup still recognises a pasted "#1189750".
+  const id = normalizeIracingId(iracingMemberId);
+  if (!id) return { status: "new" };
 
   const holder = await prisma.user.findUnique({
     where: { iracingMemberId: id },
