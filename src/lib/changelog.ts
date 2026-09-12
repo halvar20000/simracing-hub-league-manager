@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.31.1",
+    date: "2026-09-12",
+    changes: [
+      "The per-car championships (Combined Cup's BMW M2 / Ray FF1600 / SpecRacer Ford tabs, and the By Car tab on every other league) now break a points tie the same way the rest of the site does: on equal points the driver with fewer incidents ranks higher. Until now that table sorted on points alone, so two drivers on the same score were left in whatever order the results happened to be read in.",
+      "The car tables gained an Inc column, so the order is readable off the page instead of having to be taken on trust.",
+      "Spotted on Combined Cup S11 after Navarra, where Ray FF1600 had two drivers on 47 points and put the one with 13 incidents ahead of the one with 8.",
+    ],
+  },
+  {
     version: "2.31.0",
     date: "2026-09-10",
     changes: [

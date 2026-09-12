@@ -821,6 +821,7 @@ function CarDriversTable({ drivers }: { drivers: CarStanding["drivers"] }) {
           <th className="px-3 py-2 driver-col">Driver</th>
           <th className="px-3 py-2">Team</th>
           <th className="px-3 py-2 text-right">Rounds</th>
+          <th className="px-3 py-2 text-right">Inc</th>
           <th className="px-3 py-2 text-right">Total</th>
         </tr>
       </thead>
@@ -841,6 +842,9 @@ function CarDriversTable({ drivers }: { drivers: CarStanding["drivers"] }) {
             </td>
             <td className="px-3 py-2 text-zinc-400">{d.teamName ?? "—"}</td>
             <td className="px-3 py-2 text-right tabular-nums">{d.roundsCompleted}</td>
+            <td className="px-3 py-2 text-right tabular-nums text-zinc-400">
+              {d.totalIncidents}
+            </td>
             <td className="px-3 py-2 text-right font-semibold tabular-nums">
               {d.combinedTotal}
             </td>

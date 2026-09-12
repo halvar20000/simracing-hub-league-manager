@@ -902,6 +902,8 @@ export interface CarStandingDriver {
   correctionPoints: number;
   combinedTotal: number;
   roundsCompleted: number;
+  /** Incidents scored in THIS car — the tiebreaker on equal points. */
+  totalIncidents: number;
 }
 
 export interface CarStanding {
@@ -936,6 +938,7 @@ export async function computeCarStandings(
 
   type Bucket = {
     raw: number; participation: number; manual: number; correction: number;
+    incidents: number;
     rounds: Set<string>;
     firstName: string | null; lastName: string | null;
     countryCode: string | null; startNumber: string | null;
@@ -962,7 +965,7 @@ export async function computeCarStandings(
     let b = car.drivers.get(r.registrationId);
     if (!b) {
       b = {
-        raw: 0, participation: 0, manual: 0, correction: 0,
+        raw: 0, participation: 0, manual: 0, correction: 0, incidents: 0,
         rounds: new Set(),
         firstName: r.registration.user.firstName,
         lastName: r.registration.user.lastName,
@@ -976,6 +979,7 @@ export async function computeCarStandings(
     b.participation += r.participationPointsAwarded;
     b.manual += r.manualPenaltyPoints;
     b.correction += r.correctionPoints;
+    b.incidents += r.incidents ?? 0;
     b.rounds.add(r.roundId);
   }
 
@@ -1002,9 +1006,21 @@ export async function computeCarStandings(
         correctionPoints: b.correction,
         combinedTotal: total,
         roundsCompleted: b.rounds.size,
+        totalIncidents: b.incidents,
       });
     }
-    drivers.sort((a, b) => b.combinedTotal - a.combinedTotal);
+    // Same tiebreaker as the Combined / Pro / Am / GDC standings (see the
+    // sort at the end of computeDriverStandings): on equal points the driver
+    // with fewer incidents ranks higher. Without it the order fell back to
+    // whatever sequence the result rows happened to arrive in.
+    drivers.sort(
+      (a, b) =>
+        b.combinedTotal - a.combinedTotal ||
+        a.totalIncidents - b.totalIncidents ||
+        b.rawPoints - a.rawPoints ||
+        b.roundsCompleted - a.roundsCompleted ||
+        (a.driverLastName ?? "").localeCompare(b.driverLastName ?? "")
+    );
     out.push({
       carId,
       carName: car.name,
