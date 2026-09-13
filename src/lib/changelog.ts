@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.32.0",
+    date: "2026-09-13",
+    changes: [
+      "IEC: steward penalty points now count against the TEAM, not the individual driver. The IEC is an endurance team championship \u2014 the car is entered by the team and the points are scored by the team \u2014 so a penalty handed to one driver was, until now, deducted from a championship nobody is racing for while the team kept every point it had been penalised over. The penalty lands on the entry that driver was racing, in the round it was incurred.",
+      "The team championship table gained a Pen column, in both the list and the race-by-race view, and the race-by-race cells carry the deduction under the round score. It is a fixed column: a class with no penalties shows a dash rather than hiding it.",
+      "The round page follows the same rule, so the entry's Pen. figure there and the championship total can never disagree. On IEC the driver tables no longer show these points \u2014 they are the team's.",
+      "Deliberately scoped to the IEC. No other league changes how it is scored.",
+    ],
+  },
+  {
     version: "2.31.2",
     date: "2026-09-13",
     changes: [

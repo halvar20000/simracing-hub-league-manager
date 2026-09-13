@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import type { TeamClassGroup } from "@/lib/standings";
 
 type SortDir = "asc" | "desc";
-type SortKey = "pos" | "name" | "total" | `round:${string}`;
+type SortKey = "pos" | "name" | "total" | "pen" | `round:${string}`;
 
 /**
  * Interactive race-by-race team standings table (IEC / SFL team championship).
@@ -49,6 +49,7 @@ export function RaceByRaceTeamTable({ group }: { group: TeamClassGroup }) {
     const valueFor = (entry: { team: TeamClassGroup["teams"][number]; rank: number }): number => {
       if (sortKey === "pos") return entry.rank;
       if (sortKey === "total") return entry.team.totalPoints;
+      if (sortKey === "pen") return entry.team.totalPenaltyPoints;
       if (sortKey.startsWith("round:"))
         return roundPoints(entry.team, sortKey.slice("round:".length));
       return entry.rank;
@@ -125,6 +126,13 @@ export function RaceByRaceTeamTable({ group }: { group: TeamClassGroup }) {
                 </th>
               ))}
               <th
+                onClick={() => toggleSort("pen", "desc")}
+                className="cursor-pointer px-3 py-2 text-right hover:text-zinc-300"
+                title="Penalty points deducted (manual + steward decisions)"
+              >
+                Pen{arrow("pen")}
+              </th>
+              <th
                 onClick={() => toggleSort("total", "desc")}
                 className="cursor-pointer px-3 py-2 text-right hover:text-zinc-300"
               >
@@ -159,9 +167,17 @@ export function RaceByRaceTeamTable({ group }: { group: TeamClassGroup }) {
                             : cell.finishStatus}
                         </div>
                         <div className="font-semibold tabular-nums">{cell.points}</div>
+                        {cell.penaltyPoints > 0 && (
+                          <div className="text-xs font-medium tabular-nums text-red-400">
+                            −{cell.penaltyPoints}
+                          </div>
+                        )}
                       </td>
                     );
                   })}
+                  <td className="px-3 py-2 text-right tabular-nums text-red-400">
+                    {t.totalPenaltyPoints > 0 ? `−${t.totalPenaltyPoints}` : "—"}
+                  </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">
                     {t.totalPoints}
                   </td>
@@ -170,7 +186,7 @@ export function RaceByRaceTeamTable({ group }: { group: TeamClassGroup }) {
             })}
             {filteredSorted.length === 0 && (
               <tr>
-                <td colSpan={roundsList.length + 3} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={roundsList.length + 4} className="px-3 py-6 text-center text-zinc-500">
                   No teams match “{query}”.
                 </td>
               </tr>

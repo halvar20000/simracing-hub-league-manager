@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
+import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
 
 export interface RoundPoints {
   roundId: string;
@@ -244,6 +245,11 @@ export async function computeDriverStandings(
   // so racing more rounds than the counting allotment is worth a small bonus.
   const dropKeepsParticipation = !!season?.dropWeekKeepsParticipation;
   const defersPenalties = !!season?.scoringSystem?.deferPenaltyPoints;
+  // IEC: steward penalty points belong to the TEAM, not to the driver.
+  // They are deducted in computeTeamClassStandings instead; the driver
+  // tally here ignores every Penalty row. Manual per-result points
+  // (RaceResult.manualPenaltyPoints) are unaffected and still apply.
+  const penaltiesGoToTeam = penaltiesScoreToTeam(season?.league.slug);
   const driverFprEnabled = !!season?.scoringSystem?.driverFprEnabled;
   const driverFprTiers = driverFprEnabled
     ? readDriverFprTiers(season?.scoringSystem?.driverFprTiers)
@@ -299,7 +305,9 @@ export async function computeDriverStandings(
     const immediatePenaltyByRound = new Map<string, number>();
     let forgivenessCredit = 0;
     let noShowPenaltyPoints = 0;
-    if (perRacePenalties) {
+    if (penaltiesGoToTeam) {
+      // Nothing to do — the team championship carries these points.
+    } else if (perRacePenalties) {
       for (const p of reg.penalties) {
         const pv = p.pointsValue ?? 0;
         if (pv <= 0) continue;
@@ -1047,6 +1055,8 @@ export interface TeamClassRoundResult {
   finishPosition: number;
   classPosition: number | null;
   points: number;
+  /** Penalty points deducted from this round: manual + steward penalties. */
+  penaltyPoints: number;
   totalIncidents: number;
   finishStatus: string;
 }
@@ -1055,6 +1065,8 @@ export interface TeamClassStanding {
   teamId: string;
   teamName: string;
   totalPoints: number;
+  /** Season sum of penalty points deducted from this team (manual + steward). */
+  totalPenaltyPoints: number;
   totalIncidents: number;
   roundsCompleted: number;
   bestClassFinish: number | null;
@@ -1076,7 +1088,7 @@ export async function computeTeamClassStandings(
   const onlyPublished = !opts.includeUnpublishedRounds;
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
-    include: { scoringSystem: true },
+    include: { scoringSystem: true, league: { select: { slug: true } } },
   });
   if (!season) return [];
   const pointsTable = (season.scoringSystem.pointsTable ?? {}) as Record<string, number>;
@@ -1098,6 +1110,61 @@ export async function computeTeamClassStandings(
     },
   });
 
+  // ---- Steward penalties on the TEAM entry (IEC) ------------------------
+  // On a team championship a POINTS_DEDUCTION handed to a driver counts
+  // against the entry he was racing, in the round it was incurred — see
+  // src/lib/team-penalty-attribution.ts. The driver's own tally ignores it.
+  const penaltyByTeamRoundClass = new Map<string, number>();
+  const penaltyByTeamRound = new Map<string, number>();
+  const resultCountByTeamRound = new Map<string, number>();
+  if (penaltiesScoreToTeam(season.league.slug)) {
+    for (const r of results) {
+      if (!r.carClass) continue;
+      const k = `${r.team.id}::${r.round.id}`;
+      resultCountByTeamRound.set(k, (resultCountByTeamRound.get(k) ?? 0) + 1);
+    }
+    const pens = await prisma.penalty.findMany({
+      where: {
+        registration: { seasonId },
+        type: "POINTS_DEDUCTION",
+        pointsValue: { gt: 0 },
+        source: { not: "NO_RSVP_NO_SHOW" },
+        ...(onlyPublished ? { round: { status: "COMPLETED" } } : {}),
+      },
+      select: {
+        roundId: true,
+        pointsValue: true,
+        forgivenPoints: true,
+        autoForgivenPoints: true,
+        registration: { select: { teamId: true, carClassId: true } },
+      },
+    });
+    for (const p of pens) {
+      const teamId = p.registration.teamId;
+      if (!teamId) continue;
+      const effective = Math.max(
+        0,
+        (p.pointsValue ?? 0) -
+          (p.forgivenPoints ?? 0) -
+          (p.autoForgivenPoints ?? 0)
+      );
+      if (effective <= 0) continue;
+      const classId = p.registration.carClassId;
+      if (classId) {
+        const k = `${teamId}::${p.roundId}::${classId}`;
+        penaltyByTeamRoundClass.set(
+          k,
+          (penaltyByTeamRoundClass.get(k) ?? 0) + effective
+        );
+      } else {
+        // No class on the registration: only attributable when the team ran
+        // a single entry in that round.
+        const k = `${teamId}::${p.roundId}`;
+        penaltyByTeamRound.set(k, (penaltyByTeamRound.get(k) ?? 0) + effective);
+      }
+    }
+  }
+
   // Group by carClassId → teamId → rounds
   type Bucket = {
     classId: string;
@@ -1107,6 +1174,7 @@ export async function computeTeamClassStandings(
     teams: Map<string, {
       teamName: string;
       total: number;
+      penalty: number;
       incidents: number;
       rounds: TeamClassRoundResult[];
     }>;
@@ -1147,7 +1215,7 @@ export async function computeTeamClassStandings(
     }
     let t = b.teams.get(r.team.id);
     if (!t) {
-      t = { teamName: r.team.name, total: 0, incidents: 0, rounds: [] };
+      t = { teamName: r.team.name, total: 0, penalty: 0, incidents: 0, rounds: [] };
       b.teams.set(r.team.id, t);
     }
     // A team that didn't reach the configured min race distance gets 0 race
@@ -1193,9 +1261,20 @@ export async function computeTeamClassStandings(
     }
 
     const correction = r.correctionPoints ?? 0;
-    const penalty = r.manualPenaltyPoints ?? 0;
+    const manualPenalty = r.manualPenaltyPoints ?? 0;
+    // Steward penalties for this entry in this round (IEC only — the maps are
+    // empty on every other league).
+    const trKey = `${r.team.id}::${r.round.id}`;
+    let stewardPenalty = penaltyByTeamRoundClass.get(`${trKey}::${r.carClass.id}`) ?? 0;
+    const unclassed = penaltyByTeamRound.get(trKey) ?? 0;
+    if (unclassed > 0 && (resultCountByTeamRound.get(trKey) ?? 0) === 1) {
+      stewardPenalty += unclassed;
+      penaltyByTeamRound.delete(trKey);
+    }
+    const penalty = manualPenalty + stewardPenalty;
     const pts = racePts + participation + correction - penalty + fprPoints;
     t.total += pts;
+    t.penalty += penalty;
     t.incidents += r.totalIncidents;
     t.rounds.push({
       roundId: r.round.id,
@@ -1204,6 +1283,7 @@ export async function computeTeamClassStandings(
       finishPosition: r.finishPosition,
       classPosition: r.classPosition,
       points: pts,
+      penaltyPoints: penalty,
       totalIncidents: r.totalIncidents,
       finishStatus: r.finishStatus,
     });
@@ -1222,6 +1302,7 @@ export async function computeTeamClassStandings(
         teamId,
         teamName: t.teamName,
         totalPoints: t.total,
+        totalPenaltyPoints: t.penalty,
         totalIncidents: t.incidents,
         roundsCompleted: t.rounds.length,
         bestClassFinish,

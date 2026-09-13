@@ -19,6 +19,7 @@ import { DriverOfTheDayHero } from "@/components/DriverOfTheDayHero";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { computeTeamOfTheDay } from "@/lib/team-of-the-day";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
+import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
 import { isExpiringVodType, twitchVideoUrl } from "@/lib/twitch";
 import { RaceStreamEmbed } from "@/components/RaceStreamEmbed";
 
@@ -212,7 +213,7 @@ export default async function PublicRoundResults({
   // standings engine's classTotal is not gated by this flag.
   const includeParticipationInCombined =
     round.season.scoringSystem.participationInCombined ?? true;
-  const teamResultsForRound = await prisma.teamResult.findMany({
+  const rawTeamResults = await prisma.teamResult.findMany({
     where: { roundId: round.id },
     include: {
       team: { select: { id: true, name: true } },
@@ -229,6 +230,52 @@ export default async function PublicRoundResults({
     },
     orderBy: [{ classPosition: "asc" }, { finishPosition: "asc" }],
   });
+
+  // ---- Steward penalties on the TEAM entry (IEC) -------------------------
+  // Same attribution as computeTeamClassStandings in src/lib/standings.ts:
+  // a driver's POINTS_DEDUCTION counts against the entry he was racing, so
+  // this page and the championship table can never disagree.
+  const teamStewardPenaltyById = new Map<string, number>();
+  if (penaltiesScoreToTeam(slug)) {
+    const teamPens = await prisma.penalty.findMany({
+      where: {
+        roundId,
+        type: "POINTS_DEDUCTION",
+        pointsValue: { gt: 0 },
+        source: { not: "NO_RSVP_NO_SHOW" },
+      },
+      select: {
+        pointsValue: true,
+        forgivenPoints: true,
+        autoForgivenPoints: true,
+        registration: { select: { teamId: true, carClassId: true } },
+      },
+    });
+    for (const p of teamPens) {
+      const teamId = p.registration.teamId;
+      if (!teamId) continue;
+      const effective = Math.max(
+        0,
+        (p.pointsValue ?? 0) -
+          (p.forgivenPoints ?? 0) -
+          (p.autoForgivenPoints ?? 0)
+      );
+      if (effective <= 0) continue;
+      const entries = rawTeamResults.filter((tr) => tr.teamId === teamId);
+      const target =
+        entries.find((tr) => tr.carClassId === p.registration.carClassId) ??
+        (entries.length === 1 ? entries[0] : undefined);
+      if (!target) continue;
+      teamStewardPenaltyById.set(
+        target.id,
+        (teamStewardPenaltyById.get(target.id) ?? 0) + effective
+      );
+    }
+  }
+  const teamResultsForRound = rawTeamResults.map((tr) => ({
+    ...tr,
+    stewardPenaltyPoints: teamStewardPenaltyById.get(tr.id) ?? 0,
+  }));
   const hasTeamData = teamResultsForRound.length > 0;
 
   // Team of the Day — computed live from the result rows rather than stored, so
@@ -496,9 +543,13 @@ export default async function PublicRoundResults({
   // Deferred-pool seasons (GT3 WCT) stay out: their points only count once an
   // admin releases the pool at season end. No-show penalties stay out too —
   // that driver has no result in this round anyway.
+  // On a team-penalty league (IEC) the driver tables never show these points:
+  // they are deducted from the team entry above, exactly as the championship
+  // does, so showing them here as well would double-count them on screen.
   const appliesPenaltiesImmediately =
-    isPerRacePenaltySeason(slug, seasonId) ||
-    !round.season.scoringSystem.deferPenaltyPoints;
+    !penaltiesScoreToTeam(slug) &&
+    (isPerRacePenaltySeason(slug, seasonId) ||
+      !round.season.scoringSystem.deferPenaltyPoints);
   if (appliesPenaltiesImmediately) {
     const roundIncidentPenalties = await prisma.penalty.findMany({
       where: {
@@ -2062,6 +2113,8 @@ interface RoundTeamRow {
   participationPointsAwarded: number;
   correctionPoints: number;
   manualPenaltyPoints: number;
+  /** Steward penalty points attributed to this entry (IEC); 0 elsewhere. */
+  stewardPenaltyPoints: number;
   team: { id: string; name: string };
   carClass: { id: string; name: string; shortCode: string; displayOrder: number } | null;
   participations: Array<{
@@ -2296,7 +2349,7 @@ function buildTeamRowSummary(
     : fprByTeamAndClass.get(`${tr.teamId}::${selectedClassId}`) ?? 0;
 
   const bonusPts = participationPts + fprPts + legacyFpr;
-  const penPts = tr.manualPenaltyPoints;
+  const penPts = tr.manualPenaltyPoints + (tr.stewardPenaltyPoints ?? 0);
   // Total = Race + Bonus (penalty is shown separately).
   const totalPts = racePts + bonusPts;
   return {

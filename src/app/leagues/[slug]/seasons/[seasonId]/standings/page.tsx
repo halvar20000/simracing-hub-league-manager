@@ -907,6 +907,12 @@ function TeamClassTable({
               <th className="px-3 py-2 text-right">Best</th>
               <th className="px-3 py-2 text-right">Rounds</th>
               <th className="px-3 py-2 text-right">Incidents</th>
+              <th
+                className="px-3 py-2 text-right"
+                title="Penalty points deducted (manual + steward decisions)"
+              >
+                Pen
+              </th>
               <th className="px-3 py-2 text-right">Total</th>
             </tr>
           </thead>
@@ -920,6 +926,9 @@ function TeamClassTable({
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{t.roundsCompleted}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-zinc-400">{t.totalIncidents}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-red-400">
+                  {t.totalPenaltyPoints > 0 ? `−${t.totalPenaltyPoints}` : "—"}
+                </td>
                 <td className="px-3 py-2 text-right font-semibold tabular-nums">{t.totalPoints}</td>
               </tr>
             ))}
