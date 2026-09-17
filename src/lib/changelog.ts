@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.32.1",
+    date: "2026-09-17",
+    changes: [
+      "The Rounds column in the standings counted RACES, not rounds. On a league with two races per round it therefore showed twice the truth \u2014 SFL Cup 8th Season read 12 for a driver who had been to all six rounds. Affects SFL Cup, the Porsche Community Cup and the Combined Cup; single-race leagues were always right.",
+      "The same figure decides the \"more rounds raced\" tiebreak and is exported to the standings .xlsx and the broadcast overlay, so those were reading the doubled number too.",
+    ],
+  },
+  {
     version: "2.32.0",
     date: "2026-09-13",
     changes: [

@@ -592,7 +592,11 @@ export async function computeDriverStandings(
       iRating,
       excludedAt: reg.excludedAt ?? null,
       retiredAt: reg.retiredAt ?? null,
-      roundsCompleted: reg.raceResults.length,
+      // Rounds, not races: a round with two races (Combined Cup, PCCD,
+      // SFL) is ONE round for this column and for the "more rounds"
+      // tiebreak. Counting the result rows made every such driver look
+      // like he had raced twice as many rounds as the season has.
+      roundsCompleted: new Set(reg.raceResults.map((r) => r.roundId)).size,
       roundPoints,
     };
   });
@@ -1304,7 +1308,7 @@ export async function computeTeamClassStandings(
         totalPoints: t.total,
         totalPenaltyPoints: t.penalty,
         totalIncidents: t.incidents,
-        roundsCompleted: t.rounds.length,
+        roundsCompleted: new Set(sorted.map((r) => r.roundId)).size,
         bestClassFinish,
         rounds: sorted,
       });
