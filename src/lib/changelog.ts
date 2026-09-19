@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.33.0",
+    date: "2026-09-19",
+    changes: [
+      "Drivers can change their TEAM after approval again. Until now the team was frozen the moment an admin approved the registration, which meant a driver who had signed up independently, or who agreed a team seat after approval, had to ask an admin to move them. The team now follows exactly the same rule as the car: it stays editable until the driver's own first race result of the season has been uploaded.",
+      "The approval is kept — changing team does not send the registration back to pending, and the admins get the usual “Updated registration” notification.",
+      "The team size limit is enforced on these edits too, so an approved driver cannot move into a team that is already full.",
+      "Unchanged: the start number is still fixed after the initial registration, and once a driver has raced, everything goes through an admin.",
+    ],
+  },
+  {
     version: "2.32.1",
     date: "2026-09-17",
     changes: [

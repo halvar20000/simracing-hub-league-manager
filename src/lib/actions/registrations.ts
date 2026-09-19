@@ -228,9 +228,9 @@ export async function createRegistration(
       })
     : null;
 
-  // APPROVED drivers may edit their registration (car, start number, notes)
-  // until they have raced for the first time. The edit keeps the approval —
-  // no reset to PENDING. Team changes after approval go through an admin.
+  // APPROVED drivers may edit their registration (car, team, notes) until
+  // they have raced for the first time. The edit keeps the approval — no
+  // reset to PENDING. The start number stays admin-only.
   const approvedEdit = !!existing && existing.status === "APPROVED";
   if (approvedEdit && driverHasResult) {
     redirect(
@@ -241,13 +241,14 @@ export async function createRegistration(
   }
 
   // Resolve team:
-  //   - Approved edit: the team is locked — keep the existing one
   //   - If newTeamName is provided, find or create that team (it wins)
   //   - Otherwise use the team from the dropdown
+  // The team follows the same rule as the car: it stays editable until the
+  // driver's own first result of the season has been uploaded. Past that
+  // point `driverHasResult` has already redirected an approved edit away,
+  // and a non-approved registration can't have a result either.
   let teamId: string | null = teamIdFromDropdown;
-  if (approvedEdit) {
-    teamId = existing!.teamId;
-  } else if (newTeamName) {
+  if (newTeamName) {
     // Case-insensitive match so "cas racing" never creates a near-duplicate
     // of an existing "CAS Racing" — team names exist only once per season.
     const existingTeam = await prisma.team.findFirst({
@@ -270,7 +271,11 @@ export async function createRegistration(
     leagueSlug: season.league.slug,
     teamMaxDrivers: season.teamMaxDrivers,
   });
-  if (teamLimit != null && teamId && !approvedEdit) {
+  // The cap applies to approved edits too — an approved driver may now
+  // switch teams, so a crafted (or honest) move into a full team must be
+  // rejected the same way. countTeamMembers excludes the current user, so
+  // re-submitting the form with an unchanged team is always allowed.
+  if (teamLimit != null && teamId) {
     const occupied = await countTeamMembers(teamId, user.id);
     if (occupied >= teamLimit) {
       redirect(
@@ -358,9 +363,11 @@ export async function createRegistration(
       where: { id: existing.id },
       data: approvedEdit
         ? {
-            // Approved edit: car/start number/notes only — the approval and
-            // the team stay untouched.
+            // Approved edit: car, team and notes — the approval itself stays
+            // untouched (no reset to PENDING). The start number is already
+            // pinned to the existing one above.
             startNumber,
+            teamId,
             carClassId: resolvedCarClassId,
             carId,
             notes,

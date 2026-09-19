@@ -722,8 +722,8 @@ export default async function RegisterPage({
           {isApprovedEdit ? (
             <>
               You are editing your approved registration — your approval is
-              kept. You can change car and notes until your first race result
-              is in. Start number and team changes go through an admin.
+              kept. You can change car, team and notes until your first race
+              result is in. Start number changes go through an admin.
             </>
           ) : (
             <>
@@ -844,17 +844,7 @@ export default async function RegisterPage({
           );
         })()}
 
-        {isApprovedEdit ? (
-          <div className="rounded border border-zinc-800 bg-zinc-900/50 p-4">
-            <span className="mb-1 block text-sm text-zinc-300">Team</span>
-            <div className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-300">
-              {existing?.team?.name ?? "No team / Independent"}
-            </div>
-            <span className="mt-1 block text-xs text-zinc-500">
-              Team changes after approval go through an admin.
-            </span>
-          </div>
-        ) : isGt3Wct ? (
+        {isGt3Wct ? (
           <TeamPicker
             teams={teamsWithCounts}
             limit={
