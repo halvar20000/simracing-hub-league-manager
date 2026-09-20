@@ -23,6 +23,7 @@ import {
 import ProAmOverrideSelect from "@/components/ProAmOverrideSelect";
 import GdcToggle from "@/components/GdcToggle";
 import EligibleRound1Toggle from "@/components/EligibleRound1Toggle";
+import RegistrationDeleteButton from "@/components/RegistrationDeleteButton";
 import TableFilter from "@/components/TableFilter";
 import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { SortableGroupedTableEnhancer } from "@/components/SortableGroupedTableEnhancer";
@@ -818,6 +819,10 @@ export default async function RosterPage({
                     >
                       Edit
                     </Link>
+                    <RegistrationDeleteButton
+                      registrationId={r.id}
+                      driverName={`${r.user.firstName} ${r.user.lastName}`}
+                    />
                   </div>
                 </td>
               </tr>

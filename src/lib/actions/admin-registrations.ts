@@ -122,6 +122,93 @@ export async function retireRegistration(registrationId: string, retired: boolea
   );
 }
 
+export type DeleteRegistrationResult =
+  | { ok: true; name: string }
+  | { ok: false; error: string };
+
+/**
+ * Admin: DELETE a registration outright — the driver disappears from the
+ * roster instead of lingering as Withdrawn or Rejected.
+ *
+ * Refuses as soon as anything is hanging off the registration that carries
+ * championship history: race results, steward penalties, incident reports
+ * (filed by or against the driver) and team line-up rows. Deleting those
+ * would silently rewrite finished rounds, so the admin is told exactly what
+ * is in the way and pointed at Withdrawn / Retire instead.
+ *
+ * RSVPs and one-race fill-in offers are purely forward-looking and are
+ * cascaded away with the row (schema `onDelete: Cascade`). The User account
+ * is never touched — the person may be registered in other seasons, and a
+ * CLS login must not disappear because one roster entry was tidied up.
+ */
+export async function deleteRegistration(
+  registrationId: string
+): Promise<DeleteRegistrationResult> {
+  await requireAdmin();
+
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: {
+      id: true,
+      seasonId: true,
+      user: { select: { firstName: true, lastName: true } },
+      season: { select: { league: { select: { slug: true } } } },
+    },
+  });
+  if (!reg) return { ok: false, error: "That registration no longer exists." };
+
+  const name = `${reg.user.firstName} ${reg.user.lastName}`.trim();
+
+  const [results, penalties, involved, reported, lineUps] = await Promise.all([
+    prisma.raceResult.count({ where: { registrationId } }),
+    prisma.penalty.count({ where: { registrationId } }),
+    prisma.incidentReportInvolvedDriver.count({ where: { registrationId } }),
+    prisma.incidentReport.count({
+      where: { reporterRegistrationId: registrationId },
+    }),
+    prisma.teamRoundDriver.count({ where: { registrationId } }),
+  ]);
+
+  const plural = (n: number, one: string, many: string) =>
+    `${n} ${n === 1 ? one : many}`;
+  const blockers: string[] = [];
+  if (results > 0) blockers.push(plural(results, "race result", "race results"));
+  if (penalties > 0) blockers.push(plural(penalties, "penalty", "penalties"));
+  if (involved > 0)
+    blockers.push(plural(involved, "incident report", "incident reports"));
+  if (reported > 0)
+    blockers.push(plural(reported, "filed report", "filed reports"));
+  if (lineUps > 0)
+    blockers.push(plural(lineUps, "team line-up entry", "team line-up entries"));
+
+  if (blockers.length > 0) {
+    return {
+      ok: false,
+      error:
+        `${name} can't be deleted — ${blockers.join(", ")} still reference ` +
+        `this registration, and removing it would change finished rounds. ` +
+        `Set the registration to Withdrawn, or retire the driver, instead.`,
+    };
+  }
+
+  await prisma.registration.delete({ where: { id: registrationId } });
+
+  // The seat is free now: promote the next driver off the waiting list.
+  try {
+    await recomputeWaitlistForSeason(reg.seasonId);
+  } catch {
+    // Never let a waiting-list hiccup undo a completed deletion.
+  }
+
+  const slug = reg.season.league.slug;
+  revalidatePath(`/admin/leagues/${slug}/seasons/${reg.seasonId}/roster`);
+  revalidatePath(`/leagues/${slug}/seasons/${reg.seasonId}`);
+  revalidatePath(`/leagues/${slug}/seasons/${reg.seasonId}/standings`);
+  revalidatePath("/registrations");
+
+  return { ok: true, name };
+}
+
 export async function updateRegistration(
   leagueSlug: string,
   seasonId: string,

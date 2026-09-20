@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.34.0",
+    date: "2026-09-20",
+    changes: [
+      "An admin can now DELETE a registration from the roster, not just set it to Withdrawn or Rejected. Until now a wrong entry \u2014 a duplicate, a typo\u2019d iRacing ID, somebody who signed up twice \u2014 stayed in the list for good. The Delete button sits next to Edit on the admin roster.",
+      "It refuses the moment the registration carries history: race results, steward penalties, incident reports filed by or against the driver, or team line-up entries. The message names what is in the way and how many, because deleting those would quietly rewrite rounds that are already scored. Withdrawn and Retire remain the right tools there.",
+      "The driver\u2019s CLS account is never deleted with the registration \u2014 the same person may be racing in another season. Deleting frees the grid seat, so the next driver on the waiting list moves up automatically.",
+    ],
+  },
+  {
     version: "2.33.0",
     date: "2026-09-19",
     changes: [
