@@ -60,6 +60,103 @@ export const PIT_STOP_MIN_SEC = 20;
  *  several laps of every class and short enough to show track evolution. */
 export const WINDOW_SEC = 600;
 
+/**
+ * One real pit stop of one car, pit-road entry → exit on the session clock.
+ * The logger emits its `pit` event at pit EXIT with `t_session` = exit time
+ * and `duration` = time on pit road, so entry = t_session − duration.
+ */
+export interface StopSpan {
+  fromSec: number;
+  toSec: number;
+}
+
+/**
+ * A stretch of the race in which the field is NOT on the same number of stops
+ * — somebody has pitted for the k-th time and somebody else has not yet.
+ * Track positions inside such a window say who has stopped, not who is
+ * faster: an early stopper drops back and "gains" the places again once the
+ * others come in. Anything that reads a position out of the log to judge a
+ * driver (Driver of the Day's worst position / recovery) must skip these.
+ */
+export interface PitCycleWindow {
+  /** 1-based stop cycle the window starts with (merged windows keep the first). */
+  cycle: number;
+  fromSec: number;
+  toSec: number;
+  /** Most cars that stopped in any cycle merged into this window. */
+  cars: number;
+}
+
+/** Real stops (≥ PIT_STOP_MIN_SEC) of one car from its raw pit events, in
+ *  session order. Drive-throughs and penalty serves stay out on purpose: a
+ *  place lost to a penalty is a place lost, not a strategy artefact. */
+export function realStopSpans(
+  pits: { tSec: number | null; durationSec: number | null }[]
+): StopSpan[] {
+  return pits
+    .filter(
+      (p): p is { tSec: number; durationSec: number } =>
+        p.tSec != null &&
+        Number.isFinite(p.tSec) &&
+        p.durationSec != null &&
+        p.durationSec >= PIT_STOP_MIN_SEC
+    )
+    .map((p) => ({ fromSec: p.tSec - p.durationSec, toSec: p.tSec }))
+    .sort((a, b) => a.fromSec - b.fromSec);
+}
+
+/**
+ * The pit-cycle windows of a race. Cycle k runs from the first car entering
+ * pit road for its k-th stop to the last car leaving pit road after its k-th
+ * stop, plus `settleSec` (about one lap) so the out-laps have crossed the line
+ * and the order has settled. Overlapping windows are merged.
+ *
+ * `position` in the log is the OVERALL order, so pass every car of the
+ * session — a GT3 stopping reshuffles a P217's overall place too.
+ *
+ * Known limit: a car whose stop count is off the field's rhythm (an early
+ * repair stop) shifts its k-th stop against everybody else's and widens the
+ * window. That errs towards ignoring positions, never towards inventing a
+ * recovery.
+ */
+export function pitCycleWindows(
+  stopsByCar: StopSpan[][],
+  settleSec: number
+): PitCycleWindow[] {
+  const maxStops = stopsByCar.reduce((m, s) => Math.max(m, s.length), 0);
+  const raw: PitCycleWindow[] = [];
+  for (let k = 0; k < maxStops; k += 1) {
+    const spans = stopsByCar
+      .map((s) => s[k])
+      .filter((x): x is StopSpan => x != null);
+    if (spans.length === 0) continue;
+    raw.push({
+      cycle: k + 1,
+      fromSec: Math.min(...spans.map((x) => x.fromSec)),
+      toSec: Math.max(...spans.map((x) => x.toSec)) + Math.max(0, settleSec),
+      cars: spans.length,
+    });
+  }
+  raw.sort((a, b) => a.fromSec - b.fromSec);
+  const merged: PitCycleWindow[] = [];
+  for (const w of raw) {
+    const last = merged[merged.length - 1];
+    if (last && w.fromSec <= last.toSec) {
+      last.toSec = Math.max(last.toSec, w.toSec);
+      last.cars = Math.max(last.cars, w.cars);
+      last.cycle = Math.min(last.cycle, w.cycle);
+    } else {
+      merged.push({ ...w });
+    }
+  }
+  return merged;
+}
+
+/** True when session time `t` falls inside any of the windows. */
+export function inPitCycle(t: number, windows: PitCycleWindow[]): boolean {
+  return windows.some((w) => t >= w.fromSec && t <= w.toSec);
+}
+
 /** Fewest clean laps a CLASS window needs before its median is reported. */
 const CLASS_WINDOW_MIN_LAPS = 5;
 

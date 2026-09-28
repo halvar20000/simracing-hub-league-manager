@@ -192,8 +192,10 @@ export default async function AdminRaceCenterPage({
             start/finish/incidents) and the race-logger{" "}
             <span className="font-mono">…_race.jsonl</span> (overtakes + recovery). The award
             blends positions gained (40%), overtakes (25%), recovery (20%) and clean racing
-            (15%), so it is <strong>not</strong> automatically the race winner. The previous
-            round&rsquo;s winner is blocked from a back-to-back win.
+            (15%), so it is <strong>not</strong> automatically the race winner. Recovery
+            ignores the pit-stop cycles: while the field is on different numbers of stops, the
+            running order is not counted, so an early stop is neither a loss nor a comeback.
+            The previous round&rsquo;s winner is blocked from a back-to-back win.
           </p>
         </div>
 
@@ -220,6 +222,11 @@ export default async function AdminRaceCenterPage({
                   · recovered {dotdMetrics.recovery}
                   {dotdMetrics.worstPos != null ? ` from P${dotdMetrics.worstPos}` : ""} ·{" "}
                   {dotdMetrics.overtakes} overtakes · {dotdMetrics.incidents} inc
+                </div>
+              )}
+              {dotdMetrics && (
+                <div className="mt-1 text-[11px] text-zinc-500">
+                  {pitAdjustNote(dotdMetrics.pitAdjust, dotdMetrics.pitWindows)}
                 </div>
               )}
               {dotd.previousWinnerBlocked && dotd.previousWinnerName && (
@@ -972,7 +979,30 @@ type DotdWinnerMetrics = {
   recovery: number;
   overtakes: number;
   incidents: number;
+  /** Per race: how recovery was cleaned of pit stops (absent = computed before v2.35.0). */
+  pitAdjust?: ("field" | "own-laps" | "none")[];
+  /** Per race: number of pit-cycle windows skipped. */
+  pitWindows?: number[];
 };
+
+function pitAdjustNote(
+  adjust: DotdWinnerMetrics["pitAdjust"],
+  windows: DotdWinnerMetrics["pitWindows"]
+): string {
+  if (!adjust || adjust.length === 0) {
+    return "Computed before v2.35.0 — recovery still counts pit-stop reshuffles. Recompute to correct it.";
+  }
+  const parts = adjust.map((a, i) => {
+    const race = adjust.length > 1 ? `Race ${i + 1}: ` : "";
+    if (a === "field") {
+      const n = windows?.[i] ?? 0;
+      return `${race}${n} pit-cycle window${n === 1 ? "" : "s"} ignored for recovery`;
+    }
+    if (a === "own-laps") return `${race}old log without session times — only each car's own in/out laps ignored`;
+    return `${race}no pit stops — nothing to adjust`;
+  });
+  return parts.join(" · ");
+}
 
 type DotdClassWinner = {
   carClassShortName: string;

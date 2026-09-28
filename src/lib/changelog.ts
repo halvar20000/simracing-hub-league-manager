@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.35.0",
+    date: "2026-09-28",
+    changes: [
+      "Driver of the Day: pit stops no longer count as a comeback. The \u201crecovery\u201d part of the award (worst position \u2192 finish) used to read the running order over the whole race, pit stops included. A driver who stopped early dropped back, got the places back when everybody else pitted, and was scored as if he had fought his way back through the field \u2014 while a driver who lost places in the pits was counted as having a bad moment.",
+      "Now the running order is ignored while the field is on different numbers of stops: from the first car entering pit road for a stop cycle until the last car has left it again plus about one lap. Only places lost and regained on track count as recovery. Positions gained (start \u2192 finish), overtakes and clean racing are unchanged.",
+      "Races without pit stops score exactly as before. Very old race logs without session times fall back to ignoring each car\u2019s own in- and out-lap. The Race Center shows which method was used; awards computed before this version are marked there and change only when an admin recomputes them.",
+    ],
+  },
+  {
     version: "2.34.0",
     date: "2026-09-20",
     changes: [

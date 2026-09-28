@@ -313,6 +313,10 @@ export async function computeAndSaveDotd(formData: FormData): Promise<void> {
     recovery: w.recovery,
     overtakes: w.overtakes,
     incidents: w.incidents,
+    // How each race's worst position was cleaned of pit-stop reshuffles —
+    // shown on the Race Center so an old, unadjusted award is recognisable.
+    pitAdjust: orderedLogs.map((l) => l.pitAdjust),
+    pitWindows: orderedLogs.map((l) => l.pitWindows.length),
   };
 
   // previousWinnerBlocked = did the streak rule actually exclude a driver who
