@@ -25,15 +25,30 @@ export function InvolvedDriversPicker({
   excludeRegistrationId,
   name = "involvedRegistrationIds",
   teamMode = false,
+  initialSelectedRegistrationIds = [],
 }: {
   drivers: Driver[];
   /** Null on steward-initiated reports — there is no reporter to hide. */
   excludeRegistrationId?: string | null;
   name?: string;
   teamMode?: boolean;
+  /**
+   * Pre-ticked registrations (admin edit of an existing report). In team mode
+   * every team with at least one of these drivers starts ticked.
+   */
+  initialSelectedRegistrationIds?: string[];
 }) {
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    const initial = new Set(initialSelectedRegistrationIds);
+    const keys = new Set<string>();
+    for (const d of drivers) {
+      if (!initial.has(d.registrationId)) continue;
+      if (d.registrationId === excludeRegistrationId) continue;
+      keys.add(teamMode ? (d.teamId ?? "__no_team__") : d.registrationId);
+    }
+    return keys;
+  });
 
   // ---- Solo mode: drivers list ----
   const visibleDrivers = useMemo(() => {

@@ -9,7 +9,10 @@ import {
   setReportStatus,
   deleteDecision,
   deleteIncidentReport,
+  updateIncidentReport,
 } from "@/lib/actions/admin-reports";
+import { InvolvedDriversPicker } from "@/components/InvolvedDriversPicker";
+import { SessionAndTimestampFields } from "@/components/SessionAndTimestampFields";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import {
   PenaltyRowsEditor,
@@ -31,11 +34,12 @@ export default async function AdminReportDetail({
   searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string; reportId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
-  await requireSteward();
+  const viewer = await requireSteward();
+  const isAdmin = viewer.role === "ADMIN";
   const { slug, seasonId, reportId } = await params;
-  const { error } = await searchParams;
+  const { error, notice } = await searchParams;
 
   const report = await prisma.incidentReport.findUnique({
     where: { id: reportId },
@@ -176,6 +180,62 @@ export default async function AdminReportDetail({
       specialMeasure: p.specialMeasure ?? "",
     }));
 
+  // ---- Admin edit of the report itself ------------------------------------
+  // Roster for the accused picker: every approved driver of the season, plus
+  // whoever is accused right now even if their registration has since been
+  // withdrawn — otherwise opening and saving the form would drop them.
+  const editRoster = isAdmin
+    ? await prisma.registration.findMany({
+        where: {
+          seasonId: report.round.seasonId,
+          OR: [
+            { status: "APPROVED" },
+            { id: { in: accusedDrivers.map((d) => d.registrationId) } },
+          ],
+        },
+        include: {
+          user: {
+            select: { firstName: true, lastName: true, countryCode: true },
+          },
+          team: { select: { id: true, name: true } },
+        },
+        orderBy: [{ startNumber: "asc" }],
+      })
+    : [];
+  const editDriverChoices = editRoster.map((r) => ({
+    registrationId: r.id,
+    startNumber: r.startNumber,
+    firstName: r.user.firstName,
+    lastName: r.user.lastName,
+    countryCode: r.user.countryCode,
+    teamId: r.team?.id ?? null,
+    teamName: r.team?.name ?? null,
+  }));
+  const editSessionOptions =
+    racesPerRound > 1
+      ? [
+          { value: "QUALIFYING", label: "Qualifying" },
+          { value: "RACE_1", label: "Heat 1 / Race 1" },
+          { value: "RACE_2", label: "Feature / Race 2" },
+        ]
+      : [
+          { value: "QUALIFYING", label: "Qualifying" },
+          { value: "RACE", label: "Race" },
+        ];
+  // Keep a stored session that the current format no longer offers.
+  if (
+    report.session &&
+    !editSessionOptions.some((o) => o.value === report.session)
+  ) {
+    editSessionOptions.push({ value: report.session, label: report.session });
+  }
+  const updateReport = updateIncidentReport.bind(
+    null,
+    slug,
+    seasonId,
+    reportId
+  );
+
   const submit = submitDecision.bind(null, slug, seasonId, reportId);
   const setStatusUnderReview = setReportStatus.bind(
     null,
@@ -215,6 +275,17 @@ export default async function AdminReportDetail({
       {error && (
         <div className="rounded border border-red-800 bg-red-950 p-3 text-sm text-red-200">
           {error}
+        </div>
+      )}
+      {notice && (
+        <div
+          className={`rounded border p-3 text-sm ${
+            notice.includes("Achtung")
+              ? "border-amber-700 bg-amber-950/40 text-amber-200"
+              : "border-emerald-800 bg-emerald-950/40 text-emerald-200"
+          }`}
+        >
+          {notice}
         </div>
       )}
 
@@ -364,6 +435,93 @@ export default async function AdminReportDetail({
             ))}
           </ul>
         </section>
+      )}
+
+      {isAdmin && (
+        <details className="rounded border border-zinc-800 bg-zinc-900/40 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-zinc-200">
+            ✏️ Meldung bearbeiten (Admin)
+          </summary>
+          <p className="mt-2 text-xs text-zinc-500">
+            Korrigiert die Angaben des Melders — z. B. ein falsch gewähltes
+            beschuldigtes Team. Das Urteil wird dabei nicht verändert: hat ein
+            Fahrer, den du hier entfernst, im Urteil bereits eine Strafe, bleibt
+            sie bestehen, bis du das Urteil anpasst.
+          </p>
+          <form action={updateReport} className="mt-4 space-y-4">
+            <SessionAndTimestampFields
+              sessionOptions={editSessionOptions}
+              defaultSession={report.session ?? ""}
+              defaultReplayTimestamp={report.replayTimestamp ?? ""}
+              defaultOutside={report.outsideRaceIncident}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-1 block text-sm text-zinc-300">Runde</span>
+                <input
+                  name="lapNumber"
+                  type="number"
+                  min={1}
+                  max={999}
+                  defaultValue={report.lapNumber ?? ""}
+                  className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm text-zinc-300">
+                  Kurve / Sektor
+                </span>
+                <input
+                  name="turnOrSector"
+                  type="text"
+                  defaultValue={report.turnOrSector ?? ""}
+                  className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                />
+              </label>
+            </div>
+            <div>
+              <span className="mb-1 block text-sm text-zinc-300">
+                {teamMode ? "Beschuldigte(s) Team(s)" : "Beschuldigte Fahrer"}
+              </span>
+              <InvolvedDriversPicker
+                drivers={editDriverChoices}
+                excludeRegistrationId={report.reporterRegistrationId}
+                teamMode={teamMode}
+                initialSelectedRegistrationIds={accusedDrivers.map(
+                  (d) => d.registrationId
+                )}
+              />
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-sm text-zinc-300">
+                Beschreibung <span className="text-orange-400">*</span>
+              </span>
+              <textarea
+                name="description"
+                required
+                rows={5}
+                defaultValue={report.description}
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm text-zinc-300">
+                Beweis-Links (einer pro Zeile)
+              </span>
+              <textarea
+                name="evidenceLinks"
+                rows={3}
+                defaultValue={report.evidence.map((e) => e.content).join("\n")}
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+            </label>
+            <SubmitWithSpinner
+              label="Meldung speichern"
+              pendingLabel="Wird gespeichert…"
+              className="rounded bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#ff8550]"
+            />
+          </form>
+        </details>
       )}
 
       <section className="flex flex-wrap gap-2">

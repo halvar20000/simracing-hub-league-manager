@@ -9,10 +9,17 @@ export interface SessionOption {
 
 export function SessionAndTimestampFields({
   sessionOptions,
+  defaultSession = "",
+  defaultReplayTimestamp = "",
+  defaultOutside = false,
 }: {
   sessionOptions: SessionOption[];
+  /** Pre-filled values when an admin edits an existing report. */
+  defaultSession?: string;
+  defaultReplayTimestamp?: string;
+  defaultOutside?: boolean;
 }) {
-  const [outside, setOutside] = useState(false);
+  const [outside, setOutside] = useState(defaultOutside);
   const required = !outside;
 
   return (
@@ -42,7 +49,7 @@ export function SessionAndTimestampFields({
             name="session"
             required={required}
             disabled={outside}
-            defaultValue=""
+            defaultValue={defaultSession}
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <option value="" disabled>
@@ -65,6 +72,7 @@ export function SessionAndTimestampFields({
             type="text"
             required={required}
             disabled={outside}
+            defaultValue={defaultReplayTimestamp}
             placeholder="e.g. 1:23:45 or 12:30"
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
           />

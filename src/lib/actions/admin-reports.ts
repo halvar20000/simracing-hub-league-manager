@@ -3,14 +3,19 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireSteward } from "@/lib/auth-helpers";
+import { requireAdmin, requireSteward } from "@/lib/auth-helpers";
 import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
 import {
   pointsForLevel,
   isSpecialMeasureLevel,
 } from "@/lib/penalty-categories";
 import { recomputeRoundScoring } from "@/lib/scoring";
-import type { IncidentStatus, Verdict } from "@prisma/client";
+import type {
+  EvidenceKind,
+  IncidentStatus,
+  RaceSession,
+  Verdict,
+} from "@prisma/client";
 
 /**
  * Undo every disqualification a decision applied.
@@ -382,4 +387,186 @@ export async function deleteIncidentReport(
   revalidatePath(`/incidents`);
   revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/decisions`);
   redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
+}
+
+function evidenceKindFor(url: string): EvidenceKind {
+  const lc = url.toLowerCase();
+  if (lc.includes("youtu.be") || lc.includes("youtube.com")) return "YOUTUBE_LINK";
+  if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)) return "IMAGE_URL";
+  return "URL";
+}
+
+/**
+ * Admin correction of a submitted report — every field the driver typed in:
+ * accused drivers/teams, session, replay timestamp, lap, turn, the
+ * outside-race flag, description and evidence links.
+ *
+ * Deliberately ADMIN-only (not stewards) and deliberately without an edit
+ * trail — Thomas's call (2026-10-05).
+ *
+ * Never touches the verdict. If a driver who carries a penalty in this
+ * report's decision is removed from the accused list, the penalty stays and
+ * the case file shows a warning, so the standings never change silently.
+ */
+export async function updateIncidentReport(
+  leagueSlug: string,
+  seasonId: string,
+  reportId: string,
+  formData: FormData
+) {
+  const admin = await requireAdmin();
+  const base = `/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports/${reportId}`;
+
+  const report = await prisma.incidentReport.findUnique({
+    where: { id: reportId },
+    include: {
+      round: { select: { seasonId: true } },
+      involvedDrivers: true,
+      evidence: true,
+      decision: { include: { penalties: true } },
+    },
+  });
+  if (!report || report.round.seasonId !== seasonId) {
+    redirect(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
+  }
+
+  const outsideRaceIncident = formData.get("outsideRaceIncident") === "on";
+  const sessionRaw = String(formData.get("session") ?? "").trim();
+  const session = sessionRaw ? (sessionRaw as RaceSession) : null;
+  const replayTimestamp =
+    String(formData.get("replayTimestamp") ?? "").trim() || null;
+  const lapRaw = String(formData.get("lapNumber") ?? "").trim();
+  const lapParsed = lapRaw ? parseInt(lapRaw, 10) : NaN;
+  const lapNumber = Number.isNaN(lapParsed) ? null : lapParsed;
+  const turnOrSector =
+    String(formData.get("turnOrSector") ?? "").trim() || null;
+  const description = String(formData.get("description") ?? "").trim();
+
+  if (!description) {
+    redirect(`${base}?error=${encodeURIComponent("Beschreibung darf nicht leer sein.")}`);
+  }
+  if (!outsideRaceIncident && (!session || !replayTimestamp)) {
+    redirect(
+      `${base}?error=${encodeURIComponent("Session und Replay-Zeitstempel sind Pflicht (außer bei „Outside race incident“).")}`
+    );
+  }
+
+  // ---- Accused -----------------------------------------------------------
+  const currentAccused = report.involvedDrivers.filter(
+    (d) => d.role === "ACCUSED"
+  );
+  const currentAccusedIds = new Set(currentAccused.map((d) => d.registrationId));
+  const requested = new Set(
+    formData
+      .getAll("involvedRegistrationIds")
+      .map((v) => String(v).trim())
+      .filter(Boolean)
+  );
+  // The reporter can never accuse himself.
+  if (report.reporterRegistrationId) requested.delete(report.reporterRegistrationId);
+
+  // Only registrations of this season. A driver who is ALREADY accused stays
+  // valid even if his registration was withdrawn since; a newly added one
+  // must be approved, exactly as when filing.
+  const candidateRegs = await prisma.registration.findMany({
+    where: { id: { in: [...requested] }, seasonId },
+    select: { id: true, status: true },
+  });
+  const nextAccused = new Set(
+    candidateRegs
+      .filter((r) => r.status === "APPROVED" || currentAccusedIds.has(r.id))
+      .map((r) => r.id)
+  );
+
+  const removed = [...currentAccusedIds].filter((id) => !nextAccused.has(id));
+  const added = [...nextAccused].filter((id) => !currentAccusedIds.has(id));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.incidentReport.update({
+      where: { id: reportId },
+      data: {
+        session: outsideRaceIncident ? null : session,
+        replayTimestamp: outsideRaceIncident ? null : replayTimestamp,
+        outsideRaceIncident,
+        lapNumber,
+        turnOrSector,
+        description,
+      },
+    });
+
+    if (removed.length > 0) {
+      await tx.incidentReportInvolvedDriver.deleteMany({
+        where: {
+          incidentReportId: reportId,
+          role: "ACCUSED",
+          registrationId: { in: removed },
+        },
+      });
+    }
+    for (const regId of added) {
+      // (incidentReportId, registrationId) is unique — a driver already on
+      // the report as WITNESS is promoted to ACCUSED instead of duplicated.
+      await tx.incidentReportInvolvedDriver.upsert({
+        where: {
+          incidentReportId_registrationId: {
+            incidentReportId: reportId,
+            registrationId: regId,
+          },
+        },
+        update: { role: "ACCUSED" },
+        create: {
+          incidentReportId: reportId,
+          registrationId: regId,
+          role: "ACCUSED",
+        },
+      });
+    }
+
+    // ---- Evidence: the textarea is the full list ------------------------
+    const wanted = String(formData.get("evidenceLinks") ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const wantedSet = new Set(wanted);
+    const toDelete = report.evidence
+      .filter((e) => !wantedSet.has(e.content))
+      .map((e) => e.id);
+    if (toDelete.length > 0) {
+      await tx.incidentReportEvidence.deleteMany({
+        where: { id: { in: toDelete } },
+      });
+    }
+    const existing = new Set(report.evidence.map((e) => e.content));
+    for (const url of [...wantedSet]) {
+      if (existing.has(url)) continue;
+      await tx.incidentReportEvidence.create({
+        data: {
+          incidentReportId: reportId,
+          kind: evidenceKindFor(url),
+          content: url,
+          addedByUserId: admin.id,
+        },
+      });
+    }
+  });
+
+  revalidatePath(`/admin/leagues/${leagueSlug}/seasons/${seasonId}/reports`);
+  revalidatePath(base);
+  revalidatePath(`/reports/${reportId}`);
+  revalidatePath(`/reports`);
+  revalidatePath(`/incidents`);
+  revalidatePath(`/leagues/${leagueSlug}/seasons/${seasonId}/decisions`);
+  revalidatePath(`/admin/stewards`);
+
+  // Penalties in the existing verdict on drivers who are no longer accused:
+  // keep them, but say so.
+  const penalised = new Set(
+    (report.decision?.penalties ?? []).map((p) => p.registrationId)
+  );
+  const orphaned = removed.filter((id) => penalised.has(id)).length;
+  const notice =
+    orphaned > 0
+      ? `Meldung gespeichert. Achtung: ${orphaned} nicht mehr beschuldigte${orphaned === 1 ? "r Fahrer hat" : " Fahrer haben"} im bestehenden Urteil noch eine Strafe — bitte das Urteil prüfen.`
+      : "Meldung gespeichert.";
+  redirect(`${base}?notice=${encodeURIComponent(notice)}`);
 }

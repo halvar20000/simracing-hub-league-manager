@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.36.0",
+    date: "2026-10-05",
+    changes: [
+      "Admins can now correct a submitted incident report. The case file in the steward area has a new \u201c✏️ Meldung bearbeiten\u201d section: accused drivers or teams, session, replay timestamp, lap, turn/sector, the outside-race flag, the description and the evidence links can all be changed \u2014 for example when a driver picked the wrong team as accused.",
+      "The verdict is never touched by an edit. If a driver who already carries a penalty in the verdict is removed from the accused list, the penalty stays and the case file warns about it, so the standings never change without the stewards deciding it.",
+      "Editing is limited to admins; stewards keep deciding verdicts as before.",
+    ],
+  },
+  {
     version: "2.35.1",
     date: "2026-10-05",
     changes: [
