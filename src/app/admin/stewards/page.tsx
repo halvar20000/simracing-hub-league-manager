@@ -2,9 +2,15 @@ import Link from "next/link";
 import { requireSteward } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
+import { isSeasonLive } from "@/lib/season-visibility";
 
-export default async function StewardsDashboard() {
+export default async function StewardsDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ archived?: string }>;
+}) {
   await requireSteward();
+  const showArchived = (await searchParams).archived === "1";
 
   // ---- counts ----
   const [submitted, underReview, decided, dismissed, withdrawn] =
@@ -47,11 +53,20 @@ export default async function StewardsDashboard() {
   const deferredSeasons = await prisma.season.findMany({
     where: { scoringSystem: { deferPenaltyPoints: true } },
     include: {
-      league: { select: { name: true, slug: true } },
+      league: { select: { name: true, slug: true, isArchived: true } },
       scoringSystem: { select: { categoryPointsTable: true } },
     },
     orderBy: [{ year: "desc" }, { name: "asc" }],
   });
+  // Archived seasons (Season.isArchived or league archived) are hidden from
+  // the pool grid by default but stay one click away (?archived=1) — the
+  // pools themselves and their direct URLs are untouched.
+  const archivedPoolCount = deferredSeasons.filter(
+    (s) => !isSeasonLive(s),
+  ).length;
+  const visibleSeasons = showArchived
+    ? deferredSeasons
+    : deferredSeasons.filter((s) => isSeasonLive(s));
   const deferredSeasonIds = deferredSeasons.map((s) => s.id);
   const poolPenalties =
     deferredSeasonIds.length > 0
@@ -110,16 +125,31 @@ export default async function StewardsDashboard() {
 
       {/* Penalty pools */}
       <section>
-        <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
-          Penalty pools (deferred scoring systems)
-        </h2>
-        {deferredSeasons.length === 0 ? (
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+            Penalty pools (deferred scoring systems)
+          </h2>
+          {archivedPoolCount > 0 && (
+            <Link
+              href={showArchived ? "/admin/stewards" : "/admin/stewards?archived=1"}
+              className="text-xs text-zinc-500 hover:text-orange-400"
+            >
+              {showArchived
+                ? "Hide archived seasons"
+                : `📦 Show archived seasons (${archivedPoolCount})`}
+            </Link>
+          )}
+        </div>
+        {visibleSeasons.length === 0 ? (
           <p className="rounded border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-500">
-            No scoring system has &quot;Defer penalty points&quot; enabled.
+            {deferredSeasons.length === 0
+              ? <>No scoring system has &quot;Defer penalty points&quot; enabled.</>
+              : "No active season uses a deferred penalty pool."}
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {deferredSeasons.map((s) => {
+            {visibleSeasons.map((s) => {
+              const archived = !isSeasonLive(s);
               const stats = poolBySeason.get(s.id) ?? {
                 pending: 0,
                 forgiven: 0,
@@ -130,10 +160,13 @@ export default async function StewardsDashboard() {
                 <Link
                   key={s.id}
                   href={`/admin/leagues/${s.league.slug}/seasons/${s.id}/penalty-pool`}
-                  className="block rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 hover:border-orange-500/60 hover:bg-zinc-900"
+                  className={`block rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 hover:border-orange-500/60 hover:bg-zinc-900${archived ? " opacity-60" : ""}`}
                 >
                   <div className="text-xs uppercase tracking-wide text-zinc-500">
                     {s.league.name}
+                    {archived && (
+                      <span className="ml-2 normal-case tracking-normal">📦 Archived</span>
+                    )}
                   </div>
                   <div className="mt-0.5 text-base font-semibold">
                     {s.name}

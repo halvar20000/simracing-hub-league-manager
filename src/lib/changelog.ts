@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.35.1",
+    date: "2026-10-05",
+    changes: [
+      "Stewards dashboard: penalty pools of archived seasons are no longer shown. A \u201c📦 Show archived seasons\u201d link next to the heading brings them back (dimmed, with an Archived badge); the pools and their pages are unchanged.",
+    ],
+  },
+  {
     version: "2.35.0",
     date: "2026-09-28",
     changes: [
