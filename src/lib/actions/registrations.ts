@@ -722,26 +722,26 @@ export async function createTeamRegistration(
   }
 
   // ---------- find or create Team ----------
-  let team = await prisma.team.findFirst({
+  const foundTeam = await prisma.team.findFirst({
     where: { seasonId, name: teamName },
   });
 
   // Adopting an ownerless team heals Team.leaderUserId further down.
   let adoptOwnerlessTeam = false;
-  if (team) {
-    const owner = await resolveTeamOwnership(team);
+  if (foundTeam) {
+    const owner = await resolveTeamOwnership(foundTeam);
     // An ownerless team (leader/manager deleted or merged away) may be taken
     // over by anyone still on its roster — otherwise the team is locked
     // forever and even Manage Team refuses everyone.
     adoptOwnerlessTeam =
-      owner.ownerless && (await isActiveTeamMember(team.id, leader!.id));
+      owner.ownerless && (await isActiveTeamMember(foundTeam.id, leader!.id));
     const mayResubmit =
       owner.leaderUserId === leader!.id ||
       owner.managerUserId === leader!.id ||
       adoptOwnerlessTeam;
     if (!mayResubmit) {
       const teammate = await prisma.registration.findFirst({
-        where: { teamId: team.id, userId: leader!.id },
+        where: { teamId: foundTeam.id, userId: leader!.id },
         select: { id: true },
       });
       if (teammate) {
@@ -755,29 +755,13 @@ export async function createTeamRegistration(
       }
     }
   }
-  if (!team) {
-    // Manager mode: the registrant becomes the manager; the Teamchef
-    // (leaderUserId) is assigned below from the driver rows.
-    team = await prisma.team.create({
-      data: isTeamManager
-        ? { seasonId, name: teamName, managerUserId: leader!.id }
-        : { seasonId, name: teamName, leaderUserId: leader!.id },
-    });
-  } else if (isTeamManager && team.managerUserId !== leader!.id) {
-    // Existing team without a manager being resubmitted by its leader who now
-    // ticks the manager box — claim the manager slot.
-    team = await prisma.team.update({
-      where: { id: team.id },
-      data: { managerUserId: leader!.id },
-    });
-  } else if (adoptOwnerlessTeam) {
-    // Heal the dangling pointer: the roster member who just resubmitted
-    // becomes the leader, so Manage Team works for him from now on.
-    team = await prisma.team.update({
-      where: { id: team.id },
-      data: { leaderUserId: leader!.id, managerUserId: null },
-    });
-  }
+  // NOTE (v2.36.1): nothing is written until every check below has passed.
+  // The team used to be created and the registrant's own registration
+  // upserted HERE, before the teammate rows were validated — so a submission
+  // that then failed (bad teammate row, cap, same-name clash) still reset the
+  // registrant's APPROVED driver registration to PENDING and could leave an
+  // empty team behind. The writes now happen in one block further down.
+  const existingTeam = foundTeam;
 
   // ---------- leader / manager registration ----------
   // A manager registration is auto-approved: no iRacing invitation, no
@@ -797,61 +781,17 @@ export async function createTeamRegistration(
     !ownReg.isTeamManager &&
     ownReg.status !== "WITHDRAWN" &&
     ownReg.status !== "REJECTED";
-  if (isTeamManager && ownActiveDriverReg && ownReg!.teamId === team.id) {
+  if (
+    isTeamManager &&
+    ownActiveDriverReg &&
+    existingTeam !== null &&
+    ownReg!.teamId === existingTeam.id
+  ) {
     errBack(
       "You drive for this team — a manager must not drive for the team he manages."
     );
   }
   const skipOwnRegistration = isTeamManager && ownActiveDriverReg;
-
-  if (!skipOwnRegistration) {
-    await prisma.registration.upsert({
-      where: { seasonId_userId: { seasonId, userId: leader!.id } },
-      update: isTeamManager
-        ? {
-            status: "APPROVED",
-            isTeamManager: true,
-            teamId: team.id,
-            carClassId: null,
-            carId: null,
-            iRating: null,
-            notes,
-            approvedById: null,
-            approvedAt: new Date(),
-          }
-        : {
-            status: "PENDING",
-            isTeamManager: false,
-            teamId: team.id,
-            carClassId,
-            carId,
-            iRating: leaderIRating,
-            notes,
-            approvedById: null,
-            approvedAt: null,
-          },
-      create: isTeamManager
-        ? {
-            seasonId,
-            userId: leader!.id,
-            status: "APPROVED",
-            isTeamManager: true,
-            teamId: team.id,
-            notes,
-            approvedAt: new Date(),
-          }
-        : {
-            seasonId,
-            userId: leader!.id,
-            status: "PENDING",
-            teamId: team.id,
-            carClassId,
-            carId,
-            iRating: leaderIRating,
-            notes,
-          },
-    });
-  }
 
   // ---------- teammates ----------
   // Cap how many teammate rows we accept. The leader counts as one driver, so
@@ -929,9 +869,9 @@ export async function createTeamRegistration(
   // iRacing member id so no User row has to be created just to run the check.
   if (teamLimit != null) {
     const submittedIracingIds = new Set(teammates.map((t) => t.iracingId));
-    const survivors = await prisma.registration.findMany({
+    const survivors = !existingTeam ? [] : await prisma.registration.findMany({
       where: {
-        teamId: team.id,
+        teamId: existingTeam.id,
         status: { in: ["PENDING", "APPROVED"] },
         excludedAt: null,
         retiredAt: null,
@@ -966,6 +906,123 @@ export async function createTeamRegistration(
     const chefRaw = String(formData.get("teamchefIndex") ?? "").trim();
     chefRowIndex =
       chefRaw && /^\d+$/.test(chefRaw) ? parseInt(chefRaw, 10) : 1;
+  }
+
+  // Same-name clash check up front (read-only) — it used to run only inside
+  // the write loop, after the team and the registrant's own row were saved.
+  for (const tm of teammates) {
+    const known =
+      (await prisma.user.findFirst({
+        where: { iracingMemberId: tm.iracingId },
+        select: { id: true },
+      })) ??
+      (tm.email
+        ? await prisma.user.findFirst({
+            where: { email: tm.email },
+            select: { id: true },
+          })
+        : null);
+    if (known) continue;
+    const parts = tm.name.split(/\s+/);
+    const clash = await findDriverWithSameName(
+      parts[0] || tm.name,
+      parts.slice(1).join(" ") || "",
+      tm.iracingId
+    );
+    if (clash) {
+      errBack(
+        sameNameError(
+          `Teammate row ${tm.rowIndex}`,
+          tm.name,
+          tm.iracingId,
+          clash.iracingMemberId
+        )
+      );
+    }
+  }
+
+  // ---------- writes (all validation has passed) ----------
+  let team = existingTeam;
+  if (!team) {
+    // Manager mode: the registrant becomes the manager; the Teamchef
+    // (leaderUserId) is assigned below from the driver rows.
+    team = await prisma.team.create({
+      data: isTeamManager
+        ? { seasonId, name: teamName, managerUserId: leader!.id }
+        : { seasonId, name: teamName, leaderUserId: leader!.id },
+    });
+  } else if (isTeamManager && team.managerUserId !== leader!.id) {
+    // Existing team without a manager being resubmitted by its leader who now
+    // ticks the manager box — claim the manager slot.
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: { managerUserId: leader!.id },
+    });
+  } else if (adoptOwnerlessTeam) {
+    // Heal the dangling pointer: the roster member who just resubmitted
+    // becomes the leader, so Manage Team works for him from now on.
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: { leaderUserId: leader!.id, managerUserId: null },
+    });
+  }
+
+  const keepOwnApproval =
+    !isTeamManager &&
+    ownReg?.status === "APPROVED" &&
+    !ownReg.isTeamManager &&
+    ownReg.teamId === team.id;
+
+  if (!skipOwnRegistration) {
+    await prisma.registration.upsert({
+      where: { seasonId_userId: { seasonId, userId: leader!.id } },
+      update: isTeamManager
+        ? {
+            status: "APPROVED",
+            isTeamManager: true,
+            teamId: team.id,
+            carClassId: null,
+            carId: null,
+            iRating: null,
+            notes,
+            approvedById: null,
+            approvedAt: new Date(),
+          }
+        : {
+            // An APPROVED driver re-submitting his own team stays approved —
+            // same rule as createRegistration's approved edit. Only a move to
+            // another team goes back to PENDING for the admin.
+            ...(keepOwnApproval
+              ? {}
+              : { status: "PENDING" as const, approvedById: null, approvedAt: null }),
+            isTeamManager: false,
+            teamId: team.id,
+            carClassId,
+            carId,
+            iRating: leaderIRating,
+            notes,
+          },
+      create: isTeamManager
+        ? {
+            seasonId,
+            userId: leader!.id,
+            status: "APPROVED",
+            isTeamManager: true,
+            teamId: team.id,
+            notes,
+            approvedAt: new Date(),
+          }
+        : {
+            seasonId,
+            userId: leader!.id,
+            status: "PENDING",
+            teamId: team.id,
+            carClassId,
+            carId,
+            iRating: leaderIRating,
+            notes,
+          },
+    });
   }
 
   const teammateNames: string[] = [];
@@ -1017,17 +1074,30 @@ export async function createTeamRegistration(
     }
     if (mate.id === leader!.id) continue; // can't be teammate of self
 
+    // A teammate already APPROVED on this very team keeps his approval and
+    // start number when the lineup is re-submitted.
+    const mateReg = await prisma.registration.findUnique({
+      where: { seasonId_userId: { seasonId, userId: mate.id } },
+      select: { status: true, teamId: true },
+    });
+    const keepMateApproval =
+      mateReg?.status === "APPROVED" && mateReg.teamId === team.id;
+
     await prisma.registration.upsert({
       where: { seasonId_userId: { seasonId, userId: mate.id } },
       update: {
-        status: "PENDING",
+        ...(keepMateApproval
+          ? {}
+          : {
+              status: "PENDING" as const,
+              startNumber: null,
+              approvedById: null,
+              approvedAt: null,
+            }),
         teamId: team.id,
         carClassId,
         carId,
-        startNumber: null,
         iRating: tm.iRating,
-        approvedById: null,
-        approvedAt: null,
       },
       create: {
         seasonId,

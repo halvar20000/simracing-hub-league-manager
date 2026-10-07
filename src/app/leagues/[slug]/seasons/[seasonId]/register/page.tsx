@@ -349,6 +349,32 @@ export default async function RegisterPage({
               </>
             )}
           </p>
+          {!addManagerTeam && prefill && !prefill.isTeamManager && (
+            // Without this, a driver who wants to set up a SECOND team that he
+            // only manages lands in his own team's pre-filled form — and
+            // submitting it edits his own team instead (2026-10-07, IEC S4).
+            <div className="mt-3 rounded border border-cyan-800/60 bg-cyan-950/30 p-3 text-sm">
+              <span className="text-zinc-300">
+                This form edits your own team
+                {prefill.team?.name ? (
+                  <>
+                    {" "}
+                    <strong className="text-zinc-100">{prefill.team.name}</strong>
+                  </>
+                ) : null}
+                . Want to register a different team that you manage but
+                don&apos;t drive for?
+              </span>{" "}
+              <Link
+                href={`/leagues/${slug}/seasons/${seasonId}/register?manager=1${
+                  t ? `&t=${encodeURIComponent(t)}` : ""
+                }`}
+                className="font-medium text-cyan-300 underline hover:text-cyan-200"
+              >
+                Register another team as Teammanager →
+              </Link>
+            </div>
+          )}
         </div>
 
         {error && (

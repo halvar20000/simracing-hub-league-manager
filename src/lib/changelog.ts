@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.36.1",
+    date: "2026-10-07",
+    changes: [
+      "Team registration: a submission that is rejected (for example a missing teammate iRating or a mistyped iRacing ID) no longer changes anything. Before, it could already have reset the registrant’s approved driver registration to pending, or left an empty team behind.",
+      "Re-submitting your own team no longer sends approved drivers back to pending — only a move to a different team needs a new approval.",
+      "Drivers who open the team registration page now see a clear “Register another team as Teammanager” link, because the normal form edits their own team.",
+    ],
+  },
+  {
     version: "2.36.0",
     date: "2026-10-05",
     changes: [
