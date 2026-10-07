@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.36.2",
+    date: "2026-10-07",
+    changes: [
+      "Fixed Discord login: signing in failed for everyone after Discord started sending an issuer parameter with the login callback.",
+    ],
+  },
+  {
     version: "2.36.1",
     date: "2026-10-07",
     changes: [

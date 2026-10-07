@@ -14,6 +14,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: [
     Discord({
+      issuer: "https://discord.com",
       authorization: { params: { scope: "identify email guilds" } },
       allowDangerousEmailAccountLinking: true,
     }),
