@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.37.0",
+    date: "2026-10-08",
+    changes: [
+      "Stream overlays: a new public overlay feed lets the broadcast show the last round's results, the RSVP count for the next round (numbers only, no names) and the season's participation per round before a race.",
+    ],
+  },
+  {
     version: "2.36.3",
     date: "2026-10-08",
     changes: [
