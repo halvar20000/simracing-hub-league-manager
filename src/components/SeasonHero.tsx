@@ -1,5 +1,6 @@
 "use client";
 
+import { standingsLabel } from "@/lib/fun-league";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -197,7 +198,7 @@ export function SeasonHero(p: SeasonHeroProps) {
             href={`/leagues/${p.slug}/seasons/${p.seasonId}/standings`}
             className="rounded bg-[#ff6b35] px-3 py-1.5 text-xs font-medium text-zinc-950 hover:bg-[#ff8550]"
           >
-            Standings →
+            {standingsLabel(p.slug)} →
           </Link>
           {p.penaltyPoolMode && p.penaltyPoolMode !== "OFF" && (
             <Link

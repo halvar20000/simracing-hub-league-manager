@@ -13,6 +13,7 @@ import { postDiscordWebhook } from "@/lib/discord-webhook";
 import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
+import { registrationAsksIRating } from "@/lib/fun-league";
 import {
   teamSizeLimit,
   countTeamMembers,
@@ -173,6 +174,14 @@ export async function createRegistration(
       );
     }
     iRatingValue = parseInt(iRatingRaw, 10);
+  }
+
+  if (iRatingValue == null && registrationAsksIRating(season.league.slug)) {
+    redirect(
+      `${registerBase}error=${encodeURIComponent(
+        "Your current iRating is required"
+      )}`
+    );
   }
 
   const sflGate = await getSflIRatingGate(season, user.id);

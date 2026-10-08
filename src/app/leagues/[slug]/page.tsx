@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { computeDriverStandings, computeTeamClassStandings } from "@/lib/standings";
+import { isEternalChampionLeague } from "@/lib/fun-league";
 import { CountryFlag } from "@/components/CountryFlag";
 import { NextRaceHero } from "@/components/NextRaceHero";
 import type { Metadata } from "next";
@@ -336,7 +337,9 @@ export default async function PublicLeagueDetail({
           className="block rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 p-4 transition-colors hover:border-[#ff6b35]"
         >
           <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-            Current leader · {activeSeason.name} {activeSeason.year}
+            {isEternalChampionLeague(league.slug)
+              ? "👑 Eternal Champion"
+              : `Current leader · ${activeSeason.name} ${activeSeason.year}`}
           </div>
           <div className="mt-1 font-display text-lg font-bold text-zinc-100">
             <CountryFlag code={activeLeader.countryCode} />

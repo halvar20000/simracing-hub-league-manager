@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.37.0",
+    date: "2026-10-08",
+    changes: [
+      "New league: CAS Fun League — one-off races chosen by member vote. No championship, but all results add up to an eternal table whose leader is crowned the CAS Eternal Champion (the Standings link reads \"Eternal Champion\" in this league).",
+      "Fun League registration asks for your current iRating; there is no car choice, since the car changes from race to race.",
+    ],
+  },
+  {
     version: "2.37.1",
     date: "2026-10-08",
     changes: [

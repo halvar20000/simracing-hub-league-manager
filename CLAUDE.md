@@ -59,6 +59,7 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 | `cas-pccd` | CAS PCCD | Solo |
 | `cas-combined-cup` | CAS Combined Cup | Solo |
 | `cas-sfl-cup` | CAS SFL Cup | Solo + team championship matching iRLM: multi-race rounds score each race separately (best 2 per team per race, raw-only, best 7 events). 7th Season verified 14/14 vs iRLM (June 2026); apply same config (weeksCounted=7, rawOnly=true) to new seasons |
+| `cas-fun-league` | CAS Fun League | Solo, one open-ended season, one-off races by member vote, no car choice (season has no `Car` rows), iRating required at registration, no incident reports. Standings are relabelled **Eternal Champion** via `src/lib/fun-league.ts` (`isEternalChampionLeague`) — add new label sites there, not by slug check |
 
 ## Season status
 

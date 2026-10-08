@@ -13,6 +13,7 @@
  * Not a "use server" module — imported by the rounds server action.
  */
 
+import { isEternalChampionLeague } from "@/lib/fun-league";
 import { prisma } from "@/lib/prisma";
 import { postBotMessage, type Embed } from "@/lib/discord-bot";
 
@@ -81,7 +82,7 @@ export async function postRoundResults(
     description:
       `${trackLine}\n\n` +
       `[Full classification](${roundUrl})  ·  ` +
-      `[Championship standings](${standingsUrl})`,
+      `[${isEternalChampionLeague(slug) ? "Eternal Champion" : "Championship standings"}](${standingsUrl})`,
     color: hexToInt(round.season.league.discordEmbedColor),
     fields: [{ name: "Podium", value: podiumLines || "—" }],
     footer: {

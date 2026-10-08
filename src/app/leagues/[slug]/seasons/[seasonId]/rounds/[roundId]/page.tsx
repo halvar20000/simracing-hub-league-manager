@@ -1,3 +1,4 @@
+import { standingsLabel } from "@/lib/fun-league";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -1013,7 +1014,7 @@ export default async function PublicRoundResults({
           href={`/leagues/${slug}/seasons/${seasonId}/standings`}
           className={`${pillBase} ${pillOff}`}
         >
-          Standings →
+          {standingsLabel(slug)} →
         </Link>
       </div>
 

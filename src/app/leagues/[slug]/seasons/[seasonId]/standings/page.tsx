@@ -20,6 +20,7 @@ import {
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { isStandingsExportEnabled } from "@/lib/standings-export-config";
+import { isEternalChampionLeague } from "@/lib/fun-league";
 import { isAdminOrSteward } from "@/lib/auth-helpers";
 import { RaceByRaceDriverTable } from "@/components/RaceByRaceDriverTable";
 import { RaceByRaceTeamTable } from "@/components/RaceByRaceTeamTable";
@@ -40,8 +41,13 @@ export async function generateMetadata({
   if (!season || season.league.slug !== slug) {
     return { title: "Standings not found" };
   }
-  const title = `Standings — ${season.league.name} ${season.name} ${season.year}`;
-  const description = `Live driver and team standings for ${season.name} ${season.year}.`;
+  const eternal = isEternalChampionLeague(slug);
+  const title = eternal
+    ? `Eternal Champion — ${season.league.name}`
+    : `Standings — ${season.league.name} ${season.name} ${season.year}`;
+  const description = eternal
+    ? `The eternal table of the ${season.league.name} — who is the CAS Eternal Champion?`
+    : `Live driver and team standings for ${season.name} ${season.year}.`;
   const image = season.league.logoUrl ?? "/logos/cas-community.webp";
   return {
     title,
@@ -203,6 +209,12 @@ export default async function StandingsPage({
   // reflects the PUBLISHED standings, even when an admin is previewing.
   const canExport = isStandingsExportEnabled(slug) && drivers.length > 0;
 
+  // CAS Fun League: one-off races, no real championship — the summed table
+  // is a tongue-in-cheek "eternal table" whose leader is the Eternal Champion.
+  const eternal = isEternalChampionLeague(slug);
+  const eternalChampion =
+    eternal && combined[0] && combined[0].roundsCompleted > 0 ? combined[0] : null;
+
   return (
     <div className="space-y-8">
       <div>
@@ -213,8 +225,46 @@ export default async function StandingsPage({
           ← {season.league.name} {season.name}
         </Link>
         <h1 className="mt-2 font-display text-3xl font-bold">
-          Standings — {season.name} {season.year}
+          {eternal ? (
+            <>👑 CAS Eternal Champion</>
+          ) : (
+            <>
+              Standings — {season.name} {season.year}
+            </>
+          )}
         </h1>
+        {eternal && (
+          <div className="mt-3 rounded-lg border border-yellow-700/40 bg-gradient-to-br from-yellow-950/40 via-zinc-900 to-zinc-950 p-4">
+            {eternalChampion ? (
+              <>
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-yellow-300/80">
+                  Reigning Eternal Champion
+                </div>
+                <div className="mt-1 font-display text-2xl font-bold text-zinc-100">
+                  <CountryFlag code={eternalChampion.countryCode} />
+                  {eternalChampion.driverFirstName} {eternalChampion.driverLastName}
+                </div>
+                <div className="text-xs text-zinc-400 tabular-nums">
+                  {eternalChampion.combinedTotal} pts from{" "}
+                  {eternalChampion.roundsCompleted}{" "}
+                  {eternalChampion.roundsCompleted === 1 ? "race" : "races"}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-zinc-300">
+                The throne is still empty — the first Fun League race crowns
+                the first Eternal Champion.
+              </div>
+            )}
+            <p className="mt-3 text-xs text-zinc-400">
+              Every Fun League race is a one-off — there is no championship.
+              Just for fun, the points of all races are added up into an
+              eternal table, and whoever leads it carries the title. The number
+              of races entered doesn&apos;t matter: the more often you race,
+              the better your chances.
+            </p>
+          </div>
+        )}
       {pendingRound && (
         <div className="mt-3 rounded border border-orange-500/60 bg-orange-500/10 px-4 py-3 text-sm text-orange-200">
           <span className="font-semibold">Preview — admin only.</span>{" "}
@@ -320,7 +370,9 @@ export default async function StandingsPage({
 
       {!isTeamEventSeason && cls === "combined" && (
         <section>
-        <h2 className="mb-1 text-lg font-semibold">Combined Driver Championship</h2>
+        <h2 className="mb-1 text-lg font-semibold">
+          {eternal ? "Eternal table" : "Combined Driver Championship"}
+        </h2>
         <p className="mb-3 text-xs text-zinc-500">
           {season.scoringSystem.participationInCombined
             ? "Race points + participation − penalties."

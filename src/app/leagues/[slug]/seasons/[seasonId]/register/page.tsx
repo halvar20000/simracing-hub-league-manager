@@ -13,6 +13,7 @@ import TeamPicker from "@/components/TeamPicker";
 import TeamManagerToggle from "@/components/TeamManagerToggle";
 import { teamSizeLimit, GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
+import { registrationAsksIRating } from "@/lib/fun-league";
 import {
   getLeagueIratingCategory,
   iratingCategoryShortLabel,
@@ -864,6 +865,38 @@ export default async function RegisterPage({
                   New drivers must be at or below {sflGate.maxIRating}{" "}
                   {categoryLabel} iRating. Drivers who raced in the
                   previous SFL Cup season may register at any iRating.
+                </span>
+              )}
+            </label>
+          );
+        })()}
+
+        {!sflGate.applies && registrationAsksIRating(season.league.slug) && (() => {
+          // Fun League: plain required iRating, no cap. The car changes every
+          // race, so the Sports Car number is only a pre-fill suggestion.
+          const liveIrating = user
+            ? getUserLiveIratingForLeague(user, season.league.slug)
+            : null;
+          return (
+            <label className="block">
+              <span className="mb-1 block text-sm text-zinc-300">
+                Your current iRating <span className="text-orange-400">*</span>
+              </span>
+              <input
+                name="iRating"
+                type="number"
+                min={1}
+                max={20000}
+                required
+                inputMode="numeric"
+                defaultValue={existing?.iRating ?? liveIrating ?? ""}
+                placeholder="e.g. 2400"
+                className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+              />
+              {liveIrating != null && existing?.iRating == null && (
+                <span className="mt-1 block text-xs text-zinc-500">
+                  Pre-filled from your live iRacing Sports Car iRating
+                  ({liveIrating}). Edit if out of date.
                 </span>
               )}
             </label>
