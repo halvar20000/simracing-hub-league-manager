@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.37.1",
+    date: "2026-10-08",
+    changes: [
+      "Stream overlays: the last-round feed now also carries the round's combined classification (both races added up, with bonus and penalty points), identical to the Combined tab on the round page.",
+      "Stream overlays: the last-round feed also includes that round's Driver of the Day.",
+    ],
+  },
+  {
     version: "2.37.0",
     date: "2026-10-08",
     changes: [

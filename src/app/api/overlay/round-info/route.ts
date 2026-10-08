@@ -3,7 +3,13 @@
  *
  * Feeds the overlays a broadcaster shows before a round starts:
  *   - lastRound      — full results of the most recent COMPLETED round,
- *                      per race (race 1 / race 2 of a multi-race round)
+ *                      per race (race 1 / race 2 of a multi-race round),
+ *                      plus `combined`: the round's combined classification
+ *                      computed exactly like the round page's Combined tab
+ *                      (race pts + participation + driver FPR − penalties,
+ *                      same tie-breaks), and `driverOfTheDay` (the round's
+ *                      DotD as shown publicly on the round page; null when
+ *                      none was computed)
  *   - nextRound      — the next round that is not completed yet, with its
  *                      RSVP status as COUNTS ONLY (no driver names: the
  *                      RSVP list is not public on the site)
@@ -20,6 +26,9 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
+import { isPerRacePenaltySeason } from "@/lib/penalty-application";
+import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -71,6 +80,7 @@ export async function GET(req: NextRequest) {
   const season = seasonIdParam
     ? await prisma.season.findFirst({
         where: { id: seasonIdParam, leagueId: league.id },
+        include: { scoringSystem: true },
       })
     : await prisma.season.findFirst({
         where: {
@@ -79,6 +89,7 @@ export async function GET(req: NextRequest) {
           status: { in: ["ACTIVE", "OPEN_REGISTRATION"] },
         },
         orderBy: { startsOn: "desc" },
+        include: { scoringSystem: true },
       });
   if (!season) {
     return NextResponse.json(
@@ -112,6 +123,9 @@ export async function GET(req: NextRequest) {
       where: { roundId: lastMeta.id },
       orderBy: [{ raceNumber: "asc" }, { finishPosition: "asc" }],
       select: {
+        id: true,
+        registrationId: true,
+        raceDistancePct: true,
         raceNumber: true,
         finishPosition: true,
         classPosition: true,
@@ -150,6 +164,149 @@ export async function GET(req: NextRequest) {
       if (!byRace.has(r.raceNumber)) byRace.set(r.raceNumber, []);
       byRace.get(r.raceNumber)!.push(r);
     }
+    // ---- combined classification (mirrors the round page's Combined tab) ----
+    const sc = season.scoringSystem;
+    const pointsTable = (sc.pointsTable ?? {}) as Record<string, number>;
+    const minPct = sc.racePointsMinDistancePct ?? 50;
+    // Pro/Am seasons: class-relative race points, ranked per class over the
+    // eligible results in overall finishing order (same as the page).
+    const classPts = new Map<string, number>();
+    if (season.proAmEnabled) {
+      let pro = 0;
+      let am = 0;
+      for (const r of [...results]
+        .filter((x) => x.finishStatus !== "DSQ" && x.finishStatus !== "DNS" && x.raceDistancePct >= minPct)
+        .sort((a, b) => a.finishPosition - b.finishPosition)) {
+        const cls = r.registration.proAmClass;
+        const rank = cls === "PRO" ? ++pro : cls === "AM" ? ++am : null;
+        if (rank != null) classPts.set(r.id, pointsTable[String(rank)] ?? 0);
+      }
+    }
+    const racePointsOf = (r: (typeof results)[number]) =>
+      season.proAmEnabled ? classPts.get(r.id) ?? r.rawPointsAwarded : r.rawPointsAwarded;
+    const includeParticipation = sc.participationInCombined ?? true;
+    const fprEnabled = !!sc.driverFprEnabled;
+    const fprTiers = fprEnabled ? readDriverFprTiers(sc.driverFprTiers) : [];
+    const fprMinPct = sc.driverFprMinDistancePct ?? 90;
+
+    type Agg = {
+      rows: typeof results;
+      racePoints: number;
+      participation: number;
+      penalty: number;
+      incidents: number;
+      fpr: number;
+      total: number;
+    };
+    const agg = new Map<string, Agg>();
+    for (const r of results) {
+      const a = agg.get(r.registrationId) ?? {
+        rows: [], racePoints: 0, participation: 0, penalty: 0, incidents: 0, fpr: 0, total: 0,
+      };
+      a.rows.push(r);
+      a.racePoints += racePointsOf(r);
+      a.participation += r.participationPointsAwarded;
+      a.penalty += r.manualPenaltyPoints;
+      a.incidents += r.incidents;
+      agg.set(r.registrationId, a);
+    }
+    // Steward penalties applied straight away (same rule as the page).
+    const immediate =
+      !penaltiesScoreToTeam(league.slug) &&
+      (isPerRacePenaltySeason(league.slug, season.id) || !sc.deferPenaltyPoints);
+    if (immediate) {
+      const pens = await prisma.penalty.findMany({
+        where: {
+          roundId: lastMeta.id,
+          type: "POINTS_DEDUCTION",
+          pointsValue: { gt: 0 },
+          source: { not: "NO_RSVP_NO_SHOW" },
+        },
+        select: { registrationId: true, pointsValue: true, forgivenPoints: true, autoForgivenPoints: true },
+      });
+      for (const p of pens) {
+        const a = p.registrationId ? agg.get(p.registrationId) : undefined;
+        if (!a) continue;
+        a.penalty += Math.max(0, (p.pointsValue ?? 0) - (p.forgivenPoints ?? 0) - (p.autoForgivenPoints ?? 0));
+      }
+    }
+    for (const a of agg.values()) {
+      const fprEligible = a.rows.length > 0 && a.rows.every((r) => (r.raceDistancePct ?? 0) >= fprMinPct);
+      a.fpr = fprEnabled && fprEligible ? fprPointsForIncidents(a.incidents, fprTiers) : 0;
+      a.total = a.racePoints + (includeParticipation ? a.participation : 0) + a.fpr - a.penalty;
+    }
+    const combined = [...agg.values()]
+      .sort(
+        (a, b) =>
+          b.total - a.total ||
+          a.incidents - b.incidents ||
+          b.racePoints - a.racePoints ||
+          b.rows.length - a.rows.length ||
+          (a.rows[0]?.registration.user?.lastName ?? "").localeCompare(
+            b.rows[0]?.registration.user?.lastName ?? ""
+          )
+      )
+      .map((a, i) => {
+        const reg = a.rows[0].registration;
+        const byRace = (n: number) => {
+          const r = a.rows.find((x) => x.raceNumber === n);
+          return r ? { position: r.finishPosition, points: racePointsOf(r), status: r.finishStatus } : null;
+        };
+        return {
+          position: i + 1,
+          name: displayName(reg.user),
+          countryCode: reg.user?.countryCode ?? null,
+          iracingMemberId: reg.user?.iracingMemberId ?? null,
+          startNumber: reg.startNumber,
+          proAmClass: reg.proAmClass,
+          teamName: reg.team?.name ?? null,
+          race1: byRace(1),
+          race2: byRace(2),
+          bonus: (includeParticipation ? a.participation : 0) + a.fpr,
+          penalty: a.penalty,
+          incidents: a.incidents,
+          total: a.total,
+        };
+      });
+
+    // ---- Driver of the Day (public on the round page) ----
+    const dotdRow = await prisma.roundDriverOfTheDay.findUnique({
+      where: { roundId: lastMeta.id },
+      select: {
+        winnerName: true,
+        winnerCarNumber: true,
+        score: true,
+        breakdown: true,
+        winnerMetrics: true,
+        weights: true,
+        ranking: true,
+        classWinners: true,
+        previousWinnerName: true,
+        previousWinnerBlocked: true,
+        winnerUser: { select: { countryCode: true } },
+      },
+    });
+    type RankRow = { rank: number; name: string; carNumber: string | null; score: number;
+                     eligible: boolean; why: string };
+    const driverOfTheDay = dotdRow
+      ? {
+          winnerName: dotdRow.winnerName,
+          winnerCarNumber: dotdRow.winnerCarNumber,
+          countryCode: dotdRow.winnerUser?.countryCode ?? null,
+          score: dotdRow.score,
+          breakdown: dotdRow.breakdown,
+          winnerMetrics: dotdRow.winnerMetrics,
+          weights: dotdRow.weights,
+          classWinners: dotdRow.classWinners,
+          runnersUp: ((dotdRow.ranking as RankRow[] | null) ?? [])
+            .filter((r) => r.eligible && r.rank > 1)
+            .slice(0, 3)
+            .map((r) => ({ rank: r.rank, name: r.name, carNumber: r.carNumber, score: r.score, why: r.why })),
+          previousWinnerName: dotdRow.previousWinnerName,
+          previousWinnerBlocked: dotdRow.previousWinnerBlocked,
+        }
+      : null;
+
     lastRound = {
       number: lastMeta.roundNumber,
       name: lastMeta.name,
@@ -197,6 +354,8 @@ export async function GET(req: NextRequest) {
           }),
         };
       }),
+      combined,
+      driverOfTheDay,
     };
   }
 
