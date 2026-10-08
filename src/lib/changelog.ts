@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.36.3",
+    date: "2026-10-08",
+    changes: [
+      "GT3 WCT standings: the Combined table no longer shows the participation (bonus) points column — they never counted toward the Combined total. The Pro and Am standings still show and count them.",
+    ],
+  },
+  {
     version: "2.36.2",
     date: "2026-10-07",
     changes: [

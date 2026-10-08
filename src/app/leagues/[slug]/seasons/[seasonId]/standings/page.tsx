@@ -345,6 +345,9 @@ export default async function StandingsPage({
             showTeam
             showClass={season.isMulticlass}
             showProAm={season.proAmEnabled}
+            showParticipation={
+              season.scoringSystem.participationInCombined ?? true
+            }
           />
         )}
       </section>
@@ -603,6 +606,7 @@ function DriversTable({
   showTeam,
   showClass,
   showProAm,
+  showParticipation = true,
 }: {
   rows: DriverStanding[];
   previousRows: DriverStanding[] | null;
@@ -612,6 +616,10 @@ function DriversTable({
   /** Render the Class column as the driver's Pro/Am tier (from proAmClass)
    *  instead of the car class. Takes priority over showClass. */
   showProAm?: boolean;
+  /** False hides the Part. column — the Combined view of a season whose
+   *  participation points don't count toward combinedTotal (GT3 WCT), where
+   *  the column only confused readers. The class views always show it. */
+  showParticipation?: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyState icon={<ChartIcon />} title="No standings to show yet" description="Standings will appear after the first round results are imported." />;
@@ -638,7 +646,7 @@ function DriversTable({
             <th className="px-3 py-2 text-right">Inc</th>
             <th className="px-3 py-2 text-right">iR</th>
             <th className="px-3 py-2 text-right">Raw</th>
-            <th className="px-3 py-2 text-right">Part.</th>
+            {showParticipation && <th className="px-3 py-2 text-right">Part.</th>}
             <th className="px-3 py-2 text-right">Pen.</th>
             <th className="px-3 py-2 text-right">Total</th>
           </tr>
@@ -702,9 +710,11 @@ function DriversTable({
                   <IRatingChip value={r.iRating} />
                 </td>
                 <td className="px-3 py-2 text-right text-zinc-400 tabular-nums"><ValueCell value={rawForView} delta={rawDelta} /></td>
-                <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
-                  {r.participationPoints}
-                </td>
+                {showParticipation && (
+                  <td className="px-3 py-2 text-right text-zinc-400 tabular-nums">
+                    {r.participationPoints}
+                  </td>
+                )}
                 <td className="px-3 py-2 text-right text-red-400 tabular-nums"><ValueCell value={netPen > 0 ? `−${netPen}` : 0} delta={penDelta} lowerIsBetter /></td>
                 <td className="px-3 py-2 text-right font-bold text-orange-400 tabular-nums"><ValueCell value={total} delta={totalDelta} width="w-12" /></td>
               </tr>
