@@ -1,5 +1,6 @@
 "use client";
 
+import { ETERNAL_COUNTED_RACES, ETERNAL_LEAGUE_WINDOW } from "@/lib/fun-league";
 import { Fragment, useMemo, useState } from "react";
 import { CountryFlag } from "@/components/CountryFlag";
 import { EmptyState, ChartIcon } from "@/components/EmptyState";
@@ -35,6 +36,7 @@ export function RaceByRaceDriverTable({
   kind,
   participationInCombined,
   dropKeepsParticipation = false,
+  eternalWindow = false,
 }: {
   rows: DriverStanding[];
   kind: StandingsKind;
@@ -45,6 +47,11 @@ export function RaceByRaceDriverTable({
    *  strikes the race points — the round's participation points still count,
    *  so the B cell of a struck round must NOT be crossed out. */
   dropKeepsParticipation?: boolean;
+  /** Fun League eternal table (src/lib/fun-league.ts): a struck round is out
+   *  of the rolling window and loses EVERYTHING, penalties included — so the
+   *  penalty cell is struck too and the legend explains the window instead
+   *  of drop weeks. */
+  eternalWindow?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("pos");
@@ -169,6 +176,14 @@ export function RaceByRaceDriverTable({
         </span>
         {/* Without this line the strikethrough is a mystery: a driver sees a
             crossed-out result and no explanation of why it does not count. */}
+        {eternalWindow ? (
+          <span className="text-xs text-zinc-500">
+            <span className="line-through opacity-60">durchgestrichen</span> ={" "}
+            zählt nicht mehr — es zählen nur deine letzten{" "}
+            {ETERNAL_COUNTED_RACES} Rennen aus den letzten{" "}
+            {ETERNAL_LEAGUE_WINDOW} Fun League Rennen
+          </span>
+        ) : (
         <span className="text-xs text-zinc-500">
           <span className="line-through opacity-60">durchgestrichen</span> ={" "}
           Streichresultat, zählt nicht{" "}
@@ -179,6 +194,7 @@ export function RaceByRaceDriverTable({
             ? " — nur die Rennpunkte (R) verfallen, die Teilnahmepunkte (B) zählen weiter"
             : ""}
         </span>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded border border-zinc-800">
@@ -331,7 +347,11 @@ export function RaceByRaceDriverTable({
                               : dash}
                           </td>
                         )}
-                        <td className="px-1.5 py-1.5 text-right tabular-nums text-red-400">
+                        <td
+                          className={`px-1.5 py-1.5 text-right tabular-nums text-red-400${
+                            struck && eternalWindow ? " line-through opacity-60" : ""
+                          }`}
+                        >
                           {rp.hasResult && rp.penaltyPoints !== 0
                             ? `−${rp.penaltyPoints}`
                             : dash}

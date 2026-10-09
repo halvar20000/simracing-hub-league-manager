@@ -59,7 +59,7 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 | `cas-pccd` | CAS PCCD | Solo |
 | `cas-combined-cup` | CAS Combined Cup | Solo |
 | `cas-sfl-cup` | CAS SFL Cup | Solo + team championship matching iRLM: multi-race rounds score each race separately (best 2 per team per race, raw-only, best 7 events). 7th Season verified 14/14 vs iRLM (June 2026); apply same config (weeksCounted=7, rawOnly=true) to new seasons |
-| `cas-fun-league` | CAS Fun League | Solo, one open-ended season, one-off races by member vote, no car choice (season has no `Car` rows), iRating required at registration, no incident reports. Standings are relabelled **Eternal Champion** via `src/lib/fun-league.ts` (`isEternalChampionLeague`) — add new label sites there, not by slug check |
+| `cas-fun-league` | CAS Fun League | Solo, one open-ended season, one-off races by member vote, no car choice (season has no `Car` rows), iRating required at registration, no incident reports. Standings are relabelled **Eternal Champion** via `src/lib/fun-league.ts` (`isEternalChampionLeague`) — add new label sites there, not by slug check. **Eternal window** (regulation 2026-10-09): a driver's last 20 races count, taken only from the last 30 league rounds (`ETERNAL_COUNTED_RACES`/`ETERNAL_LEAGUE_WINDOW`); a struck round loses everything incl. penalties; DNF/DSQ count as taking part, DNS does not. Implemented as its own block in `computeDriverStandings` (not drop-weeks — those strike the worst, this strikes the oldest). Test: `scripts/lm_test_eternal_window.ts` (gitignored; needs `ESBUILD_BINARY_PATH` to an executable esbuild copy on the share) |
 
 ## Season status
 

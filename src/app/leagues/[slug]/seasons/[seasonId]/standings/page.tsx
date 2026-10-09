@@ -20,7 +20,11 @@ import {
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { isStandingsExportEnabled } from "@/lib/standings-export-config";
-import { isEternalChampionLeague } from "@/lib/fun-league";
+import {
+  isEternalChampionLeague,
+  ETERNAL_COUNTED_RACES,
+  ETERNAL_LEAGUE_WINDOW,
+} from "@/lib/fun-league";
 import { isAdminOrSteward } from "@/lib/auth-helpers";
 import { RaceByRaceDriverTable } from "@/components/RaceByRaceDriverTable";
 import { RaceByRaceTeamTable } from "@/components/RaceByRaceTeamTable";
@@ -258,10 +262,21 @@ export default async function StandingsPage({
             )}
             <p className="mt-3 text-xs text-zinc-400">
               Every Fun League race is a one-off — there is no championship.
-              Just for fun, the points of all races are added up into an
-              eternal table, and whoever leads it carries the title. The number
-              of races entered doesn&apos;t matter: the more often you race,
-              the better your chances.
+              Just for fun, the results add up to an eternal table, and
+              whoever leads it carries the title.
+            </p>
+            <p className="mt-2 text-xs text-zinc-400">
+              <span className="font-semibold text-zinc-300">What counts:</span>{" "}
+              your last {ETERNAL_COUNTED_RACES} races, taken only from the
+              last {ETERNAL_LEAGUE_WINDOW} Fun League races held. Race
+              regularly and your newest {ETERNAL_COUNTED_RACES} results always
+              count — each new race pushes out your oldest one. Take a break
+              and you lose nothing at first; only results older than{" "}
+              {ETERNAL_LEAGUE_WINDOW} Fun League races drop out. So newcomers
+              can always catch up. Every race with a result counts as taken
+              part, DNF and DSQ (0 points) included. Switch to{" "}
+              <span className="font-semibold text-zinc-300">Race by race</span>{" "}
+              to see which results no longer count.
             </p>
           </div>
         )}
@@ -388,6 +403,7 @@ export default async function StandingsPage({
               season.scoringSystem.participationInCombined ?? true
             }
             dropKeepsParticipation={season.dropWeekKeepsParticipation}
+            eternalWindow={eternal}
           />
         ) : (
           <DriversTable

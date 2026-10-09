@@ -1,3 +1,8 @@
+import {
+  isEternalChampionLeague,
+  ETERNAL_COUNTED_RACES,
+  ETERNAL_LEAGUE_WINDOW,
+} from "@/lib/fun-league";
 import type { PrismaClient } from "@prisma/client";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
@@ -255,6 +260,18 @@ export async function computeDriverStandings(
     ? readDriverFprTiers(season?.scoringSystem?.driverFprTiers)
     : [];
   const driverFprMinDistance = season?.scoringSystem?.driverFprMinDistancePct ?? 90;
+  // Fun League eternal table: only rounds among the last ETERNAL_LEAGUE_WINDOW
+  // league races can count (see the window block below). Rounds excluded from
+  // this computation (the "before the latest round" delta view) are not part
+  // of the window either, so the deltas compare like with like.
+  const eternalWindow = season && isEternalChampionLeague(season.league.slug)
+    ? new Set(
+        rounds
+          .filter((r) => !excludeRoundIds.includes(r.id))
+          .slice(-ETERNAL_LEAGUE_WINDOW)
+          .map((r) => r.id)
+      )
+    : null;
   const standings: DriverStanding[] = registrations.map((reg) => {
     let raw = 0;
     let classRaw = 0;
@@ -559,6 +576,41 @@ export async function computeDriverStandings(
         rp.dropped = flagSet.has(rp.roundId);
         rp.droppedCombined = droppedCombined.has(rp.roundId);
         rp.droppedClass = droppedClass.has(rp.roundId);
+      }
+    }
+
+    // --- Fun League eternal table (src/lib/fun-league.ts) ---
+    // Counts the driver's newest ETERNAL_COUNTED_RACES races, taken only from
+    // the last ETERNAL_LEAGUE_WINDOW league races. Unlike drop-weeks this
+    // strikes a round WHOLE — race points, participation, penalties and
+    // corrections — because the regulation drops the result, not the score.
+    // A round counts as taken part when it has any result other than DNS.
+    if (eternalWindow) {
+      const tookPart = (rp: RoundPoints) =>
+        (resultsByRoundId.get(rp.roundId) ?? []).some(
+          (r) => r.finishStatus !== "DNS"
+        );
+      // roundPoints follows `rounds`, i.e. roundNumber ascending.
+      const counted = new Set(
+        roundPoints
+          .filter((rp) => rp.hasResult && eternalWindow.has(rp.roundId) && tookPart(rp))
+          .slice(-ETERNAL_COUNTED_RACES)
+          .map((rp) => rp.roundId)
+      );
+      for (const rp of roundPoints) {
+        if (!rp.hasResult || counted.has(rp.roundId)) continue;
+        // A DNS-only round inside the window was never "taken part" in and
+        // carries no points — leave it alone rather than strike it.
+        if (eternalWindow.has(rp.roundId) && !tookPart(rp)) continue;
+        combRaw -= rp.rawPoints;
+        classRaw -= rp.classRawPoints;
+        combParticipation -= rp.participationPoints;
+        classParticipation -= rp.participationPoints;
+        penalty -= rp.penaltyPoints;
+        correction -= rp.correctionPoints;
+        rp.dropped = true;
+        rp.droppedCombined = true;
+        rp.droppedClass = true;
       }
     }
 

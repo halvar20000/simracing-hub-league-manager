@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.38.0",
+    date: "2026-10-09",
+    changes: [
+      "Fun League — Eternal Champion: the eternal table now counts each driver's last 20 races, taken only from the last 30 Fun League races. Regular drivers keep their newest 20 results; results older than 30 Fun League races drop out, so newcomers can always catch up. DNF and DSQ count as taking part. The Race by race view strikes results that no longer count.",
+    ],
+  },
+  {
     version: "2.37.1",
     date: "2026-10-09",
     changes: [
