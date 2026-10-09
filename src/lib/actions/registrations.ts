@@ -142,7 +142,11 @@ export async function createRegistration(
     !user.lastName ||
     !user.iracingMemberId
   ) {
-    redirect("/profile?error=Please+complete+your+profile+before+registering");
+    redirect(
+      `/profile?error=Please+complete+your+profile+before+registering&next=${encodeURIComponent(
+        registerBase.replace(/[?&]$/, "")
+      )}`
+    );
   }
 
   let startNumber: string | null;

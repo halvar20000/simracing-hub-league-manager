@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.37.1",
+    date: "2026-10-09",
+    changes: [
+      "Registration: your iRacing ID is now shown clearly on the registration form, since the league invitation in iRacing is sent to it. New drivers without an iRacing ID in their profile are sent to the profile first and come straight back to the registration after saving — the invitation link is no longer lost on the way.",
+    ],
+  },
+  {
     version: "2.37.0",
     date: "2026-10-08",
     changes: [

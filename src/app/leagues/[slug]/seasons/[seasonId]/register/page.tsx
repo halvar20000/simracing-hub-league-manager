@@ -187,8 +187,13 @@ export default async function RegisterPage({
   if (!user) redirect("/api/auth/signin");
 
   if (!user.firstName || !user.lastName || !user.iracingMemberId) {
+    // Keep the invitation link (token) so the driver lands back here after
+    // saving the profile instead of losing the registration page.
+    const back = `/leagues/${slug}/seasons/${seasonId}/register${t ? `?t=${encodeURIComponent(t)}` : ""}`;
     redirect(
-      `/profile?error=Please+complete+your+profile+before+registering`
+      `/profile?error=${encodeURIComponent(
+        "Please complete your profile (name + iRacing ID) before registering."
+      )}&next=${encodeURIComponent(back)}`
     );
   }
 
@@ -771,16 +776,25 @@ export default async function RegisterPage({
       <div className="rounded border border-zinc-800 bg-zinc-900 p-4 text-sm">
         <p className="text-zinc-400">Registering as:</p>
         <p className="mt-1 font-semibold text-zinc-200">
-          {user.firstName} {user.lastName}{" "}
-          <span className="text-zinc-500">
-            (iRacing #{user.iracingMemberId})
+          {user.firstName} {user.lastName}
+        </p>
+        <p className="mt-1 text-zinc-300">
+          iRacing ID:{" "}
+          <span className="font-mono font-semibold text-zinc-100">
+            {user.iracingMemberId}
           </span>
         </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          The league invitation in iRacing is sent to this ID — please check
+          it is your own (main) account.
+        </p>
         <Link
-          href="/profile"
+          href={`/profile?next=${encodeURIComponent(
+            `/leagues/${slug}/seasons/${seasonId}/register${t ? `?t=${encodeURIComponent(t)}` : ""}`
+          )}`}
           className="mt-2 inline-block text-xs text-orange-400 hover:underline"
         >
-          Edit profile
+          Wrong? Edit profile
         </Link>
       </div>
 

@@ -14,6 +14,12 @@ export async function updateProfile(formData: FormData) {
   const lastName = String(formData.get("lastName") ?? "").trim() || null;
   const email = String(formData.get("email") ?? "").trim() || null;
   const iracingMemberIdRaw = String(formData.get("iracingMemberId") ?? "").trim();
+  // Registration page the driver came from (same-site paths only — never an
+  // open redirect). Kept on error redirects too, so a typo doesn't lose it.
+  const nextRaw = String(formData.get("next") ?? "");
+  const next =
+    nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : null;
+  const keepNext = next ? `&next=${encodeURIComponent(next)}` : "";
   // Accept what people paste ("#1189750", "1 189 750") and store the digits.
   const iracingMemberId = iracingMemberIdRaw
     ? normalizeIracingId(iracingMemberIdRaw)
@@ -23,7 +29,7 @@ export async function updateProfile(formData: FormData) {
     redirect(
       `/profile?error=${encodeURIComponent(
         `"${iracingMemberIdRaw}" is not an iRacing ID — enter the numeric customer ID only.`
-      )}`
+      )}${keepNext}`
     );
   }
 
@@ -43,7 +49,7 @@ export async function updateProfile(formData: FormData) {
         redirect(
           `/profile?error=${encodeURIComponent(
             `That iRacing ID belongs to another account that could not be merged automatically — ${merged.reason}. Please contact a league admin.`
-          )}`
+          )}${keepNext}`
         );
       }
     }
@@ -56,12 +62,14 @@ export async function updateProfile(formData: FormData) {
     });
   } catch (e: unknown) {
     if (e instanceof Error && e.message.includes("Unique constraint")) {
-      redirect("/profile?error=That+iRacing+ID+is+already+used+by+another+account");
+      redirect(`/profile?error=That+iRacing+ID+is+already+used+by+another+account${keepNext}`);
     }
     throw e;
   }
 
   revalidatePath("/profile");
+  // Back to the registration page the driver came from, if any.
+  if (next) redirect(next);
   redirect("/profile?success=1");
 }
 

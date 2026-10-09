@@ -23,7 +23,14 @@ type Initial = {
  * "welcome back" banner; the actual account merge still happens server-side
  * in updateProfile() on save.
  */
-export default function ProfileForm({ initial }: { initial: Initial }) {
+export default function ProfileForm({
+  initial,
+  next = null,
+}: {
+  initial: Initial;
+  /** Same-site path to return to after a successful save (registration). */
+  next?: string | null;
+}) {
   const [iracingId, setIracingId] = useState(initial.iracingMemberId);
   const [firstName, setFirstName] = useState(initial.firstName);
   const [lastName, setLastName] = useState(initial.lastName);
@@ -76,6 +83,7 @@ export default function ProfileForm({ initial }: { initial: Initial }) {
 
   return (
     <form action={updateProfile} className="space-y-4">
+      {next && <input type="hidden" name="next" value={next} />}
       <Field
         label="iRacing member ID"
         name="iracingMemberId"

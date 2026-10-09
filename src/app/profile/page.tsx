@@ -7,7 +7,7 @@ import ProfileForm from "@/components/ProfileForm";
 export default async function ProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; next?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -19,7 +19,12 @@ export default async function ProfilePage({
   });
   if (!user) redirect("/api/auth/signin");
 
-  const { error, success } = await searchParams;
+  const { error, success, next: nextRaw } = await searchParams;
+  // Only same-site paths — never an open redirect.
+  const next =
+    nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//")
+      ? nextRaw
+      : null;
 
   return (
     <div className="max-w-xl space-y-6">
@@ -43,7 +48,15 @@ export default async function ProfilePage({
         </div>
       )}
 
+      {next && (
+        <div className="rounded border border-amber-800 bg-amber-950 p-3 text-sm text-amber-200">
+          Save your profile and you&apos;ll be taken straight back to the
+          registration.
+        </div>
+      )}
+
       <ProfileForm
+        next={next}
         initial={{
           firstName: user.firstName ?? "",
           lastName: user.lastName ?? "",
