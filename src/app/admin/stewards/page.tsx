@@ -1,3 +1,4 @@
+import { accusedLabel } from "@/lib/incident-accused";
 import Link from "next/link";
 import { requireSteward } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
@@ -29,8 +30,11 @@ export default async function StewardsDashboard({
       round: { include: { season: { include: { league: true } } } },
       reporterUser: true,
       involvedDrivers: {
-        include: { registration: { include: { user: true } } },
+        include: {
+          registration: { include: { user: true, team: { select: { name: true } } } },
+        },
       },
+      involvedTeams: { include: { team: { select: { name: true } } } },
     },
     orderBy: [{ status: "asc" }, { submittedAt: "asc" }],
   });
@@ -42,8 +46,11 @@ export default async function StewardsDashboard({
       round: { include: { season: { include: { league: true } } } },
       decision: true,
       involvedDrivers: {
-        include: { registration: { include: { user: true } } },
+        include: {
+          registration: { include: { user: true, team: { select: { name: true } } } },
+        },
       },
+      involvedTeams: { include: { team: { select: { name: true } } } },
     },
     orderBy: { updatedAt: "desc" },
     take: 10,
@@ -223,15 +230,9 @@ export default async function StewardsDashboard({
               </thead>
               <tbody>
                 {recentlyDecided.map((r) => {
-                  const accused = r.involvedDrivers
-                    .filter((d) => d.role === "ACCUSED")
-                    .map(
-                      (a) =>
-                        `${a.registration.user.firstName ?? ""} ${
-                          a.registration.user.lastName ?? ""
-                        }`.trim()
-                    )
-                    .join(", ");
+                  const accused = accusedLabel(r, {
+                    teamMode: r.round.season.teamRegistration,
+                  });
                   return (
                     <tr
                       key={r.id}
@@ -283,8 +284,11 @@ async function loadOpen() {
       round: { include: { season: { include: { league: true } } } },
       reporterUser: true,
       involvedDrivers: {
-        include: { registration: { include: { user: true } } },
+        include: {
+          registration: { include: { user: true, team: { select: { name: true } } } },
+        },
       },
+      involvedTeams: { include: { team: { select: { name: true } } } },
     },
   });
 }
@@ -305,15 +309,9 @@ function ReportsTable({ reports }: { reports: ReportRow[] }) {
         </thead>
         <tbody>
           {reports.map((r) => {
-            const accused = r.involvedDrivers
-              .filter((d) => d.role === "ACCUSED")
-              .map(
-                (a) =>
-                  `${a.registration.user.firstName ?? ""} ${
-                    a.registration.user.lastName ?? ""
-                  }`.trim()
-              )
-              .join(", ");
+            const accused = accusedLabel(r, {
+              teamMode: r.round.season.teamRegistration,
+            });
             return (
               <tr
                 key={r.id}

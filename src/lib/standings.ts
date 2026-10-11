@@ -1191,6 +1191,7 @@ export async function computeTeamClassStandings(
       select: {
         roundId: true,
         registrationId: true,
+        teamId: true,
         pointsValue: true,
         forgivenPoints: true,
         autoForgivenPoints: true,
@@ -1210,8 +1211,21 @@ export async function computeTeamClassStandings(
         });
       }
     }
+    // Car class per (team, round), for a penalty pinned to a team (teamId).
+    const classOfTeamRound = new Map<string, string | null>();
+    for (const r of results) {
+      classOfTeamRound.set(`${r.team.id}::${r.round.id}`, r.carClass?.id ?? null);
+    }
     for (const p of pens) {
-      const drove = droveIn.get(`${p.registrationId}::${p.roundId}`);
+      // Order: the team the steward issued it to (Penalty.teamId, set by
+      // decisions since v2.39.0) → the car the driver actually drove → the
+      // team on the driver's registration.
+      const drove = p.teamId
+        ? {
+            teamId: p.teamId,
+            classId: classOfTeamRound.get(`${p.teamId}::${p.roundId}`) ?? null,
+          }
+        : droveIn.get(`${p.registrationId}::${p.roundId}`);
       const teamId = drove?.teamId ?? p.registration.teamId;
       if (!teamId) continue;
       const effective = Math.max(

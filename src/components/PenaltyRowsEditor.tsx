@@ -10,6 +10,9 @@ import {
 export type PenaltyDriverOption = {
   registrationId: string;
   label: string;
+  /** Team-mode seasons (IEC): the car (team) this driver sat in — options
+   *  are grouped by it, and the penalty is issued to that team. */
+  group?: string;
 };
 
 export type PenaltyRowInit = {
@@ -41,12 +44,25 @@ export function PenaltyRowsEditor({
   pointsTable,
   initialRows,
   name = "penaltiesJson",
+  teamMode = false,
 }: {
   drivers: PenaltyDriverOption[];
   pointsTable: Record<string, number>;
   initialRows: PenaltyRowInit[];
   name?: string;
+  /** IEC: the penalty goes to the TEAM; the driver is picked within its car. */
+  teamMode?: boolean;
 }) {
+  // Options grouped by car (team) when groups are present, in first-seen order.
+  const groups = useMemo(() => {
+    const m = new Map<string, PenaltyDriverOption[]>();
+    for (const d of drivers) {
+      const g = d.group ?? "";
+      m.set(g, [...(m.get(g) ?? []), d]);
+    }
+    return [...m.entries()];
+  }, [drivers]);
+  const grouped = groups.some(([g]) => g !== "");
   const [rows, setRows] = useState<Row[]>(
     initialRows.length > 0 ? initialRows.map((r) => newRow(r)) : [newRow()]
   );
@@ -89,8 +105,16 @@ export function PenaltyRowsEditor({
   return (
     <div className="rounded border border-zinc-800 p-3">
       <p className="text-xs text-zinc-500">
-        Strafempfänger — Wähle einen oder mehrere Fahrer (auch der Melder ist
-        wählbar). Jede Zeile kann eine eigene Kategorie und einen eigenen
+        {teamMode ? (
+          <>
+            Strafempfänger — die Strafe geht an das <strong>Team (Auto)</strong>.
+            Wähle dazu den Fahrer, der am Steuer saß; die Fahrer sind nach dem
+            Auto gruppiert, in dem sie in dieser Runde gefahren sind.
+          </>
+        ) : (
+          <>Strafempfänger — Wähle einen oder mehrere Fahrer (auch der Melder ist
+        wählbar).</>
+        )} Jede Zeile kann eine eigene Kategorie und einen eigenen
         öffentlichen Kommentar haben. <strong>Kategorie 4</strong> zieht keine
         Strafpunkte ab — dort wird die Maßnahme als Freitext eingetragen und mit
         der Entscheidung veröffentlicht.
@@ -102,7 +126,9 @@ export function PenaltyRowsEditor({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-widest text-zinc-500">
-              <th className="px-2 py-1 font-semibold">Fahrer</th>
+              <th className="px-2 py-1 font-semibold">
+                {teamMode ? "Team / Fahrer" : "Fahrer"}
+              </th>
               <th className="px-2 py-1 font-semibold">Kategorie</th>
               <th className="px-2 py-1 font-semibold">
                 Kommentar (öffentlich)
@@ -127,12 +153,24 @@ export function PenaltyRowsEditor({
                       }
                       className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
                     >
-                      <option value="">— Fahrer wählen —</option>
-                      {drivers.map((d) => (
-                        <option key={d.registrationId} value={d.registrationId}>
-                          {d.label}
-                        </option>
-                      ))}
+                      <option value="">
+                        {teamMode ? "— Auto / Fahrer wählen —" : "— Fahrer wählen —"}
+                      </option>
+                      {grouped
+                        ? groups.map(([g, opts]) => (
+                            <optgroup key={g || "_"} label={g || "Sonstige"}>
+                              {opts.map((d) => (
+                                <option key={d.registrationId} value={d.registrationId}>
+                                  {d.label}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))
+                        : drivers.map((d) => (
+                            <option key={d.registrationId} value={d.registrationId}>
+                              {d.label}
+                            </option>
+                          ))}
                     </select>
                   </td>
                   <td className="px-2 py-2">

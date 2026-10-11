@@ -1,5 +1,6 @@
 "use server";
 
+import { namedTeamDrivers } from "@/lib/incident-team-form";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -209,6 +210,28 @@ export async function submitDecision(
     isSpecialMeasureLevel(row.level) ? true : verdict === "POINTS_DEDUCTION"
   );
 
+  // Team-mode seasons (IEC): every penalty is issued to the TEAM — the car
+  // the chosen driver sat in during this round, else the team he is
+  // registered with — and pinned on Penalty.teamId, so a later result
+  // re-import can never move it to another car.
+  const teamOfReg = new Map<string, string>();
+  if (report.round.season.teamRegistration && rowsToSave.length > 0) {
+    const regIds = rowsToSave.map((r) => r.registrationId);
+    const regs = await prisma.registration.findMany({
+      where: { id: { in: regIds } },
+      select: { id: true, teamId: true },
+    });
+    for (const r of regs) if (r.teamId) teamOfReg.set(r.id, r.teamId);
+    const drove = await prisma.teamRoundDriver.findMany({
+      where: {
+        registrationId: { in: regIds },
+        teamResult: { roundId: report.roundId },
+      },
+      select: { registrationId: true, teamResult: { select: { teamId: true } } },
+    });
+    for (const d of drove) teamOfReg.set(d.registrationId, d.teamResult.teamId);
+  }
+
   if (rowsToSave.length > 0) {
     // One penalty per selected driver; de-dupe in case the same driver was
     // picked twice.
@@ -229,6 +252,7 @@ export async function submitDecision(
             reason: row.reason || publicSummary,
             categoryLevel: row.level,
             specialMeasure: row.specialMeasure || null,
+            teamId: teamOfReg.get(row.registrationId) ?? null,
           },
         });
         continue;
@@ -245,6 +269,7 @@ export async function submitDecision(
           pointsValue: rowPoints,
           reason: row.reason || publicSummary,
           categoryLevel: row.level,
+          teamId: teamOfReg.get(row.registrationId) ?? null,
         },
       });
     }
@@ -422,6 +447,7 @@ export async function updateIncidentReport(
     include: {
       round: { select: { seasonId: true } },
       involvedDrivers: true,
+      involvedTeams: true,
       evidence: true,
       decision: { include: { penalties: true } },
     },
@@ -502,6 +528,40 @@ export async function updateIncidentReport(
           registrationId: { in: removed },
         },
       });
+    }
+    // Team-mode form (IEC): the ticked cars are the full accused-team list.
+    // Only synced when the team picker was on the form, so a solo-league edit
+    // never touches it.
+    if (formData.get("teamPickerOnForm") === "1") {
+      const wantedTeams = [
+        ...new Set(
+          formData
+            .getAll("involvedTeamIds")
+            .map((v) => String(v).trim())
+            .filter(Boolean)
+        ),
+      ];
+      const validTeams = await tx.team.findMany({
+        where: { id: { in: wantedTeams }, seasonId },
+        select: { id: true },
+      });
+      const keep = new Set(validTeams.map((t) => t.id));
+      const named = await namedTeamDrivers(formData, seasonId, [...keep]);
+      await tx.incidentReportInvolvedTeam.deleteMany({
+        where: { incidentReportId: reportId, teamId: { notIn: [...keep] } },
+      });
+      for (const teamId of keep) {
+        await tx.incidentReportInvolvedTeam.upsert({
+          where: { incidentReportId_teamId: { incidentReportId: reportId, teamId } },
+          update: { registrationId: named.get(teamId) ?? null },
+          create: {
+            incidentReportId: reportId,
+            teamId,
+            role: "ACCUSED",
+            registrationId: named.get(teamId) ?? null,
+          },
+        });
+      }
     }
     for (const regId of added) {
       // (incidentReportId, registrationId) is unique — a driver already on

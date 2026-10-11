@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-helpers";
 import type { EvidenceKind, RaceSession } from "@prisma/client";
 import { protestWindowState } from "@/lib/protest-window";
+import { namedTeamDrivers } from "@/lib/incident-team-form";
 
 export async function createIncidentReport(
   leagueSlug: string,
@@ -150,6 +151,35 @@ export async function createIncidentReport(
       .catch(() => {
         /* duplicate */
       });
+  }
+
+  // Team-mode seasons (IEC): the accused CARS. The drivers named for them (if
+  // any) arrived above as involvedRegistrationIds.
+  const involvedTeamIds = [
+    ...new Set(
+      formData
+        .getAll("involvedTeamIds")
+        .map((v) => String(v).trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (involvedTeamIds.length > 0) {
+    const teams = await prisma.team.findMany({
+      where: { id: { in: involvedTeamIds }, seasonId },
+      select: { id: true },
+    });
+    const named = await namedTeamDrivers(formData, seasonId, teams.map((t) => t.id));
+    if (teams.length > 0) {
+      await prisma.incidentReportInvolvedTeam.createMany({
+        data: teams.map((t) => ({
+          incidentReportId: report.id,
+          teamId: t.id,
+          role: "ACCUSED" as const,
+          registrationId: named.get(t.id) ?? null,
+        })),
+        skipDuplicates: true,
+      });
+    }
   }
 
   // Parse involved start numbers → match to season's roster → tag as ACCUSED.

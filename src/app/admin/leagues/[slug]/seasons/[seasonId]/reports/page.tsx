@@ -1,3 +1,4 @@
+import { accusedLabel } from "@/lib/incident-accused";
 import { requireSteward } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -41,9 +42,10 @@ export default async function AdminReportsQueue({
       reporterUser: true,
       involvedDrivers: {
         include: {
-          registration: { include: { user: true } },
+          registration: { include: { user: true, team: { select: { name: true } } } },
         },
       },
+      involvedTeams: { include: { team: { select: { name: true } } } },
       decision: true,
     },
     orderBy: [{ status: "asc" }, { submittedAt: "asc" }],
@@ -147,9 +149,6 @@ export default async function AdminReportsQueue({
             </thead>
             <tbody>
               {reports.map((r) => {
-                const accused = r.involvedDrivers.filter(
-                  (d) => d.role === "ACCUSED"
-                );
                 return (
                   <tr
                     key={r.id}
@@ -172,14 +171,7 @@ export default async function AdminReportsQueue({
                       )}
                     </td>
                     <td className="px-3 py-2 text-zinc-400">
-                      {accused.length === 0
-                        ? "—"
-                        : accused
-                            .map(
-                              (a) =>
-                                `${a.registration.user.firstName ?? ""} ${a.registration.user.lastName ?? ""}`.trim()
-                            )
-                            .join(", ")}
+                      {accusedLabel(r, { teamMode: season.teamRegistration }) || "—"}
                     </td>
                     <td className="px-3 py-2">
                       <StatusBadge status={r.status} />

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
 import { SPECIAL_MEASURE_LABEL } from "@/lib/penalty-categories";
+import { accusedLabel } from "@/lib/incident-accused";
 
 export default async function PublicDecisions({
   params,
@@ -27,12 +28,18 @@ export default async function PublicDecisions({
         include: {
           round: true,
           involvedDrivers: {
-            include: { registration: { include: { user: true } } },
+            include: {
+              registration: { include: { user: true, team: { select: { name: true } } } },
+            },
           },
+          involvedTeams: { include: { team: { select: { name: true } } } },
         },
       },
       penalties: {
-        include: { registration: { include: { user: true } } },
+        include: {
+          registration: { include: { user: true } },
+          team: { select: { name: true } },
+        },
       },
     },
     orderBy: { publishedAt: "desc" },
@@ -55,9 +62,10 @@ export default async function PublicDecisions({
       ) : (
         <div className="space-y-3">
           {decisions.map((d) => {
-            const accused = d.incidentReport.involvedDrivers.filter(
-              (i) => i.role === "ACCUSED"
-            );
+            const accused = accusedLabel(d.incidentReport, {
+              teamMode: season.teamRegistration,
+              withNumbers: true,
+            });
             return (
               <div
                 key={d.id}
@@ -74,15 +82,8 @@ export default async function PublicDecisions({
                       {d.verdict.replace(/_/g, " ")}
                     </h3>
                   </div>
-                  {accused.length > 0 && (
-                    <div className="text-sm text-zinc-400">
-                      {accused
-                        .map(
-                          (a) =>
-                            `#${a.registration.startNumber ?? "?"} ${a.registration.user.firstName ?? ""} ${a.registration.user.lastName ?? ""}`.trim()
-                        )
-                        .join(", ")}
-                    </div>
+                  {accused && (
+                    <div className="text-sm text-zinc-400">{accused}</div>
                   )}
                 </div>
                 <p className="mt-2 text-sm text-zinc-300">{d.publicSummary}</p>
@@ -103,8 +104,21 @@ export default async function PublicDecisions({
                               ? SPECIAL_MEASURE_LABEL
                               : p.type.replace(/_/g, " ")}
                           </span>{" "}
-                          — {p.registration.user.firstName}{" "}
-                          {p.registration.user.lastName}
+                          —{" "}
+                          {p.team ? (
+                            <>
+                              <span className="font-semibold text-zinc-300">
+                                {p.team.name}
+                              </span>{" "}
+                              ({p.registration.user.firstName}{" "}
+                              {p.registration.user.lastName})
+                            </>
+                          ) : (
+                            <>
+                              {p.registration.user.firstName}{" "}
+                              {p.registration.user.lastName}
+                            </>
+                          )}
                           {special
                             ? p.specialMeasure && (
                                 <span className="text-zinc-300">

@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.39.0",
+    date: "2026-10-11",
+    changes: [
+      "IEC incident reports now name the car/team instead of every driver registered with it. You pick the car(s) involved from the cars that actually raced in that round, and can optionally name the driver at the wheel — even when that driver is registered with a different team.",
+      "Stewards: in the IEC the penalty is issued to the team. The driver list in the verdict form is grouped by the car each driver sat in, and the penalty stays pinned to that team.",
+      "Everyone registered with an accused team can now open the report, and the incident and decision pages show the team (and the named driver, if any).",
+    ],
+  },
+  {
     version: "2.38.1",
     date: "2026-10-11",
     changes: [

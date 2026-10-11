@@ -4,6 +4,8 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { createIncidentReport } from "@/lib/actions/incident-reports";
 import { InvolvedDriversPicker } from "@/components/InvolvedDriversPicker";
+import { InvolvedTeamsPicker } from "@/components/InvolvedTeamsPicker";
+import { loadRoundCars, carOfRegistration } from "@/lib/round-cars";
 import { protestWindowState, formatCountdown } from "@/lib/protest-window";
 import { SessionAndTimestampFields } from "@/components/SessionAndTimestampFields";
 
@@ -114,6 +116,13 @@ export default async function FileReportPage({
     teamId: r.team?.id ?? null,
     teamName: r.team?.name ?? null,
   }));
+  // Team-mode seasons (IEC): the CAR is reported, the driver is optional.
+  const teamMode = !!seasonForFlag?.teamRegistration;
+  const roundCars = teamMode ? await loadRoundCars(prisma, roundId, seasonId) : [];
+  const ownCarTeamId = teamMode
+    ? carOfRegistration(roundCars, reporterReg?.id, reporterReg?.teamId)
+    : null;
+
   // A steward with no registration in this season files for the LEAGUE; a
   // steward who does race can choose (tick box below). Everyone else must
   // have an approved registration.
@@ -262,19 +271,25 @@ export default async function FileReportPage({
 
         <div>
           <span className="mb-1 block text-sm text-zinc-300">
-            {seasonForFlag?.teamRegistration
+            {teamMode
               ? mustFileAsSteward
-                ? "Team(s) involved"
-                : "Other team(s) involved"
+                ? "Car(s) / team(s) involved"
+                : "Other car(s) / team(s) involved"
               : mustFileAsSteward
                 ? "Driver(s) involved"
                 : "Other driver(s) involved"}
           </span>
-          <InvolvedDriversPicker
-            drivers={driverChoices}
-            excludeRegistrationId={reporterReg?.id ?? null}
-            teamMode={!!seasonForFlag?.teamRegistration}
-          />
+          {teamMode ? (
+            <InvolvedTeamsPicker
+              cars={roundCars}
+              excludeTeamId={mustFileAsSteward ? null : ownCarTeamId}
+            />
+          ) : (
+            <InvolvedDriversPicker
+              drivers={driverChoices}
+              excludeRegistrationId={reporterReg?.id ?? null}
+            />
+          )}
         </div>
 
         <label className="block">

@@ -327,6 +327,8 @@ model Team {
   registrations Registration[]
   teamResults   TeamResult[]
   fprAwards     FPRAward[]
+  penalties     Penalty[]
+  incidentReportsInvolved IncidentReportInvolvedTeam[]
   iracingTeamId Int?           @unique
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @default(now()) @updatedAt
@@ -495,6 +497,7 @@ model Registration {
   iRating                   Int?
 
   @@unique([seasonId, userId])
+  incidentTeamsNamedIn IncidentReportInvolvedTeam[] @relation("IncidentTeamDriver")
 }
 
 model RaceResult {
@@ -649,6 +652,9 @@ model IncidentReport {
   submittedAt  DateTime       @default(now())
 
   involvedDrivers IncidentReportInvolvedDriver[]
+  /// Team-mode seasons (IEC): the accused TEAMS (cars). Named drivers, if
+  /// the reporter knows them, are still stored in involvedDrivers.
+  involvedTeams   IncidentReportInvolvedTeam[]
   evidence        IncidentReportEvidence[]
   comments        IncidentReportComment[]
   decision        IncidentDecision?
@@ -671,6 +677,24 @@ model IncidentReportInvolvedDriver {
   role             ParticipantRole
 
   @@unique([incidentReportId, registrationId])
+}
+
+/// A team (car) named in an incident report — team-mode seasons only (IEC),
+/// where the entry, not the driver, is reported and penalised.
+model IncidentReportInvolvedTeam {
+  id               String          @id @default(cuid())
+  incidentReportId String
+  incidentReport   IncidentReport  @relation(fields: [incidentReportId], references: [id], onDelete: Cascade)
+  teamId           String
+  team             Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  role             ParticipantRole @default(ACCUSED)
+  /// The driver named as at the wheel of this car, when the reporter knew it.
+  /// Secondary — the team is what is reported. The driver may be registered
+  /// with a different team (mixed crews), hence stored here, not derived.
+  registrationId   String?
+  registration     Registration?   @relation("IncidentTeamDriver", fields: [registrationId], references: [id], onDelete: SetNull)
+
+  @@unique([incidentReportId, teamId])
 }
 
 model IncidentReportEvidence {
@@ -746,6 +770,13 @@ model Penalty {
   /// Category 4 never deducts points (type = SPECIAL_MEASURE, pointsValue null),
   /// so these rows stay out of the standings and the penalty pool.
   specialMeasure String?
+
+  /// Team-mode seasons (IEC): the TEAM (car) this penalty is issued to. The
+  /// registration is then the driver named at fault — secondary information.
+  /// When set, team scoring attributes the penalty here, ahead of the car the
+  /// driver drove and his registered team (src/lib/standings.ts).
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
 }
 
 // ==========================================

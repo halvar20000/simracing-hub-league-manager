@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { isAccusedIn } from "@/lib/incident-visibility";
+import {
+  isAccusedIn,
+  involvedTeamsForVisibility,
+} from "@/lib/incident-visibility";
+import { accusedLabel } from "@/lib/incident-accused";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
 import { SPECIAL_MEASURE_LABEL } from "@/lib/penalty-categories";
@@ -40,6 +44,8 @@ type PenaltyRow = {
   gridPositions: number | null;
   specialMeasure: string | null;
   reason: string;
+  /** The team the steward issued it to (team-mode seasons, v2.39.0+). */
+  team?: { name: string } | null;
   registration: {
     user: { firstName: string | null; lastName: string | null; name: string | null };
     team: { name: string } | null;
@@ -66,6 +72,7 @@ function penaltyAmount(p: PenaltyRow): string {
 }
 
 function penaltyDriver(p: PenaltyRow, teamMode: boolean): string {
+  if (p.team?.name) return p.team.name;
   if (teamMode && p.registration.team?.name) return p.registration.team.name;
   const u = p.registration.user;
   return (
@@ -101,10 +108,12 @@ export default async function PublicIncidentsList({
           },
         },
       },
+      involvedTeams: involvedTeamsForVisibility,
       decision: {
         include: {
           penalties: {
             include: {
+              team: { select: { name: true } },
               registration: {
                 include: {
                   user: {
@@ -314,20 +323,7 @@ export default async function PublicIncidentsList({
                   `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim()
                 : `${r.reporterUser.firstName ?? ""} ${r.reporterUser.lastName ?? ""}`.trim();
 
-            let accusedLabel: string;
-            if (teamMode) {
-              const teams = new Set<string>();
-              for (const d of r.involvedDrivers) {
-                const t = d.registration.team?.name;
-                if (t) teams.add(t);
-              }
-              accusedLabel = teams.size === 0 ? "—" : [...teams].join(", ");
-            } else {
-              const names = r.involvedDrivers.map((d) =>
-                `${d.registration.user.firstName ?? ""} ${d.registration.user.lastName ?? ""}`.trim()
-              );
-              accusedLabel = names.length === 0 ? "—" : names.join(", ");
-            }
+            const accusedText = accusedLabel(r, { teamMode }) || "—";
 
             const published = isPublished(r);
             const decision = r.decision;
@@ -337,7 +333,7 @@ export default async function PublicIncidentsList({
             const canOpen =
               viewerId != null &&
               (r.reporterUserId === viewerId ||
-                isAccusedIn(r.involvedDrivers, viewerId));
+                isAccusedIn(r.involvedDrivers, viewerId, r.involvedTeams));
 
             return (
               <article
@@ -367,7 +363,7 @@ export default async function PublicIncidentsList({
                       {reporterLabel || "—"}{" "}
                       <span className="text-zinc-600">→</span>{" "}
                       <span className="text-zinc-500">Accused:</span>{" "}
-                      {accusedLabel}
+                      {accusedText}
                     </div>
                   </div>
                   <div className="text-right text-xs text-zinc-500">

@@ -10,7 +10,9 @@ import type { Prisma } from "@prisma/client";
  *   1. the reporter who filed it,
  *   2. the driver(s) named as ACCUSED — added 2026-08-19, because an accused
  *      driver could see that a case existed against them but not read a word
- *      of it, which makes answering it impossible,
+ *      of it, which makes answering it impossible — and, on team-mode seasons
+ *      (IEC), everyone registered with an ACCUSED TEAM (added 2026-10-11, when
+ *      reports started naming the team rather than every one of its drivers),
  *   3. admins / stewards.
  *
  * WITNESS is deliberately NOT included: being named as a bystander is not the
@@ -27,9 +29,14 @@ export function accusedByUserWhere(
   userId: string
 ): Prisma.IncidentReportWhereInput {
   return {
-    involvedDrivers: {
-      some: { role: "ACCUSED", registration: { userId } },
-    },
+    OR: [
+      { involvedDrivers: { some: { role: "ACCUSED", registration: { userId } } } },
+      {
+        involvedTeams: {
+          some: { role: "ACCUSED", team: { registrations: { some: { userId } } } },
+        },
+      },
+    ],
   };
 }
 
@@ -38,13 +45,38 @@ type InvolvedLike = {
   registration: { userId: string };
 };
 
-/** True when `userId` is named as ACCUSED among these involved-driver rows. */
+type InvolvedTeamLike = {
+  role: string;
+  team: { registrations: { userId: string }[] };
+};
+
+/** Include fragment that loads exactly what isAccusedIn needs for teams. */
+export const involvedTeamsForVisibility = {
+  include: {
+    team: {
+      select: { name: true, registrations: { select: { userId: true } } },
+    },
+  },
+} as const;
+
+/**
+ * True when `userId` is named as ACCUSED among these involved-driver rows, or
+ * is registered with a team named as ACCUSED (team-mode seasons).
+ */
 export function isAccusedIn(
   involvedDrivers: InvolvedLike[],
-  userId: string | null | undefined
+  userId: string | null | undefined,
+  involvedTeams: InvolvedTeamLike[] = []
 ): boolean {
   if (!userId) return false;
-  return involvedDrivers.some(
-    (d) => d.role === "ACCUSED" && d.registration.userId === userId
+  return (
+    involvedDrivers.some(
+      (d) => d.role === "ACCUSED" && d.registration.userId === userId
+    ) ||
+    involvedTeams.some(
+      (t) =>
+        t.role === "ACCUSED" &&
+        t.team.registrations.some((r) => r.userId === userId)
+    )
   );
 }

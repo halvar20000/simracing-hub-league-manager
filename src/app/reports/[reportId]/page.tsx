@@ -4,7 +4,10 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDateTime } from "@/lib/date";
 import { StatusTimeline } from "@/components/StatusTimeline";
-import { isAccusedIn } from "@/lib/incident-visibility";
+import {
+  isAccusedIn,
+  involvedTeamsForVisibility,
+} from "@/lib/incident-visibility";
 
 export default async function ReportDetail({
   params,
@@ -23,6 +26,7 @@ export default async function ReportDetail({
       involvedDrivers: {
         include: { registration: { include: { user: true } } },
       },
+      involvedTeams: involvedTeamsForVisibility,
       evidence: true,
       decision: true,
     },
@@ -38,7 +42,11 @@ export default async function ReportDetail({
   });
   const isOwnReport = report.reporterUserId === session.user.id;
   const isAdmin = me?.role === "ADMIN";
-  const isAccused = isAccusedIn(report.involvedDrivers, session.user.id);
+  const isAccused = isAccusedIn(
+    report.involvedDrivers,
+    session.user.id,
+    report.involvedTeams
+  );
   if (!isOwnReport && !isAdmin && !isAccused) {
     redirect("/reports");
   }
@@ -107,11 +115,35 @@ export default async function ReportDetail({
 
       <section>
         <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
-          Involved drivers
+          {report.involvedTeams.length > 0 ? "Involved" : "Involved drivers"}
         </h2>
         <div className="rounded border border-zinc-800">
           <table className="w-full text-sm">
             <tbody>
+              {report.involvedTeams.map((t) => {
+                const named = t.registrationId
+                  ? report.involvedDrivers.find(
+                      (d) => d.registrationId === t.registrationId
+                    )
+                  : undefined;
+                return (
+                  <tr key={t.id} className="border-b border-zinc-800 last:border-0">
+                    <td className="px-3 py-2 text-zinc-500">Team</td>
+                    <td className="px-3 py-2 font-medium">
+                      {t.team.name}
+                      {named && (
+                        <span className="ml-2 font-normal text-zinc-400">
+                          driver: {named.registration.user.firstName}{" "}
+                          {named.registration.user.lastName}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs text-zinc-400">
+                      {t.role}
+                    </td>
+                  </tr>
+                );
+              })}
               {report.involvedDrivers.map((d) => (
                 <tr key={d.id} className="border-b border-zinc-800 last:border-0">
                   <td className="px-3 py-2 text-zinc-500">

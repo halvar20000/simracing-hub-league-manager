@@ -12,6 +12,8 @@ import {
   updateIncidentReport,
 } from "@/lib/actions/admin-reports";
 import { InvolvedDriversPicker } from "@/components/InvolvedDriversPicker";
+import { InvolvedTeamsPicker } from "@/components/InvolvedTeamsPicker";
+import { loadRoundCars } from "@/lib/round-cars";
 import { SessionAndTimestampFields } from "@/components/SessionAndTimestampFields";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import {
@@ -68,6 +70,7 @@ export default async function AdminReportDetail({
           },
         },
       },
+      involvedTeams: { include: { team: { select: { id: true, name: true } } } },
       evidence: true,
       decision: { include: { penalties: true } },
     },
@@ -80,6 +83,49 @@ export default async function AdminReportDetail({
   const accusedDrivers = report.involvedDrivers.filter(
     (d) => d.role === "ACCUSED"
   );
+
+  // Team-mode seasons (IEC): the cars of this round and their crews. The
+  // accused TEAMS come from involvedTeams; reports filed before v2.39.0 have
+  // none — there the reporter ticked a team and every member REGISTERED with
+  // it was tagged, so the team is the accused drivers' registered team (not
+  // the car they sat in: with mixed crews that would name a second team).
+  const roundCars = teamMode
+    ? await loadRoundCars(prisma, report.roundId, report.round.seasonId)
+    : [];
+  const accusedTeams: { teamId: string; teamName: string; driverRegIds: string[] }[] =
+    [];
+  if (teamMode) {
+    const teamName = (id: string) =>
+      report.involvedTeams.find((t) => t.teamId === id)?.team.name ??
+      roundCars.find((c) => c.teamId === id)?.teamName ??
+      accusedDrivers.find((d) => d.registration.teamId === id)?.registration.team
+        ?.name ??
+      "(Team)";
+    const ids =
+      report.involvedTeams.length > 0
+        ? report.involvedTeams.filter((t) => t.role === "ACCUSED").map((t) => t.teamId)
+        : [
+            ...new Set(
+              accusedDrivers
+                .map((d) => d.registration.teamId)
+                .filter((x): x is string => !!x)
+            ),
+          ];
+    for (const id of ids) {
+      const stored = report.involvedTeams.find((t) => t.teamId === id);
+      accusedTeams.push({
+        teamId: id,
+        teamName: teamName(id),
+        driverRegIds: stored
+          ? stored.registrationId
+            ? [stored.registrationId]
+            : []
+          : accusedDrivers
+              .filter((d) => d.registration.teamId === id)
+              .map((d) => d.registrationId),
+      });
+    }
+  }
 
   const categoryPointsTable = readCategoryPoints(
     report.round.season.scoringSystem.categoryPointsTable
@@ -130,9 +176,35 @@ export default async function AdminReportDetail({
   report.involvedDrivers.forEach((d) => addOpt(d.registration as RegLike));
   addOpt(report.reporterRegistration as RegLike | null);
 
-  const driverOptions: PenaltyDriverOption[] = Array.from(driverMap.values())
-    .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label))
-    .map(({ registrationId, label }) => ({ registrationId, label }));
+  const driverOptions: PenaltyDriverOption[] = teamMode
+    ? (() => {
+        // IEC: drivers grouped by the car they sat in this round, accused
+        // cars first. Anyone not in a car (e.g. the reporter before results
+        // exist) goes to a trailing group.
+        const accusedIds = new Set(accusedTeams.map((t) => t.teamId));
+        const cars = [...roundCars].sort(
+          (a, b) =>
+            Number(accusedIds.has(b.teamId)) - Number(accusedIds.has(a.teamId)) ||
+            a.teamName.localeCompare(b.teamName)
+        );
+        const opts: PenaltyDriverOption[] = [];
+        const placed = new Set<string>();
+        for (const c of cars) {
+          const group = `${c.teamName}${c.classLabel ? ` (${c.classLabel})` : ""}`;
+          for (const m of c.crew) {
+            opts.push({ registrationId: m.registrationId, label: `${m.label} — ${c.teamName}`, group });
+            placed.add(m.registrationId);
+          }
+        }
+        for (const o of driverMap.values()) {
+          if (!placed.has(o.registrationId))
+            opts.push({ registrationId: o.registrationId, label: o.label, group: "Weitere Fahrer" });
+        }
+        return opts;
+      })()
+    : Array.from(driverMap.values())
+        .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label))
+        .map(({ registrationId, label }) => ({ registrationId, label }));
 
   // Disqualification picker: every result of this round, accused drivers
   // first so the usual case is one click. `checked` marks the results THIS
@@ -362,7 +434,36 @@ export default async function AdminReportDetail({
           <h2 className="font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
             Beschuldigt
           </h2>
-          {accusedDrivers.length === 0 ? (
+          {teamMode && accusedTeams.length > 0 ? (
+            <ul className="space-y-2 text-sm">
+              {accusedTeams.map((t) => {
+                const named = report.involvedDrivers.filter((d) =>
+                  t.driverRegIds.includes(d.registrationId)
+                );
+                return (
+                  <li key={t.teamId}>
+                    <div className="font-semibold text-zinc-200">{t.teamName}</div>
+                    <div className="ml-4 text-zinc-400">
+                      {report.involvedTeams.length === 0
+                        ? // Legacy report: every registered member was tagged.
+                          named
+                            .map((d) =>
+                              `${d.registration.user.firstName ?? ""} ${d.registration.user.lastName ?? ""}`.trim()
+                            )
+                            .join(", ") || "—"
+                        : named.length > 0
+                          ? `Fahrer: ${named
+                              .map((d) =>
+                                `${d.registration.user.firstName ?? ""} ${d.registration.user.lastName ?? ""}`.trim()
+                              )
+                              .join(", ")}`
+                          : "Fahrer nicht angegeben"}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : accusedDrivers.length === 0 ? (
             <p className="text-sm text-zinc-500">Keine Fahrer markiert.</p>
           ) : teamMode ? (
             <ul className="space-y-2 text-sm">
@@ -481,16 +582,34 @@ export default async function AdminReportDetail({
             </div>
             <div>
               <span className="mb-1 block text-sm text-zinc-300">
-                {teamMode ? "Beschuldigte(s) Team(s)" : "Beschuldigte Fahrer"}
+                {teamMode ? "Beschuldigte(s) Team(s) / Auto(s)" : "Beschuldigte Fahrer"}
               </span>
-              <InvolvedDriversPicker
-                drivers={editDriverChoices}
-                excludeRegistrationId={report.reporterRegistrationId}
-                teamMode={teamMode}
-                initialSelectedRegistrationIds={accusedDrivers.map(
-                  (d) => d.registrationId
-                )}
-              />
+              {teamMode ? (
+                <>
+                  <input type="hidden" name="teamPickerOnForm" value="1" />
+                  <InvolvedTeamsPicker
+                    lang="de"
+                    cars={roundCars}
+                    initialSelected={accusedTeams.map((t) => ({
+                      teamId: t.teamId,
+                      // Only a single named driver can be pre-selected; a
+                      // legacy report that tagged the whole team names nobody.
+                      registrationId:
+                        report.involvedTeams.length > 0 && t.driverRegIds.length === 1
+                          ? t.driverRegIds[0]
+                          : null,
+                    }))}
+                  />
+                </>
+              ) : (
+                <InvolvedDriversPicker
+                  drivers={editDriverChoices}
+                  excludeRegistrationId={report.reporterRegistrationId}
+                  initialSelectedRegistrationIds={accusedDrivers.map(
+                    (d) => d.registrationId
+                  )}
+                />
+              )}
             </div>
             <label className="block">
               <span className="mb-1 block text-sm text-zinc-300">
@@ -594,6 +713,7 @@ export default async function AdminReportDetail({
           </label>
 
           <PenaltyRowsEditor
+            teamMode={teamMode}
             drivers={driverOptions}
             pointsTable={categoryPointsTable}
             initialRows={initialPenaltyRows}

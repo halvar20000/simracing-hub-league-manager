@@ -247,6 +247,7 @@ export default async function PublicRoundResults({
       },
       select: {
         registrationId: true,
+        teamId: true,
         pointsValue: true,
         forgivenPoints: true,
         autoForgivenPoints: true,
@@ -254,12 +255,15 @@ export default async function PublicRoundResults({
       },
     });
     for (const p of teamPens) {
-      // The car the driver actually took a stint in wins over the team on
-      // the registration (mixed crews) — same rule as standings.ts.
-      const drove = rawTeamResults.find((tr) =>
-        tr.participations.some((d) => d.registrationId === p.registrationId)
-      );
-      const teamId = drove?.teamId ?? p.registration.teamId;
+      // The team the steward issued it to wins, then the car the driver
+      // actually took a stint in, then the team on the registration — same
+      // rule as standings.ts.
+      const drove = p.teamId
+        ? rawTeamResults.find((tr) => tr.teamId === p.teamId)
+        : rawTeamResults.find((tr) =>
+            tr.participations.some((d) => d.registrationId === p.registrationId)
+          );
+      const teamId = p.teamId ?? drove?.teamId ?? p.registration.teamId;
       if (!teamId) continue;
       const effective = Math.max(
         0,
