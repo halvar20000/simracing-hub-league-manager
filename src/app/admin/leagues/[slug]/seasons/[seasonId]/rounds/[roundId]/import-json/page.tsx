@@ -17,6 +17,7 @@ interface Props {
     dq?: string;
     teams?: string;
     noTeam?: string;
+    mixedCrew?: string;
   }>;
 }
 
@@ -48,6 +49,7 @@ export default async function ImportIracingJsonPage({
     : [];
   const teams = sp.teams ? parseInt(sp.teams, 10) : 0;
   const noTeamList = sp.noTeam ? sp.noTeam.split("|") : [];
+  const mixedCrewList = sp.mixedCrew ? sp.mixedCrew.split("|") : [];
   const dqCount = sp.dqCount ? parseInt(sp.dqCount, 10) : 0;
   const dqList = sp.dq
     ? sp.dq.split("|").map((s) => {
@@ -108,8 +110,26 @@ export default async function ImportIracingJsonPage({
                 ))}
               </ul>
               <p className="mt-2 text-xs text-amber-300/80">
-                A team is matched by its iRacing team id, or by the season team
-                of the drivers who took a stint.
+                A car is matched by its iRacing team name, then by its iRacing
+                team id, then by the team most of its crew is registered with.
+              </p>
+            </div>
+          )}
+          {mixedCrewList.length > 0 && (
+            <div className="rounded border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-200">
+              <p className="font-medium">
+                {mixedCrewList.length} car{mixedCrewList.length === 1 ? "" : "s"}{" "}
+                raced with drivers registered for a different team — please
+                check the result landed on the right team:
+              </p>
+              <ul className="mt-2 list-disc pl-5 text-xs">
+                {mixedCrewList.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-300/80">
+                Steward penalties still hit the car the driver actually drove
+                in this round, whichever team they are registered with.
               </p>
             </div>
           )}

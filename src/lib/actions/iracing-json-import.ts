@@ -1,5 +1,6 @@
 "use server";
 
+import { normTeamName, pickClsTeam } from "@/lib/team-match";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { put, del } from "@vercel/blob";
@@ -101,7 +102,8 @@ function buildSummaryQuery(
   unmatched: UnmatchedDriver[],
   dq: DqDriver[],
   teams: number,
-  unmatchedTeams: string[]
+  unmatchedTeams: string[],
+  mixedCrews: string[] = []
 ): string {
   const params = new URLSearchParams({
     imported: String(imported),
@@ -115,6 +117,16 @@ function buildSummaryQuery(
     params.set(
       "noTeam",
       unmatchedTeams
+        .slice(0, 12)
+        .map((n) => n.replace(/[|~]/g, " "))
+        .join("|")
+    );
+  }
+  // Cars whose crew is registered across CLS teams (team events).
+  if (mixedCrews.length > 0) {
+    params.set(
+      "mixedCrew",
+      mixedCrews
         .slice(0, 12)
         .map((n) => n.replace(/[|~]/g, " "))
         .join("|")
@@ -395,57 +407,76 @@ export async function importIracingJson(
   // Without them a team round renders as a flat list of individual drivers
   // instead of per-class team tables, and team standings stay empty.
   //
-  // Team resolution order:
-  //   1. Team.iracingTeamId (set by a previous import),
-  //   2. the CLS team of the drivers who actually took a stint.
-  // On a (2) match the iRacing id is written back so later rounds resolve
-  // directly. Points stay 0 — the round page and standings.ts derive team
+  // Team resolution: see src/lib/team-match.ts (name → learned iRacing id →
+  // crew majority by laps; a team is never given to two cars of one race).
+  // On a name/crew match the iRacing id is written back so later rounds
+  // resolve directly. Points stay 0 — the round page and standings.ts derive team
   // race points from scoringSystem.pointsTable[classPosition], the same as
   // for the historic script-imported rounds.
   let teamsCreated = 0;
   const unmatchedTeams = new Set<string>();
+  // Cars whose crew is registered with more than one CLS team — the result is
+  // still stored on the matched team, but the admin should know.
+  const mixedCrews = new Set<string>();
+  const seasonTeams = await prisma.team.findMany({
+    where: { seasonId },
+    select: { id: true, name: true },
+  });
+  const teamIdByNormName = new Map(
+    seasonTeams.map((st) => [normTeamName(st.name), st.id])
+  );
+  const teamNameById = new Map(seasonTeams.map((st) => [st.id, st.name]));
   for (const session of raceSessions) {
     if (session.teams.length === 0) continue;
     const driverByCustId = new Map(session.drivers.map((d) => [d.custId, d]));
-    const doneKeys = new Set<string>();
+    const usedTeams = new Set<string>();
     for (const t of session.teams) {
       const regs = t.driverCustIds
         .map((c) => memberMap.get(c))
         .filter((r): r is NonNullable<typeof r> => !!r);
 
-      let clsTeamId: string | null = null;
       const byIracingId = await prisma.team.findFirst({
         where: { seasonId, iracingTeamId: t.iracingTeamId },
         select: { id: true },
       });
-      if (byIracingId) {
-        clsTeamId = byIracingId.id;
-      } else {
-        clsTeamId = regs.find((r) => r.teamId)?.teamId ?? null;
-        if (clsTeamId) {
-          // Remember the iRacing id — unless another team already claims it
-          // (Team.iracingTeamId is @unique across seasons).
-          const taken = await prisma.team.findUnique({
-            where: { iracingTeamId: t.iracingTeamId },
-            select: { id: true },
+      const match = pickClsTeam({
+        displayName: t.displayName,
+        teamIdByIracingId: byIracingId?.id ?? null,
+        teamIdByNormName,
+        crew: t.driverCustIds
+          .map((c) => ({ reg: memberMap.get(c), d: driverByCustId.get(c) }))
+          .filter((x) => !!x.reg)
+          .map((x) => ({ teamId: x.reg!.teamId, laps: x.d?.lapsComplete ?? 0 })),
+        used: usedTeams,
+      });
+      const clsTeamId: string | null = match?.teamId ?? null;
+      if (match && match.via !== "iracing-id") {
+        // Remember the iRacing id — unless another team already claims it
+        // (Team.iracingTeamId is @unique across seasons).
+        const taken = await prisma.team.findUnique({
+          where: { iracingTeamId: t.iracingTeamId },
+          select: { id: true },
+        });
+        if (!taken) {
+          await prisma.team.update({
+            where: { id: match.teamId },
+            data: { iracingTeamId: t.iracingTeamId },
           });
-          if (!taken) {
-            await prisma.team.update({
-              where: { id: clsTeamId },
-              data: { iracingTeamId: t.iracingTeamId },
-            });
-          }
         }
       }
       if (!clsTeamId) {
         unmatchedTeams.add(t.displayName || `#${t.iracingTeamId}`);
         continue;
       }
-      // TeamResult is unique on (roundId, teamId, raceNumber) — if two iRacing
-      // entries ever resolve to the same CLS team, keep the first.
-      const key = `${clsTeamId}::${session.raceNumber}`;
-      if (doneKeys.has(key)) continue;
-      doneKeys.add(key);
+      // TeamResult is unique on (roundId, teamId, raceNumber); pickClsTeam
+      // never hands out a team twice within one race.
+      usedTeams.add(clsTeamId);
+      const crewTeams = new Set(regs.map((r) => r.teamId).filter(Boolean));
+      if (crewTeams.size > 1 || (crewTeams.size === 1 && !crewTeams.has(clsTeamId))) {
+        mixedCrews.add(
+          `${t.displayName || `#${t.iracingTeamId}`} → ${teamNameById.get(clsTeamId) ?? "?"}`
+        );
+      }
 
       const teamDistancePct =
         session.maxLaps > 0
@@ -552,7 +583,8 @@ export async function importIracingJson(
       unmatched,
       dqDrivers,
       teamsCreated,
-      [...unmatchedTeams]
+      [...unmatchedTeams],
+      [...mixedCrews]
     )}`
   );
 }

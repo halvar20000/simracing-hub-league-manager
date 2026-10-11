@@ -1163,6 +1163,7 @@ export async function computeTeamClassStandings(
       team: { select: { id: true, name: true } },
       carClass: { select: { id: true, name: true, shortCode: true, displayOrder: true } },
       round: { select: { id: true, roundNumber: true, name: true } },
+      participations: { select: { registrationId: true } },
     },
   });
 
@@ -1189,14 +1190,29 @@ export async function computeTeamClassStandings(
       },
       select: {
         roundId: true,
+        registrationId: true,
         pointsValue: true,
         forgivenPoints: true,
         autoForgivenPoints: true,
         registration: { select: { teamId: true, carClassId: true } },
       },
     });
+    // The car each driver actually took a stint in, per round. A crew can mix
+    // drivers registered with different teams (IEC 3h Fuji: a Velociraptor
+    // driver in the Brachiosaurus car), and the penalty belongs to the car
+    // that committed the offence — not to the team on the registration.
+    const droveIn = new Map<string, { teamId: string; classId: string | null }>();
+    for (const r of results) {
+      for (const d of r.participations) {
+        droveIn.set(`${d.registrationId}::${r.round.id}`, {
+          teamId: r.team.id,
+          classId: r.carClass?.id ?? null,
+        });
+      }
+    }
     for (const p of pens) {
-      const teamId = p.registration.teamId;
+      const drove = droveIn.get(`${p.registrationId}::${p.roundId}`);
+      const teamId = drove?.teamId ?? p.registration.teamId;
       if (!teamId) continue;
       const effective = Math.max(
         0,
@@ -1205,7 +1221,7 @@ export async function computeTeamClassStandings(
           (p.autoForgivenPoints ?? 0)
       );
       if (effective <= 0) continue;
-      const classId = p.registration.carClassId;
+      const classId = drove ? drove.classId : p.registration.carClassId;
       if (classId) {
         const k = `${teamId}::${p.roundId}::${classId}`;
         penaltyByTeamRoundClass.set(

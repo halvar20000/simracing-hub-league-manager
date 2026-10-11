@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.38.1",
+    date: "2026-10-11",
+    changes: [
+      "IEC: a steward penalty now counts against the car the driver actually drove in that race, even when the driver is registered with a different team. Before, a penalty for a driver racing in another team's car was lost.",
+      "IEC result import: cars are now matched to teams by their iRacing team name first, then by the team most of the crew is registered with. Before, a car whose crew was registered across two teams could land on the wrong team and the other team's car could disappear from the results (3h Fuji, Jurassic Kart Racing — corrected).",
+      "The import summary now lists cars whose crew is registered with a different team, so they can be checked.",
+    ],
+  },
+  {
     version: "2.38.0",
     date: "2026-10-09",
     changes: [
