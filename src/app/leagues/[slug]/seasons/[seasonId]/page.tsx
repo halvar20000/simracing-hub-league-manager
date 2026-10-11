@@ -65,7 +65,14 @@ export default async function PublicSeasonDetail({
       },
       registrations: {
         where: { status: "APPROVED" },
-        include: { user: true, team: true, carClass: true, car: true },
+        include: {
+          user: true,
+          team: true,
+          carClass: true,
+          car: true,
+          // Team-mode: extra teams the driver is entered with (TeamMembership).
+          extraTeams: { include: { team: true, carClass: true } },
+        },
         orderBy: [{ createdAt: "asc" }],
       },
     },
@@ -112,25 +119,32 @@ export default async function PublicSeasonDetail({
       }
     >();
     const noTeam: RegWithRels[] = [];
+    const addTo = (
+      t: { id: string; name: string; leaderUserId: string | null; createdAt: Date },
+      r: RegWithRels
+    ) => {
+      let g = byTeam.get(t.id);
+      if (!g) {
+        g = {
+          team: { id: t.id, name: t.name, leaderUserId: t.leaderUserId },
+          createdAt: t.createdAt.getTime(),
+          drivers: [],
+        };
+        byTeam.set(t.id, g);
+      }
+      g.drivers.push(r);
+    };
     for (const r of confirmedRegs) {
       if (r.isTeamManager) continue;
       if (r.team) {
-        let g = byTeam.get(r.team.id);
-        if (!g) {
-          g = {
-            team: {
-              id: r.team.id,
-              name: r.team.name,
-              leaderUserId: r.team.leaderUserId,
-            },
-            createdAt: r.team.createdAt.getTime(),
-            drivers: [],
-          };
-          byTeam.set(r.team.id, g);
-        }
-        g.drivers.push(r);
+        addTo(r.team, r);
       } else {
         noTeam.push(r);
+      }
+      // A driver entered with further teams is listed under each of them,
+      // with his car class in that team.
+      for (const m of r.extraTeams) {
+        addTo(m.team, { ...r, carClass: m.carClass ?? r.carClass });
       }
     }
     const ordered = Array.from(byTeam.values()).sort(
@@ -139,10 +153,10 @@ export default async function PublicSeasonDetail({
     for (const g of ordered) teamRoster.push({ team: g.team, drivers: g.drivers });
     if (noTeam.length > 0) teamRoster.push({ team: null, drivers: noTeam });
   }
-  const teamRosterDriverCount = teamRoster.reduce(
-    (s, g) => s + g.drivers.length,
-    0
-  );
+  // Distinct drivers — a driver in two teams is listed twice but is one driver.
+  const teamRosterDriverCount = new Set(
+    teamRoster.flatMap((g) => g.drivers.map((d) => d.id))
+  ).size;
 
   const teamClasses = await computeTeamClassStandings(prisma, seasonId);
   const isTeamEventSeason = teamClasses.length > 0;

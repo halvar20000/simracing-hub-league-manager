@@ -1,3 +1,4 @@
+import { mergeExtraMembers } from "@/lib/team-members";
 import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -91,7 +92,7 @@ export default async function RosterPage({
   const showEligibleR1Column = season.league.slug === "cas-gt3-wct";
 
   if (season.teamRegistration) {
-    const teams = await prisma.team.findMany({
+    const rawTeams = await prisma.team.findMany({
       where: { seasonId },
       orderBy: { createdAt: "asc" },
       include: {
@@ -102,8 +103,22 @@ export default async function RosterPage({
           include: { user: true, carClass: true, car: true },
           orderBy: { createdAt: "asc" },
         },
+        extraMembers: {
+          where: { registration: { isTeamManager: false, status: { not: "WITHDRAWN" } } },
+          include: {
+            carClass: true,
+            registration: { include: { user: true, carClass: true, car: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
+    // Drivers entered with a team as an EXTRA team (home team elsewhere) are
+    // part of its roster too, with their class in THIS team.
+    const teams = rawTeams.map((t) => ({
+      ...t,
+      registrations: mergeExtraMembers(t.registrations, t.extraMembers),
+    }));
     const teamsWithRegs = teams.filter((t) => t.registrations.length > 0);
     // Non-driving team managers — separate list, no approval/fee/invitation
     // workflow applies to them. Source of truth is Team.managerUserId (one
@@ -281,6 +296,14 @@ export default async function RosterPage({
                               title="Team leader"
                             >
                               ★
+                            </span>
+                          )}
+                          {reg.isExtraMember && (
+                            <span
+                              className="ml-2 rounded bg-sky-950 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-sky-300"
+                              title="Also entered with another team this season"
+                            >
+                              Multi-team
                             </span>
                           )}
                           {reg.retiredAt && (

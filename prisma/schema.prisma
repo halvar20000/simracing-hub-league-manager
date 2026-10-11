@@ -309,6 +309,7 @@ model CarClass {
   registrations      Registration[]
   fprAwards          FPRAward[]
   teamResults        TeamResult[]
+  teamMemberships    TeamMembership[]
   iracingCarClassId  Int?
   iracingCarClassIds Int[]          @default([])
   isLocked           Boolean        @default(false)
@@ -329,6 +330,7 @@ model Team {
   fprAwards     FPRAward[]
   penalties     Penalty[]
   incidentReportsInvolved IncidentReportInvolvedTeam[]
+  extraMembers  TeamMembership[]
   iracingTeamId Int?           @unique
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @default(now()) @updatedAt
@@ -498,6 +500,29 @@ model Registration {
 
   @@unique([seasonId, userId])
   incidentTeamsNamedIn IncidentReportInvolvedTeam[] @relation("IncidentTeamDriver")
+  /// Team-mode seasons (IEC): ADDITIONAL teams this driver is entered with,
+  /// besides `teamId` (the home team). See TeamMembership.
+  extraTeams           TeamMembership[]
+}
+
+/// A driver entered with a SECOND (third, …) team in the same team-mode season
+/// (IEC). One Registration per driver and season stays the rule — it carries
+/// the home team (`Registration.teamId`), start number, status and iRating;
+/// each extra team is a row here, with the car class of THAT team, because a
+/// driver may be in an LMP2 and a GT3 team at once. Approval follows the
+/// registration (an approved driver is approved in every team he is in).
+/// Added 2026-10-11 at Thomas's request; read through src/lib/team-members.ts.
+model TeamMembership {
+  id             String       @id @default(cuid())
+  teamId         String
+  team           Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  registrationId String
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  carClassId     String?
+  carClass       CarClass?    @relation(fields: [carClassId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+
+  @@unique([teamId, registrationId])
 }
 
 model RaceResult {

@@ -14,6 +14,7 @@ import TeamManagerToggle from "@/components/TeamManagerToggle";
 import { teamSizeLimit, GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 import { registrationAsksIRating } from "@/lib/fun-league";
+import { teamMemberWhere } from "@/lib/team-members";
 import {
   getLeagueIratingCategory,
   iratingCategoryShortLabel,
@@ -305,7 +306,8 @@ export default async function RegisterPage({
     const teammateRegs = leaderTeamId
       ? await prisma.registration.findMany({
           where: {
-            teamId: leaderTeamId,
+            // Home and extra members (TeamMembership) alike.
+            ...teamMemberWhere(leaderTeamId),
             userId: { not: session.user.id },
             status: { notIn: ["WITHDRAWN", "REJECTED"] },
             isTeamManager: false,

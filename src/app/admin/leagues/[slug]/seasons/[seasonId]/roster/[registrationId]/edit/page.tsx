@@ -26,6 +26,7 @@ export default async function EditRegistrationPage({
       include: {
         user: true,
         season: { include: { league: true } },
+        extraTeams: { select: { teamId: true, carClassId: true } },
       },
     }),
     prisma.team.findMany({
@@ -157,6 +158,55 @@ export default async function EditRegistrationPage({
             })}
           </select>
         </label>
+
+        {registration.season.teamRegistration && (
+          <fieldset className="rounded border border-zinc-800 p-3">
+            <legend className="px-1 text-sm text-zinc-300">
+              Additional teams (driver races for several teams)
+            </legend>
+            <input type="hidden" name="extraTeamsOnForm" value="1" />
+            <p className="mb-2 text-xs text-zinc-500">
+              The Team above is the driver&apos;s home team. Tick every further
+              team he is entered with and pick his class in that team. His
+              approval, start number and iRating are shared.
+            </p>
+            <ul className="max-h-72 space-y-1 overflow-y-auto">
+              {teams
+                .filter((t) => t.id !== registration.teamId)
+                .map((t) => {
+                  const m = registration.extraTeams.find((x) => x.teamId === t.id);
+                  return (
+                    <li key={t.id} className="flex items-center gap-2 text-sm">
+                      <label className="flex flex-1 items-center gap-2">
+                        <input
+                          type="checkbox"
+                          name="extraTeamIds"
+                          value={t.id}
+                          defaultChecked={!!m}
+                          className="h-4 w-4 accent-orange-500"
+                        />
+                        <span className="text-zinc-200">{t.name}</span>
+                      </label>
+                      {registration.season.isMulticlass && (
+                        <select
+                          name={`extraTeamClass:${t.id}`}
+                          defaultValue={m?.carClassId ?? registration.carClassId ?? ""}
+                          className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                        >
+                          <option value="">— class —</option>
+                          {classes.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.shortCode}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </li>
+                  );
+                })}
+            </ul>
+          </fieldset>
+        )}
 
         {registration.season.isMulticlass && (
           <label className="block">

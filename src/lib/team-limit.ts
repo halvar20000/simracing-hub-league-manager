@@ -29,6 +29,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { teamMemberWhere } from "@/lib/team-members";
 
 /** Legacy slug shim — GT3 WCT seasons without an explicit cap default to 3. */
 export const GT3_WCT_TEAM_LIMIT = 3;
@@ -85,7 +86,8 @@ export async function countTeamMembers(
 ): Promise<number> {
   return prisma.registration.count({
     where: {
-      teamId,
+      // Home AND extra members (TeamMembership) both take a slot.
+      ...teamMemberWhere(teamId),
       status: { in: ["PENDING", "APPROVED"] },
       excludedAt: null,
       retiredAt: null,

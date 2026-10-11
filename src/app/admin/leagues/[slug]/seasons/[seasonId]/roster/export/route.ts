@@ -74,6 +74,7 @@ export async function GET(
     include: {
       user: true,
       team: true,
+      extraTeams: { select: { team: { select: { name: true } } } },
       carClass: true,
       car: true,
     },
@@ -122,7 +123,13 @@ export async function GET(
 
   for (const r of registrations) {
     const row: (string | number | null)[] = [];
-    if (season.teamRegistration) row.push(r.team?.name ?? "");
+    // Home team first, then any extra teams (TeamMembership).
+    if (season.teamRegistration)
+      row.push(
+        [r.team?.name, ...r.extraTeams.map((m) => m.team.name)]
+          .filter(Boolean)
+          .join(" + ")
+      );
     row.push(
       r.startNumber ?? "",
       r.user.firstName ?? "",

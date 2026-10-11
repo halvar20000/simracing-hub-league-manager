@@ -41,6 +41,7 @@ export async function GET(
     include: {
       user: true,
       team: true,
+      extraTeams: { select: { team: { select: { name: true } } } },
       carClass: true,
       car: true,
     },
@@ -73,6 +74,8 @@ export async function GET(
     countryCode: r.user.countryCode ?? null,
     iRating: r.iRating ?? null,
     team: r.team?.name ?? null,
+    // Further teams the driver is entered with (team-mode seasons).
+    extraTeams: r.extraTeams.map((m) => m.team.name),
     car: r.car?.name ?? null,
     // --- allocations ---
     carClass: r.carClass?.name ?? null,

@@ -14,6 +14,8 @@ import { sendResendEmail } from "@/lib/resend-email";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
 import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 import { registrationAsksIRating } from "@/lib/fun-league";
+import { enterAsExtraTeamIfElsewhere, leaveTeam } from "@/lib/team-membership-writes";
+import { teamMemberWhere } from "@/lib/team-members";
 import {
   teamSizeLimit,
   countTeamMembers,
@@ -884,7 +886,7 @@ export async function createTeamRegistration(
     const submittedIracingIds = new Set(teammates.map((t) => t.iracingId));
     const survivors = !existingTeam ? [] : await prisma.registration.findMany({
       where: {
-        teamId: existingTeam.id,
+        ...teamMemberWhere(existingTeam.id),
         status: { in: ["PENDING", "APPROVED"] },
         excludedAt: null,
         retiredAt: null,
@@ -986,7 +988,18 @@ export async function createTeamRegistration(
     !ownReg.isTeamManager &&
     ownReg.teamId === team.id;
 
-  if (!skipOwnRegistration) {
+  // A driver already racing for another team keeps that registration and is
+  // entered with this team as an EXTRA team (src/lib/team-membership-writes.ts).
+  const ownEnteredAsExtra =
+    !skipOwnRegistration &&
+    !isTeamManager &&
+    (await enterAsExtraTeamIfElsewhere(prisma, {
+      seasonId,
+      userId: leader!.id,
+      teamId: team.id,
+      carClassId,
+    }));
+  if (!skipOwnRegistration && !ownEnteredAsExtra) {
     await prisma.registration.upsert({
       where: { seasonId_userId: { seasonId, userId: leader!.id } },
       update: isTeamManager
@@ -1086,6 +1099,23 @@ export async function createTeamRegistration(
       });
     }
     if (mate.id === leader!.id) continue; // can't be teammate of self
+
+    // Already racing for another team this season → keep that and add this
+    // team as an extra one, instead of moving him (the pre-2026-10-11 bug).
+    if (
+      await enterAsExtraTeamIfElsewhere(prisma, {
+        seasonId,
+        userId: mate.id,
+        teamId: team.id,
+        carClassId,
+      })
+    ) {
+      teammateNames.push(`${mate.firstName ?? ""} ${mate.lastName ?? ""}`.trim());
+      if (isTeamManager && (chefRowIndex === tm.rowIndex || chefUser === null)) {
+        chefUser = mate;
+      }
+      continue;
+    }
 
     // A teammate already APPROVED on this very team keeps his approval and
     // start number when the lineup is re-submitted.
@@ -1211,9 +1241,20 @@ async function requireTeamLeader(teamId: string) {
     include: {
       season: { include: { league: true } },
       registrations: { include: { user: true }, orderBy: { createdAt: "asc" } },
+      extraMembers: {
+        include: { registration: { include: { user: true } } },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!team) throw new Error("Team not found");
+  // Drivers entered with this team as an EXTRA team (their home team is
+  // another one) belong to the roster too — with this team's car class.
+  // Every Manage Team action below works off team.registrations.
+  for (const m of team.extraMembers) {
+    if (team.registrations.some((r) => r.id === m.registration.id)) continue;
+    team.registrations.push({ ...m.registration, carClassId: m.carClassId });
+  }
   // The non-driving team manager has the same management rights as the
   // leader (Teamchef). Admins can manage every team.
   const owner = await resolveTeamOwnership(team);
@@ -1435,6 +1476,16 @@ export async function updateTeamRegistration(formData: FormData) {
         where: { id: existingReg.id },
         data: { iRating: tm.iRating },
       });
+    } else if (
+      // Already racing for another team → add this team as an extra one.
+      await enterAsExtraTeamIfElsewhere(prisma, {
+        seasonId: team.seasonId,
+        userId: mate.id,
+        teamId: team.id,
+        carClassId: baseReg?.carClassId ?? null,
+      })
+    ) {
+      // nothing else to write — his registration stays with his home team
     } else {
       // New (or previously withdrawn) — reset invitation flags
       await prisma.registration.upsert({
@@ -1468,13 +1519,11 @@ export async function updateTeamRegistration(formData: FormData) {
     seenUserIds.add(mate.id);
   }
 
-  // Withdraw any existing teammate not present in the form
+  // Take any existing teammate not present in the form out of THIS team. A
+  // driver who is in other teams too stays entered there (leaveTeam).
   for (const r of existingTeammates) {
     if (!seenUserIds.has(r.userId)) {
-      await prisma.registration.update({
-        where: { id: r.id },
-        data: { status: "WITHDRAWN" },
-      });
+      await leaveTeam(prisma, r.id, team.id);
     }
   }
 
@@ -1487,7 +1536,7 @@ export async function updateTeamRegistration(formData: FormData) {
   // Notify admins of the change
   const finalTeammates = await prisma.registration.findMany({
     where: {
-      teamId: team.id,
+      ...teamMemberWhere(team.id),
       userId: { not: team.leaderUserId ?? '' },
       status: { not: 'WITHDRAWN' },
       isTeamManager: false,
@@ -1538,10 +1587,12 @@ export async function withdrawTeam(formData: FormData) {
   if (!teamId) throw new Error("teamId required");
   const { team } = await requireTeamLeader(teamId);
 
-  await prisma.registration.updateMany({
-    where: { teamId },
-    data: { status: "WITHDRAWN" },
-  });
+  // Every driver leaves THIS team; one who is entered with other teams too
+  // stays entered there (leaveTeam promotes his next team to home team).
+  for (const r of team.registrations) {
+    if (r.status === "WITHDRAWN") continue;
+    await leaveTeam(prisma, r.id, team.id);
+  }
 
   const leaderReg = team.registrations.find((r) => r.userId === team.leaderUserId);
   await notifyTeamChange({
@@ -1610,17 +1661,16 @@ export async function transferTeamLeadership(formData: FormData) {
       data: { leaderUserId: newLeaderUserId },
     });
   } else {
-    // Leader hands over and leaves the team (historical behavior).
-    await prisma.$transaction([
-      prisma.team.update({
-        where: { id: teamId },
-        data: { leaderUserId: newLeaderUserId },
-      }),
-      prisma.registration.updateMany({
-        where: { teamId, userId: sessionUser.id },
-        data: { status: "WITHDRAWN" },
-      }),
-    ]);
+    // Leader hands over and leaves the team (historical behavior). A leader
+    // who races for other teams too stays entered there (leaveTeam).
+    await prisma.team.update({
+      where: { id: teamId },
+      data: { leaderUserId: newLeaderUserId },
+    });
+    const ownReg = team.registrations.find(
+      (r) => r.userId === sessionUser.id && r.status !== "WITHDRAWN"
+    );
+    if (ownReg) await leaveTeam(prisma, ownReg.id, teamId);
   }
 
   const oldLeaderReg = team.registrations.find(
@@ -1720,6 +1770,12 @@ export async function updateTeamClassCar(formData: FormData) {
       isTeamManager: false,
     },
     data: { carClassId, carId },
+  });
+  // Drivers in this team as an EXTRA team keep their own home-team class on
+  // the registration; their class for THIS team lives on the membership.
+  await prisma.teamMembership.updateMany({
+    where: { teamId: team.id },
+    data: { carClassId },
   });
 
   await notifyTeamChange({

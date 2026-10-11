@@ -82,18 +82,41 @@ export async function loadRoundCars(
             carClass: { select: { shortCode: true } },
           },
         },
+        // Drivers entered with this team as an extra team (TeamMembership).
+        extraMembers: {
+          where: { registration: { status: "APPROVED", isTeamManager: false } },
+          select: {
+            carClass: { select: { shortCode: true } },
+            registration: {
+              select: {
+                id: true,
+                startNumber: true,
+                user: { select: { firstName: true, lastName: true } },
+              },
+            },
+          },
+        },
       },
     });
     for (const t of teams) {
-      if (t.registrations.length === 0) continue;
+      if (t.registrations.length === 0 && t.extraMembers.length === 0) continue;
       byTeam.set(t.id, {
         teamId: t.id,
         teamName: t.name,
-        classLabel: t.registrations.find((r) => r.carClass)?.carClass?.shortCode ?? null,
-        crew: t.registrations.map((r) => ({
-          registrationId: r.id,
-          label: driverLabel(r),
-        })),
+        classLabel:
+          t.registrations.find((r) => r.carClass)?.carClass?.shortCode ??
+          t.extraMembers.find((m) => m.carClass)?.carClass?.shortCode ??
+          null,
+        crew: [
+          ...t.registrations.map((r) => ({
+            registrationId: r.id,
+            label: driverLabel(r),
+          })),
+          ...t.extraMembers.map((m) => ({
+            registrationId: m.registration.id,
+            label: driverLabel(m.registration),
+          })),
+        ],
       });
     }
   }

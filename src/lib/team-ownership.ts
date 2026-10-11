@@ -1,3 +1,4 @@
+import { teamMemberWhere } from "@/lib/team-members";
 import { prisma } from "@/lib/prisma";
 
 /** Just the two ownership columns of a Team row. */
@@ -77,7 +78,7 @@ export async function isActiveTeamMember(
 ): Promise<boolean> {
   const reg = await prisma.registration.findFirst({
     where: {
-      teamId,
+      ...teamMemberWhere(teamId),
       userId,
       status: { notIn: ["WITHDRAWN", "REJECTED"] },
     },

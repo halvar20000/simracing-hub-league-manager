@@ -231,10 +231,17 @@ export async function canSeeTeamStats(
   if (viewer.isAdmin) return true;
   const regs = await prisma.registration.findMany({
     where: { userId: viewer.userId, status: "APPROVED", teamId: { not: null } },
-    select: { team: { select: { name: true } } },
+    select: {
+      team: { select: { name: true } },
+      // Extra teams (TeamMembership) count too.
+      extraTeams: { select: { team: { select: { name: true } } } },
+    },
   });
+  const want = teamGroupSlug(group);
   return regs.some(
-    (r) => r.team?.name && teamGroupSlug(r.team.name) === teamGroupSlug(group)
+    (r) =>
+      (r.team?.name && teamGroupSlug(r.team.name) === want) ||
+      r.extraTeams.some((m) => teamGroupSlug(m.team.name) === want)
   );
 }
 

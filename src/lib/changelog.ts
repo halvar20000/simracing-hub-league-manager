@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.40.0",
+    date: "2026-10-11",
+    changes: [
+      "IEC: a driver can now be entered with several teams in the same season — also in different classes (e.g. an LMP2 and a GT3 team). Adding a driver who already races for another team no longer moves him out of that team; he is simply added to the new one. Rosters, Manage Team and the team pages list him under every team he is in.",
+      "IEC teams may now have up to 6 drivers.",
+      "Admins can manage a driver's additional teams on the roster edit page.",
+    ],
+  },
+  {
     version: "2.39.0",
     date: "2026-10-11",
     changes: [

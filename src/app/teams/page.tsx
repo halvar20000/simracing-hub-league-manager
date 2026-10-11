@@ -18,7 +18,19 @@ export const metadata: Metadata = pageMetadata({
 export default async function TeamsPage() {
   // All teams across every non-archived league's seasons (any status, incl.
   // completed). Only approved, driving registrations count as "drivers".
-  const teams = await prisma.team.findMany({
+  const regSelect = {
+    startNumber: true,
+    user: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        countryCode: true,
+        iracingMemberId: true,
+      },
+    },
+  } as const;
+  const rawTeams = await prisma.team.findMany({
     where: { season: { league: { isArchived: false } } },
     select: {
       name: true,
@@ -32,21 +44,19 @@ export default async function TeamsPage() {
       },
       registrations: {
         where: { status: "APPROVED", isTeamManager: false },
-        select: {
-          startNumber: true,
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              countryCode: true,
-              iracingMemberId: true,
-            },
-          },
-        },
+        select: regSelect,
+      },
+      // Drivers entered with this team as an extra team (TeamMembership).
+      extraMembers: {
+        where: { registration: { status: "APPROVED", isTeamManager: false } },
+        select: { registration: { select: regSelect } },
       },
     },
   });
+  const teams = rawTeams.map(({ extraMembers, ...t }) => ({
+    ...t,
+    registrations: [...t.registrations, ...extraMembers.map((m) => m.registration)],
+  }));
 
   const groups = groupTeamsAcrossSeasons(teams as AggTeamInput[]).filter(
     (g) => g.driverCount > 0

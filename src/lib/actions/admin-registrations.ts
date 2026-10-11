@@ -1,5 +1,6 @@
 "use server";
 
+import { leaveTeam } from "@/lib/team-membership-writes";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -274,6 +275,64 @@ export async function updateRegistration(
           )}`
         );
       }
+    }
+  }
+
+  // Team-mode seasons: sync the driver's ADDITIONAL teams (TeamMembership).
+  // Only when the edit form carried the section, so other callers never wipe
+  // them. New extra teams obey the per-team cap like the home team does.
+  if (formData.get("extraTeamsOnForm") === "1") {
+    const wanted = [
+      ...new Set(
+        formData
+          .getAll("extraTeamIds")
+          .map((v) => String(v).trim())
+          .filter((id) => id && id !== teamId)
+      ),
+    ];
+    const valid = await prisma.team.findMany({
+      where: { id: { in: wanted }, seasonId },
+      select: { id: true, name: true },
+    });
+    const current = await prisma.teamMembership.findMany({
+      where: { registrationId },
+      select: { teamId: true },
+    });
+    const season = await prisma.season.findUnique({
+      where: { id: seasonId },
+      select: { teamMaxDrivers: true },
+    });
+    const limit = teamSizeLimit({
+      leagueSlug,
+      teamMaxDrivers: season?.teamMaxDrivers ?? null,
+    });
+    const reg = await prisma.registration.findUnique({
+      where: { id: registrationId },
+      select: { userId: true },
+    });
+    for (const t of valid) {
+      const isNew = !current.some((c) => c.teamId === t.id);
+      if (isNew && limit != null) {
+        const occupied = await countTeamMembers(t.id, reg?.userId);
+        if (occupied >= limit) {
+          redirect(
+            `/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster/${registrationId}/edit?error=${encodeURIComponent(
+              `"${t.name}" already has the maximum of ${limit} drivers.`
+            )}`
+          );
+        }
+      }
+    }
+    await prisma.teamMembership.deleteMany({
+      where: { registrationId, teamId: { notIn: valid.map((t) => t.id) } },
+    });
+    for (const t of valid) {
+      const cls = String(formData.get(`extraTeamClass:${t.id}`) ?? "").trim() || null;
+      await prisma.teamMembership.upsert({
+        where: { teamId_registrationId: { teamId: t.id, registrationId } },
+        update: { carClassId: cls },
+        create: { teamId: t.id, registrationId, carClassId: cls },
+      });
     }
   }
 
@@ -609,6 +668,18 @@ export async function rejectTeamRegistrations(formData: FormData) {
   });
   if (!team) throw new Error("Team not found");
 
+  // Rejecting the TEAM entry: extra members just lose this team; a home
+  // member who is entered with other teams too has his next team promoted to
+  // home team instead of losing every team. Only drivers with no other team
+  // are rejected outright.
+  await prisma.teamMembership.deleteMany({ where: { teamId } });
+  const home = await prisma.registration.findMany({
+    where: { teamId, status: { in: ["PENDING", "APPROVED"] } },
+    select: { id: true, _count: { select: { extraTeams: true } } },
+  });
+  for (const r of home) {
+    if (r._count.extraTeams > 0) await leaveTeam(prisma, r.id, teamId);
+  }
   await prisma.registration.updateMany({
     where: { teamId, status: { in: ["PENDING", "APPROVED"] } },
     data: { status: "REJECTED", approvedAt: null, approvedById: null },

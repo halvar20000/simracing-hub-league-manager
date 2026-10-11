@@ -33,7 +33,15 @@ export function accusedByUserWhere(
       { involvedDrivers: { some: { role: "ACCUSED", registration: { userId } } } },
       {
         involvedTeams: {
-          some: { role: "ACCUSED", team: { registrations: { some: { userId } } } },
+          some: {
+            role: "ACCUSED",
+            team: {
+              OR: [
+                { registrations: { some: { userId } } },
+                { extraMembers: { some: { registration: { userId } } } },
+              ],
+            },
+          },
         },
       },
     ],
@@ -47,14 +55,21 @@ type InvolvedLike = {
 
 type InvolvedTeamLike = {
   role: string;
-  team: { registrations: { userId: string }[] };
+  team: {
+    registrations: { userId: string }[];
+    extraMembers?: { registration: { userId: string } }[];
+  };
 };
 
 /** Include fragment that loads exactly what isAccusedIn needs for teams. */
 export const involvedTeamsForVisibility = {
   include: {
     team: {
-      select: { name: true, registrations: { select: { userId: true } } },
+      select: {
+        name: true,
+        registrations: { select: { userId: true } },
+        extraMembers: { select: { registration: { select: { userId: true } } } },
+      },
     },
   },
 } as const;
@@ -76,7 +91,8 @@ export function isAccusedIn(
     involvedTeams.some(
       (t) =>
         t.role === "ACCUSED" &&
-        t.team.registrations.some((r) => r.userId === userId)
+        (t.team.registrations.some((r) => r.userId === userId) ||
+          (t.team.extraMembers ?? []).some((m) => m.registration.userId === userId))
     )
   );
 }

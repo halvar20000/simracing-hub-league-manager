@@ -1,6 +1,7 @@
 "use server";
 
 import { normTeamName, pickClsTeam } from "@/lib/team-match";
+import { teamIdsOf, isInTeam, classInTeam } from "@/lib/team-members";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { put, del } from "@vercel/blob";
@@ -213,6 +214,7 @@ export async function importIracingJson(
     include: {
       user: true,
       car: { select: { id: true, name: true, iracingCarId: true } },
+      extraTeams: { select: { teamId: true, carClassId: true } },
     },
   });
   const memberMap = new Map<
@@ -225,6 +227,8 @@ export async function importIracingJson(
       currentStartNumber: string | null;
       /** CLS team this driver is registered with (team events). */
       teamId: string | null;
+      /** Extra teams (TeamMembership) with the driver's class in each. */
+      extraTeams: { teamId: string; carClassId: string | null }[];
       /** CLS car class from the registration — the reliable class source for
        *  team results (iRacing's class short names don't match our codes). */
       carClassId: string | null;
@@ -247,6 +251,7 @@ export async function importIracingJson(
       currentCarId: reg.carId,
       currentStartNumber: reg.startNumber,
       teamId: reg.teamId,
+      extraTeams: reg.extraTeams,
       carClassId: reg.carClassId,
       registeredCarId: reg.carId,
       registeredCarName: reg.car?.name ?? null,
@@ -446,7 +451,13 @@ export async function importIracingJson(
         crew: t.driverCustIds
           .map((c) => ({ reg: memberMap.get(c), d: driverByCustId.get(c) }))
           .filter((x) => !!x.reg)
-          .map((x) => ({ teamId: x.reg!.teamId, laps: x.d?.lapsComplete ?? 0 })),
+          // A driver in several teams votes for each of them.
+          .flatMap((x) =>
+            teamIdsOf(x.reg!).map((teamId) => ({
+              teamId,
+              laps: x.d?.lapsComplete ?? 0,
+            }))
+          ),
         used: usedTeams,
       });
       const clsTeamId: string | null = match?.teamId ?? null;
@@ -471,8 +482,9 @@ export async function importIracingJson(
       // TeamResult is unique on (roundId, teamId, raceNumber); pickClsTeam
       // never hands out a team twice within one race.
       usedTeams.add(clsTeamId);
-      const crewTeams = new Set(regs.map((r) => r.teamId).filter(Boolean));
-      if (crewTeams.size > 1 || (crewTeams.size === 1 && !crewTeams.has(clsTeamId))) {
+      // Warn when someone in the crew is not entered with this team at all
+      // (neither home nor extra team).
+      if (regs.some((r) => !isInTeam(r, clsTeamId))) {
         mixedCrews.add(
           `${t.displayName || `#${t.iracingTeamId}`} → ${teamNameById.get(clsTeamId) ?? "?"}`
         );
@@ -485,7 +497,15 @@ export async function importIracingJson(
       // Class comes from the drivers' registrations: iRacing's class short
       // names ("GT3 2025", "Dallara P217", "Porsche 992.2") do not match the
       // CLS shortCodes (GT3, LMP2, PCUP).
-      const teamCarClassId = regs.find((r) => r.carClassId)?.carClassId ?? null;
+      // A driver's class FOR THIS TEAM (extra teams carry their own class);
+      // crew members actually entered with the team win over guests.
+      const teamCarClassId =
+        regs
+          .filter((r) => isInTeam(r, clsTeamId))
+          .map((r) => classInTeam(r, clsTeamId))
+          .find((c) => c != null) ??
+        regs.find((r) => r.carClassId)?.carClassId ??
+        null;
       const teamCarId = await resolveCarId(
         seasonId,
         t.carIracingId ?? 0,

@@ -1,3 +1,4 @@
+import { mergeExtraMembers } from "@/lib/team-members";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -56,7 +57,7 @@ export default async function ManageTeamPage({
     />
   ) : null;
 
-  const team = await prisma.team.findUnique({
+  const rawTeam = await prisma.team.findUnique({
     where: { id: teamId },
     include: {
       season: {
@@ -69,9 +70,23 @@ export default async function ManageTeamPage({
         include: { user: true, carClass: true, car: true },
         orderBy: { createdAt: "asc" },
       },
+      extraMembers: {
+        include: {
+          carClass: true,
+          registration: { include: { user: true, carClass: true, car: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
-  if (!team) notFound();
+  if (!rawTeam) notFound();
+  // Drivers entered with this team as an extra team belong on the form too —
+  // otherwise saving the lineup would drop them (the action works off the
+  // same merged roster, see requireTeamLeader).
+  const team = {
+    ...rawTeam,
+    registrations: mergeExtraMembers(rawTeam.registrations, rawTeam.extraMembers),
+  };
 
   // A leader/manager id whose User was deleted or merged away leaves the team
   // ownerless — any active roster member may then manage it (the action heals

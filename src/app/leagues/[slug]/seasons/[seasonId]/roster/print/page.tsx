@@ -29,6 +29,8 @@ export default async function PublicPrintRosterPage({
       team: true,
       carClass: true,
       car: true,
+      // Extra teams (team-mode seasons): the driver is listed under those too.
+      extraTeams: { include: { team: true, carClass: true } },
     },
     orderBy: [
       { team: { name: "asc" } },
@@ -62,8 +64,14 @@ export default async function PublicPrintRosterPage({
       const key = r.team?.name ?? "(no team)";
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(r);
+      for (const m of r.extraTeams) {
+        if (!buckets.has(m.team.name)) buckets.set(m.team.name, []);
+        buckets.get(m.team.name)!.push({ ...r, carClass: m.carClass ?? r.carClass });
+      }
     }
     for (const [teamName, regs] of buckets) grouped.push({ teamName, regs });
+    // Extra-team buckets are created out of order — keep teams A→Z.
+    grouped.sort((a, b) => (a.teamName ?? "").localeCompare(b.teamName ?? ""));
   }
 
   return (
