@@ -538,7 +538,7 @@ export default async function AdminRoundResults({
         <span className="text-zinc-500">View:</span>
         <Link
           href={baseHref}
-          className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+          className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
         >
           Combined
         </Link>
@@ -546,13 +546,13 @@ export default async function AdminRoundResults({
           <>
             <Link
               href={`${baseHref}?cls=pro`}
-              className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+              className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
             >
               Pro
             </Link>
             <Link
               href={`${baseHref}?cls=am`}
-              className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+              className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
             >
               Am
             </Link>
@@ -560,7 +560,7 @@ export default async function AdminRoundResults({
         )}
         <Link
           href={`${baseHref}?cls=team`}
-          className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+          className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
         >
           Team
         </Link>

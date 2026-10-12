@@ -325,13 +325,13 @@ export default async function StandingsPage({
         <div className="mt-4 inline-flex rounded border border-zinc-800 bg-zinc-900 p-1 text-xs">
           <Link
             href={teamClsQuery ? `${baseHref}?${teamClsQuery}` : baseHref}
-            className={`rounded px-3 py-1.5 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+            className={`rounded px-3 py-1.5 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
           >
             List view
           </Link>
           <Link
             href={`${baseHref}?view=races${teamClsQuery ? `&${teamClsQuery}` : ""}`}
-            className={`rounded px-3 py-1.5 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+            className={`rounded px-3 py-1.5 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
           >
             Race by race
           </Link>
@@ -347,7 +347,7 @@ export default async function StandingsPage({
                 <Link
                   key={g.carClassId}
                   href={`${baseHref}?cls=${encodeURIComponent(g.carClassShortCode)}${viewSuffix}`}
-                  className={`rounded px-3 py-1.5 ${selectedTeamClass?.carClassId === g.carClassId ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+                  className={`rounded px-3 py-1.5 ${selectedTeamClass?.carClassId === g.carClassId ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
                 >
                   {g.carClassName}
                 </Link>
@@ -355,29 +355,29 @@ export default async function StandingsPage({
             </>
           )}
           {!isTeamEventSeason && (<>
-          <Link href={`${baseHref}${viewQuery}`} className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Combined</Link>
+          <Link href={`${baseHref}${viewQuery}`} className={`rounded px-3 py-1.5 ${cls === "combined" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}>Combined</Link>
           {season.proAmEnabled && (<>
-            <Link href={`${baseHref}?cls=pro${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Pro</Link>
-            <Link href={`${baseHref}?cls=am${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Am</Link>
+            <Link href={`${baseHref}?cls=pro${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "pro" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}>Pro</Link>
+            <Link href={`${baseHref}?cls=am${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "am" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}>Am</Link>
           </>)}
           {season.gdcEnabled && (
-            <Link href={`${baseHref}?cls=gdc${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "gdc" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>GDC</Link>
+            <Link href={`${baseHref}?cls=gdc${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "gdc" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}>GDC</Link>
           )}
           {perCarTabs &&
             season.cars.map((c) => (
               <Link
                 key={c.id}
                 href={`${baseHref}?cls=car&car=${c.id}`}
-                className={`rounded px-3 py-1.5 ${cls === "car" && selectedCarId === c.id ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+                className={`rounded px-3 py-1.5 ${cls === "car" && selectedCarId === c.id ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
               >
                 {c.name}
               </Link>
             ))}
           {showTeams && (
-            <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>Team</Link>
+            <Link href={`${baseHref}?cls=team${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "team" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}>Team</Link>
           )}
           {!perCarTabs && (
-            <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}>By Car</Link>
+            <Link href={`${baseHref}?cls=car${viewSuffix}`} className={`rounded px-3 py-1.5 ${cls === "car" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}>By Car</Link>
           )}
           </>)}
         </div>
@@ -559,7 +559,7 @@ export default async function StandingsPage({
                       : baseHref
                     : `${baseHref}?cls=team`
                 }
-                className={`rounded px-2.5 py-1 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+                className={`rounded px-2.5 py-1 ${view === "list" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
               >
                 List
               </Link>
@@ -569,7 +569,7 @@ export default async function StandingsPage({
                     ? `${baseHref}?view=races${teamClsQuery ? `&${teamClsQuery}` : ""}`
                     : `${baseHref}?view=races&cls=team`
                 }
-                className={`rounded px-2.5 py-1 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "text-zinc-300 hover:text-zinc-100"}`}
+                className={`rounded px-2.5 py-1 ${view === "races" ? "bg-[#ff6b35] text-zinc-950" : "tab-off"}`}
               >
                 Race by race
               </Link>

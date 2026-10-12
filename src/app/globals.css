@@ -137,3 +137,21 @@ body {
 .scrollbar-visible::-webkit-scrollbar-thumb:hover {
   background: #71717a; /* zinc-500 */
 }
+
+/* Inactive tab / toggle button — the unselected half of every "active =
+   orange" tab or pill bar (stint planner tabs, round / standings / calendar /
+   streams pills). Used to be plain grey text on the page background, which
+   users did not recognise as clickable (Johann Solowej, Oct 2026). Blue tint
+   + outline marks it as a button. In the components layer so an explicit
+   utility on the same element (e.g. the red Race Center pill) still wins. */
+@layer components {
+  .tab-off {
+    background-color: rgb(8 47 73 / 0.55);
+    color: #bae6fd;
+    box-shadow: inset 0 0 0 1px rgb(7 89 133 / 0.75);
+  }
+  .tab-off:hover {
+    background-color: rgb(12 74 110 / 0.75);
+    color: #ffffff;
+  }
+}

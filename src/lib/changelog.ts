@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.41.0",
+    date: "2026-10-12",
+    changes: [
+      "Tabs and toggle buttons that are not selected are now shown as blue buttons instead of plain grey text — easier to spot (stint planner, round results, standings, calendar, streams).",
+      "Stint planner, Preparation tab: new order that follows the work — Garage 61 lap times first, then the drivers, then fuel, rain, pace corrections and fuel saving, and finally availability with the stint length right above the schedule.",
+      "Stint planner: the stint-length setting (fixed time, fixed laps or fuel) moved into the Availability & stint preferences card.",
+      "Stint planner: new Rain card with a \"Rain expected\" switch. Unticked, all rain inputs are hidden (rain profile, wet penalties, the drivers' wet columns and rain preference, \"rain from\" in the schedule). Hiding never changes the plan.",
+    ],
+  },
+  {
     version: "2.40.0",
     date: "2026-10-11",
     changes: [

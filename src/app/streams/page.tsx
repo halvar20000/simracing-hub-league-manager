@@ -16,7 +16,7 @@ export const metadata: Metadata = pageMetadata({
 const pillBase =
   "rounded-full px-3 py-1 text-sm transition-colors whitespace-nowrap";
 const pillOn = "bg-[#ff6b35] text-zinc-950 font-medium";
-const pillOff = "border border-zinc-700 text-zinc-300 hover:bg-zinc-900";
+const pillOff = "tab-off";
 
 export default async function StreamsPage({
   searchParams,

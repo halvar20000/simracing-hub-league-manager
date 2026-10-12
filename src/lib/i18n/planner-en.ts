@@ -658,6 +658,15 @@ export const en = {
       "Drivers come from CLS — anyone with a registration. Tyre wear is not something Garage 61 measures (it records the compound, never the wear), and neither is a fuel-save delta, so those columns are always yours to judge.",
   },
   // ---- Availability & stint preferences ---------------------------------
+  rainCard: {
+    title: "Rain",
+    expected: "Rain expected",
+    expectedHint:
+      "Tick it when rain is on the cards. Unticked, every rain input is hidden — the rain profile, the wet penalties, the drivers' wet columns and rain preference, and the schedule's \"rain from\" control. Hiding never changes the plan.",
+    hiddenNote:
+      "This plan still carries rain figures — they are hidden, not deleted, and they still count where a stint is marked wet.",
+    stintLengthTitle: "Stint length",
+  },
   avail: {
     title: "Availability & stint preferences",
     lead1:

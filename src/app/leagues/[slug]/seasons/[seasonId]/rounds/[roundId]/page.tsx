@@ -781,7 +781,7 @@ export default async function PublicRoundResults({
 
   const pillBase = "rounded px-3 py-1.5 transition-colors";
   const pillOn = "bg-[#ff6b35] text-zinc-950";
-  const pillOff = "text-zinc-300 hover:text-zinc-100";
+  const pillOff = "tab-off";
 
   return (
     <div className="space-y-6">

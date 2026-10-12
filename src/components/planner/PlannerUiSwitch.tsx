@@ -14,7 +14,7 @@ import { LANG_LABEL, type Lang } from "@/lib/i18n/planner";
 import type { PlannerMode } from "./PlannerUi";
 
 const on = "bg-[#ff6b35] text-zinc-950";
-const off = "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200";
+const off = "tab-off";
 
 export default function PlannerUiSwitch() {
   const { lang, setLang, mode, setMode, t } = usePlannerUi();

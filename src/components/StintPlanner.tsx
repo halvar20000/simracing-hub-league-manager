@@ -56,6 +56,7 @@ import {
   type PlannerState,
   type RaceLogDriverRow,
   MAX_IMPRESSIONS,
+  hasRainData,
 } from "@/lib/stint-plan-state";
 import type { ClsDriverOption } from "@/lib/cls-drivers";
 import type { ClsCarOption } from "@/lib/cls-tracks-cars";
@@ -2443,6 +2444,13 @@ export default function StintPlanner({
   const tabBox = (key: PlanTab) =>
     `space-y-6 ${tab === key ? "" : "hidden print:block"}`;
 
+  // Rain inputs are shown only when rain is expected (Johann Solowej, Oct
+  // 2026). Undefined = follow the data, so an existing wet plan keeps its
+  // rain section. View only — see PlannerState.rainExpected.
+  const rainData = hasRainData(s);
+  const rainOn = s.rainExpected ?? rainData;
+  const anyWetStint = s.assignments.some((a) => conditionOf(a) !== "dry");
+
   /**
    * Which setup tab a card lives on. The checklist jumps between them, and a
    * card on a hidden tab cannot be scrolled to — so switch first, then scroll
@@ -2457,6 +2465,8 @@ export default function StintPlanner({
       "card-paceadj": "prep",
       "card-fuelsave": "prep",
       "card-g61": "prep",
+      "card-rain": "prep",
+      "card-stintlen": "prep",
     };
     const target = CARD_TAB[anchor];
     if (target && target !== tab) setTab(target);
@@ -2595,6 +2605,7 @@ export default function StintPlanner({
             >
               {showSpotter ? t.sched.hideSpotter : t.sched.showSpotter}
             </button>
+            {(rainOn || anyWetStint) && (
             <div className="flex items-center gap-1 rounded border border-sky-900/50 bg-sky-950/20 px-2 py-1 text-xs text-sky-200">
               <span title={t.sched.rainFromHint}>{t.sched.rainFrom}</span>
               <input
@@ -2633,6 +2644,7 @@ export default function StintPlanner({
                 {t.sched.allDry}
               </button>
             </div>
+            )}
             <div className="flex items-center gap-1 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1 text-xs text-amber-200">
               <span title={t.sched.tempRampHint}>{t.sched.tempRamp}</span>
               <input
@@ -3385,9 +3397,7 @@ export default function StintPlanner({
             className={`flex-1 rounded px-2 py-2 text-sm font-semibold transition ${
               tab === x.key
                 ? "bg-[#ff6b35] text-zinc-950"
-                : x.phase === "pre"
-                  ? "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
-                  : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
+                : "tab-off"
             }`}
           >
             {t.tabs[x.labelKey]}
@@ -3441,7 +3451,7 @@ export default function StintPlanner({
                   className={`rounded px-2.5 py-1 text-xs font-semibold ${
                     s.event.raceKind === kind
                       ? "bg-[#ff6b35] text-zinc-950"
-                      : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                      : "tab-off"
                   }`}
                   title={hint}
                 >
@@ -4248,553 +4258,10 @@ export default function StintPlanner({
       <div className={tabBox("prep")}>
       <fieldset disabled={frozen} className="contents">
       {summaryStrip}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Fuel profiles */}
-        <div className={card} id="card-fuel">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-              {t.fuel.title}
-              <GuideLink section="pace" />
-            </h2>
-            {deltaSaving && (
-              <button
-                onClick={() => setShowFuelProfiles((v) => !v)}
-                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-800 print:hidden"
-              >
-                {showFuelProfiles ? t.fuel.hideFallback : t.fuel.editFallback}
-              </button>
-            )}
-          </div>
-
-          {/* How long a stint is, and how far the tyres may go — moved up from
-              the Event card on Johann Solowej's layout (Sept 2026). They
-              qualify the profiles directly below them; Event answers what the
-              race is. */}
-          <div className="mb-3 grid grid-cols-2 gap-3">
-            <Field label={t.ev.stintLength} hint={t.ev.stintLengthHint}>
-              <select className={inp} value={s.event.stintMode}
-                onChange={(e) => patchEvent("stintMode", e.target.value)}>
-                <option value="fuel">{t.ev.stintFuel}</option>
-                <option value="time">{t.ev.stintTime}</option>
-                <option value="laps">{t.ev.stintLaps}</option>
-              </select>
-            </Field>
-            {s.event.stintMode !== "fuel" && (
-              <Field
-                label={s.event.stintMode === "time" ? t.ev.stintMinutes : t.ev.stintLapsField}
-                hint={t.ev.stintValueHint}
-              >
-                <input className={inp} value={s.event.stintValue}
-                  onChange={(e) => patchEvent("stintValue", e.target.value)}
-                  placeholder={s.event.stintMode === "time" ? "45" : "20"} />
-              </Field>
-            )}
-            <Field label={t.ev.tyreMin} hint={t.ev.tyreMinHint}>
-              <input className={inp} value={s.event.tyreMinPct}
-                onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
-                placeholder="50" />
-            </Field>
-          </div>
-
-          {profilesOpen ? (
-            <ProfileRow
-              title={deltaSaving ? t.fuel.standardFallback : t.fuel.standard}
-              laptime={s.standard.laptime}
-              fuelPerLap={s.standard.fuelPerLap}
-              onLaptime={(v) => patchStd("laptime", v)}
-              onFuel={(v) => patchStd("fuelPerLap", v)}
-              laps={std.laps}
-              green={std.greenTimeSec}
-              total={std.totalTimeSec}
-              fuel={std.fuelPerStint}
-            />
-          ) : (
-            <p className="rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-xs leading-snug text-zinc-500">
-              {t.fuel.fallbackPre}{" "}
-              <strong className="text-zinc-300">
-                {s.standard.laptime || "—"}
-              </strong>{" "}
-              /{" "}
-              <strong className="text-zinc-300">
-                {s.standard.fuelPerLap || "—"} L
-              </strong>
-              {s.savingEnabled && (
-                <>
-                  {t.fuel.fallbackSavingPre}{" "}
-                  <strong className="text-cyan-300">
-                    +{planDelta.sec.toFixed(1)} s / &minus;{planDelta.litres.toFixed(2)} L
-                  </strong>
-                </>
-              )}
-              .
-            </p>
-          )}
-
-          {/* How a stint gets its pace and fuel. The old model let the profile
-              decide for everyone, which meant a driver's own averages either
-              replaced it wholesale (standard stints) or were quietly ignored
-              (fuel-save stints). The delta model below fixes both.
-
-              Advanced-only: it is a choice a plan makes once, and the wrong
-              answer is not recoverable by guessing. It keeps computing either
-              way — Easy hides the switch, never the effect. */}
-          <AdvancedOnly>
-          <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/50 p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-              {t.fuel.whereNumbers}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  ["delta", t.fuel.modeDelta],
-                  ["absolute", t.fuel.modeAbsolute],
-                ] as const
-              ).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  onClick={() => setS((p) => ({ ...p, savingMode: mode }))}
-                  className={`rounded px-2.5 py-1 text-xs font-semibold ${
-                    (s.savingMode ?? "absolute") === mode
-                      ? "bg-[#ff6b35] text-zinc-950"
-                      : "border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-zinc-500">
-              {deltaSaving ? (
-                <>
-                  {t.fuel.deltaExplainPre}{" "}
-                  <strong className="text-zinc-300">{t.fuel.deltaExplainBold}</strong>{" "}
-                  {t.fuel.deltaExplainPost}
-                </>
-              ) : (
-                t.fuel.absoluteExplain
-              )}
-            </p>
-          </div>
-          </AdvancedOnly>
-
-          {/* Fuel saving is an Advanced decision: a second pace/fuel profile
-              only pays off once you are weighing a lap time against a pit
-              stop, which is the Fuel-save card further down — also Advanced.
-              The switch and the profile it opens travel together, so Easy
-              mode does not show a "Fuel saving" row with nothing explaining
-              it. A plan that already has it on keeps computing with it. */}
-          <AdvancedOnly>
-          <CheckField
-            className="mt-3"
-            checked={s.savingEnabled}
-            onChange={(v) => setS((p) => ({ ...p, savingEnabled: v }))}
-            label={t.fuel.enableSaving}
-            hint={t.fuel.enableSavingHint}
-          />
-          {s.savingEnabled && sav && profilesOpen && (
-            <div className="mt-2">
-              <ProfileRow
-                title={deltaSaving ? t.fuel.savingFallback : t.fuel.savingProfile}
-                laptime={s.saving.laptime}
-                fuelPerLap={s.saving.fuelPerLap}
-                onLaptime={(v) => patchSav("laptime", v)}
-                onFuel={(v) => patchSav("fuelPerLap", v)}
-                laps={sav.laps}
-                green={sav.greenTimeSec}
-                total={sav.totalTimeSec}
-                fuel={sav.fuelPerStint}
-              />
-              {deltaSaving && (
-                <p className="mt-2 text-xs text-zinc-500">
-                  {t.fuel.againstStandardPre}{" "}
-                  <strong className="text-cyan-300">
-                    +{planDelta.sec.toFixed(1)} s/{t.units.lap} / &minus;
-                    {planDelta.litres.toFixed(2)} L/{t.units.lap}
-                  </strong>{" "}
-                  {t.fuel.againstStandardMid}{" "}
-                  <span className="text-zinc-400">{t.fuel.fsShort}</span>
-                  {t.fuel.againstStandardMid2}{" "}
-                  <strong className="text-zinc-400">{t.fuel.fsPlusS}</strong> /{" "}
-                  <strong className="text-zinc-400">{t.fuel.fsMinusL}</strong>{" "}
-                  {t.fuel.againstStandardPost}
-                  {planDelta.sec <= 0 && planDelta.litres <= 0 && (
-                    <span className="text-amber-400"> {t.fuel.deltaZero}</span>
-                  )}
-                </p>
-              )}
-            </div>
-          )}
-          </AdvancedOnly>
-          {(std.overFuel || (sav != null && sav.overFuel)) && (
-            <p className="mt-3 text-xs text-amber-400">{t.fuel.overFuel}</p>
-          )}
-
-          {/* The rain profile.
-              Johann Solowej asked for this (Sept 2026) and the gap was real:
-              the wet model was a lap-time penalty only, so a wet stint was
-              fuelled at the DRY consumption and came up short. A wet lap is
-              slower and therefore burns less, which is exactly the case where
-              being wrong costs a stop. */}
-          <div className="mt-3 rounded border border-sky-900/50 bg-sky-950/10 p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sky-300">
-              {t.jo.rainProfile}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t.fuel.lapTime} hint={t.jo.rainLead}>
-                <input
-                  className={inp}
-                  value={s.rain?.laptime ?? ""}
-                  onChange={(e) => patchRain("laptime", e.target.value)}
-                  placeholder={s.standard.laptime || "m:ss.s"}
-                />
-              </Field>
-              <Field label={t.fuel.fuelPerLap} hint={t.jo.rainLead}>
-                <input
-                  className={inp}
-                  value={s.rain?.fuelPerLap ?? ""}
-                  onChange={(e) => patchRain("fuelPerLap", e.target.value)}
-                  placeholder={s.standard.fuelPerLap || "L"}
-                />
-              </Field>
-            </div>
-            <p className="mt-2 text-[11px] leading-snug text-zinc-500">
-              {(() => {
-                const rain = rainProfileOf(s);
-                const dry = parseDurationToSec(s.standard.laptime);
-                if (rain && dry && dry > 0) {
-                  return t.jo.rainActive(
-                    round1(rain.laptimeSec - dry).toFixed(1),
-                    rain.fuelPerLap.toFixed(2)
-                  );
-                }
-                const half =
-                  (s.rain?.laptime ?? "").trim() !== "" ||
-                  (s.rain?.fuelPerLap ?? "").trim() !== "";
-                return half ? t.jo.rainNeedsBoth : t.jo.rainLead;
-              })()}
-            </p>
-          </div>
-        </div>
-
-      {/* Pace corrections — temperature, weather, traffic.
-          These three sat on the Basics tab under the track temperature, which
-          is where the number gets typed but not where the work happens: you
-          settle them once the pace itself is settled, which is this tab.
-          Advanced only — in Easy mode a plan runs on the standard lap time
-          alone. */}
-      <AdvancedOnly>
-      <div className={card} id="card-paceadj">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            {t.ev.paceAdjTitle}
-            <GuideLink section="pace" />
-          </h2>
-        </div>
-          {(s.tempModel || s.event.trackTempC.trim() !== "") && (
-            <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px] text-zinc-400">
-              {(() => {
-                const tm = s.tempModel;
-                const raceT = parseTypedNumber(s.event.trackTempC, NaN);
-                const hasRaceT =
-                  s.event.trackTempC.trim() !== "" && isFinite(raceT);
-                if (!tm) {
-                  return <span>{t.ev.tempNoModel}</span>;
-                }
-                const per10 = round1(tm.slopePerC * 10);
-                const pending =
-                  hasRaceT && tm.appliedTempC != null
-                    ? tm.slopePerC * (raceT - tm.appliedTempC)
-                    : 0;
-                return (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span>
-                      {t.ev.tempPaceSetAt}{" "}
-                      <strong className="text-zinc-200">
-                        {tm.appliedTempC != null
-                          ? `${round1(tm.appliedTempC)}°C`
-                          : "—"}
-                      </strong>{" "}
-                      {t.ev.tempSensitivity}{" "}
-                      <strong className="text-zinc-200">
-                        {per10 >= 0 ? "+" : ""}
-                        {per10.toFixed(1)} s/10°C
-                      </strong>{" "}
-                      <span className="text-zinc-500">
-                        {tm.fromData ? t.ev.tempFromData : t.ev.tempManual}
-                      </span>
-                    </span>
-                    {Math.abs(pending) > 0.05 && (
-                      <span className="text-amber-300">
-                        {t.ev.tempPending(
-                          `${pending > 0 ? "+" : ""}${pending.toFixed(1)}`,
-                          round1(raceT)
-                        )}
-                      </span>
-                    )}
-                    {!tm.fromData && (
-                      <label className="flex items-center gap-1 text-zinc-500 print:hidden">
-                        {t.ev.tempPer10}
-                        <input
-                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
-                          defaultValue={String(per10)}
-                          onBlur={(e) => setManualSlopePer10(e.target.value)}
-                          title={t.ev.tempPer10Hint}
-                        />
-                        <Hint text={t.ev.tempPer10Hint} />
-                      </label>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* Pace penalties: weather per stint, traffic on every stint. */}
-          <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">
-                {t.ev.fullWet}
-                <Hint text={t.ev.fullWetHint} />
-              </span>
-              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
-                +
-                <input
-                  key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
-                  className="w-16 rounded border border-sky-900/60 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
-                  defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
-                  onBlur={(e) => setWetDelta(e.target.value)}
-                  title={t.ev.fullWetHint}
-                />
-                {t.ev.perLap}
-              </label>
-              {s.wetModel && (
-                <span className="text-zinc-500">
-                  {s.wetModel.fromData ? t.ev.wetMeasured : t.ev.wetManual}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">
-                {t.ev.halfWet}
-                <Hint text={t.ev.halfWetHint} />
-              </span>
-              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
-                +
-                <input
-                  key={`half-${round1(halfWetDeltaSec(s))}`}
-                  className="w-16 rounded border border-sky-900/40 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
-                  defaultValue={
-                    s.wetModel?.manualHalfDeltaSec != null
-                      ? String(round1(s.wetModel.manualHalfDeltaSec))
-                      : ""
-                  }
-                  placeholder={String(round1(halfWetDeltaSec(s)))}
-                  onBlur={(e) => setHalfWetDelta(e.target.value)}
-                  title={t.ev.halfWetHint}
-                />
-                {t.ev.perLap}
-              </label>
-              <span className="text-zinc-500">
-                {s.wetModel?.manualHalfDeltaSec != null
-                  ? t.ev.halfYours
-                  : t.ev.halfDefault(Math.round(DEFAULT_HALF_WET_FRACTION * 100))}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="w-24 uppercase tracking-wider text-zinc-500">
-                {t.ev.traffic}
-                <Hint text={t.ev.trafficHint} />
-              </span>
-              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
-                +
-                <input
-                  className="w-16 rounded border border-amber-900/60 bg-zinc-950 px-1.5 py-0.5 text-amber-100"
-                  value={s.event.trafficPenaltySec}
-                  onChange={(e) => patchEvent("trafficPenaltySec", e.target.value)}
-                  placeholder="0"
-                  title={t.ev.trafficHint}
-                />
-                {t.ev.perLap}
-              </label>
-              <span className="text-zinc-500">{t.ev.trafficNote}</span>
-            </div>
-            <p className="text-zinc-600">{t.ev.weatherNote}</p>
-          </div>
-      </div>
-      </AdvancedOnly>
-
-      {/* Fuel-save strategy optimizer */}
-      <div className={card} id="card-fuelsave">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-            {t.fs.title}
-            <GuideLink section="pace" />
-          </h2>
-          <button
-            onClick={runFuelSaveOptimizer}
-            title={t.fs.optimizeHint}
-            className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
-          >
-            {t.fs.optimize}
-          </button>
-        </div>
-        {/* The targets lead, because they are the half a driver can act on:
-            "hold 3.14 L/lap and the stint reaches 24 laps" is an instruction.
-            The stop-count sweep below is the analysis behind it and folds away. */}
-        <p className="mb-2 text-xs text-zinc-500">{t.jo.targetsLead}</p>
-        {fsTargets.length === 0 ? (
-          <p className="mb-3 text-xs text-zinc-500">{t.jo.targetsNone}</p>
-        ) : (
-          <div className="mb-3 overflow-x-auto">
-            <table className="w-full text-left text-sm tabular-nums">
-              <thead className="text-zinc-500">
-                <tr className="border-b border-zinc-800">
-                  <th className="py-1 pr-2">{t.jo.colLapsPerStint}</th>
-                  <th className="py-1 pr-2 text-right">{t.jo.colNeeds}</th>
-                  <th className="py-1 pr-2 text-right">{t.jo.colSave}</th>
-                  <th className="py-1 pr-2 text-right">{t.jo.colStops}</th>
-                  <th className="py-1 pr-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {fsTargets.map((r) => (
-                  <tr
-                    key={r.lapsPerStint}
-                    className={`border-t border-zinc-800/60 ${
-                      r.current
-                        ? "text-zinc-200"
-                        : r.reachable
-                          ? "text-emerald-200"
-                          : "text-zinc-500"
-                    }`}
-                  >
-                    <td className="py-1 pr-2 font-medium">
-                      {r.lapsPerStint}
-                      {r.current && (
-                        <span className="ml-1.5 text-[10px] uppercase text-zinc-500">
-                          {t.jo.rowCurrent}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-1 pr-2 text-right">{r.fuelPerLap.toFixed(2)} L</td>
-                    <td className="py-1 pr-2 text-right">
-                      {r.current
-                        ? "—"
-                        : `−${r.savePerLap.toFixed(2)} L (${r.savePct.toFixed(1)} %)`}
-                    </td>
-                    <td className="py-1 pr-2 text-right">{r.stops}</td>
-                    <td className="py-1 pr-2 text-xs">
-                      {r.current
-                        ? ""
-                        : !r.reachable
-                          ? t.jo.unreachable
-                          : t.jo.targetsSaves(
-                              Math.max(0, fsTargets[0].stops - r.stops)
-                            )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <details className="mb-3 print:hidden">
-          <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
-            {t.jo.analysisDetails}
-          </summary>
-          <p className="mt-2 text-xs text-zinc-500">{t.fs.lead}</p>
-        </details>
-        {fuelSaveMsg && (
-          <p className="mb-3 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
-            ✓ {fuelSaveMsg}
-          </p>
-        )}
-        {fuelSaveOpt && !fuelSaveOpt.ok && (
-          <p className="text-sm text-amber-400">{fuelSaveOpt.reason}</p>
-        )}
-        {fuelSaveOpt &&
-          fuelSaveOpt.ok &&
-          (() => {
-            const best = fuelSaveOpt.strategies[fuelSaveOpt.bestIndex];
-            const push = fuelSaveOpt.strategies[fuelSaveOpt.fullPushIndex];
-            const byTime = fuelSaveOpt.lapLimited;
-            // Timed race: more laps wins. Distance race: less time wins.
-            const gain = byTime
-              ? push.totalTimeSec - best.totalTimeSec
-              : best.totalLaps - push.totalLaps;
-            return (
-              <div className="space-y-3">
-                <div className="rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
-                  {t.fs.bestPre} <strong>{t.fs.bestStops(best.stops)}</strong>{" "}
-                  {t.fs.bestTargetLap}{" "}
-                  <strong>{fmtLap(best.laptimeSec)}</strong> {t.fs.bestFuelPre}{" "}
-                  {best.fuelPerLap.toFixed(2)} {t.fs.bestFuelPost}{" "}
-                  <strong>
-                    {byTime
-                      ? fmtDuration(best.totalTimeSec)
-                      : t.fs.lapsValue(best.totalLaps.toFixed(1))}
-                  </strong>
-                  {fuelSaveOpt.bestIndex !== fuelSaveOpt.fullPushIndex
-                    ? byTime
-                      ? t.fs.gainTime(fmtDuration(Math.abs(gain)), gain > 0, push.stops)
-                      : t.fs.gainLaps(
-                          `${gain > 0 ? "+" : ""}${gain.toFixed(1)}`,
-                          push.stops
-                        )
-                    : t.fs.fullPushOptimal}
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm tabular-nums">
-                    <thead className="text-zinc-500">
-                      <tr className="border-b border-zinc-800">
-                        <th className="py-1 pr-2">{t.fs.colStops}</th>
-                        <th className="py-1 pr-2 text-right">{t.fs.colTargetLap}</th>
-                        <th className="py-1 pr-2 text-right">{t.fs.colFuelPerLap}</th>
-                        <th className="py-1 pr-2 text-right">{t.fs.colLapsPerStint}</th>
-                        <th className="py-1 pr-2 text-right">
-                          {byTime ? t.fs.colRaceTime : t.fs.colTotalLaps}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fuelSaveOpt.strategies.map((r, i) => (
-                        <tr
-                          key={r.stops}
-                          className={`border-t border-zinc-800/60 ${i === fuelSaveOpt.bestIndex ? "bg-emerald-950/30 text-emerald-200" : "text-zinc-200"}`}
-                        >
-                          <td className="py-1 pr-2">
-                            {r.stops}
-                            {i === fuelSaveOpt.bestIndex && (
-                              <span className="ml-1 text-[10px] uppercase text-emerald-400">
-                                {t.fs.bestApplied}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-1 pr-2 text-right">{fmtLap(r.laptimeSec)}</td>
-                          <td className="py-1 pr-2 text-right">{r.fuelPerLap.toFixed(2)} L</td>
-                          <td className="py-1 pr-2 text-right">{r.lapsPerStint}</td>
-                          <td className="py-1 pr-2 text-right">
-                            {byTime ? fmtDuration(r.totalTimeSec) : r.totalLaps.toFixed(1)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-[11px] text-zinc-600">
-                  {t.fs.assumesPre}{" "}
-                  {byTime ? t.fs.assumesTime : t.fs.assumesLaps}
-                </p>
-              </div>
-            );
-          })()}
-      </div>
-
-      </div>
-
-      {/* ===== the same tab, second half: what each DRIVER runs. One box, so
-          the totals strip appears once and a profile sits next to the driver
-          figures it falls back to. ===== */}
+      {/* ===== Preparation, in the order the work happens (Johann Solowej,
+          Oct 2026): lap times first (Garage 61), then the drivers they land
+          on, then fuel / rain / fuel-save, then availability and stint
+          length right above the schedule. ===== */}
 
       {/* Garage 61 import.
           Johann Solowej asked for an option to hide this whole section
@@ -5338,14 +4805,18 @@ export default function StintPlanner({
                       already wide table, so Advanced only. */}
                   {advanced && (
                     <>
-                      <th className="py-1 pr-2 text-right">
-                        {t.jo.colWet}
-                        <Hint text={t.jo.colWetHint} />
-                      </th>
-                      <th className="py-1 pr-2 text-right">
-                        {t.jo.colHalfWet}
-                        <Hint text={t.jo.colHalfWetHint} />
-                      </th>
+                      {rainOn && (
+                        <>
+                          <th className="py-1 pr-2 text-right">
+                            {t.jo.colWet}
+                            <Hint text={t.jo.colWetHint} />
+                          </th>
+                          <th className="py-1 pr-2 text-right">
+                            {t.jo.colHalfWet}
+                            <Hint text={t.jo.colHalfWetHint} />
+                          </th>
+                        </>
+                      )}
                       <th className="py-1 pr-2 text-right">
                         {t.jo.colTraffic}
                         <Hint text={t.jo.colTrafficHint} />
@@ -5531,7 +5002,11 @@ export default function StintPlanner({
                               ["tempSlopePer10", d.tempSlopePer10, t.jo.colTempSlopeHint,
                                 round1((s.tempModel?.slopePerC ?? 0) * 10).toFixed(1)],
                             ] as const
-                          ).map(([key, value, hint, placeholder]) => (
+                          )
+                            // Wet columns only when rain is expected (header
+                            // above follows the same rule).
+                            .filter(([key]) => rainOn || (key !== "wetSec" && key !== "halfWetSec"))
+                            .map(([key, value, hint, placeholder]) => (
                             <td key={key} className="py-1 pr-2 text-right print:hidden">
                               <input
                                 className={`w-16 rounded border bg-zinc-950 px-1.5 py-1 text-right text-sm ${
@@ -5755,13 +5230,585 @@ export default function StintPlanner({
         <p className="mt-2 text-xs text-zinc-500">{t.drv.footer}</p>
       </div>
 
-      {/* Availability */}
-      {s.drivers.length > 0 && hourCount > 0 && (
-        <div className={card}>
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-orange-300">
-            {t.avail.title}
-            <GuideLink section="stints" />
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Fuel profiles */}
+        <div className={card} id="card-fuel">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              {t.fuel.title}
+              <GuideLink section="pace" />
+            </h2>
+            {deltaSaving && (
+              <button
+                onClick={() => setShowFuelProfiles((v) => !v)}
+                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-400 hover:bg-zinc-800 print:hidden"
+              >
+                {showFuelProfiles ? t.fuel.hideFallback : t.fuel.editFallback}
+              </button>
+            )}
+          </div>
+
+          {profilesOpen ? (
+            <ProfileRow
+              title={deltaSaving ? t.fuel.standardFallback : t.fuel.standard}
+              laptime={s.standard.laptime}
+              fuelPerLap={s.standard.fuelPerLap}
+              onLaptime={(v) => patchStd("laptime", v)}
+              onFuel={(v) => patchStd("fuelPerLap", v)}
+              laps={std.laps}
+              green={std.greenTimeSec}
+              total={std.totalTimeSec}
+              fuel={std.fuelPerStint}
+            />
+          ) : (
+            <p className="rounded border border-zinc-800 bg-zinc-950/50 px-2.5 py-2 text-xs leading-snug text-zinc-500">
+              {t.fuel.fallbackPre}{" "}
+              <strong className="text-zinc-300">
+                {s.standard.laptime || "—"}
+              </strong>{" "}
+              /{" "}
+              <strong className="text-zinc-300">
+                {s.standard.fuelPerLap || "—"} L
+              </strong>
+              {s.savingEnabled && (
+                <>
+                  {t.fuel.fallbackSavingPre}{" "}
+                  <strong className="text-cyan-300">
+                    +{planDelta.sec.toFixed(1)} s / &minus;{planDelta.litres.toFixed(2)} L
+                  </strong>
+                </>
+              )}
+              .
+            </p>
+          )}
+
+          {/* How a stint gets its pace and fuel. The old model let the profile
+              decide for everyone, which meant a driver's own averages either
+              replaced it wholesale (standard stints) or were quietly ignored
+              (fuel-save stints). The delta model below fixes both.
+
+              Advanced-only: it is a choice a plan makes once, and the wrong
+              answer is not recoverable by guessing. It keeps computing either
+              way — Easy hides the switch, never the effect. */}
+          <AdvancedOnly>
+          <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/50 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              {t.fuel.whereNumbers}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["delta", t.fuel.modeDelta],
+                  ["absolute", t.fuel.modeAbsolute],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  onClick={() => setS((p) => ({ ...p, savingMode: mode }))}
+                  className={`rounded px-2.5 py-1 text-xs font-semibold ${
+                    (s.savingMode ?? "absolute") === mode
+                      ? "bg-[#ff6b35] text-zinc-950"
+                      : "tab-off"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              {deltaSaving ? (
+                <>
+                  {t.fuel.deltaExplainPre}{" "}
+                  <strong className="text-zinc-300">{t.fuel.deltaExplainBold}</strong>{" "}
+                  {t.fuel.deltaExplainPost}
+                </>
+              ) : (
+                t.fuel.absoluteExplain
+              )}
+            </p>
+          </div>
+          </AdvancedOnly>
+
+          {/* Fuel saving is an Advanced decision: a second pace/fuel profile
+              only pays off once you are weighing a lap time against a pit
+              stop, which is the Fuel-save card further down — also Advanced.
+              The switch and the profile it opens travel together, so Easy
+              mode does not show a "Fuel saving" row with nothing explaining
+              it. A plan that already has it on keeps computing with it. */}
+          <AdvancedOnly>
+          <CheckField
+            className="mt-3"
+            checked={s.savingEnabled}
+            onChange={(v) => setS((p) => ({ ...p, savingEnabled: v }))}
+            label={t.fuel.enableSaving}
+            hint={t.fuel.enableSavingHint}
+          />
+          {s.savingEnabled && sav && profilesOpen && (
+            <div className="mt-2">
+              <ProfileRow
+                title={deltaSaving ? t.fuel.savingFallback : t.fuel.savingProfile}
+                laptime={s.saving.laptime}
+                fuelPerLap={s.saving.fuelPerLap}
+                onLaptime={(v) => patchSav("laptime", v)}
+                onFuel={(v) => patchSav("fuelPerLap", v)}
+                laps={sav.laps}
+                green={sav.greenTimeSec}
+                total={sav.totalTimeSec}
+                fuel={sav.fuelPerStint}
+              />
+              {deltaSaving && (
+                <p className="mt-2 text-xs text-zinc-500">
+                  {t.fuel.againstStandardPre}{" "}
+                  <strong className="text-cyan-300">
+                    +{planDelta.sec.toFixed(1)} s/{t.units.lap} / &minus;
+                    {planDelta.litres.toFixed(2)} L/{t.units.lap}
+                  </strong>{" "}
+                  {t.fuel.againstStandardMid}{" "}
+                  <span className="text-zinc-400">{t.fuel.fsShort}</span>
+                  {t.fuel.againstStandardMid2}{" "}
+                  <strong className="text-zinc-400">{t.fuel.fsPlusS}</strong> /{" "}
+                  <strong className="text-zinc-400">{t.fuel.fsMinusL}</strong>{" "}
+                  {t.fuel.againstStandardPost}
+                  {planDelta.sec <= 0 && planDelta.litres <= 0 && (
+                    <span className="text-amber-400"> {t.fuel.deltaZero}</span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          </AdvancedOnly>
+          {(std.overFuel || (sav != null && sav.overFuel)) && (
+            <p className="mt-3 text-xs text-amber-400">{t.fuel.overFuel}</p>
+          )}
+        </div>
+
+      {/* Rain — the rain profile and the wet penalties in one place, between
+          fuel and fuel-save as Johann Solowej laid it out (Oct 2026), and
+          hidden unless rain is expected. Hiding is a view choice only: the
+          figures stay in the plan and keep counting where a stint is marked
+          wet (hasRainData drives the default and the note). */}
+      <div className={card} id="card-rain">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-sky-300">
+            {t.rainCard.title}
+            <GuideLink section="pace" />
           </h2>
+        </div>
+        <CheckField
+          checked={rainOn}
+          onChange={(v) => setS((p) => ({ ...p, rainExpected: v }))}
+          label={t.rainCard.expected}
+          hint={t.rainCard.expectedHint}
+        />
+        {rainOn ? (
+          <>
+          {/* The rain profile.
+              Johann Solowej asked for this (Sept 2026) and the gap was real:
+              the wet model was a lap-time penalty only, so a wet stint was
+              fuelled at the DRY consumption and came up short. A wet lap is
+              slower and therefore burns less, which is exactly the case where
+              being wrong costs a stop. */}
+          <div className="mt-3 rounded border border-sky-900/50 bg-sky-950/10 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sky-300">
+              {t.jo.rainProfile}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t.fuel.lapTime} hint={t.jo.rainLead}>
+                <input
+                  className={inp}
+                  value={s.rain?.laptime ?? ""}
+                  onChange={(e) => patchRain("laptime", e.target.value)}
+                  placeholder={s.standard.laptime || "m:ss.s"}
+                />
+              </Field>
+              <Field label={t.fuel.fuelPerLap} hint={t.jo.rainLead}>
+                <input
+                  className={inp}
+                  value={s.rain?.fuelPerLap ?? ""}
+                  onChange={(e) => patchRain("fuelPerLap", e.target.value)}
+                  placeholder={s.standard.fuelPerLap || "L"}
+                />
+              </Field>
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-zinc-500">
+              {(() => {
+                const rain = rainProfileOf(s);
+                const dry = parseDurationToSec(s.standard.laptime);
+                if (rain && dry && dry > 0) {
+                  return t.jo.rainActive(
+                    round1(rain.laptimeSec - dry).toFixed(1),
+                    rain.fuelPerLap.toFixed(2)
+                  );
+                }
+                const half =
+                  (s.rain?.laptime ?? "").trim() !== "" ||
+                  (s.rain?.fuelPerLap ?? "").trim() !== "";
+                return half ? t.jo.rainNeedsBoth : t.jo.rainLead;
+              })()}
+            </p>
+          </div>
+          <AdvancedOnly>
+          <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.fullWet}
+                <Hint text={t.ev.fullWetHint} />
+              </span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  key={round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC)}
+                  className="w-16 rounded border border-sky-900/60 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
+                  defaultValue={String(round1(s.wetModel?.deltaSec ?? DEFAULT_WET_DELTA_SEC))}
+                  onBlur={(e) => setWetDelta(e.target.value)}
+                  title={t.ev.fullWetHint}
+                />
+                {t.ev.perLap}
+              </label>
+              {s.wetModel && (
+                <span className="text-zinc-500">
+                  {s.wetModel.fromData ? t.ev.wetMeasured : t.ev.wetManual}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.halfWet}
+                <Hint text={t.ev.halfWetHint} />
+              </span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  key={`half-${round1(halfWetDeltaSec(s))}`}
+                  className="w-16 rounded border border-sky-900/40 bg-zinc-950 px-1.5 py-0.5 text-sky-100"
+                  defaultValue={
+                    s.wetModel?.manualHalfDeltaSec != null
+                      ? String(round1(s.wetModel.manualHalfDeltaSec))
+                      : ""
+                  }
+                  placeholder={String(round1(halfWetDeltaSec(s)))}
+                  onBlur={(e) => setHalfWetDelta(e.target.value)}
+                  title={t.ev.halfWetHint}
+                />
+                {t.ev.perLap}
+              </label>
+              <span className="text-zinc-500">
+                {s.wetModel?.manualHalfDeltaSec != null
+                  ? t.ev.halfYours
+                  : t.ev.halfDefault(Math.round(DEFAULT_HALF_WET_FRACTION * 100))}
+              </span>
+            </div>
+          </div>
+          </AdvancedOnly>
+          </>
+        ) : rainData ? (
+          <p className="mt-2 text-xs text-amber-300">{t.rainCard.hiddenNote}</p>
+        ) : null}
+      </div>
+
+      {/* Pace corrections — temperature, weather, traffic.
+          These three sat on the Basics tab under the track temperature, which
+          is where the number gets typed but not where the work happens: you
+          settle them once the pace itself is settled, which is this tab.
+          Advanced only — in Easy mode a plan runs on the standard lap time
+          alone. */}
+      <AdvancedOnly>
+      <div className={card} id="card-paceadj">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            {t.ev.paceAdjTitle}
+            <GuideLink section="pace" />
+          </h2>
+        </div>
+          {(s.tempModel || s.event.trackTempC.trim() !== "") && (
+            <div className="mt-3 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px] text-zinc-400">
+              {(() => {
+                const tm = s.tempModel;
+                const raceT = parseTypedNumber(s.event.trackTempC, NaN);
+                const hasRaceT =
+                  s.event.trackTempC.trim() !== "" && isFinite(raceT);
+                if (!tm) {
+                  return <span>{t.ev.tempNoModel}</span>;
+                }
+                const per10 = round1(tm.slopePerC * 10);
+                const pending =
+                  hasRaceT && tm.appliedTempC != null
+                    ? tm.slopePerC * (raceT - tm.appliedTempC)
+                    : 0;
+                return (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span>
+                      {t.ev.tempPaceSetAt}{" "}
+                      <strong className="text-zinc-200">
+                        {tm.appliedTempC != null
+                          ? `${round1(tm.appliedTempC)}°C`
+                          : "—"}
+                      </strong>{" "}
+                      {t.ev.tempSensitivity}{" "}
+                      <strong className="text-zinc-200">
+                        {per10 >= 0 ? "+" : ""}
+                        {per10.toFixed(1)} s/10°C
+                      </strong>{" "}
+                      <span className="text-zinc-500">
+                        {tm.fromData ? t.ev.tempFromData : t.ev.tempManual}
+                      </span>
+                    </span>
+                    {Math.abs(pending) > 0.05 && (
+                      <span className="text-amber-300">
+                        {t.ev.tempPending(
+                          `${pending > 0 ? "+" : ""}${pending.toFixed(1)}`,
+                          round1(raceT)
+                        )}
+                      </span>
+                    )}
+                    {!tm.fromData && (
+                      <label className="flex items-center gap-1 text-zinc-500 print:hidden">
+                        {t.ev.tempPer10}
+                        <input
+                          className="w-16 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-zinc-100"
+                          defaultValue={String(per10)}
+                          onBlur={(e) => setManualSlopePer10(e.target.value)}
+                          title={t.ev.tempPer10Hint}
+                        />
+                        <Hint text={t.ev.tempPer10Hint} />
+                      </label>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Pace penalties: weather per stint, traffic on every stint. */}
+          <div className="mt-3 space-y-2 rounded border border-zinc-800 bg-zinc-950/40 p-2.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-24 uppercase tracking-wider text-zinc-500">
+                {t.ev.traffic}
+                <Hint text={t.ev.trafficHint} />
+              </span>
+              <label className="flex items-center gap-1 text-zinc-400 print:hidden">
+                +
+                <input
+                  className="w-16 rounded border border-amber-900/60 bg-zinc-950 px-1.5 py-0.5 text-amber-100"
+                  value={s.event.trafficPenaltySec}
+                  onChange={(e) => patchEvent("trafficPenaltySec", e.target.value)}
+                  placeholder="0"
+                  title={t.ev.trafficHint}
+                />
+                {t.ev.perLap}
+              </label>
+              <span className="text-zinc-500">{t.ev.trafficNote}</span>
+            </div>
+            <p className="text-zinc-600">{t.ev.weatherNote}</p>
+          </div>
+      </div>
+      </AdvancedOnly>
+
+      {/* Fuel-save strategy optimizer */}
+      <div className={card} id="card-fuelsave">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+            {t.fs.title}
+            <GuideLink section="pace" />
+          </h2>
+          <button
+            onClick={runFuelSaveOptimizer}
+            title={t.fs.optimizeHint}
+            className="rounded bg-[#ff6b35] px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-orange-500 print:hidden"
+          >
+            {t.fs.optimize}
+          </button>
+        </div>
+        {/* The targets lead, because they are the half a driver can act on:
+            "hold 3.14 L/lap and the stint reaches 24 laps" is an instruction.
+            The stop-count sweep below is the analysis behind it and folds away. */}
+        <p className="mb-2 text-xs text-zinc-500">{t.jo.targetsLead}</p>
+        {fsTargets.length === 0 ? (
+          <p className="mb-3 text-xs text-zinc-500">{t.jo.targetsNone}</p>
+        ) : (
+          <div className="mb-3 overflow-x-auto">
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="text-zinc-500">
+                <tr className="border-b border-zinc-800">
+                  <th className="py-1 pr-2">{t.jo.colLapsPerStint}</th>
+                  <th className="py-1 pr-2 text-right">{t.jo.colNeeds}</th>
+                  <th className="py-1 pr-2 text-right">{t.jo.colSave}</th>
+                  <th className="py-1 pr-2 text-right">{t.jo.colStops}</th>
+                  <th className="py-1 pr-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {fsTargets.map((r) => (
+                  <tr
+                    key={r.lapsPerStint}
+                    className={`border-t border-zinc-800/60 ${
+                      r.current
+                        ? "text-zinc-200"
+                        : r.reachable
+                          ? "text-emerald-200"
+                          : "text-zinc-500"
+                    }`}
+                  >
+                    <td className="py-1 pr-2 font-medium">
+                      {r.lapsPerStint}
+                      {r.current && (
+                        <span className="ml-1.5 text-[10px] uppercase text-zinc-500">
+                          {t.jo.rowCurrent}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1 pr-2 text-right">{r.fuelPerLap.toFixed(2)} L</td>
+                    <td className="py-1 pr-2 text-right">
+                      {r.current
+                        ? "—"
+                        : `−${r.savePerLap.toFixed(2)} L (${r.savePct.toFixed(1)} %)`}
+                    </td>
+                    <td className="py-1 pr-2 text-right">{r.stops}</td>
+                    <td className="py-1 pr-2 text-xs">
+                      {r.current
+                        ? ""
+                        : !r.reachable
+                          ? t.jo.unreachable
+                          : t.jo.targetsSaves(
+                              Math.max(0, fsTargets[0].stops - r.stops)
+                            )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <details className="mb-3 print:hidden">
+          <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
+            {t.jo.analysisDetails}
+          </summary>
+          <p className="mt-2 text-xs text-zinc-500">{t.fs.lead}</p>
+        </details>
+        {fuelSaveMsg && (
+          <p className="mb-3 rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+            ✓ {fuelSaveMsg}
+          </p>
+        )}
+        {fuelSaveOpt && !fuelSaveOpt.ok && (
+          <p className="text-sm text-amber-400">{fuelSaveOpt.reason}</p>
+        )}
+        {fuelSaveOpt &&
+          fuelSaveOpt.ok &&
+          (() => {
+            const best = fuelSaveOpt.strategies[fuelSaveOpt.bestIndex];
+            const push = fuelSaveOpt.strategies[fuelSaveOpt.fullPushIndex];
+            const byTime = fuelSaveOpt.lapLimited;
+            // Timed race: more laps wins. Distance race: less time wins.
+            const gain = byTime
+              ? push.totalTimeSec - best.totalTimeSec
+              : best.totalLaps - push.totalLaps;
+            return (
+              <div className="space-y-3">
+                <div className="rounded border border-emerald-800/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-200">
+                  {t.fs.bestPre} <strong>{t.fs.bestStops(best.stops)}</strong>{" "}
+                  {t.fs.bestTargetLap}{" "}
+                  <strong>{fmtLap(best.laptimeSec)}</strong> {t.fs.bestFuelPre}{" "}
+                  {best.fuelPerLap.toFixed(2)} {t.fs.bestFuelPost}{" "}
+                  <strong>
+                    {byTime
+                      ? fmtDuration(best.totalTimeSec)
+                      : t.fs.lapsValue(best.totalLaps.toFixed(1))}
+                  </strong>
+                  {fuelSaveOpt.bestIndex !== fuelSaveOpt.fullPushIndex
+                    ? byTime
+                      ? t.fs.gainTime(fmtDuration(Math.abs(gain)), gain > 0, push.stops)
+                      : t.fs.gainLaps(
+                          `${gain > 0 ? "+" : ""}${gain.toFixed(1)}`,
+                          push.stops
+                        )
+                    : t.fs.fullPushOptimal}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm tabular-nums">
+                    <thead className="text-zinc-500">
+                      <tr className="border-b border-zinc-800">
+                        <th className="py-1 pr-2">{t.fs.colStops}</th>
+                        <th className="py-1 pr-2 text-right">{t.fs.colTargetLap}</th>
+                        <th className="py-1 pr-2 text-right">{t.fs.colFuelPerLap}</th>
+                        <th className="py-1 pr-2 text-right">{t.fs.colLapsPerStint}</th>
+                        <th className="py-1 pr-2 text-right">
+                          {byTime ? t.fs.colRaceTime : t.fs.colTotalLaps}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fuelSaveOpt.strategies.map((r, i) => (
+                        <tr
+                          key={r.stops}
+                          className={`border-t border-zinc-800/60 ${i === fuelSaveOpt.bestIndex ? "bg-emerald-950/30 text-emerald-200" : "text-zinc-200"}`}
+                        >
+                          <td className="py-1 pr-2">
+                            {r.stops}
+                            {i === fuelSaveOpt.bestIndex && (
+                              <span className="ml-1 text-[10px] uppercase text-emerald-400">
+                                {t.fs.bestApplied}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1 pr-2 text-right">{fmtLap(r.laptimeSec)}</td>
+                          <td className="py-1 pr-2 text-right">{r.fuelPerLap.toFixed(2)} L</td>
+                          <td className="py-1 pr-2 text-right">{r.lapsPerStint}</td>
+                          <td className="py-1 pr-2 text-right">
+                            {byTime ? fmtDuration(r.totalTimeSec) : r.totalLaps.toFixed(1)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  {t.fs.assumesPre}{" "}
+                  {byTime ? t.fs.assumesTime : t.fs.assumesLaps}
+                </p>
+              </div>
+            );
+          })()}
+      </div>
+
+      </div>
+
+      {/* Availability & stint preferences — and, at its top, how long a stint
+          is. Johann Solowej (Oct 2026): the stint-length control belongs next
+          to the stint planning, not with the fuel profiles. The card is always
+          shown so the stint length is reachable before any driver exists. */}
+      <div className={card} id="card-stintlen">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wider text-orange-300">
+          {t.avail.title}
+          <GuideLink section="stints" />
+        </h2>
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            <Field label={t.ev.stintLength} hint={t.ev.stintLengthHint}>
+              <select className={inp} value={s.event.stintMode}
+                onChange={(e) => patchEvent("stintMode", e.target.value)}>
+                <option value="fuel">{t.ev.stintFuel}</option>
+                <option value="time">{t.ev.stintTime}</option>
+                <option value="laps">{t.ev.stintLaps}</option>
+              </select>
+            </Field>
+            {s.event.stintMode !== "fuel" && (
+              <Field
+                label={s.event.stintMode === "time" ? t.ev.stintMinutes : t.ev.stintLapsField}
+                hint={t.ev.stintValueHint}
+              >
+                <input className={inp} value={s.event.stintValue}
+                  onChange={(e) => patchEvent("stintValue", e.target.value)}
+                  placeholder={s.event.stintMode === "time" ? "45" : "20"} />
+              </Field>
+            )}
+            <Field label={t.ev.tyreMin} hint={t.ev.tyreMinHint}>
+              <input className={inp} value={s.event.tyreMinPct}
+                onChange={(e) => patchEvent("tyreMinPct", e.target.value)}
+                placeholder="50" />
+            </Field>
+          </div>
+        {s.drivers.length > 0 && hourCount > 0 && (
+          <>
           <p className="mb-2 text-xs text-zinc-500">{t.avail.lead1}</p>
           <p className="mb-3 text-xs text-zinc-500">
             {t.avail.lead2Pre} <em>{t.avail.lead2Em}</em> {t.avail.lead2Mid}{" "}
@@ -5822,10 +5869,12 @@ export default function StintPlanner({
                     {t.avail.colNight}
                     <Hint text={t.avail.colNightHint} />
                   </th>
-                  <th className="px-2 py-1 font-normal">
-                    {t.avail.colRain}
-                    <Hint text={t.avail.colRainHint} />
-                  </th>
+                  {rainOn && (
+                    <th className="px-2 py-1 font-normal">
+                      {t.avail.colRain}
+                      <Hint text={t.avail.colRainHint} />
+                    </th>
+                  )}
                   <th className="px-2 py-1 font-normal">
                     {t.avail.colStart}
                     <Hint text={t.avail.colStartHint} />
@@ -5869,9 +5918,11 @@ export default function StintPlanner({
                     <td className="border-l border-zinc-800 px-2 py-1">
                       {prefSelect(d.id, "prefNight", d.prefNight, t.avail.prefNight)}
                     </td>
-                    <td className="px-2 py-1">
-                      {prefSelect(d.id, "prefRain", d.prefRain, t.avail.prefRain)}
-                    </td>
+                    {rainOn && (
+                      <td className="px-2 py-1">
+                        {prefSelect(d.id, "prefRain", d.prefRain, t.avail.prefRain)}
+                      </td>
+                    )}
                     <td className="px-2 py-1">
                       {prefSelect(d.id, "prefStart", d.prefStart, t.avail.prefStart)}
                     </td>
@@ -5953,8 +6004,9 @@ export default function StintPlanner({
               )}
             </div>
           )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* The same schedule as during the race — this is what the event is
           planned around. Hidden on print so the During-Race copy is the only

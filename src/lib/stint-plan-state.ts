@@ -505,6 +505,13 @@ export type PlannerState = {
    *  what every plan did before this existed. Half wet is taken as half the
    *  effect on both. */
   rain: { laptime: string; fuelPerLap: string };
+  /** Is rain expected for this race? Only decides whether the rain inputs
+   *  are SHOWN (rain card, per-driver wet columns, rain preference, the
+   *  schedule's "rain from" control) — it never changes a computed number.
+   *  Undefined = decide from the data (hasRainData), so a plan that already
+   *  carries rain figures keeps showing them. Asked for by Johann Solowej
+   *  (Oct 2026): "Alle Angaben zum Regen ausblenden, wenn kein Regen erwartet". */
+  rainExpected?: boolean;
   drivers: PlannerDriverState[];
   assignments: PlannerAssignmentState[];
   /** Track-temperature pace model, or null until data/temp is set. */
@@ -916,4 +923,31 @@ export function fullServiceStopSec(s: PlannerState): number {
   if (!model) return num(s.event.pitLoss);
   const usable = Math.max(0, num(s.event.tankSize) - num(s.event.fuelReserve));
   return pitStopSeconds(model, { litres: usable, tyres: true, driverChange: true }).totalSec;
+}
+
+/**
+ * Does the plan carry any rain information a hidden rain section would be
+ * hiding? Drives the default of `rainExpected` and the "hidden but still in
+ * effect" note.
+ */
+export function hasRainData(s: PlannerState): boolean {
+  if ((s.rain?.laptime ?? "").trim() !== "" || (s.rain?.fuelPerLap ?? "").trim() !== "")
+    return true;
+  if (s.assignments.some((a) => a.condition === "wet" || a.condition === "half" || a.wet))
+    return true;
+  if (
+    s.drivers.some(
+      (d) =>
+        (d.wetSec ?? "").trim() !== "" ||
+        (d.halfWetSec ?? "").trim() !== "" ||
+        !!d.prefRain
+    )
+  )
+    return true;
+  const wm = s.wetModel;
+  return (
+    !!wm &&
+    (wm.manualHalfDeltaSec != null ||
+      (!wm.fromData && wm.deltaSec !== DEFAULT_WET_DELTA_SEC))
+  );
 }

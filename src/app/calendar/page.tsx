@@ -223,7 +223,7 @@ export default async function CalendarPage({
             className={`rounded px-3 py-1.5 ${
               view === "month"
                 ? "bg-[#ff6b35] text-zinc-950"
-                : "text-zinc-300 hover:text-zinc-100"
+                : "tab-off"
             }`}
           >
             Month
@@ -233,7 +233,7 @@ export default async function CalendarPage({
             className={`rounded px-3 py-1.5 ${
               view === "week"
                 ? "bg-[#ff6b35] text-zinc-950"
-                : "text-zinc-300 hover:text-zinc-100"
+                : "tab-off"
             }`}
           >
             Week

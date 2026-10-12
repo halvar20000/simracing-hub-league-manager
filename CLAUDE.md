@@ -290,7 +290,7 @@ Per-round recognition badge — **no championship points, never touches standing
 | Tab | Cards |
 |---|---|
 | `basis` | Event, Pit-stop model, Roster |
-| `prep` | Fuel profiles (standard / fuel-save / rain, stint length, tyre floor), Fuel-save targets, Garage 61 + driver stats, Drivers table, Availability, schedule preview, pre-race notes |
+| `prep` | In work order (Johann Solowej, Oct 2026): Garage 61 + driver stats → Drivers table → grid of Fuel profiles (standard / fuel-save, tyre floor) · Rain (`card-rain`: rain profile + wet penalties, hidden unless `PlannerState.rainExpected`, default `hasRainData`) · Pace corrections (temp, traffic) · Fuel-save → Availability & stint preferences (`card-stintlen`: stint length mode/value + tyre floor on top, always shown) → schedule preview → notes. `rainExpected` only HIDES (also the drivers' wet columns, rain preference, schedule "rain from"); never changes numbers |
 
 - `prep` was two tabs (`pace` = what the team runs, `data` = what each driver runs) until 2.20.0. One sitting of the same work, and splitting it meant changing tab to compare a profile with the driver figures it falls back to. One `tabBox("prep")` box holds both halves so the totals strip renders once.
 
@@ -333,7 +333,7 @@ The race-logger `.jsonl` that Driver of the Day and the stint-planner analysis n
 
 ## UI conventions
 
-- Dark zinc theme (`bg-zinc-900`, `bg-zinc-950`, `border-zinc-800`). Accents:
+- Dark zinc theme (`bg-zinc-900`, `bg-zinc-950`, `border-zinc-800`). Inactive tab/toggle buttons use the `.tab-off` class (blue tint, `globals.css`) next to the orange active state — never bare grey text. Accents:
   - **Amber** — pending pool points, warnings
   - **Cyan** — auto-forgiveness, info
   - **Emerald** — clean races, success

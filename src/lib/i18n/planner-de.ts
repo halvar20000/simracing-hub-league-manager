@@ -653,6 +653,15 @@ export const de: PlannerDict = {
     footer:
       "Die Fahrer kommen aus CLS — jeder mit einer Registrierung. Reifenverschleiß misst Garage 61 nicht (es hält die Mischung fest, nie den Verschleiß), und ein Spritspar-Delta ebenso wenig — diese Spalten musst du also immer selbst einschätzen.",
   },
+  rainCard: {
+    title: "Regen",
+    expected: "Regen erwartet",
+    expectedHint:
+      "Anhaken, wenn mit Regen zu rechnen ist. Ohne Haken sind alle Regen-Angaben ausgeblendet — Regenprofil, Nässe-Zuschläge, die Nässe-Spalten und der Regen-Wunsch der Fahrer und „Regen ab Stint“ im Zeitplan. Ausblenden ändert nichts am Plan.",
+    hiddenNote:
+      "Der Plan enthält noch Regen-Angaben — sie sind nur ausgeblendet, nicht gelöscht, und wirken weiter, wo ein Stint als nass markiert ist.",
+    stintLengthTitle: "Stint-Länge",
+  },
   avail: {
     title: "Verfügbarkeit & Stint-Wünsche",
     lead1:
