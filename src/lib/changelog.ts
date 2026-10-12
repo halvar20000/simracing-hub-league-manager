@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.41.1",
+    date: "2026-10-12",
+    changes: [
+      "Pace references: the iRacing export bookmarklet no longer fails with \"Open the Pace Analysis chart first\" while the chart is on screen. If it cannot find the data right away it now asks you to switch the chart's Race week once and captures it then; if copying is blocked it opens a window with a Copy button. Replace your existing bookmark with the new line on the Pace references page.",
+    ],
+  },
+  {
     version: "2.41.0",
     date: "2026-10-12",
     changes: [

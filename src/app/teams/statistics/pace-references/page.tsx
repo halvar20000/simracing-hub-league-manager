@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { pageMetadata } from "@/lib/og";
+import { PACE_BOOKMARKLET } from "@/lib/pace-bookmarklet";
 import { getPaceReferences } from "@/lib/pace-references";
 import {
   savePaceReference,
@@ -28,11 +29,9 @@ const lbl =
   "block text-[11px] font-medium uppercase tracking-wider text-zinc-500";
 const card = "rounded border border-zinc-800 bg-zinc-900 p-4";
 
-// Stamps `_cls` on the copied file: WHEN the curve was taken (which is what
-// decides its season — the file itself only carries an internal season_id)
-// and which page it came from. An older bookmarklet still works; the label
-// then falls back to today's date instead.
-const BOOKMARKLET = `javascript:(async()=>{const e=performance.getEntriesByType('resource').map(r=>r.name).filter(n=>n.includes('pace_analysis')).pop();if(!e){alert('Open the Pace Analysis chart first (scroll to it), then click again.');return}const j=await fetch(e).then(r=>r.json());j._cls={grabbed_at:new Date().toISOString(),page_title:document.title,url:location.href};await navigator.clipboard.writeText(JSON.stringify(j));alert('Copied: '+(j.line||[]).length+' points, event_type '+j.event_type+', week '+j.race_week_num);})()`;
+// The bookmarklet itself (v2, robust to a full resource buffer and a renamed
+// endpoint) lives in src/lib/pace-bookmarklet.ts.
+const BOOKMARKLET = PACE_BOOKMARKLET;
 
 export default async function PaceReferencesPage({
   searchParams,
@@ -134,6 +133,14 @@ export default async function PaceReferencesPage({
           die ganze Kurve liegt in der Zwischenablage, bereit für den Kasten
           weiter unten — mitsamt dem Datum, an dem du sie geholt hast, woraus
           sich Saison und Rennwoche der Bezeichnung ergeben.
+        </p>
+        <p className="mb-2 text-xs text-amber-300/90">
+          Neu (Oktober 2026): Wer das Lesezeichen schon eingerichtet hat, muss
+          die Adresse einmal durch die Zeile unten ersetzen. Findet es die
+          Daten nicht sofort, bittet es dich, im Pace-Analysis-Diagramm einmal
+          die <strong>Race week</strong> (oder Car class) umzuschalten — dann
+          fängt es die Daten ab. Klappt das automatische Kopieren nicht, öffnet
+          sich ein Fenster mit einem Kopier-Knopf.
         </p>
         <textarea
           readOnly
