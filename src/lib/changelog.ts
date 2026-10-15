@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.44.0",
+    date: "2026-10-15",
+    changes: [
+      "Stream overlays: the overlay data can now show a season as it stood before a given round. Broadcasts made later from the replay of a round can show the previous round's results, the table and the schedule from before that round instead of today's.",
+    ],
+  },
+  {
     version: "2.43.0",
     date: "2026-10-15",
     changes: [

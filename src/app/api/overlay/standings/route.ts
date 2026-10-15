@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeDriverStandings } from "@/lib/standings";
+import { parseBeforeRound } from "@/lib/overlay-before-round";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -86,8 +87,30 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Round metadata — total count + how many are completed, so the overlay
+  // can show "Round 5 of 10" or grey out scoring rows beyond the current event.
+  const rounds = await prisma.round.findMany({
+    where: { seasonId: season.id },
+    orderBy: { roundNumber: "asc" },
+    select: {
+      id: true,
+      roundNumber: true,
+      name: true,
+      status: true,
+      startsAt: true,
+    },
+  });
+
+  // ?beforeRound=N — the championship as it stood BEFORE round N (rounds N
+  // and later left out). For broadcasts made later from a replay of round N.
+  const beforeRound = parseBeforeRound(searchParams.get("beforeRound"));
+  const excludedRoundIds =
+    beforeRound != null
+      ? rounds.filter((r) => r.roundNumber >= beforeRound).map((r) => r.id)
+      : [];
+
   // Compute championship standings the same way the public site does.
-  const standings = await computeDriverStandings(prisma, season.id);
+  const standings = await computeDriverStandings(prisma, season.id, excludedRoundIds);
 
   // Pull each registration's User.iracingMemberId so the overlay can match
   // telemetry drivers to championship rows. computeDriverStandings doesn't
@@ -110,20 +133,9 @@ export async function GET(req: NextRequest) {
   });
   const regToUser = new Map(regs.map((r) => [r.id, r.user]));
 
-  // Round metadata — total count + how many are completed, so the overlay
-  // can show "Round 5 of 10" or grey out scoring rows beyond the current event.
-  const rounds = await prisma.round.findMany({
-    where: { seasonId: season.id },
-    orderBy: { roundNumber: "asc" },
-    select: {
-      id: true,
-      roundNumber: true,
-      name: true,
-      status: true,
-      startsAt: true,
-    },
-  });
-  const completedRounds = rounds.filter((r) => r.status === "COMPLETED").length;
+  const completedRounds = rounds.filter(
+    (r) => r.status === "COMPLETED" && (beforeRound == null || r.roundNumber < beforeRound)
+  ).length;
 
   // Build the response. Keep field names compact and stable — the Python
   // overlay parses this directly.
@@ -147,6 +159,7 @@ export async function GET(req: NextRequest) {
       proAmEnabled: season.proAmEnabled,
       totalRounds: rounds.length,
       completedRounds,
+      asOfBeforeRound: beforeRound,
     },
     scoring: {
       pointsTable, // { "1": 25, "2": 18, ... } — overall race position
@@ -158,7 +171,8 @@ export async function GET(req: NextRequest) {
       id: r.id,
       number: r.roundNumber,
       name: r.name,
-      status: r.status,
+      status:
+        beforeRound != null && r.roundNumber >= beforeRound ? "UPCOMING" : r.status,
       startsAt: r.startsAt,
     })),
     standings: standings.map((s, idx) => {

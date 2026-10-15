@@ -29,6 +29,7 @@ import { prisma } from "@/lib/prisma";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
+import { parseBeforeRound } from "@/lib/overlay-before-round";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -113,7 +114,12 @@ export async function GET(req: NextRequest) {
       rsvpClosedAt: true,
     },
   });
-  const completed = rounds.filter((r) => r.status === "COMPLETED");
+  // ?beforeRound=N: the season as it stood before round N — last round = the
+  // last completed one before N, next round = N, later rounds "UPCOMING".
+  const beforeRound = parseBeforeRound(searchParams.get("beforeRound"));
+  const isDone = (r: (typeof rounds)[number]) =>
+    r.status === "COMPLETED" && (beforeRound == null || r.roundNumber < beforeRound);
+  const completed = rounds.filter(isDone);
 
   // ---------- last completed round: full results per race ----------
   const lastMeta = completed[completed.length - 1] ?? null;
@@ -360,7 +366,10 @@ export async function GET(req: NextRequest) {
   }
 
   // ---------- next round: RSVP counts ----------
-  const nextMeta = rounds.find((r) => r.status !== "COMPLETED") ?? null;
+  const nextMeta =
+    (beforeRound != null ? rounds.find((r) => r.roundNumber === beforeRound) : null) ??
+    rounds.find((r) => !isDone(r)) ??
+    null;
   let nextRound = null;
   if (nextMeta) {
     const registered = await prisma.registration.findMany({
@@ -413,7 +422,7 @@ export async function GET(req: NextRequest) {
       return {
         number: r.roundNumber,
         name: r.name,
-        status: r.status,
+        status: isDone(r) ? "COMPLETED" : r.status === "COMPLETED" ? "UPCOMING" : r.status,
         entries: new Set(rows.map((x) => x.registrationId)).size,
         finishers: rows.filter((x) => x.finishStatus === "CLASSIFIED").length,
         hasResults: rows.length > 0,
@@ -436,12 +445,15 @@ export async function GET(req: NextRequest) {
         name: season.name,
         totalRounds: rounds.length,
         completedRounds: completed.length,
+        asOfBeforeRound: beforeRound,
       },
       rounds: rounds.map((r) => ({
         number: r.roundNumber,
         name: r.name,
-        status: r.status,
+        status: isDone(r) ? "COMPLETED" : r.status === "COMPLETED" ? "UPCOMING" : r.status,
         startsAt: r.startsAt,
+        track: r.track,
+        trackConfig: r.trackConfig,
       })),
       lastRound,
       nextRound,
