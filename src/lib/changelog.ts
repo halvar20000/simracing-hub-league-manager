@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.43.0",
+    date: "2026-10-15",
+    changes: [
+      "Race Logger 1.4.1: please download it again. Version 1.4.0 did not send the finished log to the league site, had no setup page at localhost:5009/league, and the .exe could lose its log when it was closed. 1.4.1 brings all of that back, together with the tire data.",
+      "Live tire wear on the league stream: with Race Logger 1.4.1 and your key set, your own pit stop (tread left per corner, fresh or used set, stop time) is sent the moment you leave the pit lane, so the broadcast can show it. Only your own car, nothing else. You can switch it off on the setup page (\"Send my pit stops live\").",
+    ],
+  },
+  {
     version: "2.42.0",
     date: "2026-10-15",
     changes: [
