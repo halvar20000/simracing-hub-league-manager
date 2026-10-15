@@ -1451,6 +1451,34 @@ export const de: PlannerDict = {
     colPitStop: "Boxenstopp",
     incidentsNotTimed:
       "Incidents je Stint stehen nur zur Verfügung, wenn der Race Logger sie mit Zeitstempel aufgezeichnet hat. Dieses Log enthält keine — die Gesamtzahl je Fahrer in der Auswertung oben kommt aus dem eventresult, lässt sich aber keinem Stint zuordnen.",
+    tiresStale:
+      "Diese Auswertung entstand, bevor der Logger Reifen und Setup mitgeschrieben hat. „Neu analysieren“ füllt sie nach, wenn das archivierte Log die Daten enthält.",
+
+    // ---- Reifen + Setup, Stopp für Stopp (Race Logger 1.4.0+) ----------
+    tiresTitle: "Reifen und Setup",
+    tiresSetup: "Setup:",
+    tiresSetupEdited: "in der Garage verstellt",
+    tiresSetupCount: (n: number) => `(${n} Setups über die Session)`,
+    colAfterStint: "nach Stint",
+    colTireChange: "Reifen",
+    colTireOff: "runter mit",
+    colTireOn: "raus auf",
+    colTireService: "Service",
+    tiresFresh: "neu",
+    tiresUsed: "gebrauchter Satz",
+    tiresKept: "nicht gewechselt",
+    tiresUnproven: "nicht belegt",
+    cornerLf: "VL",
+    cornerRf: "VR",
+    cornerLr: "HL",
+    cornerRr: "HR",
+    svAllTires: "4 Reifen",
+    svFuel: (litres: number | null) =>
+      litres == null ? "Tanken" : `Tanken ${litres} l`,
+    svTearoff: "Tearoff",
+    svFastRepair: "Fast Repair",
+    tiresNote:
+      "Restprofil je Ecke in Prozent, vorne oben; die Zahl ist der niedrigste der drei Streifen, im Hover stehen alle drei. iRacing misst das Profil nur, während das Auto in der Box steht, und liefert Reifendaten ausschließlich für das eigene Auto des Fahrers — diese Zeilen gibt es also nur, wenn das hochgeladene Log von diesem Auto stammt.",
   },
 
   dbfField: {

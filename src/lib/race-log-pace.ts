@@ -16,6 +16,10 @@
  *   session_start { track, session_name, weather:{track_temp_c, air_temp_c} }
  *   lap           { car_idx, car_number, driver, car, car_class, lap, lap_time }
  *   pit           { car_idx, car_number, driver, entry_lap, duration }
+ *                 and, for the car whose driver ran the logger:
+ *                 { tire_wear_in, tire_wear_out, tires_changed,
+ *                   left_on_fresh, service:{requested, fuel_l} }
+ *   setup         { name, modified }   (local car only)
  *   incident      { car_idx, car_number, driver }
  *   session_end   { official }
  */
@@ -29,11 +33,21 @@ import type {
   RaceLogDriverRow,
   RaceLogLap,
   RaceLogStintRow,
+  RaceLogStintTires,
+  TireCorner,
+  TireTriple,
 } from "@/lib/stint-plan-state";
 
 /** Bumped whenever the exclusion rules change, so a plan carrying an older
  *  trace can be spotted and offered a re-analyse. */
 export const PARSER_EXCLUSION_GENERATION = 2;
+
+/** Bumped when the in-box tire / setup capture changes, so an older trace can
+ *  say "re-analyse" instead of showing a blank that looks like "no data".
+ *  See PlannerRaceLog.tireV. */
+export const PARSER_TIRE_GENERATION = 1;
+
+const TIRE_CORNERS: readonly TireCorner[] = ["lf", "rf", "lr", "rr"];
 
 export interface ParsedRaceLog {
   ok: boolean;
@@ -56,6 +70,10 @@ export interface ParsedRaceLog {
   /** Incidents on our car with the session clock, when the logger timestamped
    *  them. Empty means "none recorded" — never "the race was clean". */
   incidents: { t: number; d: number }[];
+  /** See PlannerRaceLog.setups. Empty when the log has none. */
+  setups: { t: number | null; name: string; modified?: boolean }[];
+  /** See PlannerRaceLog.tireV. */
+  tireV: number;
   /** See PlannerRaceLog.exclV. */
   exclV: number;
   /** See PlannerRaceLog.incidentSource. */
@@ -63,6 +81,68 @@ export interface ParsedRaceLog {
 }
 
 const norm = (s: unknown) => String(s ?? "").trim().toLowerCase();
+
+/** One tire's three tread readings, or null unless all three are numbers. */
+function tireTriple(v: unknown): TireTriple | null {
+  if (!Array.isArray(v) || v.length !== 3) return null;
+  const out: number[] = [];
+  for (const x of v) {
+    if (typeof x !== "number" || !Number.isFinite(x)) return null;
+    out.push(Math.round(x * 10) / 10);
+  }
+  return [out[0], out[1], out[2]];
+}
+
+/** A {lf,rf,lr,rr} wear block, or undefined when no corner came through. */
+function tireCornerMap(
+  v: unknown
+): Partial<Record<TireCorner, TireTriple>> | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const src = v as Record<string, unknown>;
+  const out: Partial<Record<TireCorner, TireTriple>> = {};
+  for (const c of TIRE_CORNERS) {
+    const triple = tireTriple(src[c]);
+    if (triple) out[c] = triple;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * The tire half of a logger `pit` event, or undefined.
+ *
+ * Undefined for every car but the one whose driver ran the logger — iRacing
+ * publishes tire data for the local car only. Each field is taken on its own
+ * so a partially-written event still yields what it does carry.
+ */
+function tiresOfPit(o: any): RaceLogStintTires | undefined {
+  const rec: RaceLogStintTires = {};
+  const before = tireCornerMap(o?.tire_wear_in);
+  const after = tireCornerMap(o?.tire_wear_out);
+  if (before) rec.in = before;
+  if (after) rec.out = after;
+  if (Array.isArray(o?.tires_changed)) {
+    const changed = (o.tires_changed as unknown[]).filter(
+      (c): c is TireCorner => TIRE_CORNERS.includes(c as TireCorner)
+    );
+    if (changed.length) rec.changed = changed;
+  }
+  if (typeof o?.left_on_fresh === "boolean") rec.fresh = o.left_on_fresh;
+  const service = o?.service;
+  if (service && typeof service === "object") {
+    const requested = (service as any).requested;
+    if (Array.isArray(requested)) {
+      const names = (requested as unknown[]).filter(
+        (s): s is string => typeof s === "string" && s !== ""
+      );
+      if (names.length) rec.service = names;
+    }
+    const fuel = (service as any).fuel_l;
+    if (typeof fuel === "number" && Number.isFinite(fuel)) {
+      rec.fuelL = Math.round(fuel * 10) / 10;
+    }
+  }
+  return Object.keys(rec).length ? rec : undefined;
+}
 const numOrNull = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
 
@@ -99,7 +179,12 @@ interface CarAcc {
   carNumber: string | null;
   carClass: string | null;
   laps: LapRec[];
-  pits: { entryLap: number | null; durationSec: number | null; driver: string }[];
+  pits: {
+    entryLap: number | null;
+    durationSec: number | null;
+    driver: string;
+    tires?: RaceLogStintTires;
+  }[];
   incidentsByDriver: Map<string, number>;
   /** Every incident with the session clock it landed on, so a de-briefing can
    *  say WHERE in the race it went wrong instead of only how many there were
@@ -296,6 +381,8 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     incidents: [],
     stints: [],
     temps: [],
+    setups: [],
+    tireV: PARSER_TIRE_GENERATION,
     exclV: PARSER_EXCLUSION_GENERATION,
     incidentSource: null,
   };
@@ -323,6 +410,9 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
     o?.car_number != null && String(o.car_number).trim() !== ""
       ? `#${String(o.car_number).trim()}`
       : `idx${o?.car_idx ?? "?"}`;
+
+  // Setups seen in the log (local car only — see the `setup` case below).
+  const setups: { t: number | null; name: string; modified?: boolean }[] = [];
 
   const getCar = (o: any): CarAcc => {
     const k = carKey(o);
@@ -425,10 +515,37 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
       }
       case "pit": {
         const car = getCar(o);
+        const tires = tiresOfPit(o);
         car.pits.push({
           entryLap: typeof o.entry_lap === "number" ? o.entry_lap : null,
           durationSec: numOrNull(o.duration),
           driver: String(o.driver ?? "").trim(),
+          ...(tires ? { tires } : {}),
+        });
+        break;
+      }
+      case "setup": {
+        // Local car only, so it is ours by construction — the event carries no
+        // car_number to group by. Consecutive duplicates are dropped: a
+        // practice session re-emits on every garage edit, and two identical
+        // lines in a row say nothing.
+        const name = String(o.name ?? "").trim();
+        if (name === "") break;
+        const modified = o.modified === true;
+        const last = setups[setups.length - 1];
+        // `modified` is only STORED when true, so compare against a
+        // normalised false — otherwise undefined !== false and every repeated
+        // line gets through.
+        if (last && last.name === name && (last.modified ?? false) === modified) {
+          break;
+        }
+        setups.push({
+          t:
+            typeof o.t_session === "number" && Number.isFinite(o.t_session)
+              ? Math.round(o.t_session)
+              : null,
+          name,
+          ...(modified ? { modified: true } : {}),
         });
         break;
       }
@@ -575,9 +692,14 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
   const stops = ownCar.pits
     .filter((p) => p.entryLap != null)
     .sort((a, b) => (a.entryLap ?? 0) - (b.entryLap ?? 0));
-  const bounds: { end: number; pitSec: number | null }[] = stops.map((p) => ({
+  const bounds: {
+    end: number;
+    pitSec: number | null;
+    tires?: RaceLogStintTires;
+  }[] = stops.map((p) => ({
     end: p.entryLap as number,
     pitSec: p.durationSec == null ? null : Math.round(p.durationSec * 10) / 10,
+    ...(p.tires ? { tires: p.tires } : {}),
   }));
   const lastLap = numbered.length ? (numbered[numbered.length - 1].lap as number) : 0;
   if (bounds.length === 0 || bounds[bounds.length - 1].end < lastLap) {
@@ -623,6 +745,7 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
       d: driverIndex.get(mainKey) ?? 0,
       avgSec: round3(base.reduce((s, l) => s + l.sec, 0) / base.length),
       pitSec: b.pitSec,
+      ...(b.tires ? { tires: b.tires } : {}),
     });
   }
   for (const st of stints) {
@@ -653,6 +776,8 @@ export function parseRaceLog(text: string, rosterNames: string[]): ParsedRaceLog
         d: driverIndex.get(e.driver) ?? -1,
       }))
       .sort((a, b) => a.t - b.t),
+    setups,
+    tireV: PARSER_TIRE_GENERATION,
     exclV: PARSER_EXCLUSION_GENERATION,
     incidentSource,
   };

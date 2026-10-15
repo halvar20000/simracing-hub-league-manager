@@ -6,6 +6,11 @@ import type {
   DebriefStint,
   DebriefRaceDetail,
 } from "@/lib/debrief-stints";
+import type {
+  RaceLogStintTires,
+  TireCorner,
+  TireTriple,
+} from "@/lib/stint-plan-state";
 import { fmtLap } from "@/lib/debrief";
 import { useT } from "@/components/planner/PlannerUi";
 import type { PlannerDict } from "@/lib/i18n/planner";
@@ -95,6 +100,13 @@ export default function DebriefRaceCharts({
           <h2 className={h2}>{t.dbfRace.stintByStintTitle}</h2>
           <StintCharts race={race} />
           <StintTable race={race} />
+        </section>
+      )}
+
+      {race.stints.some((s) => s.tires) && (
+        <section className={card}>
+          <h2 className={h2}>{t.dbfRace.tiresTitle}</h2>
+          <TireTable race={race} />
         </section>
       )}
     </>
@@ -576,6 +588,201 @@ function StintTable({ race }: { race: DebriefRaceDetail }) {
           {t.dbfRace.incidentsNotTimed}
         </p>
       )}
+      {/* A trace parsed before the tire capture existed has no tire section at
+          all. Saying so beats a silent blank, because the raw .jsonl in the
+          archive may well hold the data. */}
+      {race.tireV == null && race.stints.some((s) => s.pitSec != null) && (
+        <p className="mt-2 text-[11px] text-zinc-500 print:text-zinc-600">
+          {t.dbfRace.tiresStale}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Tread remaining per corner, laid out like the car: fronts on top. The
+ *  number is the LIMITING strip (the lowest of inner/middle/outer) — a tire is
+ *  as good as its worst strip; the hover gives all three. */
+function TireGrid({
+  map,
+  labels,
+}: {
+  map?: Partial<Record<TireCorner, TireTriple>>;
+  labels: Record<TireCorner, string>;
+}) {
+  if (!map) return <span className="text-zinc-500 print:text-zinc-600">—</span>;
+  const cell = (c: TireCorner) => {
+    const v: TireTriple | undefined = map[c];
+    if (!v) {
+      return (
+        <span key={c} className="text-zinc-600 print:text-zinc-500">
+          —
+        </span>
+      );
+    }
+    const low = Math.min(...v);
+    const tone =
+      low < 20
+        ? "text-red-300 print:text-zinc-900"
+        : low < 40
+          ? "text-amber-300 print:text-zinc-900"
+          : "text-zinc-200 print:text-zinc-900";
+    return (
+      <span
+        key={c}
+        className={`${tone} tabular-nums`}
+        title={`${labels[c]}: ${v.map((n) => n.toFixed(0)).join(" / ")} %`}
+      >
+        {low.toFixed(0)}
+      </span>
+    );
+  };
+  return (
+    <span className="inline-grid grid-cols-2 gap-x-2 text-[11px] leading-tight">
+      {cell("lf")}
+      {cell("rf")}
+      {cell("lr")}
+      {cell("rr")}
+    </span>
+  );
+}
+
+/** What the crew was asked for, in the team's words rather than SDK flags. */
+function serviceText(tires: RaceLogStintTires, t: PlannerDict): string {
+  const names = tires.service ?? [];
+  if (names.length === 0) return "—";
+  const labels: Record<TireCorner, string> = {
+    lf: t.dbfRace.cornerLf,
+    rf: t.dbfRace.cornerRf,
+    lr: t.dbfRace.cornerLr,
+    rr: t.dbfRace.cornerRr,
+  };
+  const corners = (["lf", "rf", "lr", "rr"] as TireCorner[]).filter((c) =>
+    names.includes(`${c}_tire`)
+  );
+  const out: string[] = [];
+  if (corners.length === 4) out.push(t.dbfRace.svAllTires);
+  else if (corners.length) out.push(corners.map((c) => labels[c]).join(" "));
+  if (names.includes("fuel")) out.push(t.dbfRace.svFuel(tires.fuelL ?? null));
+  if (names.includes("windshield_tearoff")) out.push(t.dbfRace.svTearoff);
+  if (names.includes("fast_repair")) out.push(t.dbfRace.svFastRepair);
+  return out.length ? out.join(" · ") : "—";
+}
+
+/**
+ * Tires and setup, stop by stop.
+ *
+ * Its own table rather than more columns on the stint table: this is per-STOP
+ * data (iRacing refreshes tread only while the car stands in the box), it only
+ * exists when the uploaded log came from this car's own driver, and the four
+ * corners need the room to stay readable.
+ */
+function TireTable({ race }: { race: DebriefRaceDetail }) {
+  const t = useT();
+  const labels: Record<TireCorner, string> = {
+    lf: t.dbfRace.cornerLf,
+    rf: t.dbfRace.cornerRf,
+    lr: t.dbfRace.cornerLr,
+    rr: t.dbfRace.cornerRr,
+  };
+  const rows = race.stints.filter((s) => s.tires);
+  const setup = race.setups.length ? race.setups[race.setups.length - 1] : null;
+  return (
+    <div>
+      {setup && (
+        <p className="mb-3 text-xs text-zinc-300 print:text-zinc-900">
+          {t.dbfRace.tiresSetup}{" "}
+          <span className="font-semibold">{setup.name}</span>
+          {setup.modified && (
+            <span className="ml-2 text-amber-300 print:text-zinc-900">
+              {t.dbfRace.tiresSetupEdited}
+            </span>
+          )}
+          {race.setups.length > 1 && (
+            <span className="ml-2 text-zinc-500 print:text-zinc-600">
+              {t.dbfRace.tiresSetupCount(race.setups.length)}
+            </span>
+          )}
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-xs">
+          <thead>
+            <tr>
+              <th className={th}>{t.dbfRace.colAfterStint}</th>
+              <th className={`${th} text-right`}>{t.dbfRace.colPitStop}</th>
+              <th className={th}>{t.dbfRace.colTireChange}</th>
+              <th className={`${th} text-right`}>{t.dbfRace.colTireOff}</th>
+              <th className={`${th} text-right`}>{t.dbfRace.colTireOn}</th>
+              <th className={th}>{t.dbfRace.colTireService}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => {
+              const ti = s.tires!;
+              const changed = ti.changed ?? [];
+              return (
+                <tr
+                  key={s.index}
+                  className="border-b border-zinc-900 last:border-0 print:border-zinc-200"
+                >
+                  <td className={`${td} whitespace-nowrap`}>
+                    <span
+                      className="mr-2 inline-block h-2 w-2 rounded-full align-middle"
+                      style={{ background: colorFor(s.d) }}
+                    />
+                    {s.index}
+                    <span className="ml-2 text-zinc-500 print:text-zinc-600">
+                      {s.driver ?? "—"}
+                    </span>
+                  </td>
+                  <td className={`${td} text-right tabular-nums text-zinc-400 print:text-zinc-600`}>
+                    {s.pitSec == null ? "—" : `${t.common.dec(s.pitSec, 1)} s`}
+                  </td>
+                  <td className={`${td} whitespace-nowrap`}>
+                    {changed.length === 0 ? (
+                      <span className="text-zinc-500 print:text-zinc-600">
+                        {ti.out ? t.dbfRace.tiresKept : t.dbfRace.tiresUnproven}
+                      </span>
+                    ) : (
+                      <>
+                        <span
+                          className={
+                            ti.fresh === false
+                              ? "text-amber-300 print:text-zinc-900"
+                              : "text-emerald-300 print:text-zinc-900"
+                          }
+                        >
+                          {ti.fresh === false
+                            ? t.dbfRace.tiresUsed
+                            : t.dbfRace.tiresFresh}
+                        </span>
+                        <span className="ml-2 text-zinc-400 print:text-zinc-600">
+                          {changed.length === 4
+                            ? t.dbfRace.svAllTires
+                            : changed.map((c) => labels[c]).join(" ")}
+                        </span>
+                      </>
+                    )}
+                  </td>
+                  <td className={`${td} text-right`}>
+                    <TireGrid map={ti.in} labels={labels} />
+                  </td>
+                  <td className={`${td} text-right`}>
+                    <TireGrid map={ti.out} labels={labels} />
+                  </td>
+                  <td className={`${td} text-zinc-400 print:text-zinc-600`}>
+                    {serviceText(ti, t)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[11px] text-zinc-500 print:text-zinc-600">
+        {t.dbfRace.tiresNote}
+      </p>
     </div>
   );
 }

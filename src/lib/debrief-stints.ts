@@ -14,6 +14,7 @@ import type {
   LapExclusion,
   PlannerRaceLog,
   RaceLogLap,
+  RaceLogStintTires,
 } from "@/lib/stint-plan-state";
 import type { ScheduleStint } from "@/lib/stint-planner";
 import { normName, type RaceLogModel } from "@/lib/race-log-model";
@@ -45,6 +46,9 @@ export type DebriefStint = {
   bestSec: number | null;
   /** Duration of the stop that ENDED this stint, in seconds. */
   pitSec: number | null;
+  /** Tires + service at that stop, when the log came from this car's own
+   *  driver — see RaceLogStintTires. Null for everyone else's upload. */
+  tires: RaceLogStintTires | null;
   /** What the plan expected this driver's lap to be in this window. */
   planSec: number | null;
   /** Actual minus planned, in seconds per lap. Positive = slower than planned. */
@@ -85,6 +89,11 @@ export type DebriefRaceDetail = {
   teamBestSec: number | null;
   /** Fastest lap in our class, when the log identified one. */
   classBestSec: number | null;
+  /** Setups our car ran (local-car-only data — empty for a spectator's log). */
+  setups: { t: number | null; name: string; modified?: boolean }[];
+  /** PlannerRaceLog.tireV: null = this trace predates the tire capture, so an
+   *  empty tire section means "unknown", not "nothing happened". */
+  tireV: number | null;
 };
 
 const round3 = (n: number | null): number | null =>
@@ -173,6 +182,7 @@ export function buildDebriefRace(
       avgSec: round3(avg),
       bestSec: secs.length ? round3(Math.min(...secs)) : null,
       pitSec: st.pitSec,
+      tires: st.tires ?? null,
       planSec: round3(planSec),
       deltaSec: avg != null && planSec != null ? round3(avg - planSec) : null,
       incidents: inWindow,
@@ -249,5 +259,7 @@ export function buildDebriefRace(
     incidentsTimed,
     teamBestSec: allSecs.length ? round3(Math.min(...allSecs)) : null,
     classBestSec: log.classBestSec ?? null,
+    setups: log.setups ?? [],
+    tireV: log.tireV ?? null,
   };
 }

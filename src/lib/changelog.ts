@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.42.0",
+    date: "2026-10-15",
+    changes: [
+      "Stint planner de-briefing: new \"Tires and setup\" section. For every pit stop it shows what came off the car and what it went back out on — tread remaining per corner in percent, fronts on top — whether that set was fresh or a used one, and what was ordered in the pit box (tires, fuel, tearoff, fast repair). The setup that was driven is named above the table, with a marker when it had been edited in the garage.",
+      "Needs Race Logger 1.4.0 or newer — download it again from the Race Logger page. The data exists only in the log of the driver who ran the logger: iRacing publishes tire data for the own car alone, and measures the tread only while the car stands in the box.",
+      "An analysis made before this says so instead of showing an empty section — \"Re-analyse\" fills the tires in when the archived log holds them.",
+    ],
+  },
+  {
     version: "2.41.1",
     date: "2026-10-12",
     changes: [

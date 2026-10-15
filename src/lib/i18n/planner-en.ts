@@ -1452,6 +1452,34 @@ export const en = {
     colPitStop: "Pit stop",
     incidentsNotTimed:
       "Per-stint incidents are only available when the race logger recorded them with a timestamp. This log has none — the per-driver total in the evaluation above comes from the eventresult and cannot be attributed to a stint.",
+    tiresStale:
+      "This trace was analysed before the logger recorded tires and setup. Re-analyse fills them in when the archived log has the data.",
+
+    // ---- tires + setup, stop by stop (race logger 1.4.0+) ---------------
+    tiresTitle: "Tires and setup",
+    tiresSetup: "Setup:",
+    tiresSetupEdited: "edited in the garage",
+    tiresSetupCount: (n: number) => `(${n} setups over the session)`,
+    colAfterStint: "after stint",
+    colTireChange: "Tires",
+    colTireOff: "came off at",
+    colTireOn: "went out on",
+    colTireService: "Service",
+    tiresFresh: "fresh",
+    tiresUsed: "used set",
+    tiresKept: "not changed",
+    tiresUnproven: "not proven",
+    cornerLf: "LF",
+    cornerRf: "RF",
+    cornerLr: "LR",
+    cornerRr: "RR",
+    svAllTires: "4 tires",
+    svFuel: (litres: number | null) =>
+      litres == null ? "fuel" : `fuel ${litres} l`,
+    svTearoff: "tearoff",
+    svFastRepair: "fast repair",
+    tiresNote:
+      "Tread remaining per corner in percent, fronts on top; the figure is the lowest of the three strips, the hover gives all three. iRacing measures tread only while the car stands in the box, and it publishes tire data for the driver's own car alone — so these rows exist only when the uploaded log came from this car.",
   },
 
   // ---- debrief: the rest of the field ------------------------------------

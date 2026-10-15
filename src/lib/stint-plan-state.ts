@@ -175,6 +175,38 @@ export type RaceLogLap = {
   tc?: number;
 };
 
+/** A tire's tread remaining per strip, inner → outer, in percent. */
+export type TireTriple = [number, number, number];
+
+export type TireCorner = "lf" | "rf" | "lr" | "rr";
+
+/**
+ * What happened to the tires at the stop that ENDED a stint — from the race
+ * logger's in-box readings (logger 1.4.0+, Johann's request).
+ *
+ * Only ever present for the car whose driver ran the logger: iRacing has no
+ * CarIdx array for tire data, and it refreshes tread depth only while the car
+ * stands in the box. So this is per-stop by nature, never per-lap.
+ *
+ * `changed` lists the corners whose tread jumped up, `fresh` says every one of
+ * them came out unused — a remounted scuffed set is changed but NOT fresh.
+ * `changed` missing while `out` is present means iRacing published a single
+ * reading during the stop, so a change could not be proven; `service` is then
+ * the only evidence of what was asked for.
+ */
+export type RaceLogStintTires = {
+  /** Tread per corner before the stop — what came off the car. */
+  in?: Partial<Record<TireCorner, TireTriple>>;
+  /** Tread per corner after the stop — what the car left on. */
+  out?: Partial<Record<TireCorner, TireTriple>>;
+  changed?: TireCorner[];
+  fresh?: boolean;
+  /** Queued in the pit box: lf_tire … rr_tire, fuel, windshield_tearoff,
+   *  fast_repair. The INTENT, which can differ from the outcome above. */
+  service?: string[];
+  fuelL?: number;
+};
+
 /** One stint of the plan's own car, derived from the log's pit events. */
 export type RaceLogStintRow = {
   carNumber: string | null;
@@ -190,6 +222,9 @@ export type RaceLogStintRow = {
   d: number;
   avgSec: number | null;
   pitSec: number | null; // pit-stop duration that ENDED this stint
+  /** Tires + service at that stop. Absent unless the uploaded log came from
+   *  the car's own driver — see RaceLogStintTires. */
+  tires?: RaceLogStintTires;
 };
 
 /** Archived + parsed race-logger JSONL attached to a plan. */
@@ -234,6 +269,25 @@ export type PlannerRaceLog = {
    * saved with the plan so the debrief keeps reading correctly.
    */
   stintDrivers?: (string | null)[];
+  /**
+   * Setups our car ran, with the session clock they were seen at. One entry in
+   * a race; one per iteration through a practice session. `modified` means the
+   * setup had been edited in the garage since loading — the file name alone
+   * lies the moment someone turns a click.
+   *
+   * ABSENT on a log parsed before this existed AND on one whose uploader was
+   * spectating; `tireV` tells the two apart.
+   */
+  setups?: { t: number | null; name: string; modified?: boolean }[];
+  /**
+   * Parser generation for the in-box tire data and the setup events.
+   *
+   * Absent = parsed before the logger recorded them, so empty tire fields say
+   * nothing; 1 = this parse looked for them, and empty means the log really
+   * has none (an older logger, or an uploader who was spectating). Drives the
+   * "re-analyse to fill this in" hint rather than a silent blank.
+   */
+  tireV?: number;
   /**
    * Which generation of the parser produced this trace.
    *
