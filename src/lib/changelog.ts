@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.45.0",
+    date: "2026-10-25",
+    changes: [
+      "Stream overlays: the team championship table can now be shown on the league stream, in the same look as the starting grid and the results.",
+    ],
+  },
+  {
     version: "2.44.0",
     date: "2026-10-15",
     changes: [

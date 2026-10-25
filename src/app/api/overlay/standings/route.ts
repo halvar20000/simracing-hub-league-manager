@@ -16,7 +16,12 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { computeDriverStandings } from "@/lib/standings";
+import {
+  computeDriverStandings,
+  computeTeamClassStandings,
+  computeTeamStandings,
+} from "@/lib/standings";
+import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { parseBeforeRound } from "@/lib/overlay-before-round";
 
 export const dynamic = "force-dynamic";
@@ -147,6 +152,37 @@ export async function GET(req: NextRequest) {
     (season.scoringSystem?.classPointsTable as Record<string, number> | null) ??
     pointsTable;
 
+  // Team championship (same functions as the public standings page). Only
+  // for leagues with a team competition, and not with ?beforeRound — the
+  // team functions cannot leave rounds out, so a replay would get today's
+  // team table; null tells the overlay "not available" instead.
+  let teams: unknown[] | null = null;
+  let teamClasses: unknown[] | null = null;
+  if (beforeRound == null && leagueHasTeamCompetition(league.slug)) {
+    const [t, tc] = await Promise.all([
+      computeTeamStandings(prisma, season.id),
+      computeTeamClassStandings(prisma, season.id),
+    ]);
+    teams = t.map((r, idx) => ({
+      rank: idx + 1,
+      teamId: r.teamId,
+      teamName: r.teamName,
+      points: r.totalPoints,
+      driversCount: r.driversCount,
+    }));
+    teamClasses = tc.map((g) => ({
+      carClassName: g.carClassName,
+      carClassShortCode: g.carClassShortCode,
+      teams: g.teams.map((r, idx) => ({
+        rank: idx + 1,
+        teamId: r.teamId,
+        teamName: r.teamName,
+        points: r.totalPoints,
+        roundsCompleted: r.roundsCompleted,
+      })),
+    }));
+  }
+
   const responseBody = {
     ok: true,
     generatedAt: new Date().toISOString(),
@@ -209,6 +245,10 @@ export async function GET(req: NextRequest) {
         retiredAt: s.retiredAt,
       };
     }),
+    // Team championship: one table (teams) or one per car class in team-event
+    // seasons like IEC (teamClasses). null = league without teams / beforeRound.
+    teams,
+    teamClasses,
   };
 
   return NextResponse.json(responseBody, { headers: CORS_HEADERS });
