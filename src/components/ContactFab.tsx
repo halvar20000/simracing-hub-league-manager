@@ -19,7 +19,7 @@ export default function ContactFab() {
       href="/contact"
       aria-label="Report an issue / Contact developer"
       title="Report an issue / Contact developer"
-      className="group fixed bottom-5 right-5 z-50 flex items-center gap-0 rounded-full border border-[#ff6b35] bg-zinc-950/90 px-3.5 py-3 text-sm font-medium text-[#ff6b35] shadow-lg shadow-black/40 backdrop-blur transition-colors hover:bg-[#ff6b35] hover:text-zinc-950"
+      className="group fixed bottom-20 right-4 z-50 print:hidden lg:bottom-5 lg:right-5 flex items-center gap-0 rounded-full border border-[#ff6b35] bg-zinc-950/90 px-3.5 py-3 text-sm font-medium text-[#ff6b35] shadow-lg shadow-black/40 backdrop-blur transition-colors hover:bg-[#ff6b35] hover:text-zinc-950"
     >
       <span aria-hidden className="text-base leading-none">
         🛠️

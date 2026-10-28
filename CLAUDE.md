@@ -321,6 +321,17 @@ The race-logger `.jsonl` that Driver of the Day and the stint-planner analysis n
 - **Round matching** (`matchRoundForLog`): a round of a season the uploader is registered in, within ±36 h of the log, track names compared loosely; ambiguous → left unassigned for an admin. The Race Center DotD panel ticks the attached logs by default and lists nearby unassigned ones with an "Attach to this round" button; `computeAndSaveDotd` accepts `logUploadIds` alongside the manual file inputs (manual upload is unchanged and still works alone).
 - **Schema**: `RaceLogUpload` + the two `User` columns — apply `outputs/race_log_upload_table.sql` on the Hetzner Postgres before deploying (see the schema-change note above).
 
+## Installable app (PWA) + push notifications (v2.46.0)
+
+Step 1 of the app plan (2026-10-28): CLS is an installable PWA. Step 2 (later) = the same site in a Capacitor shell for App Store + Play Store with native push; Apple + Google developer accounts exist.
+
+- **Manifest** `src/app/manifest.ts`; icons in `public/icons/` (generated from the "CAS" part of `site-logo.png`; `maskable-512` has the safe-zone padding, `badge-96` is the white Android status-bar glyph). `src/app/favicon.ico` is the same CAS icon (was the Vercel default triangle).
+- **Service worker** `public/sw.js` (registered by `ServiceWorkerRegister`, production only): push + notificationclick + a network-only navigation handler with `/offline` as the fallback. **It caches NOTHING else on purpose** — standings, RSVP and the publish gate must never come from a cache. Served `no-cache` via `next.config.ts` headers. Bump `VERSION` in it when the pre-cached set changes.
+- **Phone layout**: `nav.tsx` shows the link row only from `lg`; below that a `MobileMenu` (`<details>`, closes on navigation) + `MobileTabBar` fixed at the bottom (Home / Leagues / Calendar / Streams / Me). Body has bottom padding for it (`env(safe-area-inset-bottom)`, `viewportFit: "cover"`); `ContactFab` sits above it on phones. New top-level nav links go into the `links` array in `nav.tsx` (both menus read it).
+- **Push**: `src/lib/push.ts` (`web-push`; VAPID keys from `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` env if set, else generated once into `AppSetting` key `vapid` — never rotate casually, every subscription is bound to it). `PushSubscription` = one device (topics per device: `race-soon`, `rsvp`, `results`, `reporting`, `results-all`); 404/410 from the push service deletes it. UI: `PushSettings` on `/app` and `/profile#notifications`; install help `InstallApp` on `/app`. iOS only gets push inside the installed home-screen app (16.4+).
+- **Sweep** `src/lib/push-sweep.ts` via `/api/cron/push` (host crontab every 10 min + `cron-push.yml` backup). Independent of the Discord notifiers and their league switches. Once per (kind, round) through `PushDispatch` — claimed BEFORE sending so overlapping runs can't double-send; a window that opened long ago is stamped with `sentCount 0` instead of announced. Uses `reinterpretLocalAsZone` for all start-time maths. Results go out only once the round is COMPLETED (publish gate).
+- **Schema**: `PushSubscription`, `PushDispatch`, `AppSetting` — applied on the live DB via `outputs/push_tables.sql` (2026-10-28).
+
 ## Logos
 
 - `public/logos/site-logo.png` — top nav logo (CAS LEAGUE SCORING SYSTEM)

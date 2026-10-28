@@ -12,6 +12,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # --- time-critical: a late run has real consequences -----------------------
 */10 * * * * /root/cls-cron.sh post-stream-announcements
+*/10 * * * * /root/cls-cron.sh push
 */15 * * * * /root/cls-cron.sh rsvp-close
 */30 * * * * /root/cls-cron.sh post-rsvp
 */30 * * * * /root/cls-cron.sh notify-reporting-open

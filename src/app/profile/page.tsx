@@ -3,6 +3,13 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import ProfileForm from "@/components/ProfileForm";
+import PushSettings from "@/components/PushSettings";
+import {
+  DEFAULT_PUSH_TOPICS,
+  getVapidKeys,
+  PUSH_TOPICS,
+  PUSH_TOPIC_LABEL,
+} from "@/lib/push";
 
 export default async function ProfilePage({
   searchParams,
@@ -20,6 +27,7 @@ export default async function ProfilePage({
   if (!user) redirect("/api/auth/signin");
 
   const { error, success, next: nextRaw } = await searchParams;
+  const { publicKey } = await getVapidKeys();
   // Only same-site paths — never an open redirect.
   const next =
     nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//")
@@ -64,6 +72,25 @@ export default async function ProfilePage({
           iracingMemberId: user.iracingMemberId ?? "",
         }}
       />
+
+      <div
+        id="notifications"
+        className="scroll-mt-20 rounded border border-zinc-800 bg-zinc-900 p-4"
+      >
+        <h2 className="text-sm font-semibold text-zinc-200">Notifications</h2>
+        <p className="mb-3 mt-1 text-sm text-zinc-400">
+          Race reminders, RSVP and results on this device.{" "}
+          <Link href="/app" className="text-[#ff6b35] hover:underline">
+            Install the app
+          </Link>{" "}
+          first on iPhone.
+        </p>
+        <PushSettings
+          publicKey={publicKey}
+          topics={PUSH_TOPICS.map((k) => ({ key: k, label: PUSH_TOPIC_LABEL[k] }))}
+          defaultTopics={DEFAULT_PUSH_TOPICS}
+        />
+      </div>
 
       <div className="rounded border border-zinc-800 bg-zinc-900 p-4">
         <h2 className="text-sm font-semibold text-zinc-200">Race Logger</h2>

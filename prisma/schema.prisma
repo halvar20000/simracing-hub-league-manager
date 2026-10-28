@@ -79,6 +79,8 @@ model User {
   /// the driver generates one on /race-logger; regenerating replaces it.
   raceLoggerToken          String?   @unique
   raceLoggerTokenCreatedAt DateTime?
+
+  pushSubscriptions PushSubscription[]
 }
 
 model Account {
@@ -1598,6 +1600,47 @@ model DebriefStintMetric {
 /// admin picks from when computing Driver of the Day, so nobody has to mail
 /// log files around any more. Manual upload on the Race Center page still
 /// works unchanged — this is an additional source, never a replacement.
+/// One browser/device that allowed CLS push notifications (Web Push, the
+/// installed app on Android + iOS 16.4+). Several per user. `topics` is what
+/// this device wants — see src/lib/push.ts PUSH_TOPICS. Deleted when the push
+/// service answers 404/410 (the browser dropped the subscription).
+model PushSubscription {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  topics        String[]  @default(["race-soon", "rsvp", "results", "reporting"])
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+  failCount     Int       @default(0)
+
+  @@index([userId])
+}
+
+/// Idempotency for the push sweep (/api/cron/push): one row per (kind, round)
+/// once that announcement went out — written even when nobody was subscribed,
+/// so a device that subscribes later never gets a backlog of old rounds.
+model PushDispatch {
+  id        String   @id @default(cuid())
+  kind      String
+  roundId   String
+  sentCount Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([kind, roundId])
+}
+
+/// Small key/value store for server-generated settings (the VAPID key pair
+/// for Web Push when no VAPID_* env vars are set).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 model RaceLogUpload {
   id String @id @default(cuid())
 

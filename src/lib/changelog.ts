@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.46.0",
+    date: "2026-10-28",
+    changes: [
+      "CAS League as an app: on Android and iPhone you can now install CLS to your home screen (league.simracing-hub.com/app). It opens full screen with its own icon, no app store needed.",
+      "Push notifications: switch them on per device under Profile → Notifications. You get a reminder about an hour before each of your races, a note when the RSVP opens, when results are published and when the incident-reporting window opens after a race you drove. Optionally the results of every CAS league. On iPhone, notifications work in the installed app (iOS 16.4 or newer).",
+      "Phones: the menu now folds into a menu button, and a tab bar at the bottom takes you to Home, Leagues, Calendar, Streams and your profile.",
+      "New site icon (CAS) in browser tabs and on the home screen.",
+    ],
+  },
+  {
     version: "2.45.0",
     date: "2026-10-25",
     changes: [

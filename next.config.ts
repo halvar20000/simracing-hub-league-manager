@@ -11,6 +11,19 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "25mb",
     },
   },
+  // The service worker must never be served stale from a cache, or a fix to
+  // it would take days to reach installed apps.
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
