@@ -88,6 +88,21 @@ export async function mergeUserAccounts(
     await tx.incidentReportEvidence.updateMany({ where: { addedByUserId: orphanId }, data: { addedByUserId: survivorId } });
     await tx.league.updateMany({ where: { createdById: orphanId }, data: { createdById: survivorId } });
     await tx.csvImport.updateMany({ where: { uploadedById: orphanId }, data: { uploadedById: survivorId } });
+    // Plain-string user ids without a foreign key: nothing stops the delete
+    // below from leaving them dangling. A Team whose leaderUserId points at a
+    // deleted row has no Teamchef — Manage Team then fails for everybody,
+    // admins included (IEC Season 4, Oct 2026).
+    await tx.team.updateMany({ where: { leaderUserId: orphanId }, data: { leaderUserId: survivorId } });
+    await tx.team.updateMany({ where: { managerUserId: orphanId }, data: { managerUserId: survivorId } });
+    await tx.raceCenter.updateMany({ where: { comebackUserId: orphanId }, data: { comebackUserId: survivorId } });
+    await tx.roundDriverOfTheDay.updateMany({ where: { winnerUserId: orphanId }, data: { winnerUserId: survivorId } });
+    await tx.roundDriverOfTheDay.updateMany({ where: { previousWinnerUserId: orphanId }, data: { previousWinnerUserId: survivorId } });
+    await tx.stintPlan.updateMany({ where: { createdByUserId: orphanId }, data: { createdByUserId: survivorId } });
+    await tx.$executeRaw`UPDATE "StintPlan" SET "accessUserIds" = array_replace("accessUserIds", ${orphanId}, ${survivorId}) WHERE ${orphanId} = ANY("accessUserIds")`;
+    await tx.pushSubscription.updateMany({ where: { userId: orphanId }, data: { userId: survivorId } });
+    await tx.raceLogUpload.updateMany({ where: { uploadedById: orphanId }, data: { uploadedById: survivorId } });
+    await tx.pitReference.updateMany({ where: { updatedById: orphanId }, data: { updatedById: survivorId } });
+    await tx.paceReference.updateMany({ where: { updatedById: orphanId }, data: { updatedById: survivorId } });
 
     // Carry over identity fields the survivor is missing — no data loss.
     // The survivor's own values always win where it already has them (its

@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.46.1",
+    date: "2026-10-28",
+    changes: [
+      "Fixed: when a driver linked his Discord login to an existing CLS account, a team he led lost its Teamchef — Manage Team then failed for him and for admins. The link now keeps team leadership (and Driver of the Day, stint-plan access and race logs) with the driver.",
+      "Manage Team no longer crashes on a team whose Teamchef is missing.",
+    ],
+  },
+  {
     version: "2.46.0",
     date: "2026-10-28",
     changes: [

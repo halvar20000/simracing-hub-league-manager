@@ -1319,14 +1319,12 @@ export async function updateTeamRegistration(formData: FormData) {
   }
 
   // Update leader registration's iRating
+  // updateMany, not update: a team whose leaderUserId no longer has a
+  // registration (dangling after a user merge) must still be manageable
+  // instead of crashing the whole save with P2025.
   if (team.leaderUserId) {
-    await prisma.registration.update({
-      where: {
-        seasonId_userId: {
-          seasonId: team.seasonId,
-          userId: team.leaderUserId,
-        },
-      },
+    await prisma.registration.updateMany({
+      where: { seasonId: team.seasonId, userId: team.leaderUserId },
       data: { iRating: leaderIRating },
     });
   }
