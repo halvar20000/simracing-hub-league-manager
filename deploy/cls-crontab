@@ -25,3 +25,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # --- daily ----------------------------------------------------------------
 30 4 * * *  /root/cls-cron.sh discord-stats
 0 16 * * *  /root/cls-cron.sh discord-welcome
+
+# --- backups (scripts live only on the box, see deploy/BACKUP-RUNBOOK.md) ---
+15 3 * * *  /root/cls-backup.sh >> /var/log/cls-backup.log 2>&1
+5 3 * * *  /root/cls-blob-mirror.sh >> /var/log/cls-backup.log 2>&1
