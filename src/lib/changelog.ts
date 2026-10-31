@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.46.2",
+    date: "2026-10-31",
+    changes: [
+      "Team events (IEC): drivers may race for another team and in another car than they registered with — the result import no longer warns about it and no longer disqualifies the driver. Only the TEAM must race its registered car; a team in another car is disqualified (team result and the crew's results of that race).",
+    ],
+  },
+  {
     version: "2.46.1",
     date: "2026-10-28",
     changes: [

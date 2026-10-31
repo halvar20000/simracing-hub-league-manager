@@ -17,7 +17,6 @@ interface Props {
     dq?: string;
     teams?: string;
     noTeam?: string;
-    mixedCrew?: string;
   }>;
 }
 
@@ -49,7 +48,6 @@ export default async function ImportIracingJsonPage({
     : [];
   const teams = sp.teams ? parseInt(sp.teams, 10) : 0;
   const noTeamList = sp.noTeam ? sp.noTeam.split("|") : [];
-  const mixedCrewList = sp.mixedCrew ? sp.mixedCrew.split("|") : [];
   const dqCount = sp.dqCount ? parseInt(sp.dqCount, 10) : 0;
   const dqList = sp.dq
     ? sp.dq.split("|").map((s) => {
@@ -115,24 +113,6 @@ export default async function ImportIracingJsonPage({
               </p>
             </div>
           )}
-          {mixedCrewList.length > 0 && (
-            <div className="rounded border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-200">
-              <p className="font-medium">
-                {mixedCrewList.length} car{mixedCrewList.length === 1 ? "" : "s"}{" "}
-                raced with drivers registered for a different team — please
-                check the result landed on the right team:
-              </p>
-              <ul className="mt-2 list-disc pl-5 text-xs">
-                {mixedCrewList.map((n) => (
-                  <li key={n}>{n}</li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-amber-300/80">
-                Steward penalties still hit the car the driver actually drove
-                in this round, whichever team they are registered with.
-              </p>
-            </div>
-          )}
           {unmatchedCount > 0 && (
             <div className="rounded border border-amber-800 bg-amber-950/40 p-3 text-sm text-amber-200">
               <p className="font-medium">
@@ -162,8 +142,10 @@ export default async function ImportIracingJsonPage({
           {dqCount > 0 && (
             <div className="rounded border border-red-800 bg-red-950/50 p-3 text-sm text-red-200">
               <p className="font-medium">
-                {dqCount} driver{dqCount === 1 ? " was" : "s were"} disqualified
-                (DSQ) for racing a car other than the one they registered:
+                {dqCount} {teams > 0 ? "car" : "driver"}
+                {dqCount === 1 ? " was" : "s were"} disqualified (DSQ) for
+                racing a car other than the one{" "}
+                {teams > 0 ? "the team" : "they"} registered:
               </p>
               <ul className="mt-2 space-y-1 text-xs">
                 {dqList.map((d, i) => (
@@ -181,6 +163,9 @@ export default async function ImportIracingJsonPage({
                 )}
               </ul>
               <p className="mt-2 text-xs text-red-200/80">
+                {teams > 0
+                  ? "In team events only the team's car counts — drivers may race for any team. "
+                  : ""}
                 Their points are forfeited for this round. If a car change was
                 approved, edit the result and clear the DSQ status.
               </p>

@@ -103,8 +103,7 @@ function buildSummaryQuery(
   unmatched: UnmatchedDriver[],
   dq: DqDriver[],
   teams: number,
-  unmatchedTeams: string[],
-  mixedCrews: string[] = []
+  unmatchedTeams: string[]
 ): string {
   const params = new URLSearchParams({
     imported: String(imported),
@@ -118,16 +117,6 @@ function buildSummaryQuery(
     params.set(
       "noTeam",
       unmatchedTeams
-        .slice(0, 12)
-        .map((n) => n.replace(/[|~]/g, " "))
-        .join("|")
-    );
-  }
-  // Cars whose crew is registered across CLS teams (team events).
-  if (mixedCrews.length > 0) {
-    params.set(
-      "mixedCrew",
-      mixedCrews
         .slice(0, 12)
         .map((n) => n.replace(/[|~]/g, " "))
         .join("|")
@@ -337,9 +326,14 @@ export async function importIracingJson(
       // known iRacing id AND the driven car_id is known AND they differ. If the
       // registered car has no iRacing id (legacy/unlinked row), we cannot prove
       // anything, so we do not disqualify.
+      //
+      // TEAM EVENTS (IEC): a driver may race for any team in any car — only
+      // the TEAM must race the car it registered. That check runs per car in
+      // the team block below, so no per-driver check here.
       const drivenCarIracingId = d.carIracingId ?? null;
       const carMismatch =
         carEnforced &&
+        session.teams.length === 0 &&
         reg.registeredCarIracingId != null &&
         !!drivenCarIracingId &&
         drivenCarIracingId !== reg.registeredCarIracingId;
@@ -420,13 +414,34 @@ export async function importIracingJson(
   // for the historic script-imported rounds.
   let teamsCreated = 0;
   const unmatchedTeams = new Set<string>();
-  // Cars whose crew is registered with more than one CLS team — the result is
-  // still stored on the matched team, but the admin should know.
-  const mixedCrews = new Set<string>();
+  // Drivers may race for another team than the one they registered with
+  // (Thomas, 2026-10-31) — no warning for that any more.
   const seasonTeams = await prisma.team.findMany({
     where: { seasonId },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      // The team's registered car = the car its OWN drivers (home team, not
+      // guests via TeamMembership) registered with.
+      registrations: {
+        where: { status: "APPROVED", isTeamManager: false },
+        select: { car: { select: { name: true, iracingCarId: true } } },
+      },
+    },
   });
+  const teamCarById = new Map<string, { iracingId: number; name: string }>();
+  for (const st of seasonTeams) {
+    const votes = new Map<number, { n: number; name: string }>();
+    for (const r of st.registrations) {
+      const id = r.car?.iracingCarId;
+      if (id == null) continue;
+      const v = votes.get(id) ?? { n: 0, name: r.car?.name ?? "unknown car" };
+      v.n++;
+      votes.set(id, v);
+    }
+    const best = [...votes.entries()].sort((a, b) => b[1].n - a[1].n)[0];
+    if (best) teamCarById.set(st.id, { iracingId: best[0], name: best[1].name });
+  }
   const teamIdByNormName = new Map(
     seasonTeams.map((st) => [normTeamName(st.name), st.id])
   );
@@ -482,13 +497,16 @@ export async function importIracingJson(
       // TeamResult is unique on (roundId, teamId, raceNumber); pickClsTeam
       // never hands out a team twice within one race.
       usedTeams.add(clsTeamId);
-      // Warn when someone in the crew is not entered with this team at all
-      // (neither home nor extra team).
-      if (regs.some((r) => !isInTeam(r, clsTeamId))) {
-        mixedCrews.add(
-          `${t.displayName || `#${t.iracingTeamId}`} → ${teamNameById.get(clsTeamId) ?? "?"}`
-        );
-      }
+
+      // CAR-MATCH ENFORCEMENT for team events: the TEAM must race the car it
+      // registered (whoever drives it). Same "only when provable" rule as the
+      // solo check: both iRacing car ids known and different.
+      const teamCar = teamCarById.get(clsTeamId);
+      const teamCarMismatch =
+        carEnforced &&
+        !!teamCar &&
+        !!t.carIracingId &&
+        t.carIracingId !== teamCar.iracingId;
 
       const teamDistancePct =
         session.maxLaps > 0
@@ -525,7 +543,7 @@ export async function importIracingJson(
           totalTimeMs: t.totalTimeMs,
           bestLapTimeMs: t.bestLapMs,
           totalIncidents: t.incidents,
-          finishStatus: t.finishStatus,
+          finishStatus: teamCarMismatch ? "DSQ" : t.finishStatus,
           startPosition: t.startingPosition,
           carId: teamCarId,
           carClassId: teamCarClassId,
@@ -551,6 +569,25 @@ export async function importIracingJson(
             iRating: d.iRating,
             finishStatus: d.finishStatus,
           },
+        });
+      }
+      if (teamCarMismatch && teamCar) {
+        // The crew's own results in this car go too (driver standings).
+        await prisma.raceResult.updateMany({
+          where: {
+            roundId,
+            raceNumber: session.raceNumber,
+            registrationId: { in: [...seenRegs] },
+          },
+          data: {
+            finishStatus: "DSQ",
+            notes: `Auto-DQ: team ${teamNameById.get(clsTeamId) ?? "?"} drove "${t.carName ?? "unknown car"}" but registered "${teamCar.name}"`,
+          },
+        });
+        dqDrivers.push({
+          displayName: `Team ${teamNameById.get(clsTeamId) ?? t.displayName}`,
+          drovenCar: t.carName ?? "unknown car",
+          registeredCar: teamCar.name,
         });
       }
       teamsCreated++;
@@ -603,8 +640,7 @@ export async function importIracingJson(
       unmatched,
       dqDrivers,
       teamsCreated,
-      [...unmatchedTeams],
-      [...mixedCrews]
+      [...unmatchedTeams]
     )}`
   );
 }
