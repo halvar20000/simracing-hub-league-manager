@@ -52,6 +52,12 @@ export default function AdminTabs({
             Discord
           </Tab>
           <Tab
+            href="/admin/stream-calendar"
+            active={isActive("/admin/stream-calendar")}
+          >
+            Stream calendar
+          </Tab>
+          <Tab
             href="/admin/scoring-systems"
             active={isActive("/admin/scoring-systems")}
           >

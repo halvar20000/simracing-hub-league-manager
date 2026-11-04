@@ -254,6 +254,10 @@ Twitch sibling of the YouTube matcher above, for leagues streamed on Twitch rath
 - **Admin actions**: `matchTwitchAction` ("🟣 Match Twitch", force) + `setRoundTwitchAction` in `race-videos.ts`; redirect status flag is `tw=`.
 - **Player embed**: `player.twitch.tv/?video=<id>&parent=<host>` — the `parent` param is mandatory and is derived from `NEXT_PUBLIC_SITE_URL` (`TWITCH_PARENT` in the public round page).
 
+## Stream calendar (admin, v2.47.0)
+
+`/admin/stream-calendar` (admin only): per week, who streams which GT3 WCT / CC / SFL / PCC / IEC race, a dropdown per race, counts per person. Logic + the plan agreed 2026-11-04 in `src/lib/stream-calendar.ts` (pure); streamers are the `STREAMERS` const. Stored in `AppSetting`, one row per race (`stream-calendar:round:<id>` / `stream-calendar:slot:<slug>:<date>`), no schema change. Lookup: round row → slot row → `STREAM_PLAN` → Open. Planned rows (seasons not in CLS yet) are shown until the league has a real round on or after that date. Test: `scripts/lm_test_stream_calendar.ts` (gitignored).
+
 ## Driver of the Day (all leagues)
 
 Per-round recognition badge — **no championship points, never touches standings**. Admin uploads the iRacing `eventresult.json` (authoritative start/finish/incidents + `cust_id` identity) + the race-logger `…_race.jsonl` (overtakes counter + worst position for the recovery metric); CLS computes the winner and shows a hero card on the public round page.

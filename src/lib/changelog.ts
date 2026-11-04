@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.47.0",
+    date: "2026-11-04",
+    changes: [
+      "Admin: new stream calendar. Shows week by week who streams which GT3 WCT, Combined Cup, SFL Cup, Porsche Cup and IEC race, with the number of streams per person. Every race has a dropdown to change the streamer.",
+    ],
+  },
+  {
     version: "2.46.2",
     date: "2026-10-31",
     changes: [
