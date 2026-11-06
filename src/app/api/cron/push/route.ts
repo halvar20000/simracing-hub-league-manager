@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runPushSweep } from "@/lib/push-sweep";
+import { sendInvitationReminders } from "@/lib/iracing-invite-notice";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,5 +14,13 @@ export async function GET(req: NextRequest) {
   }
   const now = new Date();
   const dispatched = await runPushSweep(now);
-  return NextResponse.json({ ok: true, now: now.toISOString(), dispatched });
+  // Runs here rather than on its own endpoint: same 10-minute schedule, on both
+  // the host crontab and the GitHub backup.
+  const inviteReminders = await sendInvitationReminders(now);
+  return NextResponse.json({
+    ok: true,
+    now: now.toISOString(),
+    dispatched,
+    inviteReminders,
+  });
 }

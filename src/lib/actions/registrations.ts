@@ -373,7 +373,9 @@ export async function createRegistration(
   }
 
 
+  let registrationId: string;
   if (existing) {
+    registrationId = existing.id;
     await prisma.registration.update({
       where: { id: existing.id },
       data: approvedEdit
@@ -403,7 +405,7 @@ export async function createRegistration(
           },
     });
   } else {
-    await prisma.registration.create({
+    const created = await prisma.registration.create({
       data: {
         seasonId,
         userId: user.id,
@@ -415,7 +417,9 @@ export async function createRegistration(
         notes,
         iRating: iRatingValue,
       },
+      select: { id: true },
     });
+    registrationId = created.id;
   }
 
   // Fire-and-forget Discord webhook (non-blocking)
@@ -455,7 +459,7 @@ export async function createRegistration(
               : existing && existing.status !== "PENDING"
                 ? `Updated registration (was ${existing.status.toLowerCase()})`
                 : "New pending registration awaiting approval",
-            url: `${baseUrl}/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`,
+            url: `${baseUrl}/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster?driver=${registrationId}`,
             color: 0xff6b35,
             fields,
             timestamp: new Date().toISOString(),
@@ -479,7 +483,8 @@ export async function createRegistration(
     );
     if (recipients.length > 0) {
       const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://league.simracing-hub.com";
-      const rosterUrl = `${baseUrl}/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster`;
+      // ?driver= opens this driver's Manage popup straight away.
+      const rosterUrl = `${baseUrl}/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster?driver=${registrationId}`;
       const teamLabel2 = teamId
         ? (await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }))?.name ?? "—"
         : "Independent";
@@ -526,7 +531,7 @@ export async function createRegistration(
             ${notes ? `<tr><td style="padding: 6px 0; color: #71717a; vertical-align: top;">Notes</td><td>${escape(notes)}</td></tr>` : ""}
           </table>
           <p style="margin-top: 20px;">
-            <a href="${rosterUrl}" style="display: inline-block; background: #ff6b35; color: #18181b; padding: 10px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Open roster</a>
+            <a href="${rosterUrl}" style="display: inline-block; background: #ff6b35; color: #18181b; padding: 10px 16px; text-decoration: none; border-radius: 6px; font-weight: 600;">Manage driver</a>
           </p>
           <p style="margin-top: 24px; color: #a1a1aa; font-size: 12px;">CLS — CAS League Scoring</p>
         </div>
@@ -544,7 +549,7 @@ export async function createRegistration(
         iRatingValue != null ? `iRating: ${iRatingValue}` : null,
         notes ? `Notes: ${notes}` : null,
         "",
-        `Open roster: ${rosterUrl}`,
+        `Manage driver: ${rosterUrl}`,
       ].filter((x): x is string => x !== null).join("\n");
 
       await sendResendEmail({ to: recipients, subject, html, text });

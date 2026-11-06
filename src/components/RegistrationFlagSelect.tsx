@@ -36,7 +36,10 @@ export default function RegistrationFlagSelect({
     <form action={updateRegistrationFlag}>
       <input type="hidden" name="registrationId" value={registrationId} />
       <input type="hidden" name="field" value={field} />
+      {/* key: the same driver also has this dropdown in the Manage popup, so a
+          change made in one has to show up in the other. */}
       <select
+        key={safeValue}
         name="value"
         defaultValue={safeValue}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}

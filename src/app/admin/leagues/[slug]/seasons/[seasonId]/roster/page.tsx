@@ -30,14 +30,24 @@ import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { SortableGroupedTableEnhancer } from "@/components/SortableGroupedTableEnhancer";
 import { FilteredRosterButtons } from "@/components/FilteredRosterButtons";
 import { DoubleScrollWrapper } from "@/components/DoubleScrollWrapper";
+import DriverManageModal from "@/components/DriverManageModal";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import {
+  INVITE_REMINDER_AFTER_MS,
+  loadInviteNotices,
+  type InviteNoticeState,
+} from "@/lib/iracing-invite-notice";
 
 export default async function RosterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; seasonId: string }>;
+  searchParams: Promise<{ driver?: string }>;
 }) {
   await requireAdmin();
   const { slug, seasonId } = await params;
+  const { driver: openDriverId } = await searchParams;
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: { league: true },
@@ -90,6 +100,8 @@ export default async function RosterPage({
   // whether a brand-new, unclassified driver may be offered a freed race slot
   // from the waiting list. Hidden for every other league.
   const showEligibleR1Column = season.league.slug === "cas-gt3-wct";
+  const showFee =
+    !!season.league.registrationFee && season.league.registrationFee > 0;
 
   if (season.teamRegistration) {
     const rawTeams = await prisma.team.findMany({
@@ -148,6 +160,9 @@ export default async function RosterPage({
       (s, t) =>
         s + t.registrations.filter((r) => r.status === "PENDING").length,
       0
+    );
+    const inviteNotices = await loadInviteNotices(
+      teamsWithRegs.flatMap((t) => t.registrations.map((r) => r.id))
     );
     const fmtDate = (d: Date) =>
       d.toLocaleDateString("en-GB", {
@@ -312,6 +327,20 @@ export default async function RosterPage({
                             </span>
                           )}
                         </div>
+                        <DriverManageModal
+                          driverName={`${reg.user.firstName ?? ""} ${reg.user.lastName ?? ""}`.trim()}
+                          // A multi-team driver has several rows: home team only.
+                          defaultOpen={reg.id === openDriverId && !reg.isExtraMember}
+                        >
+                          <DriverPanel
+                            reg={reg}
+                            subtitle={`${team.name}${reg.user.email ? ` · ${reg.user.email}` : ""}`}
+                            showFee={showFee}
+                            capEnabled={false}
+                            notice={inviteNotices.get(reg.id)}
+                            editHref={`/admin/leagues/${slug}/seasons/${seasonId}/roster/${reg.id}/edit`}
+                          />
+                        </DriverManageModal>
                         {reg.status === "APPROVED" && (
                           <div className="mt-1">
                             {reg.retiredAt != null ? (
@@ -358,6 +387,7 @@ export default async function RosterPage({
                           field="iracingInvitationSent"
                           value={reg.iracingInvitationSent}
                         />
+                        <InviteNoticeWarning notice={inviteNotices.get(reg.id)} />
                       </td>
                       <td className="px-2 py-3">
                         <RegistrationFlagSelect
@@ -458,8 +488,7 @@ export default async function RosterPage({
   const pendingCount = registrations.filter(
     (r) => r.status === "PENDING"
   ).length;
-  const showFee =
-    !!season.league.registrationFee && season.league.registrationFee > 0;
+  const inviteNotices = await loadInviteNotices(registrations.map((r) => r.id));
 
   // Waiting list (only active when the season has a maxDrivers cap).
   const capInfo = await getSeasonCapInfo(seasonId);
@@ -686,6 +715,21 @@ export default async function RosterPage({
                   <div className="text-xs text-zinc-500">
                     {r.user.email ?? r.user.name}
                   </div>
+                  <DriverManageModal
+                    driverName={`${r.user.firstName ?? ""} ${r.user.lastName ?? ""}`.trim()}
+                    defaultOpen={r.id === openDriverId}
+                  >
+                    <DriverPanel
+                      reg={r}
+                      subtitle={[r.user.email ?? r.user.name, r.user.iracingMemberId && `iRacing ${r.user.iracingMemberId}`, r.startNumber && `#${r.startNumber}`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      showFee={showFee}
+                      capEnabled={capInfo.enabled}
+                      notice={inviteNotices.get(r.id)}
+                      editHref={`/admin/leagues/${slug}/seasons/${seasonId}/roster/${r.id}/edit`}
+                    />
+                  </DriverManageModal>
                 </td>
                 <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">
                   {r.user.iracingMemberId ?? "—"}
@@ -758,6 +802,7 @@ export default async function RosterPage({
                     field="iracingInvitationSent"
                     value={r.iracingInvitationSent}
                   />
+                  <InviteNoticeWarning notice={inviteNotices.get(r.id)} />
                 </td>
                 <td className="px-4 py-3">
                   <RegistrationFlagSelect
@@ -768,83 +813,10 @@ export default async function RosterPage({
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
-                    {r.status === "PENDING" && (
-                      <>
-                        <form
-                          action={approveRegistration.bind(null, r.id)}
-                        >
-                          <button
-                            type="submit"
-                            className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500"
-                          >
-                            Approve
-                          </button>
-                        </form>
-                        <form action={rejectRegistration.bind(null, r.id)}>
-                          <button
-                            type="submit"
-                            className="rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-600"
-                          >
-                            Reject
-                          </button>
-                        </form>
-                      </>
-                    )}
-                    {capInfo.enabled && r.status === "APPROVED" && (
-                      r.waitlistedAt != null ? (
-                        <form action={promoteWaitlistRegistration.bind(null, r.id)}>
-                          <button
-                            type="submit"
-                            className="rounded border border-cyan-800 bg-cyan-950/40 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-900/60"
-                            title="Move into a confirmed grid seat and DM the driver"
-                          >
-                            ↑ Grid
-                          </button>
-                        </form>
-                      ) : (
-                        <form action={demoteToWaitlist.bind(null, r.id)}>
-                          <button
-                            type="submit"
-                            className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
-                            title="Move this driver onto the waiting list"
-                          >
-                            ↓ Waitlist
-                          </button>
-                        </form>
-                      )
-                    )}
-                    {r.status === "APPROVED" && (
-                      r.retiredAt != null ? (
-                        <form action={retireRegistration.bind(null, r.id, false)}>
-                          <button
-                            type="submit"
-                            className="rounded border border-amber-800 bg-amber-950/40 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/60"
-                            title="Bring this driver back — reclaims a grid seat if the cap allows"
-                          >
-                            ↩ Un-retire
-                          </button>
-                        </form>
-                      ) : (
-                        <form action={retireRegistration.bind(null, r.id, true)}>
-                          <button
-                            type="submit"
-                            className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
-                            title="Retire from the season: keeps points & position, frees the grid seat, promotes the next waiting-list driver"
-                          >
-                            Retire
-                          </button>
-                        </form>
-                      )
-                    )}
-                    <Link
-                      href={`/admin/leagues/${slug}/seasons/${seasonId}/roster/${r.id}/edit`}
-                      className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
-                    >
-                      Edit
-                    </Link>
-                    <RegistrationDeleteButton
-                      registrationId={r.id}
-                      driverName={`${r.user.firstName} ${r.user.lastName}`}
+                    <RegistrationActions
+                      reg={r}
+                      capEnabled={capInfo.enabled}
+                      editHref={`/admin/leagues/${slug}/seasons/${seasonId}/roster/${r.id}/edit`}
                     />
                   </div>
                 </td>
@@ -932,6 +904,210 @@ export default async function RosterPage({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+type RosterRegistration = {
+  id: string;
+  status: string;
+  waitlistedAt: Date | null;
+  retiredAt: Date | null;
+  startingFeePaid: "PENDING" | "YES" | "NO";
+  iracingInvitationSent: "PENDING" | "YES" | "NO";
+  iracingInvitationAccepted: "PENDING" | "YES" | "NO";
+  user: { firstName: string | null; lastName: string | null };
+};
+
+/** Approve / reject / grid / retire / edit / delete, for one registration. */
+function RegistrationActions({
+  reg: r,
+  capEnabled,
+  editHref,
+}: {
+  reg: RosterRegistration;
+  capEnabled: boolean;
+  editHref: string;
+}) {
+  return (
+    <>
+      {r.status === "PENDING" && (
+        <>
+          <form action={approveRegistration.bind(null, r.id)}>
+            <SubmitWithSpinner
+              label="Approve"
+              className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500"
+            />
+          </form>
+          <form action={rejectRegistration.bind(null, r.id)}>
+            <SubmitWithSpinner
+              label="Reject"
+              className="rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-600"
+            />
+          </form>
+        </>
+      )}
+      {capEnabled && r.status === "APPROVED" && (
+        r.waitlistedAt != null ? (
+          <form action={promoteWaitlistRegistration.bind(null, r.id)} title="Move into a confirmed grid seat and DM the driver">
+            <SubmitWithSpinner
+              label="↑ Grid"
+              className="rounded border border-cyan-800 bg-cyan-950/40 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-900/60"
+            />
+          </form>
+        ) : (
+          <form action={demoteToWaitlist.bind(null, r.id)} title="Move this driver onto the waiting list">
+            <SubmitWithSpinner
+              label="↓ Waitlist"
+              className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+            />
+          </form>
+        )
+      )}
+      {r.status === "APPROVED" && (
+        r.retiredAt != null ? (
+          <form action={retireRegistration.bind(null, r.id, false)} title="Bring this driver back: reclaims a grid seat if the cap allows">
+            <SubmitWithSpinner
+              label="↩ Un-retire"
+              className="rounded border border-amber-800 bg-amber-950/40 px-2 py-1 text-xs text-amber-200 hover:bg-amber-900/60"
+            />
+          </form>
+        ) : (
+          <form action={retireRegistration.bind(null, r.id, true)} title="Retire from the season: keeps points & position, frees the grid seat, promotes the next waiting-list driver">
+            <SubmitWithSpinner
+              label="Retire"
+              className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+            />
+          </form>
+        )
+      )}
+      <Link
+        href={editHref}
+        className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+      >
+        Edit
+      </Link>
+      <RegistrationDeleteButton
+        registrationId={r.id}
+        driverName={`${r.user.firstName} ${r.user.lastName}`}
+      />
+    </>
+  );
+}
+
+/** All admin controls for one driver, shown in the Manage popup. */
+function DriverPanel({
+  reg,
+  subtitle,
+  showFee,
+  capEnabled,
+  notice,
+  editHref,
+}: {
+  reg: RosterRegistration;
+  subtitle: string;
+  showFee: boolean;
+  capEnabled: boolean;
+  notice: InviteNoticeState | undefined;
+  editHref: string;
+}) {
+  const row = "flex items-center justify-between gap-3 border-t border-zinc-800 py-2.5";
+  return (
+    <div className="text-sm">
+      <p className="mb-3 break-all text-xs text-zinc-500">{subtitle}</p>
+      <div className={row}>
+        <span className="text-zinc-400">Status</span>
+        <span className="text-right">
+          <StatusBadge status={reg.status} />
+          {reg.waitlistedAt != null && (
+            <span className="ml-1 rounded bg-cyan-900/40 px-2 py-0.5 text-xs text-cyan-200">
+              Waiting list
+            </span>
+          )}
+        </span>
+      </div>
+      {showFee && (
+        <div className={row}>
+          <span className="text-zinc-400">Fee</span>
+          <RegistrationFlagSelect
+            registrationId={reg.id}
+            field="startingFeePaid"
+            value={reg.startingFeePaid}
+          />
+        </div>
+      )}
+      <div className={row}>
+        <span className="text-zinc-400">iRacing invite</span>
+        <RegistrationFlagSelect
+          registrationId={reg.id}
+          field="iracingInvitationSent"
+          value={reg.iracingInvitationSent}
+        />
+      </div>
+      <InviteNoticeDetail notice={notice} />
+      <div className={row}>
+        <span className="text-zinc-400">iRacing accepted</span>
+        <RegistrationFlagSelect
+          registrationId={reg.id}
+          field="iracingInvitationAccepted"
+          value={reg.iracingInvitationAccepted}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2 border-t border-zinc-800 pt-3">
+        <RegistrationActions reg={reg} capEnabled={capEnabled} editHref={editHref} />
+      </div>
+    </div>
+  );
+}
+
+// These are true instants, unlike Round.startsAt, so they need a real zone.
+const fmtNoticeTime = (d: Date) =>
+  d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Berlin",
+  });
+
+/** Under the Invite dropdown in the table: only when a DM did not arrive. */
+function InviteNoticeWarning({ notice }: { notice: InviteNoticeState | undefined }) {
+  const error = notice?.reminderError ?? notice?.noticeError;
+  if (!error) return null;
+  return (
+    <div className="mt-1 text-[10px] text-red-400" title={error}>
+      ⚠ Discord DM failed
+    </div>
+  );
+}
+
+function InviteNoticeDetail({ notice }: { notice: InviteNoticeState | undefined }) {
+  if (!notice) return null;
+  const sentAt = new Date(notice.sentAt);
+  const line = (key: string, text: string, error: string | null) => (
+    <p key={key} className={error ? "text-red-400" : "text-zinc-500"}>
+      {text}
+      {error ? ` failed: ${error}` : ""}
+    </p>
+  );
+  return (
+    <div className="pb-2.5 text-xs">
+      {line(
+        "notice",
+        `Discord notice ${notice.noticeError ? "" : "sent "}${fmtNoticeTime(sentAt)}`,
+        notice.noticeError
+      )}
+      {notice.reminderAt
+        ? line(
+            "reminder",
+            `Reminder ${notice.reminderError ? "" : "sent "}${fmtNoticeTime(new Date(notice.reminderAt))}`,
+            notice.reminderError
+          )
+        : line(
+            "due",
+            `Reminder due ${fmtNoticeTime(new Date(sentAt.getTime() + INVITE_REMINDER_AFTER_MS))} if not accepted`,
+            null
+          )}
     </div>
   );
 }

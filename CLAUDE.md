@@ -67,6 +67,10 @@ After `db push`, run `npx prisma generate` to refresh the typed client.
 
 `PAUSED` = put a season on hold without deleting it. The reporting-window and RSVP crons (`/api/cron/notify-reporting-open`, `/api/cron/post-rsvp`) only fire for `OPEN_REGISTRATION`/`ACTIVE`, so a `PAUSED` season stops all Discord announcements; registration also closes (the open-registration guards check for `OPEN_REGISTRATION`/`ACTIVE`). Switch back to `ACTIVE` to resume. Set via the admin season-edit page. The `{ in: ["OPEN_REGISTRATION","ACTIVE"] }` "currently running" filters deliberately exclude `PAUSED`.
 
+## Admin roster: Manage popup + iRacing invite DMs (v2.49.0)
+
+Every driver in the admin roster (solo + team) has a **Manage** button in the frozen driver column: `DriverManageModal` (portalled to body, the sticky cell would trap it) around the server-rendered `DriverPanel` in the roster page. Invite flipping to Sent in `updateRegistrationFlag` DMs the driver; `sendInvitationReminders` (`src/lib/iracing-invite-notice.ts`, called from `/api/cron/push`, every 10 min) sends ONE reminder if Accepted is still not YES after 48 h. State + delivery errors in `AppSetting` `iracing-invite:<registrationId>`; only invites set to Sent after v2.49.0 have a row, so older ones are never reminded. Accepted is manual, CLS cannot see iRacing. `roster?driver=<registrationId>` opens that driver's popup (solo registration email + webhook; team registrations have no single driver and link the plain roster). Test: `scripts/lm_test_invite_notice.ts` (gitignored).
+
 ## Results publish gate (COMPLETED = published)
 
 A round's results and their standings impact go public **only** when `Round.status === "COMPLETED"`. Workflow: race runs → admin imports results → admin previews → admin clicks **✓ Publish results** (or sets `COMPLETED` on the round-edit form) → published.

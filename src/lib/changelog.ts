@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.49.0",
+    date: "2026-11-06",
+    changes: [
+      "Admin roster: every driver now has a Manage button right next to the name, in all leagues. It opens one popup with status, fee, iRacing invite, iRacing accepted, edit and the other actions, so there is no more scrolling sideways.",
+      "iRacing invitation: when an admin sets Invite to Sent, the driver gets a Discord message asking them to accept it in iRacing. If Accepted is still not set 48 hours later, the driver gets one reminder. A DM that could not be delivered is flagged in the roster.",
+      "The email about a new driver registration now links straight to that driver's Manage popup.",
+    ],
+  },
+  {
     version: "2.48.0",
     date: "2026-11-06",
     changes: [

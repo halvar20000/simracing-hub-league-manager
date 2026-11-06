@@ -13,6 +13,10 @@ import {
   setRegistrationWaitlisted,
   setRegistrationRetired,
 } from "@/lib/waitlist";
+import {
+  clearInvitationNotice,
+  notifyInvitationSent,
+} from "@/lib/iracing-invite-notice";
 import type { RegistrationStatus, ProAmClass } from "@prisma/client";
 
 export async function approveRegistration(registrationId: string) {
@@ -371,6 +375,17 @@ export async function updateRegistrationFlag(formData: FormData) {
   if (!ADMIN_CHECK_FIELDS.has(field)) throw new Error("Invalid field");
   if (!ADMIN_CHECK_VALUES.has(value)) throw new Error("Invalid value");
 
+  // Atomic, so a double submit can only count as one change to Sent.
+  const inviteBecameSent =
+    field === "iracingInvitationSent" &&
+    value === "YES" &&
+    (
+      await prisma.registration.updateMany({
+        where: { id: registrationId, iracingInvitationSent: { not: "YES" } },
+        data: { iracingInvitationSent: "YES" },
+      })
+    ).count > 0;
+
   const reg = await prisma.registration.update({
     where: { id: registrationId },
     // The field name is whitelisted above; cast is necessary because the key
@@ -378,6 +393,12 @@ export async function updateRegistrationFlag(formData: FormData) {
     data: { [field]: value } as never,
     include: { season: { include: { league: true } } },
   });
+
+  if (inviteBecameSent) {
+    await notifyInvitationSent(registrationId);
+  } else if (field === "iracingInvitationSent" && value !== "YES") {
+    await clearInvitationNotice(registrationId);
+  }
 
   revalidatePath(
     `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/roster`

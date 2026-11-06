@@ -134,7 +134,7 @@ export async function getWaitlist(seasonId: string): Promise<WaitlistEntry[]> {
 }
 
 /** Resolve a user's Discord ID for DMs: linked OAuth account, then admin-set field. */
-async function discordIdForUser(userId: string): Promise<string | null> {
+export async function discordIdForUser(userId: string): Promise<string | null> {
   const acct = await prisma.account.findFirst({
     where: { userId, provider: "discord" },
     select: { providerAccountId: true },
