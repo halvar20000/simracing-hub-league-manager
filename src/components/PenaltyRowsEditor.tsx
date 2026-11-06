@@ -15,7 +15,18 @@ export type PenaltyDriverOption = {
   group?: string;
 };
 
+/** Team-mode seasons (IEC): one car of the round — the penalty recipient. */
+export type PenaltyCarOption = {
+  teamId: string;
+  label: string;
+  /** Drivers who sat in this car; naming one is optional. */
+  crew: { registrationId: string; label: string }[];
+};
+
 export type PenaltyRowInit = {
+  /** Team mode: the team (car) penalised. Empty in solo leagues. */
+  teamId?: string;
+  /** Solo: the driver penalised. Team mode: the driver named, or "". */
   registrationId: string;
   level: string; // "" | "0" | "1" | "2" | "3" | "4"
   reason: string;
@@ -23,7 +34,7 @@ export type PenaltyRowInit = {
   specialMeasure?: string;
 };
 
-type Row = PenaltyRowInit & { key: string; specialMeasure: string };
+type Row = PenaltyRowInit & { key: string; teamId: string; specialMeasure: string };
 
 const SPECIAL = String(SPECIAL_MEASURE_LEVEL);
 
@@ -32,6 +43,7 @@ function newRow(init?: Partial<PenaltyRowInit>): Row {
   rowSeq += 1;
   return {
     key: `r${rowSeq}`,
+    teamId: init?.teamId ?? "",
     registrationId: init?.registrationId ?? "",
     level: init?.level ?? "",
     reason: init?.reason ?? "",
@@ -45,13 +57,19 @@ export function PenaltyRowsEditor({
   initialRows,
   name = "penaltiesJson",
   teamMode = false,
+  cars = [],
+  accusedTeamIds = [],
 }: {
   drivers: PenaltyDriverOption[];
   pointsTable: Record<string, number>;
   initialRows: PenaltyRowInit[];
   name?: string;
-  /** IEC: the penalty goes to the TEAM; the driver is picked within its car. */
+  /** IEC: the penalty goes to the TEAM (picked from `cars`); naming the
+   *  driver at the wheel is optional. */
   teamMode?: boolean;
+  cars?: PenaltyCarOption[];
+  /** Team mode: the report's accused cars, for "add all accused teams". */
+  accusedTeamIds?: string[];
 }) {
   // Options grouped by car (team) when groups are present, in first-seen order.
   const groups = useMemo(() => {
@@ -73,27 +91,54 @@ export function PenaltyRowsEditor({
     setRows((rs) => (rs.length > 1 ? rs.filter((r) => r.key !== key) : rs));
   const add = () => setRows((rs) => [...rs, newRow()]);
 
+  // A row is filled once it names its recipient: the team in team mode, the
+  // driver otherwise.
+  const recipient = (r: Row) => (teamMode ? r.teamId : r.registrationId);
+  const carById = useMemo(
+    () => new Map(cars.map((c) => [c.teamId, c])),
+    [cars]
+  );
+
+  // Collective cases (a mass false start): one row per accused car, taking
+  // the category and comment of the first filled row so the steward sets
+  // them once. Cars already in the table are skipped.
+  const missingAccused = accusedTeamIds.filter(
+    (id) => carById.has(id) && !rows.some((r) => r.teamId === id)
+  );
+  const addAccused = () =>
+    setRows((rs) => {
+      const tpl = rs.find((r) => r.level !== "") ?? rs[0];
+      const kept = rs.filter((r) => r.teamId);
+      const extra = missingAccused.map((teamId) =>
+        newRow({
+          teamId,
+          registrationId: "",
+          level: tpl?.level ?? "",
+          reason: tpl?.reason ?? "",
+          specialMeasure: tpl?.specialMeasure ?? "",
+        })
+      );
+      return [...kept, ...extra];
+    });
+
   const ptsFor = (level: string) =>
     level === "" || level === SPECIAL ? null : pointsTable[level] ?? 0;
 
-  const totalPoints = useMemo(
-    () =>
-      rows.reduce(
-        (sum, r) =>
-          sum +
-          (r.registrationId && r.level !== "" && r.level !== SPECIAL
-            ? pointsTable[r.level] ?? 0
-            : 0),
-        0
-      ),
-    [rows, pointsTable]
+  const totalPoints = rows.reduce(
+    (sum, r) =>
+      sum +
+      (recipient(r) && r.level !== "" && r.level !== SPECIAL
+        ? pointsTable[r.level] ?? 0
+        : 0),
+    0
   );
 
-  // Serialize only rows that actually name a driver.
+  // Serialize only rows that actually name a recipient.
   const serialized = JSON.stringify(
     rows
-      .filter((r) => r.registrationId)
+      .filter((r) => recipient(r))
       .map((r) => ({
+        ...(teamMode ? { teamId: r.teamId } : {}),
         registrationId: r.registrationId,
         level: r.level === "" ? null : parseInt(r.level, 10),
         reason: r.reason.trim(),
@@ -108,8 +153,10 @@ export function PenaltyRowsEditor({
         {teamMode ? (
           <>
             Strafempfänger — die Strafe geht an das <strong>Team (Auto)</strong>.
-            Wähle dazu den Fahrer, der am Steuer saß; die Fahrer sind nach dem
-            Auto gruppiert, in dem sie in dieser Runde gefahren sind.
+            Wähle das Team; den Fahrer am Steuer zu nennen ist optional. Bei
+            einem Sammelfall (z.&nbsp;B. kollektiver Fehlstart) legt „Alle
+            beschuldigten Teams übernehmen“ eine Zeile pro Auto an, mit
+            Kategorie und Kommentar der ersten Zeile.
           </>
         ) : (
           <>Strafempfänger — Wähle einen oder mehrere Fahrer (auch der Melder ist
@@ -127,7 +174,7 @@ export function PenaltyRowsEditor({
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-widest text-zinc-500">
               <th className="px-2 py-1 font-semibold">
-                {teamMode ? "Team / Fahrer" : "Fahrer"}
+                {teamMode ? "Team (Auto) / Fahrer optional" : "Fahrer"}
               </th>
               <th className="px-2 py-1 font-semibold">Kategorie</th>
               <th className="px-2 py-1 font-semibold">
@@ -146,6 +193,49 @@ export function PenaltyRowsEditor({
                   className="border-t border-zinc-800 align-top"
                 >
                   <td className="px-2 py-2">
+                    {teamMode ? (
+                      <div className="space-y-1.5">
+                        <select
+                          value={r.teamId}
+                          onChange={(e) => {
+                            const teamId = e.target.value;
+                            // A named driver must belong to the chosen car.
+                            const crew = carById.get(teamId)?.crew ?? [];
+                            update(r.key, {
+                              teamId,
+                              registrationId: crew.some((m) => m.registrationId === r.registrationId)
+                                ? r.registrationId
+                                : "",
+                            });
+                          }}
+                          className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+                        >
+                          <option value="">— Team wählen —</option>
+                          {cars.map((c) => (
+                            <option key={c.teamId} value={c.teamId}>
+                              {accusedTeamIds.includes(c.teamId) ? "⚑ " : ""}
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                        {r.teamId && (carById.get(r.teamId)?.crew.length ?? 0) > 0 && (
+                          <select
+                            value={r.registrationId}
+                            onChange={(e) =>
+                              update(r.key, { registrationId: e.target.value })
+                            }
+                            className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-300"
+                          >
+                            <option value="">Fahrer: nicht genannt</option>
+                            {carById.get(r.teamId)!.crew.map((m) => (
+                              <option key={m.registrationId} value={m.registrationId}>
+                                Fahrer: {m.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    ) : (
                     <select
                       value={r.registrationId}
                       onChange={(e) =>
@@ -172,6 +262,7 @@ export function PenaltyRowsEditor({
                             </option>
                           ))}
                     </select>
+                    )}
                   </td>
                   <td className="px-2 py-2">
                     <select
@@ -204,7 +295,7 @@ export function PenaltyRowsEditor({
                       type="text"
                       value={r.reason}
                       onChange={(e) => update(r.key, { reason: e.target.value })}
-                      placeholder="Begründung für diesen Fahrer (optional)"
+                      placeholder={teamMode ? "Begründung für dieses Team (optional)" : "Begründung für diesen Fahrer (optional)"}
                       className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
                     />
                     {isSpecial && (
@@ -242,14 +333,25 @@ export function PenaltyRowsEditor({
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={add}
-          className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
-        >
-          + Fahrer hinzufügen
-        </button>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={add}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800"
+          >
+            {teamMode ? "+ Team hinzufügen" : "+ Fahrer hinzufügen"}
+          </button>
+          {teamMode && missingAccused.length > 0 && (
+            <button
+              type="button"
+              onClick={addAccused}
+              className="rounded border border-orange-800/70 px-3 py-1.5 text-xs text-orange-200 hover:bg-orange-950/40"
+            >
+              ⚑ Alle beschuldigten Teams übernehmen ({missingAccused.length})
+            </button>
+          )}
+        </div>
         {totalPoints > 0 && (
           <span className="text-xs text-zinc-400">
             Summe:{" "}

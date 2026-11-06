@@ -4,6 +4,7 @@ import { namedTeamDrivers } from "@/lib/incident-team-form";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { teamMemberWhere } from "@/lib/team-members";
 import { requireAdmin, requireSteward } from "@/lib/auth-helpers";
 import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
 import {
@@ -110,6 +111,9 @@ export async function submitDecision(
   // it is saved regardless of the verdict (a special measure can accompany a
   // warning, a reprimand or even "no action").
   type PenaltyRowInput = {
+    /** Team mode (IEC): the team picked; null on solo leagues / old forms. */
+    teamId: string | null;
+    /** The driver; "" in team mode when only the team was picked. */
     registrationId: string;
     level: number | null;
     reason: string;
@@ -121,34 +125,21 @@ export async function submitDecision(
       String(formData.get("penaltiesJson") ?? "[]")
     );
     if (Array.isArray(parsed)) {
+      const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
       penaltyRows = parsed
-        .filter(
-          (r): r is { registrationId: string; level?: unknown; reason?: unknown } =>
-            !!r &&
-            typeof (r as { registrationId?: unknown }).registrationId ===
-              "string" &&
-            ((r as { registrationId: string }).registrationId.length > 0)
-        )
-        .map((r) => {
-          const row = r as {
-            registrationId: string;
-            level?: unknown;
-            reason?: unknown;
-            specialMeasure?: unknown;
-          };
-          return {
-            registrationId: row.registrationId,
-            level:
-              row.level === null || row.level === undefined
-                ? null
-                : Number(row.level),
-            reason: typeof row.reason === "string" ? row.reason.trim() : "",
-            specialMeasure:
-              typeof row.specialMeasure === "string"
-                ? row.specialMeasure.trim()
-                : "",
-          };
-        });
+        .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+        .map((row) => ({
+          teamId: str(row.teamId) || null,
+          registrationId: str(row.registrationId),
+          level:
+            row.level === null || row.level === undefined
+              ? null
+              : Number(row.level),
+          reason: str(row.reason),
+          specialMeasure: str(row.specialMeasure),
+        }))
+        // A row needs a recipient: the team, or (solo) the driver.
+        .filter((r) => r.teamId || r.registrationId);
     }
   } catch {
     penaltyRows = [];
@@ -210,35 +201,86 @@ export async function submitDecision(
     isSpecialMeasureLevel(row.level) ? true : verdict === "POINTS_DEDUCTION"
   );
 
-  // Team-mode seasons (IEC): every penalty is issued to the TEAM — the car
-  // the chosen driver sat in during this round, else the team he is
-  // registered with — and pinned on Penalty.teamId, so a later result
-  // re-import can never move it to another car.
-  const teamOfReg = new Map<string, string>();
-  if (report.round.season.teamRegistration && rowsToSave.length > 0) {
-    const regIds = rowsToSave.map((r) => r.registrationId);
-    const regs = await prisma.registration.findMany({
-      where: { id: { in: regIds } },
-      select: { id: true, teamId: true },
-    });
+  // Team-mode seasons (IEC): every penalty is issued to the TEAM and pinned
+  // on Penalty.teamId, so a later result re-import can never move it to
+  // another car. Since v2.48.0 the steward picks the team itself; naming the
+  // driver is optional. Older forms send only a driver — then the team is the
+  // car he sat in this round, else the team he is registered with.
+  const teamMode = !!report.round.season.teamRegistration;
+  type Resolved = { registrationId: string; teamId: string | null; teamOnly: boolean };
+  const resolved: (Resolved & PenaltyRowInput)[] = [];
+  if (teamMode && rowsToSave.length > 0) {
+    const teamIds = [...new Set(rowsToSave.map((r) => r.teamId).filter((x): x is string => !!x))];
+    const regIds = [...new Set(rowsToSave.map((r) => r.registrationId).filter(Boolean))];
+    const [seasonTeams, regs, drove, crews] = await Promise.all([
+      prisma.team.findMany({
+        where: { id: { in: teamIds }, seasonId: report.round.seasonId },
+        select: { id: true, leaderUserId: true },
+      }),
+      prisma.registration.findMany({
+        where: { id: { in: regIds } },
+        select: { id: true, teamId: true },
+      }),
+      prisma.teamRoundDriver.findMany({
+        where: { registrationId: { in: regIds }, teamResult: { roundId: report.roundId } },
+        select: { registrationId: true, teamResult: { select: { teamId: true } } },
+      }),
+      // Placeholder driver for a team-only penalty: whoever drove the most
+      // laps in that car this round.
+      prisma.teamRoundDriver.findMany({
+        where: { teamResult: { roundId: report.roundId, teamId: { in: teamIds } } },
+        select: { registrationId: true, lapsCompleted: true, teamResult: { select: { teamId: true } } },
+        orderBy: { lapsCompleted: "desc" },
+      }),
+    ]);
+    const validTeams = new Set(seasonTeams.map((t) => t.id));
+    const teamOfReg = new Map<string, string>();
     for (const r of regs) if (r.teamId) teamOfReg.set(r.id, r.teamId);
-    const drove = await prisma.teamRoundDriver.findMany({
-      where: {
-        registrationId: { in: regIds },
-        teamResult: { roundId: report.roundId },
-      },
-      select: { registrationId: true, teamResult: { select: { teamId: true } } },
-    });
     for (const d of drove) teamOfReg.set(d.registrationId, d.teamResult.teamId);
+
+    const placeholder = async (teamId: string): Promise<string | null> => {
+      const fromCrew = crews.find((c) => c.teamResult.teamId === teamId);
+      if (fromCrew) return fromCrew.registrationId;
+      // No results yet: the Teamchef if he drives, else the longest-entered
+      // active driver.
+      const leaderUserId = seasonTeams.find((t) => t.id === teamId)?.leaderUserId;
+      const members = await prisma.registration.findMany({
+        where: {
+          ...teamMemberWhere(teamId),
+          seasonId: report.round.seasonId,
+          isTeamManager: false,
+          status: { not: "WITHDRAWN" },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, userId: true },
+      });
+      return (members.find((m) => m.userId === leaderUserId) ?? members[0])?.id ?? null;
+    };
+
+    for (const row of rowsToSave) {
+      if (row.teamId) {
+        if (!validTeams.has(row.teamId)) continue;
+        const regId = row.registrationId || (await placeholder(row.teamId));
+        if (!regId) continue; // a team with no driver at all can't hold a row
+        resolved.push({ ...row, registrationId: regId, teamId: row.teamId, teamOnly: !row.registrationId });
+      } else if (row.registrationId) {
+        resolved.push({ ...row, teamId: teamOfReg.get(row.registrationId) ?? null, teamOnly: false });
+      }
+    }
+  } else {
+    for (const row of rowsToSave) {
+      if (row.registrationId) resolved.push({ ...row, teamId: null, teamOnly: false });
+    }
   }
 
-  if (rowsToSave.length > 0) {
-    // One penalty per selected driver; de-dupe in case the same driver was
-    // picked twice.
+  if (resolved.length > 0) {
+    // One penalty per recipient; de-dupe in case the same one was picked
+    // twice (team mode: the same team, solo: the same driver).
     const seen = new Set<string>();
-    for (const row of rowsToSave) {
-      if (seen.has(row.registrationId)) continue;
-      seen.add(row.registrationId);
+    for (const row of resolved) {
+      const key = teamMode && row.teamId ? `t:${row.teamId}` : `r:${row.registrationId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
 
       if (isSpecialMeasureLevel(row.level)) {
         await prisma.penalty.create({
@@ -252,7 +294,8 @@ export async function submitDecision(
             reason: row.reason || publicSummary,
             categoryLevel: row.level,
             specialMeasure: row.specialMeasure || null,
-            teamId: teamOfReg.get(row.registrationId) ?? null,
+            teamId: row.teamId,
+            teamOnly: row.teamOnly,
           },
         });
         continue;
@@ -269,7 +312,8 @@ export async function submitDecision(
           pointsValue: rowPoints,
           reason: row.reason || publicSummary,
           categoryLevel: row.level,
-          teamId: teamOfReg.get(row.registrationId) ?? null,
+          teamId: row.teamId,
+          teamOnly: row.teamOnly,
         },
       });
     }

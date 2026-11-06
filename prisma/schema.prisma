@@ -804,6 +804,9 @@ model Penalty {
   /// driver drove and his registered team (src/lib/standings.ts).
   teamId String?
   team   Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  /// Team-mode: the steward picked only the team, no driver. registrationId
+  /// is then just a member of that car (the row needs one) — never show it.
+  teamOnly Boolean @default(false)
 }
 
 // ==========================================

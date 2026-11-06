@@ -19,6 +19,7 @@ import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import {
   PenaltyRowsEditor,
   type PenaltyDriverOption,
+  type PenaltyCarOption,
 } from "@/components/PenaltyRowsEditor";
 
 // CAS uses penalty points as the only penalty type. The stewarding form offers
@@ -72,7 +73,16 @@ export default async function AdminReportDetail({
       },
       involvedTeams: { include: { team: { select: { id: true, name: true } } } },
       evidence: true,
-      decision: { include: { penalties: true } },
+      decision: {
+        include: {
+          penalties: {
+            include: {
+              team: { select: { name: true } },
+              registration: { select: { teamId: true } },
+            },
+          },
+        },
+      },
     },
   });
   if (!report || report.round.season.league.slug !== slug) notFound();
@@ -241,12 +251,47 @@ export default async function AdminReportDetail({
       };
     });
 
+  // IEC: penalty recipients are cars — accused ones first, then the rest.
+  const penaltyCars: PenaltyCarOption[] = teamMode
+    ? (() => {
+        const accusedIds = new Set(accusedTeams.map((t) => t.teamId));
+        const list = [...roundCars]
+          .sort(
+            (a, b) =>
+              Number(accusedIds.has(b.teamId)) - Number(accusedIds.has(a.teamId)) ||
+              a.teamName.localeCompare(b.teamName)
+          )
+          .map((c) => ({
+            teamId: c.teamId,
+            label: `${c.teamName}${c.classLabel ? ` (${c.classLabel})` : ""}`,
+            crew: c.crew,
+          }));
+        // Keep teams an existing penalty names even if they are no longer a
+        // car of this round, so opening and saving never drops a penalty.
+        for (const p of report.decision?.penalties ?? []) {
+          if (p.teamId && !list.some((c) => c.teamId === p.teamId)) {
+            list.push({ teamId: p.teamId, label: p.team?.name ?? "(Team)", crew: [] });
+          }
+        }
+        return list;
+      })()
+    : [];
+
   const initialPenaltyRows = (report.decision?.penalties ?? [])
     .filter(
       (p) => p.type === "POINTS_DEDUCTION" || p.type === "SPECIAL_MEASURE"
     )
     .map((p) => ({
-      registrationId: p.registrationId,
+      // Penalties saved before teams were pinned: the car the driver sat in,
+      // else his registered team.
+      teamId:
+        p.teamId ??
+        roundCars.find((c) => c.crew.some((m) => m.registrationId === p.registrationId))
+          ?.teamId ??
+        p.registration.teamId ??
+        "",
+      // A team-only penalty carries a placeholder crew member — not named.
+      registrationId: p.teamOnly ? "" : p.registrationId,
       level: p.categoryLevel != null ? String(p.categoryLevel) : "",
       reason: p.reason ?? "",
       specialMeasure: p.specialMeasure ?? "",
@@ -714,6 +759,8 @@ export default async function AdminReportDetail({
 
           <PenaltyRowsEditor
             teamMode={teamMode}
+            cars={penaltyCars}
+            accusedTeamIds={accusedTeams.map((t) => t.teamId)}
             drivers={driverOptions}
             pointsTable={categoryPointsTable}
             initialRows={initialPenaltyRows}

@@ -109,9 +109,14 @@ export default async function PublicDecisions({
                             <>
                               <span className="font-semibold text-zinc-300">
                                 {p.team.name}
-                              </span>{" "}
-                              ({p.registration.user.firstName}{" "}
-                              {p.registration.user.lastName})
+                              </span>
+                              {!p.teamOnly && (
+                                <>
+                                  {" "}
+                                  ({p.registration.user.firstName}{" "}
+                                  {p.registration.user.lastName})
+                                </>
+                              )}
                             </>
                           ) : (
                             <>

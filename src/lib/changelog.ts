@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.48.0",
+    date: "2026-11-06",
+    changes: [
+      "IEC stewards: penalties are now given to a team directly. Each row of the decision form picks the team (car); naming the driver at the wheel is optional, and a team-only penalty is published with the team name alone.",
+      "Collective cases (e.g. a mass false start): “⚑ Alle beschuldigten Teams übernehmen” adds one penalty row per accused car of a league report in one click, with the category and comment of the first row.",
+    ],
+  },
+  {
     version: "2.47.0",
     date: "2026-11-04",
     changes: [
