@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.50.0",
+    date: "2026-11-08",
+    changes: [
+      "Admin roster: setting the iRacing invitation to Sent now also gives the driver the league's driver role on Discord and mentions them in the league chat with a request to accept the invitation.",
+      "League edit page: new fields for that driver role and league chat channel. Without a role entry, the RSVP role is used.",
+      "The driver's Manage window shows whether the role and the chat message went through.",
+    ],
+  },
+  {
     version: "2.49.0",
     date: "2026-11-06",
     changes: [

@@ -232,6 +232,23 @@ export async function modifyGuildScheduledEvent(
 }
 
 /**
+ * Give a guild member a role. Idempotent (Discord answers 204 whether or not
+ * the member already had it). Needs MANAGE_ROLES, and the bot's own highest
+ * role must sit ABOVE the role it hands out. Never throws.
+ */
+export async function addGuildMemberRole(
+  guildId: string,
+  discordUserId: string,
+  roleId: string,
+  reason?: string
+): Promise<Result<void>> {
+  return discordFetch(`/guilds/${guildId}/members/${discordUserId}/roles/${roleId}`, {
+    method: "PUT",
+    headers: reason ? { "X-Audit-Log-Reason": encodeURIComponent(reason) } : {},
+  });
+}
+
+/**
  * Open (or fetch the existing) DM channel between the bot and a user.
  * Discord returns the same channel on repeated calls, so this is idempotent.
  */

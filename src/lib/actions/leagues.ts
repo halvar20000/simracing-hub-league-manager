@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/slug";
 import { uploadLogoIfProvided } from "@/lib/logo-upload";
 import { normalizeChannelLogin } from "@/lib/twitch";
+import { parseSnowflake, saveInviteDiscordConfig } from "@/lib/iracing-invite-notice";
 
 export async function createLeague(formData: FormData) {
   const admin = await requireAdmin();
@@ -82,6 +83,11 @@ export async function updateLeague(id: string, formData: FormData) {
     String(formData.get("discordRsvpChannelId") ?? "").trim() || null;
   const discordRsvpRoleId =
     String(formData.get("discordRsvpRoleId") ?? "").trim() || null;
+  // Role + chat channel for the iRacing invitation (AppSetting, not League).
+  const inviteRoleId = parseSnowflake(String(formData.get("inviteRoleId") ?? ""));
+  const inviteChatChannelId = parseSnowflake(
+    String(formData.get("inviteChatChannelId") ?? "")
+  );
   // Embed color: accept "#RRGGBB" or "RRGGBB"; reject anything else by
   // storing null so the embed falls back to its default.
   const embedColorRaw = String(formData.get("discordEmbedColor") ?? "").trim();
@@ -201,6 +207,13 @@ export async function updateLeague(id: string, formData: FormData) {
   if (!existing) {
     redirect(`/admin/leagues/${id}/edit?error=League+not+found`);
   }
+  if (inviteRoleId === undefined || inviteChatChannelId === undefined) {
+    redirect(
+      `/admin/leagues/${existing.slug}/edit?error=${encodeURIComponent(
+        "Driver role and league chat channel take a Discord ID (digits only). In Discord: developer mode on, right-click the role or channel, Copy ID."
+      )}`
+    );
+  }
   const removeLogo = formData.get("removeLogo") === "1";
   const upload = await uploadLogoIfProvided(
     formData,
@@ -255,6 +268,11 @@ export async function updateLeague(id: string, formData: FormData) {
       rsvpCloseBeforeHours,
       isArchived,
     },
+  });
+
+  await saveInviteDiscordConfig(id, {
+    roleId: inviteRoleId,
+    chatChannelId: inviteChatChannelId,
   });
 
   revalidatePath("/admin/leagues");

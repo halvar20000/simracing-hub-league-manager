@@ -11,15 +11,21 @@
  * Accepted is set by hand in the roster; CLS cannot see iRacing. The reminder
  * text therefore allows for a driver who already accepted.
  *
+ * Besides the DM, Sent also (once, not on the reminder) gives the driver the
+ * league's driver role and @mentions them in the league chat. Both are set per
+ * league on the league-edit page and stored in `AppSetting`
+ * `invite-discord:<leagueId>`; the role falls back to the RSVP role.
+ *
  * Not a "use server" module.
  */
-import { sendDirectMessage } from "@/lib/discord-bot";
+import { addGuildMemberRole, postBotMessage, sendDirectMessage } from "@/lib/discord-bot";
 import { prisma } from "@/lib/prisma";
 import { discordIdForUser } from "@/lib/waitlist";
 
 export const INVITE_REMINDER_AFTER_MS = 48 * 60 * 60 * 1000;
 
 const KEY_PREFIX = "iracing-invite:";
+const CONFIG_PREFIX = "invite-discord:";
 /** Each DM is a couple of Discord calls and the cron route has 60 s. */
 const MAX_REMINDERS_PER_RUN = 25;
 
@@ -29,7 +35,49 @@ export type InviteNoticeState = {
   noticeError: string | null;
   reminderAt: string | null;
   reminderError: string | null;
+  /** "done", "off" (not configured) or the failure. null on rows older than v2.50.0. */
+  role: string | null;
+  chat: string | null;
 };
+
+export type InviteDiscordConfig = {
+  /** Role given on Sent. null = the league's RSVP role. */
+  roleId: string | null;
+  /** League chat channel for the @mention. null = no chat post. */
+  chatChannelId: string | null;
+};
+
+const SNOWFLAKE = /^\d{15,22}$/;
+
+/** "" -> null, a snowflake -> itself, anything else -> undefined (invalid). */
+export function parseSnowflake(raw: string): string | null | undefined {
+  const v = raw.trim();
+  if (!v) return null;
+  return SNOWFLAKE.test(v) ? v : undefined;
+}
+
+export async function loadInviteDiscordConfig(leagueId: string): Promise<InviteDiscordConfig> {
+  const row = await prisma.appSetting.findUnique({ where: { key: CONFIG_PREFIX + leagueId } });
+  try {
+    const c = row ? (JSON.parse(row.value) as Partial<InviteDiscordConfig>) : {};
+    return { roleId: c.roleId ?? null, chatChannelId: c.chatChannelId ?? null };
+  } catch {
+    return { roleId: null, chatChannelId: null };
+  }
+}
+
+export async function saveInviteDiscordConfig(
+  leagueId: string,
+  config: InviteDiscordConfig
+): Promise<void> {
+  const key = CONFIG_PREFIX + leagueId;
+  if (!config.roleId && !config.chatChannelId) {
+    await prisma.appSetting.deleteMany({ where: { key } });
+    return;
+  }
+  const value = JSON.stringify(config);
+  await prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
+}
 
 const keyOf = (registrationId: string) => `${KEY_PREFIX}${registrationId}`;
 
@@ -42,6 +90,8 @@ export function parseInviteNotice(value: string): InviteNoticeState | null {
       noticeError: s.noticeError ?? null,
       reminderAt: s.reminderAt ?? null,
       reminderError: s.reminderError ?? null,
+      role: s.role ?? null,
+      chat: s.chat ?? null,
     };
   } catch {
     return null;
@@ -94,11 +144,56 @@ export function inviteReminderText(leagueName: string, seasonName: string): stri
   );
 }
 
+export function inviteChatText(discordUserId: string): string {
+  return `<@${discordUserId}>: Einladung wurde in iRacing versendet. Bitte Einladung annehmen.`;
+}
+
+const NO_DISCORD = "No Discord account linked";
+
 /** Never throws. Returns the reason on failure, null when delivered. */
 async function dmDriver(userId: string, content: string): Promise<string | null> {
   try {
     const discordId = await discordIdForUser(userId);
-    if (!discordId) return "No Discord account linked";
+    if (!discordId) return NO_DISCORD;
+    return await dmDiscordId(discordId, content);
+  } catch {
+    return "Discord could not be reached";
+  }
+}
+
+/** "done" | "off" | failure text. Never throws. */
+async function giveDriverRole(
+  guildId: string | null,
+  roleId: string | null,
+  discordId: string | null,
+  leagueName: string
+): Promise<string> {
+  if (!roleId) return "off";
+  if (!guildId) return "League has no Discord guild ID";
+  if (!discordId) return NO_DISCORD;
+  const res = await addGuildMemberRole(guildId, discordId, roleId, `${leagueName}: iRacing invitation sent`);
+  if (res.ok) return "done";
+  if (res.status === 403) return "Bot may not give this role (Manage Roles missing, or the bot's role is below it)";
+  if (res.status === 404) return "Driver is not on the Discord server, or the role does not exist";
+  return `Discord refused (${res.status || "unreachable"})`;
+}
+
+/** "done" | "off" | failure text. Never throws. */
+async function postInChat(channelId: string | null, discordId: string | null): Promise<string> {
+  if (!channelId) return "off";
+  if (!discordId) return NO_DISCORD;
+  const res = await postBotMessage(channelId, {
+    content: inviteChatText(discordId),
+    allowed_mentions: { users: [discordId] },
+  });
+  if (res.ok) return "done";
+  if (res.status === 403) return "Bot may not post in the league chat channel";
+  if (res.status === 404) return "League chat channel not found";
+  return `Discord refused (${res.status || "unreachable"})`;
+}
+
+async function dmDiscordId(discordId: string, content: string): Promise<string | null> {
+  try {
     const res = await sendDirectMessage(discordId, {
       content,
       allowed_mentions: { parse: [] },
@@ -121,7 +216,9 @@ const select = {
       name: true,
       status: true,
       isArchived: true,
-      league: { select: { name: true } },
+      league: {
+        select: { id: true, name: true, discordGuildId: true, discordRsvpRoleId: true },
+      },
     },
   },
 } as const;
@@ -134,16 +231,31 @@ export async function notifyInvitationSent(registrationId: string): Promise<void
   });
   if (!reg || !canNotifyInvite(reg)) return;
 
+  const league = reg.season.league;
+  const [config, discordId] = await Promise.all([
+    loadInviteDiscordConfig(league.id),
+    discordIdForUser(reg.userId).catch(() => null),
+  ]);
+  const [noticeError, role, chat] = await Promise.all([
+    discordId
+      ? dmDiscordId(discordId, inviteNoticeText(league.name, reg.season.name))
+      : Promise.resolve(NO_DISCORD),
+    giveDriverRole(
+      league.discordGuildId,
+      config.roleId ?? league.discordRsvpRoleId,
+      discordId,
+      league.name
+    ),
+    postInChat(config.chatChannelId, discordId),
+  ]);
   const state: InviteNoticeState = {
     sentAt: new Date().toISOString(),
-    noticeError: null,
+    noticeError,
     reminderAt: null,
     reminderError: null,
+    role,
+    chat,
   };
-  state.noticeError = await dmDriver(
-    reg.userId,
-    inviteNoticeText(reg.season.league.name, reg.season.name)
-  );
   const key = keyOf(registrationId);
   const value = JSON.stringify(state);
   await prisma.appSetting.upsert({

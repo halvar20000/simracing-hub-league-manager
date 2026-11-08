@@ -3,16 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateLeague } from "@/lib/actions/leagues";
+import { loadInviteDiscordConfig } from "@/lib/iracing-invite-notice";
 
 export default async function EditLeaguePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   await requireAdmin();
   const { slug } = await params;
+  const { error } = await searchParams;
   const league = await prisma.league.findUnique({ where: { slug } });
   if (!league) notFound();
+  const inviteDiscord = await loadInviteDiscordConfig(league.id);
 
   const update = updateLeague.bind(null, league.id);
 
@@ -27,6 +32,11 @@ export default async function EditLeaguePage({
         </Link>
         <h1 className="mt-2 text-2xl font-bold">Edit League</h1>
       </div>
+      {error && (
+        <p className="max-w-xl rounded border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">
+          {error}
+        </p>
+      )}
 
       <form action={update} className="max-w-xl space-y-4">
         <label className="block">
@@ -183,6 +193,47 @@ export default async function EditLeaguePage({
                 className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
               />
             </label>
+            <div className="w-full rounded border border-zinc-800 bg-zinc-900/50 p-3">
+              <p className="text-sm font-medium text-zinc-200">
+                iRacing invitation set to “Sent”
+              </p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                Besides the DM, the driver gets this role and is @mentioned in
+                the league chat: “Einladung wurde in iRacing versendet. Bitte
+                Einladung annehmen.” The bot needs Manage Roles, and its own
+                role must be above the driver role.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                <label className="block flex-1 min-w-[12rem]">
+                  <span className="mb-1 block text-xs text-zinc-400">
+                    Driver role ID (e.g. PCC-Driver)
+                  </span>
+                  <input
+                    name="inviteRoleId"
+                    type="text"
+                    defaultValue={inviteDiscord.roleId ?? ""}
+                    placeholder={
+                      league.discordRsvpRoleId
+                        ? `empty = RSVP role ${league.discordRsvpRoleId}`
+                        : "empty = no role"
+                    }
+                    className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+                  />
+                </label>
+                <label className="block flex-1 min-w-[12rem]">
+                  <span className="mb-1 block text-xs text-zinc-400">
+                    League chat channel ID
+                  </span>
+                  <input
+                    name="inviteChatChannelId"
+                    type="text"
+                    defaultValue={inviteDiscord.chatChannelId ?? ""}
+                    placeholder="empty = no chat message"
+                    className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-mono text-zinc-100"
+                  />
+                </label>
+              </div>
+            </div>
             <label className="block w-44">
               <span className="mb-1 block text-xs text-zinc-400">
                 Embed color (hex, optional)

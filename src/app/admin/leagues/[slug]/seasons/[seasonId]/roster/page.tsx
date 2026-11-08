@@ -1072,11 +1072,20 @@ const fmtNoticeTime = (d: Date) =>
 
 /** Under the Invite dropdown in the table: only when a DM did not arrive. */
 function InviteNoticeWarning({ notice }: { notice: InviteNoticeState | undefined }) {
-  const error = notice?.reminderError ?? notice?.noticeError;
-  if (!error) return null;
+  if (!notice) return null;
+  const failed = (v: string | null) => v != null && v !== "done" && v !== "off";
+  const parts = [
+    (notice.reminderError ?? notice.noticeError) && "DM",
+    failed(notice.role) && "role",
+    failed(notice.chat) && "chat",
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  const detail = [notice.reminderError ?? notice.noticeError, failed(notice.role) && notice.role, failed(notice.chat) && notice.chat]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <div className="mt-1 text-[10px] text-red-400" title={error}>
-      ⚠ Discord DM failed
+    <div className="mt-1 text-[10px] text-red-400" title={detail}>
+      ⚠ Discord {parts.join(" + ")} failed
     </div>
   );
 }
@@ -1090,6 +1099,13 @@ function InviteNoticeDetail({ notice }: { notice: InviteNoticeState | undefined 
       {error ? ` failed: ${error}` : ""}
     </p>
   );
+  // null = row from before v2.50.0, "off" = not configured for this league.
+  const stepLine = (key: string, label: string, v: string | null) =>
+    v == null || v === "off"
+      ? null
+      : v === "done"
+        ? line(key, `${label} done`, null)
+        : line(key, label, v);
   return (
     <div className="pb-2.5 text-xs">
       {line(
@@ -1097,6 +1113,8 @@ function InviteNoticeDetail({ notice }: { notice: InviteNoticeState | undefined 
         `Discord notice ${notice.noticeError ? "" : "sent "}${fmtNoticeTime(sentAt)}`,
         notice.noticeError
       )}
+      {stepLine("role", "Driver role", notice.role)}
+      {stepLine("chat", "League chat message", notice.chat)}
       {notice.reminderAt
         ? line(
             "reminder",
