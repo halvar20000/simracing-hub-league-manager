@@ -4,6 +4,7 @@ import {
   ETERNAL_LEAGUE_WINDOW,
 } from "@/lib/fun-league";
 import type { PrismaClient } from "@prisma/client";
+import { loadGuestLookup, neutraliseGuestResult } from "@/lib/proam-guest";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
@@ -185,6 +186,17 @@ export async function computeDriverStandings(
     prisma.round.count({ where: { seasonId } }),
   ]);
 
+  // Pro/Am intro races: an unclassified driver, or a round raced before his
+  // classification, scores nothing and takes no class position (proam-guest.ts).
+  const guests = await loadGuestLookup(prisma, seasonId, proAmEnabled);
+  if (proAmEnabled) {
+    for (const reg of registrations) {
+      for (const r of reg.raceResults) {
+        if (guests.isGuest(reg.id, reg.proAmClass, r.roundId)) neutraliseGuestResult(r);
+      }
+    }
+  }
+
   // Compute "class position" per result (rank within Pro or AM only) and
   // "GDC position" (rank within the opt-in Gentleman Driver Class cohort).
   // Both are class-relative rankings derived from the same finishing order.
@@ -215,6 +227,7 @@ export async function computeDriverStandings(
       const classified = round.raceResults
         .filter(
           (r) =>
+            !guests.isGuest(r.registrationId, r.registration.proAmClass, round.id) &&
             r.finishStatus !== "DSQ" &&
             r.finishStatus !== "DNS" &&
             r.raceDistancePct >= minPct
@@ -768,11 +781,22 @@ export async function computeTeamStandings(
     where: { seasonId, ...completedRoundWhere },
     include: {
       raceResults: {
-        include: { registration: { select: { teamId: true } } },
+        include: { registration: { select: { teamId: true, proAmClass: true } } },
       },
       fprAwards: true,
     },
   });
+  // Pro/Am intro races score nothing for the team either (proam-guest.ts).
+  if (season.proAmEnabled) {
+    const guests = await loadGuestLookup(prisma, seasonId, true);
+    for (const round of rounds) {
+      for (const r of round.raceResults) {
+        if (guests.isGuest(r.registrationId, r.registration.proAmClass, round.id)) {
+          neutraliseGuestResult(r);
+        }
+      }
+    }
+  }
 
   const teamMap = new Map<
     string,
@@ -999,6 +1023,18 @@ export async function computeCarStandings(
       },
     },
   });
+  const carSeason = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: { proAmEnabled: true },
+  });
+  if (carSeason?.proAmEnabled) {
+    const guests = await loadGuestLookup(prisma, seasonId, true);
+    for (const r of results) {
+      if (guests.isGuest(r.registrationId, r.registration.proAmClass, r.roundId)) {
+        neutraliseGuestResult(r);
+      }
+    }
+  }
 
   type Bucket = {
     raw: number; participation: number; manual: number; correction: number;

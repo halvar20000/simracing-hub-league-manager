@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { clearGuestRounds, noteGuestRoundsOnRating } from "@/lib/proam-guest";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 import { parseStartNumberInput } from "@/lib/start-number";
 import {
@@ -340,10 +341,16 @@ export async function updateRegistration(
     }
   }
 
+  const before = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: { proAmClass: true },
+  });
   await prisma.registration.update({
     where: { id: registrationId },
     data: status === "APPROVED" ? data : { ...data, waitlistedAt: null },
   });
+  // First Pro/Am classification: the rounds already raced stay intro races.
+  await noteGuestRoundsOnRating(prisma, registrationId, before?.proAmClass ?? null, proAmClass);
 
   // Keep the waiting list consistent (order-proof, by registration date) —
   // handles both "now approved → maybe waitlist" and "left the grid → promote
@@ -436,11 +443,20 @@ export async function setRegistrationProAmClass(formData: FormData) {
   if (!registrationId) throw new Error("registrationId required");
   if (!PROAM_VALUES.has(value)) throw new Error("Invalid value");
 
+  const before = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: { proAmClass: true },
+  });
+  const newClass = value === "AUTO" ? null : (value as "PRO" | "AM");
   const reg = await prisma.registration.update({
     where: { id: registrationId },
-    data: { proAmClass: value === "AUTO" ? null : (value as "PRO" | "AM") },
+    data: { proAmClass: newClass },
     include: { season: { include: { league: true } } },
   });
+  await noteGuestRoundsOnRating(prisma, registrationId, before?.proAmClass ?? null, newClass);
+  revalidatePath(
+    `/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/standings`
+  );
 
   revalidatePath(
     `/admin/leagues/${reg.season.league.slug}/seasons/${reg.seasonId}/pro-am`
@@ -632,6 +648,7 @@ export async function applyProAmToTargetSeason(formData: FormData) {
       where: { id: targetReg.id },
       data: { proAmClass: cls },
     });
+    await noteGuestRoundsOnRating(prisma, targetReg.id, targetReg.proAmClass, cls);
     if (cls === "PRO") appliedPro++;
     else if (cls === "AM") appliedAm++;
     else appliedAuto++;
@@ -714,3 +731,23 @@ export async function rejectTeamRegistrations(formData: FormData) {
   );
 }
 
+
+/**
+ * Admin undo for a driver's Pro/Am intro races: they count normally, in his
+ * current class, again (and re-rank that class in those rounds).
+ */
+export async function clearIntroRacesAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const registrationId = String(formData.get("registrationId") ?? "");
+  if (!registrationId) throw new Error("registrationId required");
+  const reg = await prisma.registration.findUnique({
+    where: { id: registrationId },
+    select: { seasonId: true, season: { select: { league: { select: { slug: true } } } } },
+  });
+  if (!reg) throw new Error("Registration not found");
+  await clearGuestRounds(prisma, reg.seasonId, registrationId);
+  const slug = reg.season.league.slug;
+  revalidatePath(`/admin/leagues/${slug}/seasons/${reg.seasonId}/roster/${registrationId}/edit`);
+  revalidatePath(`/leagues/${slug}/seasons/${reg.seasonId}/standings`);
+  revalidatePath(`/leagues/${slug}/seasons/${reg.seasonId}`, "layout");
+}

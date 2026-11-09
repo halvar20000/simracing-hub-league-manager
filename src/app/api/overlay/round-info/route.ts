@@ -30,6 +30,7 @@ import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
 import { parseBeforeRound } from "@/lib/overlay-before-round";
+import { loadGuestLookup, neutraliseGuestResult } from "@/lib/proam-guest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -164,6 +165,17 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+
+    // Pro/Am intro races (proam-guest.ts): no points, no class in this round.
+    if (season.proAmEnabled) {
+      const guests = await loadGuestLookup(prisma, season.id, true);
+      for (const r of results) {
+        if (guests.isGuest(r.registrationId, r.registration.proAmClass, lastMeta.id)) {
+          neutraliseGuestResult(r);
+          r.registration = { ...r.registration, proAmClass: null };
+        }
+      }
+    }
 
     const byRace = new Map<number, typeof results>();
     for (const r of results) {

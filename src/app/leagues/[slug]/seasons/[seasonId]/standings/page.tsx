@@ -189,6 +189,11 @@ export default async function StandingsPage({
   const proDrivers = drivers.filter((d) => d.proAmClass === "PRO");
   const previousPro = previousDrivers?.filter((d) => d.proAmClass === "PRO") ?? null;
   const amDrivers = drivers.filter((d) => d.proAmClass === "AM");
+  // Raced an introduction race but not classified yet: no points, listed
+  // under the Pro and Am tables so they don't just vanish (proam-guest.ts).
+  const unclassifiedDrivers = season.proAmEnabled
+    ? drivers.filter((d) => !d.proAmClass && d.roundsCompleted > 0)
+    : [];
   const previousAm = previousDrivers?.filter((d) => d.proAmClass === "AM") ?? null;
 
   // GDC — parallel, opt-in class. Filter the already-computed driver
@@ -453,6 +458,31 @@ export default async function StandingsPage({
           ) : (
             <DriversTable rows={amDrivers} previousRows={previousAm} kind="class" showTeam />
           )}
+        </section>
+      )}
+
+      {!isTeamEventSeason && (cls === "pro" || cls === "am") && unclassifiedDrivers.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold text-zinc-400">Not yet classified</h2>
+          <p className="mb-2 text-xs text-zinc-500">
+            Introduction race driven, Pro/Am class not set yet. Introduction
+            races score no points; the class counts from the next race on.
+          </p>
+          <ul className="divide-y divide-zinc-800 overflow-hidden rounded border border-zinc-800 text-sm">
+            {unclassifiedDrivers.map((d) => (
+              <li key={d.registrationId} className="flex items-center gap-3 px-3 py-2">
+                <span className="w-10 text-zinc-500 tabular-nums">
+                  {d.startNumber ? `#${d.startNumber}` : ""}
+                </span>
+                <span className="flex-1 text-zinc-300">
+                  {[d.driverFirstName, d.driverLastName].filter(Boolean).join(" ")}
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {d.roundsCompleted} introduction race{d.roundsCompleted === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

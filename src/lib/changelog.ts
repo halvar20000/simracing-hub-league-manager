@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.51.0",
+    date: "2026-11-09",
+    changes: [
+      "GT3 WCT introduction races: a driver who is not yet classified Pro or Am keeps his place in the race result but scores no points and takes no class position from anyone.",
+      "Once he is classified, his class counts from the next race on. The introduction race keeps scoring nothing, so already published Pro/Am results do not change.",
+      "Standings: drivers who are not classified yet are listed under the Pro and Am tables instead of disappearing.",
+      "Driver edit page: shows his introduction races, with a button to count them normally after all.",
+    ],
+  },
+  {
     version: "2.50.0",
     date: "2026-11-08",
     changes: [

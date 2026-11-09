@@ -2,7 +2,9 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { updateRegistration } from "@/lib/actions/admin-registrations";
+import { clearIntroRacesAction, updateRegistration } from "@/lib/actions/admin-registrations";
+import { loadGuestRounds } from "@/lib/proam-guest";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { teamSizeLimit } from "@/lib/team-limit";
 
 export default async function EditRegistrationPage({
@@ -59,6 +61,16 @@ export default async function EditRegistrationPage({
   ) {
     notFound();
   }
+  const introRoundIds = registration.season.proAmEnabled
+    ? ((await loadGuestRounds(prisma, seasonId))[registration.id] ?? [])
+    : [];
+  const introRounds = introRoundIds.length
+    ? await prisma.round.findMany({
+        where: { id: { in: introRoundIds } },
+        select: { roundNumber: true },
+        orderBy: { roundNumber: "asc" },
+      })
+    : [];
 
   const update = updateRegistration.bind(
     null,
@@ -240,6 +252,8 @@ export default async function EditRegistrationPage({
             </select>
             <span className="mt-1 block text-xs text-zinc-500">
               Set after a test race or based on previous league results.
+              Races driven while “Not set” are introduction races: they count
+              for the result but score no points, also after the class is set.
             </span>
           </label>
         )}
@@ -269,6 +283,27 @@ export default async function EditRegistrationPage({
           </Link>
         </div>
       </form>
+
+      {introRounds.length > 0 && (
+        <div className="max-w-xl rounded border border-zinc-800 bg-zinc-900/50 p-3 text-sm">
+          <p className="font-medium text-zinc-200">
+            Introduction races (no points):{" "}
+            {introRounds.map((r) => `R${r.roundNumber}`).join(", ")}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Raced before the Pro/Am class was set. Reset only if these races
+            should count after all: they are then scored in the current class,
+            and the drivers behind him in that class lose a position.
+          </p>
+          <form action={clearIntroRacesAction} className="mt-2">
+            <input type="hidden" name="registrationId" value={registration.id} />
+            <SubmitWithSpinner
+              label="Count these races normally"
+              className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+            />
+          </form>
+        </div>
+      )}
     </div>
   );
 }

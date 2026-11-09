@@ -23,6 +23,7 @@ import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
 import { isExpiringVodType, twitchVideoUrl } from "@/lib/twitch";
 import { RaceStreamEmbed } from "@/components/RaceStreamEmbed";
+import { loadGuestLookup, neutraliseGuestResult } from "@/lib/proam-guest";
 
 /**
  * Twitch's embedded player refuses to load unless the embedding host is named
@@ -434,6 +435,20 @@ export default async function PublicRoundResults({
 
   const baseHref = `/leagues/${slug}/seasons/${seasonId}/rounds/${roundId}`;
   const allRows = round.raceResults;
+  // Pro/Am intro races (proam-guest.ts): the driver keeps his overall position
+  // but scores nothing and has no class in this round. Neutralised here, so
+  // every table and total below follows on its own.
+  let introRaceCount = 0;
+  if (proAmEnabled) {
+    const guests = await loadGuestLookup(prisma, round.seasonId, true);
+    for (const r of allRows) {
+      if (guests.isGuest(r.registrationId, r.registration.proAmClass, round.id)) {
+        neutraliseGuestResult(r);
+        r.registration = { ...r.registration, proAmClass: null };
+        introRaceCount++;
+      }
+    }
+  }
 
   // ---- Pro/Am class-relative race points -------------------------------
   // For Pro/Am seasons (GT3 WCT), championship race points come from the
@@ -1189,6 +1204,12 @@ export default async function PublicRoundResults({
             classRacePoints={null}
             includeParticipation={includeParticipationInCombined}
           />
+        )}
+        {introRaceCount > 0 && (
+          <p className="mt-2 text-xs text-zinc-500">
+            “—” in the class column: introduction race of a driver not yet
+            classified Pro or Am. It counts for the result, not for points.
+          </p>
         )}
       </section>
 
