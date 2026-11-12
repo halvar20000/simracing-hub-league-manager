@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.52.3",
+    date: "2026-11-12",
+    changes: [
+      "CAS Rating page: the Fun League counts too; its races count fully for performance and as a bonus for attendance.",
+    ],
+  },
+  {
     version: "2.52.2",
     date: "2026-11-12",
     changes: [

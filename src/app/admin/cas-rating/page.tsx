@@ -53,6 +53,11 @@ const SPECIAL_CASES: [string, string, string][] = [
     "zählt als gefahren; nicht angemeldet: Bonus (+1 gefahren / +1 Rennen)",
   ],
   [
+    "Fun League",
+    "zählt wie jedes Rennen",
+    "gefahren: Bonus (+1 gefahren / +1 Rennen); nicht gefahren: zählt nicht – die Fun League ist eine offene Liga ohne Pflicht, jedes Rennen zu fahren",
+  ],
+  [
     "Pre-Race- und sonstige Einzel-Events (z. B. Adventsrennen)",
     "zählt nicht",
     "zählt nicht",
@@ -124,7 +129,7 @@ export default async function CasRatingPage() {
       <H2>2. Geltungsbereich</H2>
       <p>
         Das CAS Rating gilt für alle Ligen der CAS Community: GT3 WCT, IEC, Combined Cup,
-        SFL Cup und Porsche Community Cup. Jeder Fahrer hat{" "}
+        SFL Cup, Porsche Community Cup und Fun League. Jeder Fahrer hat{" "}
         <b className="text-zinc-100">ein</b> Rating für alle Ligen zusammen.
         <b className="text-zinc-100"> Gezählt wird nur, was im CLS erfasst ist</b>: Rennen,
         deren Ergebnis im CLS veröffentlicht ist. Pre-Race- und sonstige Einzel-Events (z. B.
@@ -388,7 +393,8 @@ export default async function CasRatingPage() {
         Rating startet in jeder Liga{" "}
         <b className="text-zinc-100">mit ihrer nächsten neuen Saison</b>. Ab dann zählen
         die Rennen dieser Liga für Leistung und Teilnahme. Rennen aus Saisons, die schon
-        vor der Einführung liefen, zählen nicht.
+        vor der Einführung liefen, zählen nicht. Die Fun League hat keine Saisons; ihre
+        Rennen zählen ab dem Tag, an dem die erste Liga mit dem CAS Rating startet.
       </p>
       <p>
         Bis zu seinem ersten gewerteten Rennen steht jeder Fahrer bei 50. Das CAS Rating
