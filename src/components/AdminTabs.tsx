@@ -57,6 +57,9 @@ export default function AdminTabs({
           >
             Stream calendar
           </Tab>
+          <Tab href="/admin/cas-rating" active={isActive("/admin/cas-rating")}>
+            CAS Rating
+          </Tab>
           <Tab
             href="/admin/scoring-systems"
             active={isActive("/admin/scoring-systems")}

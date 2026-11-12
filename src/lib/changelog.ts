@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.52.0",
+    date: "2026-11-12",
+    changes: [
+      "Admin: new CAS Rating page with the draft regulation for the planned CAS Rating, for admins only for now.",
+    ],
+  },
+  {
     version: "2.51.0",
     date: "2026-11-09",
     changes: [
