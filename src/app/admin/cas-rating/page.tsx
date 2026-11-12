@@ -120,9 +120,14 @@ export default async function CasRatingPage() {
       <H2>2. Geltungsbereich</H2>
       <p>
         Das CAS Rating gilt für alle Ligen der CAS Community: GT3 WCT, IEC, Combined Cup,
-        SFL Cup, Porsche Community Cup, TSS GT4, NASCAR sowie Fun-/Pre-Race-Events. Jeder
-        Fahrer hat <b className="text-zinc-100">ein</b> Rating für alle Ligen zusammen.
-        Gewertet werden nur Rennen, deren Ergebnis im CLS veröffentlicht ist.
+        SFL Cup und Porsche Community Cup sowie Fun-/Pre-Race-Events. Jeder Fahrer hat{" "}
+        <b className="text-zinc-100">ein</b> Rating für alle Ligen zusammen. Gewertet
+        werden nur Rennen, deren Ergebnis im CLS veröffentlicht ist.
+      </p>
+      <p>
+        Gezählt wird in jeder Liga <b className="text-zinc-100">ab dem Start ihrer nächsten
+        Saison</b>. Rennen aus Saisons, die bei der Einführung schon laufen, zählen nicht
+        (siehe Abschnitt 8).
       </p>
 
       <H2>3. Berechnung</H2>
@@ -186,6 +191,13 @@ export default async function CasRatingPage() {
         Wer sich für mehrere Ligen anmeldet und nur sporadisch fährt, hat eine niedrige
         Teilnahme. Wer nirgends angemeldet ist, steht bei 50 %.
       </p>
+      <p>
+        <b className="text-zinc-100">Streamen zählt als Teilnahme:</b> Wer ein Rennen im
+        offiziellen CAS-Stream überträgt, bekommt dieses Rennen als gefahren angerechnet.
+        Ist er in der Liga nicht angemeldet, zählt es als zusätzliches gefahrenes Rennen
+        (Bonus). Maßgeblich ist der CAS-Stream-Kalender – andere Streams werden nicht
+        gezählt.
+      </p>
 
       <H3>3.4 Start</H3>
       <p>
@@ -193,7 +205,8 @@ export default async function CasRatingPage() {
         Fehlende Rennen bis 10 zählen bei der Leistung mit 50 Punkten und bei der
         Teilnahme als halb gefahren. Jedes echte Rennen ersetzt eines davon. Ein einzelnes
         gutes Rennen bringt also nicht gleich an die Spitze – ein Sieg ohne Incidents hebt
-        die Leistung von 50 auf 55. Frühere Ergebnisse werden nicht rückwirkend gewertet.
+        die Leistung von 50 auf 55. Gezählt wird ab dem Start der jeweils nächsten Saison
+        jeder Liga; frühere Ergebnisse werden nicht rückwirkend gewertet.
       </p>
 
       <H2>4. Sonderfälle</H2>

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.52.1",
+    date: "2026-11-12",
+    changes: [
+      "CAS Rating page: streaming a race in the official CAS stream counts as taking part, and counting starts with each league's next season.",
+    ],
+  },
+  {
     version: "2.52.0",
     date: "2026-11-12",
     changes: [
