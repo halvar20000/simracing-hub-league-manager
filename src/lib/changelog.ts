@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.52.2",
+    date: "2026-11-12",
+    changes: [
+      "CAS Rating page: only races recorded in CLS count (no pre-race or one-off events), and each race of a double-race round counts on its own for performance and attendance.",
+    ],
+  },
+  {
     version: "2.52.1",
     date: "2026-11-12",
     changes: [

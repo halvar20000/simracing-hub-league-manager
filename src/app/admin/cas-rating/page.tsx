@@ -31,7 +31,11 @@ const EXAMPLE_RACES: [string, string, string, string, string, string][] = [
 const SPECIAL_CASES: [string, string, string][] = [
   ["DNF / DSQ", "0 Platzpunkte, Sauberkeit zählt", "gefahren"],
   ["DNS", "zählt nicht", "nicht gefahren"],
-  ["Doppelrennen (z. B. SFL, CC, PCC)", "jedes Rennen einzeln", "eine Runde = ein Rennen"],
+  [
+    "Doppelrennen (z. B. PCC, SFL, CC)",
+    "jedes Rennen zählt einzeln",
+    "jedes Rennen zählt einzeln (eine Runde mit 2 Rennen = 2 Rennen)",
+  ],
   [
     "IEC (Teamrennen)",
     "Klassenplatz des Autos, eigene Incidents; nur wer einen Stint gefahren ist",
@@ -49,9 +53,9 @@ const SPECIAL_CASES: [string, string, string][] = [
     "zählt als gefahren; nicht angemeldet: Bonus (+1 gefahren / +1 Rennen)",
   ],
   [
-    "Fun-/Pre-Race-Event",
-    "zählt wie jedes Rennen",
-    "gefahren: Bonus (+1 / +1); nicht gefahren: zählt nicht",
+    "Pre-Race- und sonstige Einzel-Events (z. B. Adventsrennen)",
+    "zählt nicht",
+    "zählt nicht",
   ],
 ];
 
@@ -120,9 +124,11 @@ export default async function CasRatingPage() {
       <H2>2. Geltungsbereich</H2>
       <p>
         Das CAS Rating gilt für alle Ligen der CAS Community: GT3 WCT, IEC, Combined Cup,
-        SFL Cup und Porsche Community Cup sowie Fun-/Pre-Race-Events. Jeder Fahrer hat{" "}
-        <b className="text-zinc-100">ein</b> Rating für alle Ligen zusammen. Gewertet
-        werden nur Rennen, deren Ergebnis im CLS veröffentlicht ist.
+        SFL Cup und Porsche Community Cup. Jeder Fahrer hat{" "}
+        <b className="text-zinc-100">ein</b> Rating für alle Ligen zusammen.
+        <b className="text-zinc-100"> Gezählt wird nur, was im CLS erfasst ist</b>: Rennen,
+        deren Ergebnis im CLS veröffentlicht ist. Pre-Race- und sonstige Einzel-Events (z. B.
+        das Adventsrennen) werden nicht im CLS geführt und zählen deshalb nicht.
       </p>
       <p>
         Gezählt wird in jeder Liga <b className="text-zinc-100">ab dem Start ihrer nächsten
@@ -382,8 +388,7 @@ export default async function CasRatingPage() {
         Rating startet in jeder Liga{" "}
         <b className="text-zinc-100">mit ihrer nächsten neuen Saison</b>. Ab dann zählen
         die Rennen dieser Liga für Leistung und Teilnahme. Rennen aus Saisons, die schon
-        vor der Einführung liefen, zählen nicht. Fun-/Pre-Race-Events zählen ab dem Tag, an
-        dem die erste Liga mit dem CAS Rating startet.
+        vor der Einführung liefen, zählen nicht.
       </p>
       <p>
         Bis zu seinem ersten gewerteten Rennen steht jeder Fahrer bei 50. Das CAS Rating
