@@ -248,6 +248,14 @@ export async function addGuildMemberRole(
   });
 }
 
+/** One guild member (only the role ids are read). 404 = not on the server. Never throws. */
+export async function getGuildMember(
+  guildId: string,
+  discordUserId: string
+): Promise<Result<{ roles: string[] }>> {
+  return discordFetch(`/guilds/${guildId}/members/${discordUserId}`, { method: "GET" });
+}
+
 /**
  * Open (or fetch the existing) DM channel between the bot and a user.
  * Discord returns the same channel on repeated calls, so this is idempotent.

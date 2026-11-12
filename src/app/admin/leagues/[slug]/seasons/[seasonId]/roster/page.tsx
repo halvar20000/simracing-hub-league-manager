@@ -35,6 +35,7 @@ import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import {
   INVITE_REMINDER_AFTER_MS,
   loadInviteNotices,
+  ROLE_ALREADY,
   type InviteNoticeState,
 } from "@/lib/iracing-invite-notice";
 
@@ -1073,7 +1074,8 @@ const fmtNoticeTime = (d: Date) =>
 /** Under the Invite dropdown in the table: only when a DM did not arrive. */
 function InviteNoticeWarning({ notice }: { notice: InviteNoticeState | undefined }) {
   if (!notice) return null;
-  const failed = (v: string | null) => v != null && v !== "done" && v !== "off";
+  const failed = (v: string | null) =>
+    v != null && v !== "done" && v !== "off" && v !== ROLE_ALREADY;
   const parts = [
     (notice.reminderError ?? notice.noticeError) && "DM",
     failed(notice.role) && "role",
@@ -1093,7 +1095,18 @@ function InviteNoticeWarning({ notice }: { notice: InviteNoticeState | undefined
 function InviteNoticeDetail({ notice }: { notice: InviteNoticeState | undefined }) {
   if (!notice) return null;
   const sentAt = new Date(notice.sentAt);
-  const line = (key: string, text: string, error: string | null) => (
+  if (notice.role === ROLE_ALREADY) {
+    return (
+      <div className="pb-2.5 text-xs text-zinc-500">
+        <p>
+          Already had the driver role on Discord ({fmtNoticeTime(sentAt)}): already in the
+          league roster, so no notice, no chat message and no reminder. Accepted was set
+          automatically.
+        </p>
+      </div>
+    );
+  }
+  const line =(key: string, text: string, error: string | null) => (
     <p key={key} className={error ? "text-red-400" : "text-zinc-500"}>
       {text}
       {error ? ` failed: ${error}` : ""}

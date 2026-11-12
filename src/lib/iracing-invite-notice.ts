@@ -18,7 +18,12 @@
  *
  * Not a "use server" module.
  */
-import { addGuildMemberRole, postBotMessage, sendDirectMessage } from "@/lib/discord-bot";
+import {
+  addGuildMemberRole,
+  getGuildMember,
+  postBotMessage,
+  sendDirectMessage,
+} from "@/lib/discord-bot";
 import { prisma } from "@/lib/prisma";
 import { discordIdForUser } from "@/lib/waitlist";
 
@@ -35,7 +40,7 @@ export type InviteNoticeState = {
   noticeError: string | null;
   reminderAt: string | null;
   reminderError: string | null;
-  /** "done", "off" (not configured) or the failure. null on rows older than v2.50.0. */
+  /** "done", "off" (not configured), "already" (had it, nothing sent) or the failure. null on rows older than v2.50.0. */
   role: string | null;
   chat: string | null;
 };
@@ -149,6 +154,8 @@ export function inviteChatText(discordUserId: string): string {
 }
 
 const NO_DISCORD = "No Discord account linked";
+/** `role` value: the driver already had the role, so nothing was sent. */
+export const ROLE_ALREADY = "already";
 
 /** Never throws. Returns the reason on failure, null when delivered. */
 async function dmDriver(userId: string, content: string): Promise<string | null> {
@@ -236,26 +243,49 @@ export async function notifyInvitationSent(registrationId: string): Promise<void
     loadInviteDiscordConfig(league.id),
     discordIdForUser(reg.userId).catch(() => null),
   ]);
+  const roleId = config.roleId ?? league.discordRsvpRoleId;
+
+  // Already holds the league's driver role = already in the iRacing league
+  // roster (Thomas, 2026-11-12): nothing to accept, so no DM, no chat ping,
+  // no role call (Discord may refuse it even though nothing would change) and
+  // Accepted is set, which also rules out the 48 h reminder.
+  if (roleId && league.discordGuildId && discordId) {
+    const member = await getGuildMember(league.discordGuildId, discordId);
+    if (member.ok && member.data?.roles?.includes(roleId)) {
+      await prisma.registration.update({
+        where: { id: registrationId },
+        data: { iracingInvitationAccepted: "YES" },
+      });
+      await saveNotice(registrationId, {
+        sentAt: new Date().toISOString(),
+        noticeError: null,
+        reminderAt: null,
+        reminderError: null,
+        role: ROLE_ALREADY,
+        chat: "off",
+      });
+      return;
+    }
+  }
+
   const [noticeError, role, chat] = await Promise.all([
     discordId
       ? dmDiscordId(discordId, inviteNoticeText(league.name, reg.season.name))
       : Promise.resolve(NO_DISCORD),
-    giveDriverRole(
-      league.discordGuildId,
-      config.roleId ?? league.discordRsvpRoleId,
-      discordId,
-      league.name
-    ),
+    giveDriverRole(league.discordGuildId, roleId, discordId, league.name),
     postInChat(config.chatChannelId, discordId),
   ]);
-  const state: InviteNoticeState = {
+  await saveNotice(registrationId, {
     sentAt: new Date().toISOString(),
     noticeError,
     reminderAt: null,
     reminderError: null,
     role,
     chat,
-  };
+  });
+}
+
+async function saveNotice(registrationId: string, state: InviteNoticeState): Promise<void> {
   const key = keyOf(registrationId);
   const value = JSON.stringify(state);
   await prisma.appSetting.upsert({

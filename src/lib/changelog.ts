@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.52.4",
+    date: "2026-11-12",
+    changes: [
+      "Roster: a driver who already has the league's driver role on Discord is treated as already in the iRacing league when the invitation is set to Sent. No \"Discord role failed\" warning, no DM, no chat message, no reminder, and Accepted is set automatically.",
+    ],
+  },
+  {
     version: "2.52.3",
     date: "2026-11-12",
     changes: [
