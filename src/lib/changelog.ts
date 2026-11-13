@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.54.0",
+    date: "2026-11-13",
+    changes: [
+      "CAS Rating for every driver: once you are signed in, your CR is shown at the top right (like the licence in iRacing). Click it for your rating page — the licence card, the curve of your rating over time, your last 10 races with place, clean and penalty points, your attendance per league and the full history of every race that counted.",
+      "The CAS Rating starts with the new SFL Cup season (first race 25 November). Until your first counted race you are at 50.",
+    ],
+  },
+  {
     version: "2.53.0",
     date: "2026-11-13",
     changes: [

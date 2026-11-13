@@ -2,6 +2,8 @@ import Link from "next/link";
 import { auth, signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import MobileMenu from "@/components/MobileMenu";
+import { getCasRatingCached } from "@/lib/cas-rating-data";
+import { fmtCr } from "@/components/CasRatingCard";
 
 export default async function Nav() {
   const session = await auth();
@@ -18,6 +20,29 @@ export default async function Nav() {
       where: { status: "SUBMITTED" },
     });
   }
+  // CAS Rating badge (like the iRacing licence in the top bar). Never let a
+  // rating problem break the navigation.
+  let myCr: number | null = null;
+  if (session?.user?.id) {
+    try {
+      const { engine } = await getCasRatingCached(prisma);
+      myCr = engine.rate(session.user.id).rating;
+    } catch {
+      myCr = null;
+    }
+  }
+  const crBadge =
+    myCr != null ? (
+      <Link
+        href="/rating"
+        title="My CAS Rating"
+        className="inline-flex items-baseline gap-1.5 rounded-full border-[1.5px] border-[#ff6b35] px-2.5 py-0.5 hover:bg-[#ff6b35]/10"
+      >
+        <small className="text-[10px] font-bold tracking-widest text-[#ff6b35]">CR</small>
+        <b className="text-sm tabular-nums text-white">{fmtCr(myCr)}</b>
+      </Link>
+    ) : null;
+
   const isFullAdmin = role === "ADMIN";
   const isSteward = role === "ADMIN" || role === "STEWARD";
 
@@ -106,10 +131,12 @@ export default async function Nav() {
               {l.label}
             </NavLink>
           ))}
+          {crBadge && <div className="ml-2">{crBadge}</div>}
           <div className="ml-2">{authButton}</div>
         </div>
         {/* Phone / tablet: menu button. <details> needs no client JS. */}
         <div className="flex items-center gap-2 lg:hidden">
+          {crBadge}
           {authButton}
           <MobileMenu
             summary={

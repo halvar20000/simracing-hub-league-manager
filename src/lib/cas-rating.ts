@@ -300,7 +300,13 @@ export function buildCasRating(input: CrInput) {
   /** CR after each counting race date, oldest first (the curve). */
   function history(userId: string, asOf: Date = new Date()): { at: Date; rating: number }[] {
     const dates = [...new Set(races.filter((r) => r.at <= asOf).map((r) => r.at.getTime()))].sort((a, b) => a - b);
-    return dates.map((t) => ({ at: new Date(t), rating: rate(userId, new Date(t)).rating }));
+    const points = dates.map((t) => ({ at: new Date(t), rating: rate(userId, new Date(t)).rating }));
+    // Drop the flat 50 lead-in before the driver's rating first moves (keep
+    // the last of it, so the curve starts at 50).
+    const firstMove = points.findIndex((p) => Math.abs(p.rating - CR_START) > 1e-9);
+    if (firstMove === -1) return points.slice(-1);
+    if (firstMove > 0) return points.slice(firstMove - 1);
+    return [{ at: new Date(points[0].at.getTime() - 1), rating: CR_START }, ...points];
   }
 
   /** Change since the driver's last race: CR now minus CR just before it. */
@@ -318,5 +324,15 @@ export function buildCasRating(input: CrInput) {
     ...streamsByUser.keys(),
   ]);
 
-  return { rate, history, deltaSinceLastRace, userIds, races };
+  /** Every counted race of the driver, newest first (the history table). */
+  function racesOf(userId: string, asOf: Date = new Date()): CrRaceEntry[] {
+    return entriesOf(userId, asOf);
+  }
+
+  /** Deductions outside a race entry ever, newest first. */
+  function adjustmentsOf(userId: string, asOf: Date = new Date()): CrAdjustment[] {
+    return (adjByUser.get(userId) ?? []).filter((a) => a.at <= asOf).sort(byAtDesc);
+  }
+
+  return { rate, history, deltaSinceLastRace, racesOf, adjustmentsOf, userIds, races };
 }

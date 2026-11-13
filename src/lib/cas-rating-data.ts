@@ -438,3 +438,26 @@ export async function clearCrWithdrawn(
     /* ignore */
   }
 }
+
+// ---- short in-process cache for the nav badge and the driver page ---------
+// The app is one standalone Node process, so a module-level memo is enough.
+// A published result or decision shows up within CR_CACHE_MS; saving the
+// admin settings clears it at once.
+const CR_CACHE_MS = 2 * 60_000;
+let crCache: { at: number; value: Promise<Awaited<ReturnType<typeof loadCasRating>>> } | null = null;
+
+export function getCasRatingCached(prisma: PrismaClient) {
+  if (!crCache || Date.now() - crCache.at > CR_CACHE_MS) {
+    const value = loadCasRating(prisma);
+    crCache = { at: Date.now(), value };
+    // A failed load must not stick for two minutes.
+    value.catch(() => {
+      if (crCache?.value === value) crCache = null;
+    });
+  }
+  return crCache.value;
+}
+
+export function clearCasRatingCache(): void {
+  crCache = null;
+}

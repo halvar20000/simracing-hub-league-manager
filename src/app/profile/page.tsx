@@ -37,7 +37,12 @@ export default async function ProfilePage({
   return (
     <div className="max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">My Profile</h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 className="text-2xl font-bold">My Profile</h1>
+          <Link href="/rating" className="text-sm text-[#ff6b35] hover:underline">
+            My CAS Rating →
+          </Link>
+        </div>
         <p className="mt-1 text-sm text-zinc-400">
           Required before you can register for a season. Start with your
           iRacing ID — if we already know you, your name fills in

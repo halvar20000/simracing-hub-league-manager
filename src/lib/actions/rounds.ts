@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { recomputePenaltyPoolForSeason } from "@/lib/penalty-pool";
 import { applyNoRsvpNoShowPenalties } from "@/lib/no-rsvp-penalty";
 import { postRoundResults } from "@/lib/notify-results";
+import { clearCasRatingCache } from "@/lib/cas-rating-data";
 import type { RoundStatus } from "@prisma/client";
 
 export async function createRound(
@@ -103,6 +104,8 @@ export async function updateRound(
   // helper is safe to call on any status transition — it clears stale auto
   // penalties when a round is moved out of COMPLETED.
   await applyNoRsvpNoShowPenalties(roundId);
+  // Publishing / unpublishing changes the CAS Rating at once.
+  clearCasRatingCache();
 
   // Penalty pool: recompute auto-forgiveness when a round is marked complete
   if (status === "COMPLETED") {
@@ -154,6 +157,8 @@ export async function setRoundPublished(formData: FormData) {
   // Same downstream pipeline as updateRound. applyNoRsvpNoShowPenalties is safe
   // on any transition — it clears stale auto penalties when leaving COMPLETED.
   await applyNoRsvpNoShowPenalties(roundId);
+  // Publishing / unpublishing changes the CAS Rating at once.
+  clearCasRatingCache();
 
   if (status === "COMPLETED") {
     await recomputePenaltyPoolForSeason(seasonId);

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { CR_CONFIG_KEY, type CrConfig } from "@/lib/cas-rating-data";
+import { CR_CONFIG_KEY, clearCasRatingCache, type CrConfig } from "@/lib/cas-rating-data";
 import { STREAMERS } from "@/lib/stream-calendar";
 
 /**
@@ -40,6 +40,7 @@ export async function saveCasRatingConfigAction(formData: FormData): Promise<voi
     update: { value: JSON.stringify(next) },
     create: { key: CR_CONFIG_KEY, value: JSON.stringify(next) },
   });
+  clearCasRatingCache();
   revalidatePath("/admin/cas-rating/live");
   redirect("/admin/cas-rating/live?saved=1");
 }
