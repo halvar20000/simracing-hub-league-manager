@@ -135,12 +135,13 @@ export default async function Nav() {
           />
         </Link>
         {/* Desktop: one row + account menu. */}
-        <div className="hidden min-w-0 items-center gap-0.5 whitespace-nowrap text-sm xl:flex">
+        <div className="ml-6 hidden min-w-0 flex-1 items-center gap-0.5 whitespace-nowrap text-sm xl:flex">
           {links.map((l) => (
             <NavLink key={l.href} href={l.href}>
               {l.label}
             </NavLink>
           ))}
+          <div className="ml-auto" />
           {crBadge && <div className="ml-3">{crBadge}</div>}
           <div className="ml-2">
             {session?.user ? (

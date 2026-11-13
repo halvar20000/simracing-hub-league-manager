@@ -19,6 +19,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.54.4",
+    date: "2026-11-13",
+    changes: ["Top bar: the menu now starts right next to the logo; your CR and picture stay at the far right."],
+  },
+  {
     version: "2.54.3",
     date: "2026-11-13",
     changes: [
