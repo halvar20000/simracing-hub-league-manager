@@ -180,6 +180,26 @@ function isoWeekOf(monday: string): number {
   return Math.floor((thursday.getTime() - jan1) / 86_400_000 / 7) + 1;
 }
 
+/**
+ * Who streams this one round ("Thomas", "Andreas", "Open"), with the same
+ * lookup as the calendar: round row -> slot row -> STREAM_PLAN -> Open.
+ * Null when the round is before the calendar starts.
+ */
+export function streamerOfRound(
+  round: StreamRoundInput,
+  overrides: Map<string, string>
+): string | null {
+  const cal = buildStreamCalendar([round], overrides);
+  const key = roundStreamKey(round.id);
+  for (const w of cal.weeks) for (const r of w.races) if (r.key === key) return r.streamer;
+  return null;
+}
+
+/** The two AppSetting keys that can hold this round's streamer. */
+export function streamKeysOfRound(round: { id: string; leagueSlug: string; startsAt: Date }): string[] {
+  return [roundStreamKey(round.id), slotStreamKey(round.leagueSlug, localDate(round.startsAt))];
+}
+
 export function buildStreamCalendar(
   rounds: StreamRoundInput[],
   overrides: Map<string, string>,

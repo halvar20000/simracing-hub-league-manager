@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.54.3",
+    date: "2026-11-13",
+    changes: [
+      "No-show penalty: the official CAS streamer of a race (stream calendar) no longer gets a no-show penalty point for that race when streaming instead of driving — no need to click Decline. Same rule as in the CAS Rating.",
+    ],
+  },
+  {
     version: "2.54.2",
     date: "2026-11-13",
     changes: [

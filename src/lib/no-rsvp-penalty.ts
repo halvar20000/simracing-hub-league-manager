@@ -37,6 +37,12 @@
  *     the flag is ignored. (Fill-ins are only ever offered R1 when they're
  *     already eligible, so no extra R1 gate is needed for rule 2.)
  *
+ *   - Official streamer exempt (v2.54.3, agreed 2026-11-13): the driver who
+ *     streams this round according to the stream calendar
+ *     (/admin/stream-calendar; name -> CLS user via the CAS Rating settings)
+ *     gets no no-show penalty, and an auto-penalty already written for him
+ *     in this round is removed on the next run. Same rule as the CAS Rating.
+ *
  * Idempotent: re-running on an already-processed round does nothing new.
  *
  * If a round is later moved out of COMPLETED, the helper clears the
@@ -48,6 +54,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { loadCrConfig } from "@/lib/cas-rating-data";
+import { streamerOfRound, streamKeysOfRound } from "@/lib/stream-calendar";
 
 export type NoRsvpPenaltyResult = {
   league: string;
@@ -84,7 +92,7 @@ export async function applyNoRsvpNoShowPenalties(
               isTeamManager: false,
               waitlistedAt: null,
             },
-            select: { id: true, eligibleRound1: true },
+            select: { id: true, eligibleRound1: true, userId: true },
           },
         },
       },
@@ -103,7 +111,7 @@ export async function applyNoRsvpNoShowPenalties(
             isTeamManager: false,
           },
         },
-        select: { registrationId: true },
+        select: { registrationId: true, registration: { select: { userId: true } } },
       },
     },
   });
@@ -124,6 +132,43 @@ export async function applyNoRsvpNoShowPenalties(
       where: { roundId, source: "NO_RSVP_NO_SHOW" },
     });
     return { league: slug, mode, applied: 0, cleared: cleared.count };
+  }
+
+  // The official streamer of this round (stream calendar) is exempt.
+  let streamerUserId: string | null = null;
+  try {
+    const leagueSlug = round.season.league.slug;
+    const keys = streamKeysOfRound({ id: round.id, leagueSlug, startsAt: round.startsAt });
+    const [rows, crConfig] = await Promise.all([
+      prisma.appSetting.findMany({ where: { key: { in: keys } } }),
+      loadCrConfig(prisma),
+    ]);
+    const name = streamerOfRound(
+      {
+        id: round.id,
+        seasonId: round.seasonId,
+        leagueSlug,
+        roundNumber: round.roundNumber,
+        name: round.name ?? "",
+        track: "",
+        startsAt: round.startsAt,
+      },
+      new Map(rows.map((r) => [r.key, r.value]))
+    );
+    streamerUserId = name ? (crConfig.streamers[name] ?? null) : null;
+  } catch {
+    streamerUserId = null;
+  }
+  const streamerRegIds = new Set(
+    [
+      ...round.season.registrations.filter((r) => r.userId === streamerUserId).map((r) => r.id),
+      ...round.fillIns.filter((f) => f.registration.userId === streamerUserId).map((f) => f.registrationId),
+    ].filter(() => streamerUserId != null)
+  );
+  if (streamerRegIds.size > 0) {
+    await prisma.penalty.deleteMany({
+      where: { roundId, source: "NO_RSVP_NO_SHOW", registrationId: { in: [...streamerRegIds] } },
+    });
   }
 
   const ranRegIds = new Set(round.raceResults.map((r) => r.registrationId));
@@ -148,6 +193,7 @@ export async function applyNoRsvpNoShowPenalties(
     (reg) =>
       !ranRegIds.has(reg.id) &&
       !rsvpRegIds.has(reg.id) &&
+      !streamerRegIds.has(reg.id) &&
       (!requireEligible || reg.eligibleRound1)
   );
 
@@ -155,7 +201,8 @@ export async function applyNoRsvpNoShowPenalties(
   const acceptedFillInNoShows = round.fillIns.filter(
     (f) =>
       !ranRegIds.has(f.registrationId) &&
-      !declinedRegIds.has(f.registrationId)
+      !declinedRegIds.has(f.registrationId) &&
+      !streamerRegIds.has(f.registrationId)
   );
 
   // Merge both categories, registrationId -> penalty reason. Rule 1 wins on the

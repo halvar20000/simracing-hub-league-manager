@@ -215,6 +215,7 @@ Drivers RSVP for each round via three buttons (Accept / Decline / Tentative) on 
 
 - Helper: `src/lib/no-rsvp-penalty.ts:applyNoRsvpNoShowPenalties(roundId)` — pure, idempotent, hard-gated by `league.slug === "cas-gt3-wct"`.
 - Trigger: `src/lib/actions/rounds.ts:updateRound` runs the helper on every save. When status flips to `COMPLETED`: drivers with no `RaceResult` AND no `RoundRsvp` row at all get a `Penalty(source=NO_RSVP_NO_SHOW, type=POINTS_DEDUCTION, pointsValue=1, reason="No RSVP and no-show")`. When status flips back away from `COMPLETED`: auto-penalties are deleted.
+- **Official streamer exempt (v2.54.3)**: whoever streams the round per the stream calendar (`streamerOfRound` in `stream-calendar.ts`; name -> user via `cas-rating:config` `streamers`) gets no no-show penalty, and an existing auto one for that round is deleted on the next run. Gating is really `ScoringSystem.penaltyPoolMode` (FULL = GT3 WCT, NO_SHOW_ONLY = SFL), not the slug. Test: `scripts/lm_test_streamer_of_round.ts` (gitignored).
 - Pool integration: `src/lib/penalty-pool.ts` walks rounds where the driver entered OR carries a penalty, so on a season with `noShowForgivenessEnabled = true` a `NO_RSVP_NO_SHOW` penalty resets the clean-race counter even though the driver didn't enter that round. On a season with the flag off these penalties are filtered out of the engine before the walk, so they neither reset the counter nor get forgiven.
 
 ## Discord community stats
