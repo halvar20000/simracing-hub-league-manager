@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.54.1",
+    date: "2026-11-13",
+    changes: [
+      "CAS Rating: your rating page (link on My Profile) is open as a preview. The CR badge at the top right appears once the rating goes live with the new SFL Cup season.",
+    ],
+  },
+  {
     version: "2.54.0",
     date: "2026-11-13",
     changes: [

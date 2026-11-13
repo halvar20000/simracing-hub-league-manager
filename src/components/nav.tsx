@@ -22,11 +22,12 @@ export default async function Nav() {
   }
   // CAS Rating badge (like the iRacing licence in the top bar). Never let a
   // rating problem break the navigation.
+  // Until the CR is switched live (admin page), only admins see the badge.
   let myCr: number | null = null;
   if (session?.user?.id) {
     try {
-      const { engine } = await getCasRatingCached(prisma);
-      myCr = engine.rate(session.user.id).rating;
+      const { engine, config } = await getCasRatingCached(prisma);
+      if (config.live || role === "ADMIN") myCr = engine.rate(session.user.id).rating;
     } catch {
       myCr = null;
     }

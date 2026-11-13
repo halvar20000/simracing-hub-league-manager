@@ -16,7 +16,7 @@ export async function saveCasRatingConfigAction(formData: FormData): Promise<voi
   await requireAdmin();
   const leagues = await prisma.league.findMany({ select: { id: true, slug: true } });
 
-  const next: CrConfig = { leagues: {}, streamers: {} };
+  const next: CrConfig = { leagues: {}, streamers: {}, live: formData.get("live") === "on" };
   for (const l of leagues) {
     const seasonId = String(formData.get(`season:${l.slug}`) ?? "").trim();
     if (!seasonId) continue;
@@ -42,5 +42,7 @@ export async function saveCasRatingConfigAction(formData: FormData): Promise<voi
   });
   clearCasRatingCache();
   revalidatePath("/admin/cas-rating/live");
+  revalidatePath("/rating");
+  revalidatePath("/", "layout");
   redirect("/admin/cas-rating/live?saved=1");
 }

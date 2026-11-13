@@ -99,6 +99,14 @@ export default async function MyCasRatingPage() {
         </p>
       </div>
 
+      {!cr.config.live && (
+        <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-amber-200">
+          <b>Preview — the CAS Rating is not live yet.</b> It starts with the new SFL Cup season
+          (first race 25 November) and the other leagues follow with their next seasons. Until it
+          goes live the numbers on this page are not official.
+        </div>
+      )}
+
       <div className="grid items-start gap-6 md:grid-cols-[300px_1fr]">
         <CasRatingCard
           name={name}

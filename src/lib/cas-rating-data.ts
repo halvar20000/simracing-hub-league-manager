@@ -35,16 +35,20 @@ export type CrConfig = {
   leagues: Record<string, CrLeagueConfig>; // by league slug
   /** Stream-calendar name ("Thomas", "Andreas") -> CLS user id. */
   streamers: Record<string, string>;
+  /** Drivers see their CR (top-bar badge, official values) only once this is on.
+   *  Off = admins see the badge, drivers can open /rating as a preview. */
+  live?: boolean;
 };
 
 export function parseCrConfig(value: string | null | undefined): CrConfig {
-  const empty: CrConfig = { leagues: {}, streamers: {} };
+  const empty: CrConfig = { leagues: {}, streamers: {}, live: false };
   if (!value) return empty;
   try {
     const v = JSON.parse(value);
     return {
       leagues: v && typeof v.leagues === "object" && v.leagues ? v.leagues : {},
       streamers: v && typeof v.streamers === "object" && v.streamers ? v.streamers : {},
+      live: v?.live === true,
     };
   } catch {
     return empty;

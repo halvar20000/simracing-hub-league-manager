@@ -74,6 +74,17 @@ export default async function CasRatingLivePage({
         <h2 className="mb-3 text-lg font-semibold text-zinc-100">Einstellungen</h2>
         {sp.saved && <p className="mb-3 text-emerald-400">Gespeichert.</p>}
         <form action={saveCasRatingConfigAction} className="space-y-4">
+          <label className="flex items-start gap-2 rounded border border-zinc-800 bg-zinc-950 p-3">
+            <input type="checkbox" name="live" defaultChecked={config.live === true} className="mt-1" />
+            <span>
+              <b className="text-zinc-100">CR für Fahrer live schalten</b>
+              <span className="block text-xs text-zinc-500">
+                Aus: nur Admins sehen das CR-Abzeichen oben rechts; Fahrer können ihre Seite
+                /rating als Vorschau (mit Hinweis „not live yet“) öffnen. An: alle Eingeloggten
+                sehen ihr CR oben rechts, der Vorschau-Hinweis verschwindet.
+              </span>
+            </span>
+          </label>
           <table className="w-full">
             <thead>
               <tr>
