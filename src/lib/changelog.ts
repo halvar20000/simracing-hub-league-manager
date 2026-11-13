@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.54.2",
+    date: "2026-11-13",
+    changes: [
+      "Top bar tidied up: your personal pages (Profile, My Registrations, My Reports, Team Stats, Race Logger) and Sign out are now in a menu behind your round Discord picture at the top right, so the bar fits on a normal screen without zooming out. On smaller windows everything is in the ☰ menu.",
+    ],
+  },
+  {
     version: "2.54.1",
     date: "2026-11-13",
     changes: [

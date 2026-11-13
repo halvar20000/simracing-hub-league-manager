@@ -47,6 +47,9 @@ export default async function Nav() {
   const isFullAdmin = role === "ADMIN";
   const isSteward = role === "ADMIN" || role === "STEWARD";
 
+  // Public + staff links stay in the top row; everything that is about the
+  // signed-in driver lives in the account menu behind the round avatar on the
+  // right, so the row fits even for admins without zooming out.
   const links: { href: string; label: React.ReactNode }[] = [
     { href: "/leagues", label: "Leagues" },
     { href: "/calendar", label: "Calendar" },
@@ -55,15 +58,6 @@ export default async function Nav() {
     { href: "/incidents", label: "Incidents" },
     { href: "/streams", label: "Streams" },
     { href: "/stint-planner", label: "Stint Planner" },
-    ...(session?.user
-      ? [
-          { href: "/teams/statistics", label: "Team Stats" },
-          { href: "/registrations", label: "My Registrations" },
-          { href: "/reports", label: "My Reports" },
-          { href: "/race-logger", label: "Race Logger" },
-          { href: "/profile", label: "Profile" },
-        ]
-      : []),
     ...(isFullAdmin ? [{ href: "/admin", label: "Admin" }] : []),
     ...(isSteward
       ? [
@@ -84,8 +78,21 @@ export default async function Nav() {
       : []),
     { href: "/app", label: "App" },
   ];
+  const accountLinks: { href: string; label: React.ReactNode }[] = session?.user
+    ? [
+        { href: "/profile", label: "Profile" },
+        ...(myCr != null ? [{ href: "/rating", label: "My CAS Rating" }] : []),
+        { href: "/registrations", label: "My Registrations" },
+        { href: "/reports", label: "My Reports" },
+        { href: "/teams/statistics", label: "Team Stats" },
+        { href: "/race-logger", label: "Race Logger" },
+      ]
+    : [];
+  const userLabel = session?.user?.name ?? "Account";
+  const userImage = session?.user?.image ?? null;
+  const userInitial = (userLabel.replace(/\[[^\]]*\]/g, "").trim()[0] ?? "?").toUpperCase();
 
-  const authButton = session?.user ? (
+  const signOutForm = (
     <form
       action={async () => {
         "use server";
@@ -94,12 +101,14 @@ export default async function Nav() {
     >
       <button
         type="submit"
-        className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+        className="block w-full rounded px-3 py-2.5 text-left text-sm text-zinc-400 hover:bg-zinc-900 hover:text-red-400"
       >
         Sign out
       </button>
     </form>
-  ) : (
+  );
+  const menuLink = "block rounded px-3 py-2.5 text-sm text-zinc-200 hover:bg-zinc-900 hover:text-[#ff6b35]";
+  const authButton = (
     <form
       action={async () => {
         "use server";
@@ -116,29 +125,61 @@ export default async function Nav() {
   );
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-zinc-800 bg-[#0a0a0f]/95 backdrop-blur lg:static">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-2 sm:px-6 lg:py-2.5">
+    <nav className="sticky top-0 z-40 border-b border-zinc-800 bg-[#0a0a0f]/95 backdrop-blur xl:static">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-2 sm:px-6 xl:py-2.5">
         <Link href="/" className="flex shrink-0 items-center gap-3">
           <img
             src="/logos/site-logo.png"
             alt="Simracing-Hub"
-            className="h-9 w-auto lg:h-12"
+            className="h-9 w-auto xl:h-11"
           />
         </Link>
-        {/* Desktop: one row. */}
-        <div className="hidden items-center gap-1 text-sm lg:flex">
+        {/* Desktop: one row + account menu. */}
+        <div className="hidden min-w-0 items-center gap-0.5 whitespace-nowrap text-sm xl:flex">
           {links.map((l) => (
             <NavLink key={l.href} href={l.href}>
               {l.label}
             </NavLink>
           ))}
-          {crBadge && <div className="ml-2">{crBadge}</div>}
-          <div className="ml-2">{authButton}</div>
+          {crBadge && <div className="ml-3">{crBadge}</div>}
+          <div className="ml-2">
+            {session?.user ? (
+              <MobileMenu
+                summary={
+                  <summary
+                    aria-label="Account menu"
+                    title={userLabel}
+                    className="flex h-10 w-10 cursor-pointer list-none items-center justify-center overflow-hidden rounded-full border-2 border-zinc-600 bg-indigo-700 text-sm font-bold text-white hover:border-[#ff6b35] group-open:border-[#ff6b35] [&::-webkit-details-marker]:hidden"
+                  >
+                    {userImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={userImage} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      userInitial
+                    )}
+                  </summary>
+                }
+              >
+                <div className="absolute right-0 top-12 z-50 w-60 rounded-lg border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl shadow-black/60">
+                  <div className="truncate px-3 py-2 text-xs text-zinc-500">{userLabel}</div>
+                  {accountLinks.map((l) => (
+                    <Link key={l.href} href={l.href} className={menuLink}>
+                      {l.label}
+                    </Link>
+                  ))}
+                  <div className="my-1 border-t border-zinc-800" />
+                  {signOutForm}
+                </div>
+              </MobileMenu>
+            ) : (
+              authButton
+            )}
+          </div>
         </div>
         {/* Phone / tablet: menu button. <details> needs no client JS. */}
-        <div className="flex items-center gap-2 lg:hidden">
+        <div className="flex items-center gap-2 xl:hidden">
           {crBadge}
-          {authButton}
+          {!session?.user && authButton}
           <MobileMenu
             summary={
             <summary
@@ -154,14 +195,23 @@ export default async function Nav() {
           >
             <div className="absolute right-0 top-11 z-50 max-h-[75vh] w-60 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl shadow-black/60">
               {links.map((l) => (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  className="block rounded px-3 py-2.5 text-sm text-zinc-200 hover:bg-zinc-900 hover:text-[#ff6b35]"
-                >
+                <Link key={l.href} href={l.href} className={menuLink}>
                   {l.label}
                 </Link>
               ))}
+              {session?.user && (
+                <>
+                  <div className="my-1 border-t border-zinc-800" />
+                  <div className="truncate px-3 py-1.5 text-xs text-zinc-500">{userLabel}</div>
+                  {accountLinks.map((l) => (
+                    <Link key={l.href} href={l.href} className={menuLink}>
+                      {l.label}
+                    </Link>
+                  ))}
+                  <div className="my-1 border-t border-zinc-800" />
+                  {signOutForm}
+                </>
+              )}
             </div>
           </MobileMenu>
         </div>
@@ -180,7 +230,7 @@ function NavLink({
   return (
     <Link
       href={href}
-      className="rounded px-2.5 py-1 text-zinc-300 hover:bg-zinc-900 hover:text-[#ff6b35] transition-colors"
+      className="rounded px-2 py-1 text-zinc-300 hover:bg-zinc-900 hover:text-[#ff6b35] transition-colors"
     >
       {children}
     </Link>
