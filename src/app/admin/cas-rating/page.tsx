@@ -1,9 +1,11 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth-helpers";
 
 /**
  * CAS Rating regulation (German), agreed with the CAS leadership 2026-11-12.
- * Admin-only preview for now; the rating itself is not computed yet. The
+ * Admin-only preview for now; the live calculation is /admin/cas-rating/live
+ * (src/lib/cas-rating.ts). The
  * licence card, history curve and race table are a static example taken from
  * the offline prototype (Thomas Herbrig's own data, with his consent).
  */
@@ -86,8 +88,11 @@ export default async function CasRatingPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-16 leading-relaxed text-zinc-300">
       <div className="rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-sm text-orange-200">
-        Vorschau nur für Admins. Das CAS Rating wird noch nicht berechnet; Karte,
-        Verlauf und Rennliste unten sind ein Beispiel aus dem Prototyp.
+        Vorschau nur für Admins. Karte, Verlauf und Rennliste unten sind ein Beispiel aus
+        dem Prototyp. Die echte Berechnung, die Startsaison pro Liga und die Rangliste:{" "}
+        <Link href="/admin/cas-rating/live" className="font-semibold underline">
+          CAS Rating – Berechnung →
+        </Link>
       </div>
 
       <div>

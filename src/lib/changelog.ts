@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.53.0",
+    date: "2026-11-13",
+    changes: [
+      "Admin: the CAS Rating is now calculated. New admin page \"CAS Rating – Berechnung\" (linked from the regulation page): choose per league the season it counts from, map the stream-calendar names to their CLS accounts, and see the full ranking with every driver's last 10 races, penalties, no-shows and attendance per league. Only published races of the chosen seasons count; until then everybody is at 50. Still admins only — nothing public yet.",
+      "Withdrawing from a season now records the date, so the CAS Rating attendance can be frozen there.",
+    ],
+  },
+  {
     version: "2.52.4",
     date: "2026-11-12",
     changes: [

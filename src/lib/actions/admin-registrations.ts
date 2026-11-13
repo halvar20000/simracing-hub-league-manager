@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { clearGuestRounds, noteGuestRoundsOnRating } from "@/lib/proam-guest";
+import { clearCrWithdrawn, stampCrWithdrawn } from "@/lib/cas-rating-data";
 import { teamSizeLimit, countTeamMembers } from "@/lib/team-limit";
 import { parseStartNumberInput } from "@/lib/start-number";
 import {
@@ -349,6 +350,8 @@ export async function updateRegistration(
     where: { id: registrationId },
     data: status === "APPROVED" ? data : { ...data, waitlistedAt: null },
   });
+  if (status === "WITHDRAWN") await stampCrWithdrawn(prisma, registrationId);
+  else if (status === "APPROVED") await clearCrWithdrawn(prisma, registrationId);
   // First Pro/Am classification: the rounds already raced stay intro races.
   await noteGuestRoundsOnRating(prisma, registrationId, before?.proAmClass ?? null, proAmClass);
 

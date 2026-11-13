@@ -16,6 +16,7 @@ import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
 import { registrationAsksIRating } from "@/lib/fun-league";
 import { enterAsExtraTeamIfElsewhere, leaveTeam } from "@/lib/team-membership-writes";
 import { teamMemberWhere } from "@/lib/team-members";
+import { stampCrWithdrawn } from "@/lib/cas-rating-data";
 import {
   teamSizeLimit,
   countTeamMembers,
@@ -584,6 +585,7 @@ export async function withdrawRegistration(registrationId: string) {
     where: { id: registrationId },
     data: { status: "WITHDRAWN", waitlistedAt: null },
   });
+  await stampCrWithdrawn(prisma, registrationId);
 
   // If this driver held a confirmed seat, promote the next on the waiting list
   // (order-proof, by registration date).

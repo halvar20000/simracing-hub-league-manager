@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { stampCrWithdrawn } from "@/lib/cas-rating-data";
 
 /**
  * Write side of team membership on team-mode seasons (IEC) — see
@@ -98,5 +99,6 @@ export async function leaveTeam(
     where: { id: registrationId },
     data: { status: "WITHDRAWN" },
   });
+  await stampCrWithdrawn(prisma, registrationId);
   return "withdrawn";
 }
