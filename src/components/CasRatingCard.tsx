@@ -3,10 +3,9 @@
  * change since the last race, performance / attendance / races, leagues.
  * Pure server component.
  */
-import { round1 } from "@/lib/cas-rating";
+import { CR_DICTS, CR_DEFAULT_LANG, fmtCrIn, type CrLang } from "@/lib/i18n/cas-rating";
 
-export const fmtCr = (v: number) =>
-  round1(v).toLocaleString("en-GB", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+export const fmtCr = (v: number, lang: CrLang = "en") => fmtCrIn(lang, v);
 
 function initials(name: string): string {
   const parts = name.replace(/\[[^\]]*\]/g, "").trim().split(/\s+/).filter(Boolean);
@@ -23,7 +22,9 @@ export function CasRatingCard({
   attendance,
   races,
   leagues,
+  lang = CR_DEFAULT_LANG,
 }: {
+  lang?: CrLang;
   name: string;
   image?: string | null;
   rating: number;
@@ -33,6 +34,8 @@ export function CasRatingCard({
   races: number;
   leagues: string[];
 }) {
+  const t = CR_DICTS[lang];
+  const f = (v: number) => fmtCr(v, lang);
   return (
     <div className="relative w-full max-w-[300px] rounded-[22px] bg-gradient-to-br from-[#3a3d47] to-[#23252c] p-3.5 shadow-2xl shadow-black/60">
       <div className="absolute left-1/2 top-2.5 h-2 w-14 -translate-x-1/2 rounded bg-[#0a0a0f]" />
@@ -53,7 +56,7 @@ export function CasRatingCard({
         <div className="text-2xl font-extrabold text-white">{name}</div>
         <div className="mb-1 mt-2.5 inline-flex items-baseline gap-2.5 rounded-full border-[1.5px] border-[#ff6b35] px-4 py-1">
           <small className="text-xs font-bold tracking-widest text-[#ff6b35]">CR</small>
-          <b className="text-2xl tabular-nums text-white">{fmtCr(rating)}</b>
+          <b className="text-2xl tabular-nums text-white">{f(rating)}</b>
         </div>
         <div
           className={`text-sm ${
@@ -61,20 +64,20 @@ export function CasRatingCard({
           }`}
         >
           {delta == null
-            ? "No race counted yet"
+            ? t.noRaceYet
             : Math.abs(delta) < 0.05
-              ? "± 0.0 since last race"
-              : `${delta > 0 ? "▲" : "▼"} ${fmtCr(Math.abs(delta))} since last race`}
+              ? t.noChange
+              : t.sinceLastRace(`${delta > 0 ? "▲" : "▼"} ${f(Math.abs(delta))}`)}
         </div>
         <div className="mt-2.5 flex justify-center gap-4 text-xs text-zinc-400">
           <div>
-            <b className="block text-base tabular-nums text-white">{fmtCr(performance)}</b>Performance
+            <b className="block text-base tabular-nums text-white">{f(performance)}</b>{t.performance}
           </div>
           <div>
-            <b className="block text-base tabular-nums text-white">{Math.round(attendance)} %</b>Attendance
+            <b className="block text-base tabular-nums text-white">{Math.round(attendance)} %</b>{t.attendance}
           </div>
           <div>
-            <b className="block text-base tabular-nums text-white">{races}</b>Races
+            <b className="block text-base tabular-nums text-white">{races}</b>{t.races}
           </div>
         </div>
         {leagues.length > 0 && (
@@ -91,7 +94,14 @@ export function CasRatingCard({
 }
 
 /** CR curve over time. `points` oldest first. */
-export function CasRatingChart({ points }: { points: { at: Date; rating: number }[] }) {
+export function CasRatingChart({
+  points,
+  lang = CR_DEFAULT_LANG,
+}: {
+  points: { at: Date; rating: number }[];
+  lang?: CrLang;
+}) {
+  const t = CR_DICTS[lang];
   const W = 640;
   const H = 220;
   const L = 34;
@@ -101,7 +111,7 @@ export function CasRatingChart({ points }: { points: { at: Date; rating: number 
   if (points.length < 2) {
     return (
       <p className="py-10 text-center text-sm text-zinc-500">
-        The curve starts after your first counted race. Until then everybody is at 50.
+        {t.chartEmpty}
       </p>
     );
   }
@@ -118,7 +128,7 @@ export function CasRatingChart({ points }: { points: { at: Date; rating: number 
   const last = points[points.length - 1];
   const fmtDay = (d: Date) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="CAS Rating over time">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={t.chartAria}>
       {grid.map((g) => (
         <g key={g}>
           <line x1={L} x2={R} y1={y(g)} y2={y(g)} stroke="#2a2a33" />

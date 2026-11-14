@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.55.1",
+    date: "2026-11-14",
+    changes: [
+      "CAS Rating in German and English: \"My CAS Rating\" and the ranking now open in German, with a DE / EN switch at the top right of both pages (your choice is remembered). The rules page is in German.",
+    ],
+  },
+  {
     version: "2.55.0",
     date: "2026-11-14",
     changes: [

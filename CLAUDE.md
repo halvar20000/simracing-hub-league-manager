@@ -287,7 +287,7 @@ Per-round recognition badge — **no championship points, never touches standing
 
 ## Stint planner: language (DE default) + Easy/Advanced
 
-**The planner is the ONLY part of CLS that is translated, and its default is German.** Everything else stays English.
+**The planner and the CAS Rating pages are the only translated parts of CLS; both default to German.** Everything else stays English. CAS Rating (v2.55.1): dictionary `src/lib/i18n/cas-rating.ts` (`de` typed against `en`), language from cookie `cls_cr_lang` read server-side by `getCrLang()` (`cas-rating-lang.ts`), switch `CrLangSwitch`; used by `/rating`, `/cas-rating/ranking`, `CasRatingCard`/`Chart` (`lang` prop) and the nav badge. The regulation `/cas-rating` is German-only.
 
 - **Dictionaries**: `src/lib/i18n/planner-en.ts` (source of truth for the key set) + `planner-de.ts` (`: PlannerDict`, so a missing/misspelt/extra key is a build error). `planner.ts` exports `DICTS`, `DEFAULT_LANG = "de"`, `type PlannerDict`. `en` must NOT be `as const` — values have to widen to `string`.
 - Sentences carrying a number/name are **functions**, not `{n}` templates — word order differs too much between DE and EN.

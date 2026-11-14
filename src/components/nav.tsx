@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import MobileMenu from "@/components/MobileMenu";
 import { getCasRatingCached } from "@/lib/cas-rating-data";
 import { fmtCr } from "@/components/CasRatingCard";
+import { getCrLang } from "@/lib/i18n/cas-rating-lang";
 
 export default async function Nav() {
   const session = await auth();
@@ -32,15 +33,16 @@ export default async function Nav() {
       myCr = null;
     }
   }
+  const { lang: crLang, t: crT } = await getCrLang();
   const crBadge =
     myCr != null ? (
       <Link
         href="/rating"
-        title="My CAS Rating"
+        title={crT.badgeTitle}
         className="inline-flex items-baseline gap-1.5 rounded-full border-[1.5px] border-[#ff6b35] px-2.5 py-0.5 hover:bg-[#ff6b35]/10"
       >
         <small className="text-[10px] font-bold tracking-widest text-[#ff6b35]">CR</small>
-        <b className="text-sm tabular-nums text-white">{fmtCr(myCr)}</b>
+        <b className="text-sm tabular-nums text-white">{fmtCr(myCr, crLang)}</b>
       </Link>
     ) : null;
 
@@ -82,7 +84,7 @@ export default async function Nav() {
   const accountLinks: { href: string; label: React.ReactNode }[] = session?.user
     ? [
         { href: "/profile", label: "Profile" },
-        ...(myCr != null ? [{ href: "/rating", label: "My CAS Rating" }] : []),
+        ...(myCr != null ? [{ href: "/rating", label: crT.badgeTitle }] : []),
         { href: "/registrations", label: "My Registrations" },
         { href: "/reports", label: "My Reports" },
         { href: "/teams/statistics", label: "Team Stats" },

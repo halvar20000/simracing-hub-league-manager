@@ -6,6 +6,8 @@ import { pageMetadata } from "@/lib/og";
 import { getCasRatingCached } from "@/lib/cas-rating-data";
 import { CR_START, round1 } from "@/lib/cas-rating";
 import { fmtCr } from "@/components/CasRatingCard";
+import CrLangSwitch from "@/components/CrLangSwitch";
+import { getCrLang } from "@/lib/i18n/cas-rating-lang";
 
 /**
  * Public CAS Rating ranking: every driver who has ever been approved in a CAS
@@ -24,14 +26,16 @@ const td = "border-t border-zinc-800 py-2 pr-3 align-middle";
 const num = "text-right tabular-nums";
 
 export default async function CasRatingRankingPage() {
-  const [session, cr, drivers] = await Promise.all([
+  const [session, cr, drivers, { lang, t }] = await Promise.all([
     auth(),
     getCasRatingCached(prisma),
     prisma.user.findMany({
       where: { registrations: { some: { status: "APPROVED", isTeamManager: false } } },
       select: { id: true, name: true, firstName: true, lastName: true, image: true },
     }),
+    getCrLang(),
   ]);
+  const f = (v: number) => fmtCr(v, lang);
   const me = session?.user?.id ?? null;
   const { engine, config } = cr;
   const now = new Date();
@@ -85,27 +89,24 @@ export default async function CasRatingRankingPage() {
     <div className="mx-auto max-w-4xl space-y-6 text-sm text-zinc-300">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-100">CAS Rating – Ranking</h1>
-          <p className="mt-1 text-zinc-400">
-            Every CAS driver, highest rating first. Everybody starts at 50.
-          </p>
+          <h1 className="text-2xl font-bold text-zinc-100">{t.rankTitle}</h1>
+          <p className="mt-1 text-zinc-400">{t.rankIntro}</p>
         </div>
-        <Link href="/cas-rating" className="text-[#ff6b35] hover:underline">
-          How the CAS Rating works (Reglement) →
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/cas-rating" className="text-[#ff6b35] hover:underline">
+            {t.rankRules}
+          </Link>
+          <CrLangSwitch lang={lang} />
+        </div>
       </div>
 
       {!config.live && (
         <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-amber-200">
-          <b>Preview — the CAS Rating is not live yet.</b> It starts with the new SFL Cup season
-          (first race 25 November); the other leagues follow with their next seasons. Until then
-          the values are not official.
+          <b>{t.preview}</b> {t.previewText}
         </div>
       )}
       {allAtStart && (
-        <p className="text-zinc-400">
-          No race has counted yet, so every driver is at 50.0 and listed alphabetically.
-        </p>
+        <p className="text-zinc-400">{t.rankAllAtStart}</p>
       )}
 
       <div className="overflow-x-auto">
@@ -113,12 +114,12 @@ export default async function CasRatingRankingPage() {
           <thead>
             <tr>
               <th className={`${th} w-10 ${num}`}>#</th>
-              <th className={th}>Driver</th>
+              <th className={th}>{t.colDriver}</th>
               <th className={`${th} ${num}`}>CR</th>
-              <th className={`${th} ${num} hidden sm:table-cell`}>Last race</th>
-              <th className={`${th} ${num} hidden sm:table-cell`}>Performance</th>
-              <th className={`${th} ${num} hidden sm:table-cell`}>Attendance</th>
-              <th className={`${th} ${num}`}>Races</th>
+              <th className={`${th} ${num} hidden sm:table-cell`}>{t.colLastRace}</th>
+              <th className={`${th} ${num} hidden sm:table-cell`}>{t.performance}</th>
+              <th className={`${th} ${num} hidden sm:table-cell`}>{t.attendance}</th>
+              <th className={`${th} ${num}`}>{t.races}</th>
             </tr>
           </thead>
           <tbody>
@@ -139,12 +140,12 @@ export default async function CasRatingRankingPage() {
                     <span className={r.id === me ? "font-semibold text-zinc-100" : ""}>{r.name}</span>
                     {r.id === me && (
                       <Link href="/rating" className="text-xs text-[#ff6b35] hover:underline">
-                        you
+                        {t.you}
                       </Link>
                     )}
                   </span>
                 </td>
-                <td className={`${td} ${num} font-bold text-zinc-100`}>{fmtCr(r.rating)}</td>
+                <td className={`${td} ${num} font-bold text-zinc-100`}>{f(r.rating)}</td>
                 <td
                   className={`${td} ${num} hidden sm:table-cell ${
                     r.delta == null || Math.abs(r.delta) < 0.05
@@ -157,10 +158,10 @@ export default async function CasRatingRankingPage() {
                   {r.delta == null
                     ? "–"
                     : Math.abs(r.delta) < 0.05
-                      ? "± 0.0"
-                      : `${r.delta > 0 ? "▲" : "▼"} ${fmtCr(Math.abs(r.delta))}`}
+                      ? `± ${f(0)}`
+                      : `${r.delta > 0 ? "▲" : "▼"} ${f(Math.abs(r.delta))}`}
                 </td>
-                <td className={`${td} ${num} hidden sm:table-cell`}>{fmtCr(r.performance)}</td>
+                <td className={`${td} ${num} hidden sm:table-cell`}>{f(r.performance)}</td>
                 <td className={`${td} ${num} hidden sm:table-cell`}>{Math.round(r.attendance)} %</td>
                 <td className={`${td} ${num}`}>{r.races}</td>
               </tr>
@@ -169,8 +170,7 @@ export default async function CasRatingRankingPage() {
         </table>
       </div>
       <p className="text-xs text-zinc-500">
-        {ranked.length} drivers: everyone who has been registered in a CAS league. Equal CR = equal
-        place. Updated a few minutes after results or steward decisions are published.
+        {t.rankFooter(ranked.length)} {t.updated}
       </p>
     </div>
   );
