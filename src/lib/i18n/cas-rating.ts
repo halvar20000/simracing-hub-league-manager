@@ -31,6 +31,7 @@ const en = {
   myTitle: "My CAS Rating",
   signInText: "Sign in with Discord to see your own CAS Rating, its history and your last races.",
   signIn: "Sign in with Discord",
+  signInNewTab: "Open in a new tab and sign in with Discord",
   myIntro:
     "One number from 0 to 100 for every CAS driver, across all leagues: how well, how cleanly and how regularly you race with us.",
   overTime: "Rating over time",
@@ -102,6 +103,7 @@ const de: CrDict = {
   myTitle: "Mein CAS Rating",
   signInText: "Melde dich mit Discord an, um dein eigenes CAS Rating, den Verlauf und deine letzten Rennen zu sehen.",
   signIn: "Mit Discord anmelden",
+  signInNewTab: "Im neuen Tab öffnen und mit Discord anmelden",
   myIntro:
     "Eine Zahl von 0 bis 100 für jeden CAS-Fahrer, über alle Ligen: wie gut, wie sauber und wie regelmäßig du bei uns fährst.",
   overTime: "Verlauf",

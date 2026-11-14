@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.55.3",
+    date: "2026-11-14",
+    changes: [
+      "CLS shown inside another website (e.g. the CAS homepage): Discord does not allow signing in inside such a frame, so \"Sign in with Discord\" now opens CLS in a new tab instead, where the login works.",
+    ],
+  },
+  {
     version: "2.55.2",
     date: "2026-11-14",
     changes: [

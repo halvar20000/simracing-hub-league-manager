@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import MobileMenu from "@/components/MobileMenu";
+import FrameAwareSignIn from "@/components/FrameAwareSignIn";
 import { getCasRatingCached } from "@/lib/cas-rating-data";
 import { fmtCr } from "@/components/CasRatingCard";
 import { getCrLang } from "@/lib/i18n/cas-rating-lang";
@@ -112,6 +113,10 @@ export default async function Nav() {
   );
   const menuLink = "block rounded px-3 py-2.5 text-sm text-zinc-200 hover:bg-zinc-900 hover:text-[#ff6b35]";
   const authButton = (
+    <FrameAwareSignIn
+      label="Sign in with Discord"
+      className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium hover:bg-indigo-500"
+    >
     <form
       action={async () => {
         "use server";
@@ -125,6 +130,7 @@ export default async function Nav() {
         Sign in with Discord
       </button>
     </form>
+    </FrameAwareSignIn>
   );
 
   return (

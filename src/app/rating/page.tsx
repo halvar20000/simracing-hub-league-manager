@@ -7,6 +7,7 @@ import { CR_WINDOW, type CrRaceEntry } from "@/lib/cas-rating";
 import { CasRatingCard, CasRatingChart, fmtCr } from "@/components/CasRatingCard";
 import CrLangSwitch from "@/components/CrLangSwitch";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
+import FrameAwareSignIn from "@/components/FrameAwareSignIn";
 import { getCrLang } from "@/lib/i18n/cas-rating-lang";
 import type { CrDict, CrLang } from "@/lib/i18n/cas-rating";
 
@@ -87,14 +88,20 @@ async function SignInForRating() {
       </div>
       <h1 className="text-2xl font-bold text-zinc-100">{t.myTitle}</h1>
       <p className="text-zinc-400">{t.signInText}</p>
-      <form
-        action={async () => {
-          "use server";
-          await signIn("discord", { redirectTo: "/rating" });
-        }}
+      <FrameAwareSignIn
+        path="/rating"
+        label={t.signInNewTab}
+        className="inline-block rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500"
       >
-        <SubmitWithSpinner label={t.signIn} className="rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500" />
-      </form>
+        <form
+          action={async () => {
+            "use server";
+            await signIn("discord", { redirectTo: "/rating" });
+          }}
+        >
+          <SubmitWithSpinner label={t.signIn} className="rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500" />
+        </form>
+      </FrameAwareSignIn>
       <p>
         <Link href="/cas-rating/ranking" className="text-[#ff6b35] hover:underline">
           {t.rankingAll} →
