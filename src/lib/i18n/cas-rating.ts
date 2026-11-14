@@ -29,6 +29,8 @@ const en = {
   badgeTitle: "My CAS Rating",
   // /rating
   myTitle: "My CAS Rating",
+  signInText: "Sign in with Discord to see your own CAS Rating, its history and your last races.",
+  signIn: "Sign in with Discord",
   myIntro:
     "One number from 0 to 100 for every CAS driver, across all leagues: how well, how cleanly and how regularly you race with us.",
   overTime: "Rating over time",
@@ -69,7 +71,7 @@ const en = {
   // ranking
   rankTitle: "CAS Rating – Ranking",
   rankIntro: "Every CAS driver, highest rating first. Everybody starts at 50.",
-  rankRules: "How the CAS Rating works (rules) →",
+  rankRules: "How the CAS Rating works →",
   rankAllAtStart: "No race has counted yet, so every driver is at 50.0 and listed alphabetically.",
   colDriver: "Driver",
   colLastRace: "Last race",
@@ -98,6 +100,8 @@ const de: CrDict = {
   updated: "Wird wenige Minuten nach veröffentlichten Ergebnissen oder Steward-Entscheidungen aktualisiert.",
   badgeTitle: "Mein CAS Rating",
   myTitle: "Mein CAS Rating",
+  signInText: "Melde dich mit Discord an, um dein eigenes CAS Rating, den Verlauf und deine letzten Rennen zu sehen.",
+  signIn: "Mit Discord anmelden",
   myIntro:
     "Eine Zahl von 0 bis 100 für jeden CAS-Fahrer, über alle Ligen: wie gut, wie sauber und wie regelmäßig du bei uns fährst.",
   overTime: "Verlauf",

@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.55.2",
+    date: "2026-11-14",
+    changes: [
+      "CAS Rating rules now also in English (DE / EN switch at the top of the page).",
+      "\"My CAS Rating\" when you are not signed in: the page itself now offers \"Sign in with Discord\" and brings you straight back to your rating afterwards.",
+    ],
+  },
+  {
     version: "2.55.1",
     date: "2026-11-14",
     changes: [

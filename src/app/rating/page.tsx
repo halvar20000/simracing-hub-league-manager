@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { auth } from "@/auth";
+import { auth, signIn } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getCasRatingCached } from "@/lib/cas-rating-data";
 import { CR_WINDOW, type CrRaceEntry } from "@/lib/cas-rating";
 import { CasRatingCard, CasRatingChart, fmtCr } from "@/components/CasRatingCard";
 import CrLangSwitch from "@/components/CrLangSwitch";
+import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { getCrLang } from "@/lib/i18n/cas-rating-lang";
 import type { CrDict, CrLang } from "@/lib/i18n/cas-rating";
 
@@ -77,9 +77,36 @@ function RaceHead({ t }: { t: CrDict }) {
   );
 }
 
+/** Logged out: sign in right here (same Discord login as the top bar), then back to /rating. */
+async function SignInForRating() {
+  const { lang, t } = await getCrLang();
+  return (
+    <div className="mx-auto max-w-md space-y-4 py-10 text-center text-sm text-zinc-300">
+      <div className="flex justify-end">
+        <CrLangSwitch lang={lang} />
+      </div>
+      <h1 className="text-2xl font-bold text-zinc-100">{t.myTitle}</h1>
+      <p className="text-zinc-400">{t.signInText}</p>
+      <form
+        action={async () => {
+          "use server";
+          await signIn("discord", { redirectTo: "/rating" });
+        }}
+      >
+        <SubmitWithSpinner label={t.signIn} className="rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500" />
+      </form>
+      <p>
+        <Link href="/cas-rating/ranking" className="text-[#ff6b35] hover:underline">
+          {t.rankingAll} →
+        </Link>
+      </p>
+    </div>
+  );
+}
+
 export default async function MyCasRatingPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/rating");
+  if (!session?.user?.id) return <SignInForRating />;
   const userId = session.user.id;
 
   const [user, cr, { lang, t }] = await Promise.all([
