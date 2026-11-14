@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.55.0",
+    date: "2026-11-14",
+    changes: [
+      "CAS Rating is now public: \"CAS Rating\" in the top menu opens the rules (in German) — how the rating is calculated, special cases and how it orders waiting lists.",
+      "New CAS Rating ranking: every CAS driver with their CR, highest first, with performance, attendance and races. Everybody starts at 50. Your own row is highlighted.",
+    ],
+  },
+  {
     version: "2.54.4",
     date: "2026-11-13",
     changes: ["Top bar: the menu now starts right next to the logo; your CR and picture stay at the far right."],

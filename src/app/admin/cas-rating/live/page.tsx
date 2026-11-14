@@ -59,7 +59,7 @@ export default async function CasRatingLivePage({
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 text-sm text-zinc-300">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-2xl font-bold text-zinc-100">CAS Rating – Berechnung</h1>
-        <Link href="/admin/cas-rating" className="text-[#ff6b35] hover:underline">
+        <Link href="/cas-rating" className="text-[#ff6b35] hover:underline">
           ← Reglement
         </Link>
       </div>

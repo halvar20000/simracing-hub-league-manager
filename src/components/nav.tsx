@@ -58,6 +58,7 @@ export default async function Nav() {
     { href: "/incidents", label: "Incidents" },
     { href: "/streams", label: "Streams" },
     { href: "/stint-planner", label: "Stint Planner" },
+    { href: "/cas-rating", label: "CAS Rating" },
     ...(isFullAdmin ? [{ href: "/admin", label: "Admin" }] : []),
     ...(isSteward
       ? [

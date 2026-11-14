@@ -1,6 +1,6 @@
 /**
  * CAS Rating (CR) — one number 0-100 per driver across all CAS leagues.
- * Regulation agreed 2026-11-12, see /admin/cas-rating:
+ * Regulation agreed 2026-11-12, see /cas-rating:
  *
  *   CR = 70 % performance + 30 % attendance, always over the last 10 races.
  *

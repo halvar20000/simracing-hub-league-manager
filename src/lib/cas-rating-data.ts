@@ -3,7 +3,7 @@
  * Not "use server": imported by pages, actions and the test script alike.
  *
  * Which races count is set per league in AppSetting `cas-rating:config`
- * (admin page /admin/cas-rating): a league counts from one season on — that
+ * (regulation /cas-rating): a league counts from one season on — that
  * season and every later one; races of seasons already running when the
  * league joined never count. Optional `fromDate` for the open-ended Fun
  * League season. A league without an entry does not count at all.

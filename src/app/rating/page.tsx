@@ -238,6 +238,14 @@ export default async function MyCasRatingPage() {
         Only results published in CLS count. Leagues that count:{" "}
         {countedLeagues.length ? countedLeagues.join(", ") : "none yet — each league joins with its next season"}.
         Updated a few minutes after results or steward decisions are published.{" "}
+<Link href="/cas-rating" className="underline hover:text-zinc-300">
+          How the CAS Rating works
+        </Link>{" "}
+        ·{" "}
+        <Link href="/cas-rating/ranking" className="underline hover:text-zinc-300">
+          Ranking of all drivers
+        </Link>{" "}
+        ·{" "}
         <Link href="/profile" className="underline hover:text-zinc-300">
           Profile settings
         </Link>
