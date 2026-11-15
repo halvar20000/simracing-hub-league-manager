@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExampleBlock, H2, H3, RatingLinks, num, td, th } from "./regulation-de";
+import { ExampleBlock, H2, H3, RatingLinks, RegulationLogo, num, td, th } from "./regulation-de";
 
 /** English version of the CAS Rating regulation (the German one is the original). */
 
@@ -41,6 +41,7 @@ export function RegulationEn() {
   return (
     <>
       <div>
+        <RegulationLogo />
         <h1 className="text-3xl font-bold text-zinc-100">CAS Rating (CR) – Rules</h1>
         <p className="mt-1 text-zinc-400">
           One number from 0 to 100 for every driver of the CAS Community. It shows how well, how
@@ -217,12 +218,12 @@ export function RegulationEn() {
       <H2>6. Where to see it in CLS</H2>
       <p>
         The{" "}
-        <Link href="/cas-rating/ranking" className="text-[#ff6b35] hover:underline">
+        <Link href="/cas-rating/ranking?lang=en" className="text-[#ff6b35] hover:underline">
           ranking
         </Link>{" "}
         shows the CAS Rating of every driver. In addition, every driver sees in their CLS account
         (the CR badge at the top right, or{" "}
-        <Link href="/rating" className="text-[#ff6b35] hover:underline">
+        <Link href="/rating?lang=en" className="text-[#ff6b35] hover:underline">
           My CAS Rating
         </Link>
         ):

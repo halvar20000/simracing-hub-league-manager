@@ -9,7 +9,7 @@ import CrLangSwitch from "@/components/CrLangSwitch";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import FrameAwareSignIn from "@/components/FrameAwareSignIn";
 import { getCrLang } from "@/lib/i18n/cas-rating-lang";
-import type { CrDict, CrLang } from "@/lib/i18n/cas-rating";
+import { crHref, type CrDict, type CrLang } from "@/lib/i18n/cas-rating";
 
 export const metadata: Metadata = { title: "My CAS Rating" };
 export const dynamic = "force-dynamic";
@@ -79,31 +79,32 @@ function RaceHead({ t }: { t: CrDict }) {
 }
 
 /** Logged out: sign in right here (same Discord login as the top bar), then back to /rating. */
-async function SignInForRating() {
-  const { lang, t } = await getCrLang();
+async function SignInForRating({ langParam }: { langParam?: string | string[] }) {
+  const { lang, t } = await getCrLang(langParam);
   return (
     <div className="mx-auto max-w-md space-y-4 py-10 text-center text-sm text-zinc-300">
       <div className="flex justify-end">
         <CrLangSwitch lang={lang} />
       </div>
+      <img src="/logos/cas-rating-512.png" alt="CAS Rating" width={128} height={128} className="mx-auto h-32 w-32" />
       <h1 className="text-2xl font-bold text-zinc-100">{t.myTitle}</h1>
       <p className="text-zinc-400">{t.signInText}</p>
       <FrameAwareSignIn
-        path="/rating"
+        path={crHref("/rating", lang)}
         label={t.signInNewTab}
         className="inline-block rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500"
       >
         <form
           action={async () => {
             "use server";
-            await signIn("discord", { redirectTo: "/rating" });
+            await signIn("discord", { redirectTo: crHref("/rating", lang) });
           }}
         >
           <SubmitWithSpinner label={t.signIn} className="rounded bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500" />
         </form>
       </FrameAwareSignIn>
       <p>
-        <Link href="/cas-rating/ranking" className="text-[#ff6b35] hover:underline">
+        <Link href={crHref("/cas-rating/ranking", lang)} className="text-[#ff6b35] hover:underline">
           {t.rankingAll} →
         </Link>
       </p>
@@ -111,15 +112,20 @@ async function SignInForRating() {
   );
 }
 
-export default async function MyCasRatingPage() {
+export default async function MyCasRatingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string | string[] }>;
+}) {
+  const { lang: langParam } = await searchParams;
   const session = await auth();
-  if (!session?.user?.id) return <SignInForRating />;
+  if (!session?.user?.id) return <SignInForRating langParam={langParam} />;
   const userId = session.user.id;
 
   const [user, cr, { lang, t }] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true, firstName: true, lastName: true, image: true } }),
     getCasRatingCached(prisma),
-    getCrLang(),
+    getCrLang(langParam),
   ]);
   const f = (v: number) => fmtCr(v, lang);
   const name = user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Driver";
@@ -142,9 +148,12 @@ export default async function MyCasRatingPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8 text-sm text-zinc-300">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">{t.myTitle}</h1>
-          <p className="mt-1 text-zinc-400">{t.myIntro}</p>
+        <div className="flex items-center gap-4">
+          <img src="/logos/cas-rating-96.png" alt="CAS Rating" width={64} height={64} className="h-16 w-16 shrink-0" />
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-100">{t.myTitle}</h1>
+            <p className="mt-1 text-zinc-400">{t.myIntro}</p>
+          </div>
         </div>
         <CrLangSwitch lang={lang} />
       </div>
@@ -271,11 +280,11 @@ export default async function MyCasRatingPage() {
 
       <p className="text-xs text-zinc-500">
         {t.onlyPublished} {countedLeagues.length ? countedLeagues.join(", ") : t.noLeagueYet}. {t.updated}{" "}
-        <Link href="/cas-rating" className="underline hover:text-zinc-300">
+        <Link href={crHref("/cas-rating", lang)} className="underline hover:text-zinc-300">
           {t.howItWorks}
         </Link>{" "}
         ·{" "}
-        <Link href="/cas-rating/ranking" className="underline hover:text-zinc-300">
+        <Link href={crHref("/cas-rating/ranking", lang)} className="underline hover:text-zinc-300">
           {t.rankingAll}
         </Link>{" "}
         ·{" "}

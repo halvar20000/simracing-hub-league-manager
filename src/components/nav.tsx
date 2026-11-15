@@ -40,9 +40,9 @@ export default async function Nav() {
       <Link
         href="/rating"
         title={crT.badgeTitle}
-        className="inline-flex items-baseline gap-1.5 rounded-full border-[1.5px] border-[#ff6b35] px-2.5 py-0.5 hover:bg-[#ff6b35]/10"
+        className="inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-[#ff6b35] px-2.5 py-0.5 hover:bg-[#ff6b35]/10"
       >
-        <small className="text-[10px] font-bold tracking-widest text-[#ff6b35]">CR</small>
+        <img src="/logos/cas-rating-96.png" alt="CR" width={20} height={20} className="h-5 w-5 self-center" />
         <b className="text-sm tabular-nums text-white">{fmtCr(myCr, crLang)}</b>
       </Link>
     ) : null;

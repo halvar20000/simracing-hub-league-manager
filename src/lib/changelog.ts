@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.56.0",
+    date: "2026-11-15",
+    changes: [
+      "CAS Rating logo on the rules, the ranking, My CAS Rating and the CR badge in the top bar.",
+      "Direct links per language: add ?lang=en (or ?lang=de) to /cas-rating, /cas-rating/ranking or /rating to open that page in English (or German), whatever language was chosen before. Links on an English page stay English.",
+    ],
+  },
+  {
     version: "2.55.3",
     date: "2026-11-14",
     changes: [

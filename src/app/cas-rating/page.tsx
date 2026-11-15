@@ -14,8 +14,13 @@ export const metadata: Metadata = pageMetadata({
 });
 export const dynamic = "force-dynamic";
 
-export default async function CasRatingPage() {
-  const { lang } = await getCrLang();
+export default async function CasRatingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string | string[] }>;
+}) {
+  const { lang: langParam } = await searchParams;
+  const { lang } = await getCrLang(langParam);
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-16 leading-relaxed text-zinc-300">
       <div className="flex justify-end">

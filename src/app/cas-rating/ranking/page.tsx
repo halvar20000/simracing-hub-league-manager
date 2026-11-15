@@ -8,6 +8,7 @@ import { CR_START, round1 } from "@/lib/cas-rating";
 import { fmtCr } from "@/components/CasRatingCard";
 import CrLangSwitch from "@/components/CrLangSwitch";
 import { getCrLang } from "@/lib/i18n/cas-rating-lang";
+import { crHref } from "@/lib/i18n/cas-rating";
 
 /**
  * Public CAS Rating ranking: every driver who has ever been approved in a CAS
@@ -25,7 +26,12 @@ const th = "py-2 pr-3 text-left text-xs font-semibold text-zinc-400";
 const td = "border-t border-zinc-800 py-2 pr-3 align-middle";
 const num = "text-right tabular-nums";
 
-export default async function CasRatingRankingPage() {
+export default async function CasRatingRankingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string | string[] }>;
+}) {
+  const { lang: langParam } = await searchParams;
   const [session, cr, drivers, { lang, t }] = await Promise.all([
     auth(),
     getCasRatingCached(prisma),
@@ -33,7 +39,7 @@ export default async function CasRatingRankingPage() {
       where: { registrations: { some: { status: "APPROVED", isTeamManager: false } } },
       select: { id: true, name: true, firstName: true, lastName: true, image: true },
     }),
-    getCrLang(),
+    getCrLang(langParam),
   ]);
   const f = (v: number) => fmtCr(v, lang);
   const me = session?.user?.id ?? null;
@@ -88,12 +94,15 @@ export default async function CasRatingRankingPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 text-sm text-zinc-300">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-100">{t.rankTitle}</h1>
-          <p className="mt-1 text-zinc-400">{t.rankIntro}</p>
+        <div className="flex items-center gap-4">
+          <img src="/logos/cas-rating-96.png" alt="CAS Rating" width={64} height={64} className="h-16 w-16 shrink-0" />
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-100">{t.rankTitle}</h1>
+            <p className="mt-1 text-zinc-400">{t.rankIntro}</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Link href="/cas-rating" className="text-[#ff6b35] hover:underline">
+          <Link href={crHref("/cas-rating", lang)} className="text-[#ff6b35] hover:underline">
             {t.rankRules}
           </Link>
           <CrLangSwitch lang={lang} />
@@ -139,7 +148,7 @@ export default async function CasRatingRankingPage() {
                     )}
                     <span className={r.id === me ? "font-semibold text-zinc-100" : ""}>{r.name}</span>
                     {r.id === me && (
-                      <Link href="/rating" className="text-xs text-[#ff6b35] hover:underline">
+                      <Link href={crHref("/rating", lang)} className="text-xs text-[#ff6b35] hover:underline">
                         {t.you}
                       </Link>
                     )}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CrLang } from "@/lib/i18n/cas-rating";
+import { crHref, type CrLang } from "@/lib/i18n/cas-rating";
 
 /**
  * CAS Rating regulation (German), agreed with the CAS leadership 2026-11-12.
@@ -82,17 +82,30 @@ export const th = "py-2 pr-3 text-left text-xs font-semibold text-zinc-400";
 export const td = "border-t border-zinc-800 py-2 pr-3 align-top";
 export const num = "text-right tabular-nums";
 
+/** The CAS Rating logo above the regulation title (white text: dark background only). */
+export function RegulationLogo() {
+  return (
+    <img
+      src="/logos/cas-rating-512.png"
+      alt="CAS Rating"
+      width={160}
+      height={160}
+      className="mb-3 h-32 w-32 sm:h-40 sm:w-40"
+    />
+  );
+}
+
 export function RatingLinks({ lang = "de" }: { lang?: CrLang }) {
   return (
     <div className="flex flex-wrap gap-3">
       <Link
-        href="/cas-rating/ranking"
+        href={crHref("/cas-rating/ranking", lang)}
         className="rounded-full bg-[#ff6b35] px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-[#ff8a5c]"
       >
         {lang === "de" ? "CAS Rating aller Fahrer – Rangliste →" : "CAS Rating of all drivers – ranking →"}
       </Link>
       <Link
-        href="/rating"
+        href={crHref("/rating", lang)}
         className="rounded-full border border-[#ff6b35] px-4 py-2 text-sm font-semibold text-[#ff6b35] hover:bg-[#ff6b35]/10"
       >
         {lang === "de" ? "Mein CAS Rating →" : "My CAS Rating →"}
@@ -106,6 +119,7 @@ export function RegulationDe() {
     <>
 
       <div>
+        <RegulationLogo />
         <h1 className="text-3xl font-bold text-zinc-100">CAS Rating (CR) – Reglement</h1>
         <p className="mt-1 text-zinc-400">
           Eine Zahl von 0 bis 100 für jeden Fahrer der CAS Community. Sie zeigt, wie gut,

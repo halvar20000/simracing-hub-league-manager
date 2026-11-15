@@ -8,7 +8,12 @@ export default function CrLangSwitch({ lang }: { lang: CrLang }) {
   const router = useRouter();
   const set = (l: CrLang) => {
     document.cookie = `${CR_LANG_COOKIE}=${l}; path=/; max-age=31536000; samesite=lax`;
-    router.refresh();
+    // A direct link (?lang=en) overrides the cookie, so switch the URL too.
+    const u = new URL(window.location.href);
+    if (u.searchParams.has("lang")) {
+      u.searchParams.set("lang", l);
+      router.replace(u.pathname + u.search + u.hash);
+    } else router.refresh();
   };
   const btn = (l: CrLang, label: string) => (
     <button

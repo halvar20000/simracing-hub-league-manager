@@ -158,6 +158,11 @@ export function parseCrLang(v: string | null | undefined): CrLang {
   return v === "en" || v === "de" ? v : CR_DEFAULT_LANG;
 }
 
+/** Link to a CAS Rating page that keeps a non-default language (`?lang=en`). */
+export function crHref(path: string, lang: CrLang): string {
+  return lang === CR_DEFAULT_LANG ? path : `${path}${path.includes("?") ? "&" : "?"}lang=${lang}`;
+}
+
 /** 43.6 / 43,6 — one decimal, in the page language. */
 export function fmtCrIn(lang: CrLang, v: number): string {
   return (Math.round(v * 10) / 10).toLocaleString(lang === "de" ? "de-DE" : "en-GB", {
