@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.61.1",
+    date: "2026-11-16",
+    changes: [
+      "Admin, Discord stats: the joined / left chart now reads the moderation channel in steps and keeps its progress, so the first full count no longer gets lost when it takes too long.",
+    ],
+  },
+  {
     version: "2.61.0",
     date: "2026-11-16",
     changes: [

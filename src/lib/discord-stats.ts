@@ -526,6 +526,7 @@ export async function saveDiscordStatsSnapshot(): Promise<DiscordStatsData> {
     });
   }
   // Joined / left per month from #moderation (incremental, never throws).
-  await refreshMemberFlow();
+  const flow = await refreshMemberFlow();
+  if (!flow.ok || !flow.done) console.log("[discord-member-flow]", JSON.stringify(flow));
   return data;
 }
