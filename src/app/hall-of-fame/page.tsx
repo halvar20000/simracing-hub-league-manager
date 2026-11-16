@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { pageMetadata } from "@/lib/og";
 import { getHallOfFame, type HofSeason, type HofStanding } from "@/lib/hall-of-fame";
+import { TitleStars } from "@/components/TitleStars";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,12 @@ export default async function HallOfFamePage({
   const shown = leagueParam ? hof.leagues.filter((l) => l.slug === leagueParam) : hof.leagues;
   const topDrivers = hof.drivers.filter((d) => d.titles > 0 || d.classTitles > 0).slice(0, 20);
   const topTeams = hof.teams.slice(0, 10);
+  // Only drivers with a CLS profile get a link.
+  const ids = topDrivers.map((d) => d.iracingId).filter((x): x is string => !!x);
+  const withProfile = new Set(
+    (await prisma.user.findMany({ where: { iracingMemberId: { in: ids } }, select: { iracingMemberId: true } }))
+      .map((u) => u.iracingMemberId!),
+  );
   const short = (slug: string) =>
     (leagueName.get(slug) ?? slug).replace(/^CAS\s+/i, "").replace(/\s+CAS\s+/i, " ");
 
@@ -67,7 +75,18 @@ export default async function HallOfFamePage({
                   {topDrivers.map((d, i) => (
                     <tr key={d.key} className="border-t border-zinc-800">
                       <td className="py-1 pr-2 text-zinc-500">{i + 1}</td>
-                      <td className="py-1 pr-2 font-medium text-zinc-100">{d.name}</td>
+                      <td className="py-1 pr-2 font-medium text-zinc-100">
+                        {d.iracingId && withProfile.has(d.iracingId) ? (
+                          <Link href={`/drivers/${d.iracingId}`} className="hover:text-[#ff6b35] hover:underline">
+                            {d.name}
+                          </Link>
+                        ) : (
+                          d.name
+                        )}
+                        <span className="ml-1.5">
+                          <TitleStars titles={d.titleList} size="sm" />
+                        </span>
+                      </td>
                       <td className="py-1 pr-2 text-right font-bold text-yellow-300">{d.titles || "–"}</td>
                       <td className="py-1 pr-2 text-right text-zinc-300">{d.classTitles || "–"}</td>
                       <td className="py-1 pr-2 text-right text-zinc-400">{d.podiums || "–"}</td>

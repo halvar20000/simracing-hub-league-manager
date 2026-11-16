@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.63.0",
+    date: "2026-11-16",
+    changes: [
+      "Championship stars: every driver profile now shows a gold star above the name for each championship won and a silver star for each class title (Pro, Am, Silver, car class) – iRLM-era titles included. Hover a star to see which title it is.",
+      "Driver profiles get a Titles section listing every championship, and the Hall of Fame title table shows the stars and links to the driver profiles.",
+    ],
+  },
+  {
     version: "2.62.0",
     date: "2026-11-16",
     changes: [

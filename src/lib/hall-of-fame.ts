@@ -48,6 +48,22 @@ export type HofDriverTally = {
   podiums: number;
   /** League slugs of the overall titles, one per title. */
   titleLeagues: string[];
+  /** iRacing id when known (links to /drivers/<id>). */
+  iracingId: string | null;
+  /** Every championship won, overall and class, newest first. */
+  titleList: HofTitle[];
+};
+
+export type HofTitle = {
+  kind: "overall" | "class";
+  /** "Overall", "Pro", "Am", "Silver", a car class... */
+  label: string;
+  leagueSlug: string;
+  leagueName: string;
+  seasonName: string;
+  year: string;
+  points: number;
+  href: string | null;
 };
 
 export type HofTeamTally = { key: string; name: string; titles: number; leagues: string[] };
@@ -233,8 +249,9 @@ async function buildHallOfFame(): Promise<HallOfFame> {
     if (e.iracingId && !keyOfName.has(nk)) keyOfName.set(nk, key);
     if (!e.iracingId && keyOfName.has(nk)) key = keyOfName.get(nk)!;
     let t = drivers.get(key);
+    if (t && !t.iracingId && e.iracingId) t.iracingId = e.iracingId;
     if (!t) {
-      t = { key, name: e.name, titles: 0, classTitles: 0, podiums: 0, titleLeagues: [] };
+      t = { key, name: e.name, titles: 0, classTitles: 0, podiums: 0, titleLeagues: [], iracingId: e.iracingId, titleList: [] };
       drivers.set(key, t);
     }
     return t;
@@ -256,6 +273,17 @@ async function buildHallOfFame(): Promise<HallOfFame> {
       }
       for (const e of st.podium) {
         const t = driver(e);
+        if (e.pos === 1)
+          t.titleList.push({
+            kind: st.kind,
+            label: st.label,
+            leagueSlug: s.leagueSlug,
+            leagueName: leagues.get(s.leagueSlug)?.name ?? s.leagueSlug,
+            seasonName: s.seasonName,
+            year: s.endedOn.slice(0, 4),
+            points: e.points,
+            href: s.href,
+          });
         if (st.kind === "overall") {
           t.podiums++;
           if (e.pos === 1) {
@@ -282,4 +310,10 @@ async function buildHallOfFame(): Promise<HallOfFame> {
   };
 }
 
-export const getHallOfFame = unstable_cache(buildHallOfFame, ["hall-of-fame-v1"], { revalidate: 3600 });
+export const getHallOfFame = unstable_cache(buildHallOfFame, ["hall-of-fame-v2"], { revalidate: 3600 });
+
+/** Titles of one driver (by iRacing id) for the driver profile; null when none. */
+export async function getDriverTitles(iracingId: string): Promise<HofDriverTally | null> {
+  const hof = await getHallOfFame();
+  return hof.drivers.find((d) => d.iracingId === iracingId && d.titleList.length > 0) ?? null;
+}

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/og";
+import { getDriverTitles } from "@/lib/hall-of-fame";
+import { TitleStars, titleText } from "@/components/TitleStars";
 
 export async function generateMetadata({
   params,
@@ -113,6 +115,11 @@ export default async function DriverPage({
     };
   });
 
+  // Championship stars from the Hall of Fame (incl. the iRLM era). Never
+  // let a Hall of Fame problem break the profile.
+  const hof = await getDriverTitles(iracingMemberId).catch(() => null);
+  const titles = hof?.titleList ?? [];
+
   return (
     <div className="space-y-6">
       <div>
@@ -122,7 +129,12 @@ export default async function DriverPage({
         >
           ← All rosters
         </Link>
-        <h1 className="mt-2 text-2xl font-bold">
+        {titles.length > 0 && (
+          <div className="mt-3">
+            <TitleStars titles={titles} />
+          </div>
+        )}
+        <h1 className={`${titles.length > 0 ? "mt-1" : "mt-2"} text-2xl font-bold`}>
           {user.firstName} {user.lastName}
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
@@ -184,6 +196,52 @@ export default async function DriverPage({
           <Stat label="Total incidents" value={totalIncidents.toLocaleString()} />
         </div>
       </section>
+
+      {titles.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
+              Titles
+            </h2>
+            <Link href="/hall-of-fame" className="text-xs text-[#ff6b35] hover:underline">
+              Hall of Fame →
+            </Link>
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {titles.map((t, i) => {
+              const inner = (
+                <>
+                  <TitleStars titles={[t]} size="sm" />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-zinc-100">
+                      {t.kind === "overall" ? "Champion" : `${t.label} champion`}
+                    </span>
+                    <span className="block truncate text-xs text-zinc-400">
+                      {t.leagueName} · {t.seasonName} · {t.year} · {t.points} pts
+                    </span>
+                  </span>
+                </>
+              );
+              const cls = `flex items-center gap-2 rounded-lg border p-2.5 ${
+                t.kind === "overall"
+                  ? "border-yellow-700/40 bg-gradient-to-br from-yellow-950/30 to-zinc-950"
+                  : "border-zinc-800 bg-zinc-900/50"
+              }`;
+              return (
+                <li key={i} title={titleText(t)}>
+                  {t.href ? (
+                    <Link href={t.href} className={`${cls} hover:border-yellow-500/60`}>
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div className={cls}>{inner}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-3 font-display text-sm font-semibold uppercase tracking-widest text-zinc-500">
