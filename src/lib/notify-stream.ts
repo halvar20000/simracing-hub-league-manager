@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { postBotMessage, editBotMessage } from "@/lib/discord-bot";
 import { buildStreamEmbed } from "@/lib/discord-stream-embed";
 import { resolveLogoUrl } from "@/lib/discord-rsvp-embed";
+import { resolveStreamTwitchUrl } from "@/lib/stream-twitch-url";
 
 export type PostStreamResult =
   | { ok: true; messageId: string }
@@ -53,7 +54,7 @@ export async function postStreamAnnouncement(
   }
   if (!a.posterBlobUrl) return { ok: false, reason: "no-poster" };
 
-  const twitchUrl = a.twitchUrl ?? round.season.league.twitchUrl ?? null;
+  const twitchUrl = await resolveStreamTwitchUrl(round, a.twitchUrl);
 
   const payload = buildStreamEmbed({
     leagueName: round.season.league.name,
@@ -132,7 +133,7 @@ export async function refreshStreamAnnouncement(
   }
   if (!a.posterBlobUrl) return { ok: false, reason: "no-poster" };
 
-  const twitchUrl = a.twitchUrl ?? round.season.league.twitchUrl ?? null;
+  const twitchUrl = await resolveStreamTwitchUrl(round, a.twitchUrl);
   const payload = buildStreamEmbed({
     leagueName: round.season.league.name,
     leagueLogoUrl: resolveLogoUrl(round.season.league.logoUrl),

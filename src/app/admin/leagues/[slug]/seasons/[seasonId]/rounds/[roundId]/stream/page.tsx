@@ -8,6 +8,7 @@ import {
   postStreamNow,
   refreshStreamEmbed,
 } from "@/lib/actions/stream-announcements";
+import { calendarStreamerOf, resolveStreamTwitchUrl } from "@/lib/stream-twitch-url";
 
 function toLocalInputValue(d: Date): string {
   // datetime-local input expects "YYYY-MM-DDTHH:mm" with no timezone.
@@ -49,6 +50,8 @@ export default async function AdminRoundStreamPage({
 
   const a = round.streamAnnouncement;
   const league = round.season.league;
+  const calendarStreamer = await calendarStreamerOf(round);
+  const autoTwitchUrl = await resolveStreamTwitchUrl(round, null);
   const defaultSchedule = a?.scheduledAt
     ? toLocalInputValue(a.scheduledAt)
     : toLocalInputValue(
@@ -189,13 +192,19 @@ export default async function AdminRoundStreamPage({
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
-            Twitch URL (overrides league default, optional)
+            Twitch URL (optional — leave empty for the automatic one)
+          </span>
+          <span className="mb-1 block text-xs text-zinc-500">
+            Automatic: {autoTwitchUrl ?? "none"}{" "}
+            {calendarStreamer && calendarStreamer !== "Open"
+              ? `(stream calendar: ${calendarStreamer})`
+              : "(stream calendar: Open - league default)"}
           </span>
           <input
             type="url"
             name="twitchUrl"
             defaultValue={a?.twitchUrl ?? ""}
-            placeholder={league.twitchUrl ?? "https://twitch.tv/…"}
+            placeholder={autoTwitchUrl ?? "https://twitch.tv/…"}
             className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
           />
         </label>

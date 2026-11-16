@@ -20,6 +20,17 @@ import { iracingSeasonAt } from "./iracing-season";
 
 export const STREAMERS = ["Thomas", "Andreas"] as const;
 export const STREAM_OPEN = "Open";
+
+/** Twitch channel login of each streamer (twitch.tv/<login>). */
+export const STREAMER_CHANNELS: Record<string, string> = {
+  Thomas: "sim_racing_broadcast",
+  Andreas: "cas_sim_tv",
+};
+
+export function streamerTwitchUrl(streamer: string | null | undefined): string | null {
+  const login = streamer ? STREAMER_CHANNELS[streamer] : undefined;
+  return login ? `https://www.twitch.tv/${login}` : null;
+}
 export const STREAM_VALUES: readonly string[] = [...STREAMERS, STREAM_OPEN];
 
 /** The leagues being streamed, in table order. */

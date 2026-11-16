@@ -2,6 +2,7 @@
  * Auto-match a race-stream Twitch VOD to a round.
  *
  * For a round whose league has `twitchChannelLogin` set, we pull the channel's
+ * (the round's streamer's channel per the stream calendar, else that one)
  * videos and pick the one most likely to be that round's broadcast.
  *
  * WHY THIS RANKS DIFFERENTLY FROM THE YOUTUBE MATCHER: a Twitch "archive" VOD
@@ -23,6 +24,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { STREAMER_CHANNELS } from "@/lib/stream-calendar";
+import { calendarStreamerOf } from "@/lib/stream-twitch-url";
 import {
   resolveUserId,
   listChannelVideos,
@@ -120,15 +123,19 @@ export async function matchTwitchForRound(
     include: {
       season: {
         include: {
-          league: { select: { twitchChannelLogin: true } },
+          league: { select: { twitchChannelLogin: true, slug: true, twitchUrl: true } },
         },
       },
     },
   });
   if (!round) return { ok: false, reason: "round-not-found" };
 
-  const login = round.season.league.twitchChannelLogin;
-  if (!login) return { ok: false, reason: "not-configured" };
+  if (!round.season.league.twitchChannelLogin) return { ok: false, reason: "not-configured" };
+  // Two streamers share the leagues: look in the channel of whoever streams
+  // this round per the stream calendar, else the league's channel.
+  const streamer = await calendarStreamerOf(round);
+  const login =
+    (streamer && STREAMER_CHANNELS[streamer]) || round.season.league.twitchChannelLogin;
 
   if (round.twitchVideoId && !opts.force)
     return { ok: false, reason: "already-set" };

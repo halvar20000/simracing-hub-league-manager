@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.60.0",
+    date: "2026-11-16",
+    changes: [
+      "Stream announcements: the Twitch link now follows the stream calendar — races Thomas streams link to twitch.tv/sim_racing_broadcast, races Andreas streams to twitch.tv/cas_sim_tv; the league's link is only the fallback for races still open. A link typed into an announcement still wins. The automatic race-video (VOD) linking looks in the same channel.",
+    ],
+  },
+  {
     version: "2.59.1",
     date: "2026-11-16",
     changes: [
