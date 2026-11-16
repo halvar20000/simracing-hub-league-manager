@@ -37,22 +37,16 @@ const en = {
   overTime: "Rating over time",
   perfBox: (w: number, missing: number) =>
     `Average points of your last ${w} races${missing > 0 ? ` (${missing} still counted as 50)` : ""}`,
-  attBox: "Races driven in the leagues you are registered in",
+  attBox: "50 % + 5 % per race driven or streamed, 100 % after 10",
   lastRaces: (w: number) => `Your last ${w} races`,
   pointsRule:
     "Place up to 60 (winner 60, last 0; DNF and DSQ 0) + clean up to 40 (−4 per incident per 10 laps) − steward penalties (category 1 / 2 / 3: −5 / −10 / −20).",
   noCountedRace: "No counted race yet — you start at 50.",
-  noShow: "No-show without declining",
   penaltyNoResult: "Steward penalty (no result in that race)",
-  attPerLeague: "Attendance per league",
-  notRegistered: "You are not registered in a league that counts right now, so your attendance is 50 %.",
-  league: "League",
-  driven: "Driven",
-  heldSince: "Races held since you registered",
-  streamed: (n: number) => `(${n} streamed)`,
-  restHalf: (w: number) => `of ${w} (the rest count as half)`,
-  bonus: (n: number) =>
-    `Bonus: ${n} extra race${n === 1 ? "" : "s"} (Fun League, fill-in or official CAS stream outside your leagues).`,
+  attSummary: (driven: number, streamed: number, counted: number, w: number, pct: string) =>
+    `${driven} race${driven === 1 ? "" : "s"} driven${streamed ? `, ${streamed} streamed on the official CAS stream` : ""}: ${counted} of ${w} counted${counted < w ? ` (the other ${w - counted} count as half)` : ""} = ${pct} %.`,
+  attRule:
+    "Every race you drive counts, in any league (Fun League and fill-in drives too). A race you miss changes nothing — with or without declining.",
   history: "History",
   historyIntro: (w: number) => `Every race that counted for your rating. Greyed out: older than your last ${w}.`,
   noCountedRaceShort: "No counted race yet.",
@@ -109,22 +103,16 @@ const de: CrDict = {
   overTime: "Verlauf",
   perfBox: (w, missing) =>
     `Durchschnitt der Punkte deiner letzten ${w} Rennen${missing > 0 ? ` (${missing} zählen noch mit 50)` : ""}`,
-  attBox: "Gefahrene Rennen in den Ligen, in denen du angemeldet bist",
+  attBox: "50 % + 5 % je gefahrenem oder gestreamtem Rennen, 100 % nach 10",
   lastRaces: (w) => `Deine letzten ${w} Rennen`,
   pointsRule:
     "Platz bis 60 (Sieger 60, Letzter 0; DNF und DSQ 0) + Sauberkeit bis 40 (−4 je Incident pro 10 Runden) − Steward-Strafen (Kategorie 1 / 2 / 3: −5 / −10 / −20).",
   noCountedRace: "Noch kein gewertetes Rennen – du startest bei 50.",
-  noShow: "No-show ohne Abmeldung",
   penaltyNoResult: "Steward-Strafe (kein Ergebnis in diesem Rennen)",
-  attPerLeague: "Teilnahme pro Liga",
-  notRegistered: "Du bist gerade in keiner gewerteten Liga angemeldet, deshalb liegt deine Teilnahme bei 50 %.",
-  league: "Liga",
-  driven: "Gefahren",
-  heldSince: "Ausgetragene Rennen seit deiner Anmeldung",
-  streamed: (n) => `(${n} gestreamt)`,
-  restHalf: (w) => `von ${w} (der Rest zählt halb)`,
-  bonus: (n) =>
-    `Bonus: ${n} zusätzliche${n === 1 ? "s Rennen" : " Rennen"} (Fun League, Ersatzfahrer oder offizieller CAS-Stream außerhalb deiner Ligen).`,
+  attSummary: (driven, streamed, counted, w, pct) =>
+    `${driven} Rennen gefahren${streamed ? `, ${streamed} im offiziellen CAS-Stream übertragen` : ""}: ${counted} von ${w} gezählt${counted < w ? ` (die übrigen ${w - counted} zählen halb)` : ""} = ${pct} %.`,
+  attRule:
+    "Jedes Rennen, das du fährst, zählt – in jeder Liga (auch Fun League und als Ersatzfahrer). Ein verpasstes Rennen ändert nichts, egal ob mit oder ohne Abmeldung.",
   history: "Historie",
   historyIntro: (w) => `Jedes Rennen, das für dein Rating gezählt hat. Ausgegraut: älter als deine letzten ${w}.`,
   noCountedRaceShort: "Noch kein gewertetes Rennen.",

@@ -7,15 +7,14 @@
  *   Race points (max 100): place 60 (winner 60, last 0, linear; DNF/DSQ 0)
  *   + clean 40 (minus 4 per incident per 10 laps, floor 0)
  *   - steward penalty category 1/2/3 = 5/10/20 in that race.
- *   No-show without declining = -5.  DNS = no race.
+ *   DNS = no race. Not racing never costs anything (no no-show deduction,
+ *   since 2026-11-16) — like iRating, the CR only moves when you race.
  *
  *   Performance = average race points of the last 10 races; missing races
  *   up to 10 count as 50.
- *   Attendance  = per league the driver is currently registered in: driven of
- *   the last 10 races held since registration, summed over the leagues;
- *   missing races up to 10 count as half driven. Nobody registered = 50 %.
- *   Bonus (+1 driven / +1 race): a Fun League race driven, a race streamed or
- *   driven in a league the driver is not registered in.
+ *   Attendance  = races driven (any counting league) + races streamed on the
+ *   official CAS stream, newest 10; missing up to 10 count as half:
+ *   50 % + 5 % per race, 100 % after 10 races.
  *
  * Pure module: no DB, no React. Data comes from src/lib/cas-rating-data.ts.
  */
@@ -27,7 +26,6 @@ export const CR_CLEAN_MAX = 40;
 /** Clean points lost per incident per 10 laps. */
 export const CR_CLEAN_PER_INCIDENT = 4;
 export const CR_PENALTY_BY_LEVEL: Record<number, number> = { 1: 5, 2: 10, 3: 20 };
-export const CR_NO_SHOW = 5;
 export const CR_W_PERFORMANCE = 0.7;
 export const CR_W_ATTENDANCE = 0.3;
 
@@ -42,7 +40,7 @@ export type CrRace = {
   leagueName: string;
   seasonId: string;
   at: Date;
-  /** Fun League: no duty to race — attendance only as a bonus, no no-show. */
+  /** Fun League: open league, no duty to race every round. */
   open: boolean;
 };
 
@@ -59,8 +57,8 @@ export type CrResult = {
   penalty: number;
 };
 
-/** Points taken off outside a race entry: a no-show, or a penalty in a race
- *  the driver has no result for. */
+/** Points taken off outside a race entry: a steward penalty in a race the
+ *  driver has no result for. ("no-show" is no longer produced, 2026-11-16.) */
 export type CrAdjustment = {
   userId: string;
   raceKey: string;
@@ -104,14 +102,6 @@ export type CrRaceEntry = {
   total: number;
 };
 
-export type CrLeagueAttendance = {
-  leagueSlug: string;
-  leagueName: string;
-  held: number; // races held since registration, max 10
-  driven: number;
-  streamed: number;
-};
-
 export type CrRating = {
   userId: string;
   rating: number;
@@ -120,11 +110,15 @@ export type CrRating = {
   /** Real races in the performance window (the rest are 50s). */
   windowRaces: CrRaceEntry[];
   adjustments: CrAdjustment[];
-  leagues: CrLeagueAttendance[];
-  bonus: number;
+  /** Races counting for attendance (driven + streamed), max 10. */
+  attendanceRaces: number;
+  drivenCount: number;
+  /** Races streamed on the official CAS stream without driving them. */
+  streamedCount: number;
   /** All counted races ever (for the licence card). */
   raceCount: number;
   leagueSlugs: string[];
+  leagueNames: string[];
 };
 
 export function placePoints(position: number, fieldSize: number, status: CrResult["status"]): number {
@@ -206,81 +200,20 @@ export function buildCasRating(input: CrInput) {
     const performance = perfSum / CR_WINDOW;
 
     // ---- attendance --------------------------------------------------------
+    // Only what the driver DID counts (rule change 2026-11-16, Thomas +
+    // Andreas): every race driven, in any counting league (Fun League and
+    // fill-in drives included), and every race streamed on the official CAS
+    // stream. Missing a race changes nothing. The newest 10 count; missing
+    // races up to 10 count as half, so everybody starts at 50 % and reaches
+    // 100 % after 10 races.
     const driven = new Set(entries.map((e) => e.race.key));
     const streamed = new Set(
       (streamsByUser.get(userId) ?? [])
-        .filter((s) => (raceByKey.get(s.raceKey)?.at ?? asOf) <= asOf)
+        .filter((s) => (raceByKey.get(s.raceKey)?.at ?? asOf) <= asOf && !driven.has(s.raceKey))
         .map((s) => s.raceKey)
     );
-
-    const regs = (regsByUser.get(userId) ?? []).filter((r) => r.from <= asOf);
-    // A league counts while one of its registrations is current: the season
-    // has not ended, and (withdrawn) there was at least one race before.
-    const currentLeagues = new Set<string>();
-    for (const r of regs) {
-      if (r.seasonEndsAt && r.seasonEndsAt < asOf) continue;
-      if (r.until) {
-        const until = r.until;
-        const anyBefore = races.some(
-          (x) => x.seasonId === r.seasonId && x.at >= r.from && x.at <= until && x.at <= asOf
-        );
-        if (!anyBefore) continue;
-      }
-      currentLeagues.add(r.leagueSlug);
-    }
-
-    const covered = new Set<string>(); // race keys inside an attendance window
-    const leagues: CrLeagueAttendance[] = [];
-    let num = 0;
-    let den = 0;
-    for (const slug of currentLeagues) {
-      const own = regs.filter((r) => r.leagueSlug === slug);
-      const held = races
-        .filter(
-          (x) =>
-            x.leagueSlug === slug &&
-            x.at <= asOf &&
-            own.some((r) => r.seasonId === x.seasonId && x.at >= r.from && (!r.until || x.at <= r.until))
-        )
-        .slice(0, CR_WINDOW);
-      let d = 0;
-      let st = 0;
-      for (const x of held) {
-        covered.add(x.key);
-        if (driven.has(x.key)) d++;
-        else if (streamed.has(x.key)) {
-          d++;
-          st++;
-        }
-      }
-      num += d + 0.5 * (CR_WINDOW - held.length);
-      den += CR_WINDOW;
-      leagues.push({
-        leagueSlug: slug,
-        leagueName: held[0]?.leagueName ?? races.find((x) => x.leagueSlug === slug)?.leagueName ?? slug,
-        held: held.length,
-        driven: d,
-        streamed: st,
-      });
-    }
-    if (den === 0) {
-      // Registered nowhere: 50 %.
-      num = 0.5 * CR_WINDOW;
-      den = CR_WINDOW;
-    }
-
-    // Bonus: a driven or streamed race in a season the driver was not
-    // registered for (fill-in from the waiting list, streaming someone else's
-    // league) and every Fun League race driven. Newest 10.
-    const registeredSeasons = new Set(regs.map((r) => r.seasonId));
-    const bonusRaces = [...new Set([...driven, ...streamed])]
-      .map((key) => raceByKey.get(key)!)
-      .filter((x) => x && !covered.has(x.key) && (x.open || !registeredSeasons.has(x.seasonId)));
-    const bonus = Math.min(CR_WINDOW, bonusRaces.length);
-    num += bonus;
-    den += bonus;
-
-    const attendance = (100 * num) / den;
+    const attendanceRaces = Math.min(CR_WINDOW, driven.size + streamed.size);
+    const attendance = (100 * (attendanceRaces + 0.5 * (CR_WINDOW - attendanceRaces))) / CR_WINDOW;
     const rating = Math.min(100, Math.max(0, CR_W_PERFORMANCE * performance + CR_W_ATTENDANCE * attendance));
 
     return {
@@ -290,10 +223,12 @@ export function buildCasRating(input: CrInput) {
       attendance,
       windowRaces: window,
       adjustments,
-      leagues: leagues.sort((a, b) => a.leagueName.localeCompare(b.leagueName)),
-      bonus,
+      attendanceRaces,
+      drivenCount: driven.size,
+      streamedCount: streamed.size,
       raceCount: entries.length,
       leagueSlugs: [...new Set(entries.map((e) => e.race.leagueSlug))],
+      leagueNames: [...new Set(entries.map((e) => e.race.leagueName))],
     };
   }
 

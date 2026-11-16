@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.58.0",
+    date: "2026-11-16",
+    changes: [
+      "CAS Rating: missing a race no longer costs anything. Attendance now only counts what you drive: every race in any league (Fun League and fill-in drives included) and every race you stream on the official CAS stream — 50 % plus 5 % per race, 100 % after 10 races. Races you do not drive, with or without declining, change nothing, and there is no no-show deduction in the CAS Rating any more (league no-show rules are unchanged). Rules page (German and English) and \"My CAS Rating\" updated.",
+    ],
+  },
+  {
     version: "2.57.0",
     date: "2026-11-16",
     changes: [

@@ -104,7 +104,7 @@ export default async function CasRatingLivePage({
                     <td className={td}>
                       {l.name}
                       {CR_OPEN_LEAGUE_SLUGS.has(l.slug) && (
-                        <div className="text-xs text-zinc-500">Teilnahme nur als Bonus</div>
+                        <div className="text-xs text-zinc-500">offene Liga</div>
                       )}
                     </td>
                     <td className={td}>
@@ -241,7 +241,7 @@ export default async function CasRatingLivePage({
                   <tr key={`adj${i}`}>
                     <td className={td}>{fmtDate(a.at)}</td>
                     <td className={td} colSpan={5}>
-                      {a.reason === "no-show" ? "No-show ohne Abmeldung" : "Strafe ohne Ergebnis in diesem Rennen"}
+                      Strafe ohne Ergebnis in diesem Rennen
                     </td>
                     <td className={`${td} ${num}`}>−{a.points}</td>
                     <td className={`${td} ${num}`} />
@@ -251,40 +251,14 @@ export default async function CasRatingLivePage({
             </table>
           </div>
 
-          <h3 className="mt-5 mb-1 font-semibold text-zinc-100">Teilnahme pro Liga</h3>
-          {detail.leagues.length === 0 ? (
-            <p className="text-zinc-400">In keiner gewerteten Liga aktuell angemeldet → 50 %.</p>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className={th}>Liga</th>
-                  <th className={`${th} ${num}`}>gefahren</th>
-                  <th className={`${th} ${num}`}>ausgetragen seit Anmeldung</th>
-                  <th className={`${th} ${num}`}>davon gestreamt</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.leagues.map((l) => (
-                  <tr key={l.leagueSlug}>
-                    <td className={td}>{l.leagueName}</td>
-                    <td className={`${td} ${num}`}>{l.driven}</td>
-                    <td className={`${td} ${num}`}>
-                      {l.held}
-                      {l.held < CR_WINDOW ? ` (+${CR_WINDOW - l.held} halb)` : ""}
-                    </td>
-                    <td className={`${td} ${num}`}>{l.streamed || "–"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {detail.bonus > 0 && (
-            <p className="mt-2 text-zinc-400">
-              Bonus: {detail.bonus} Rennen (Fun League, Ersatzfahrer oder Stream außerhalb der
-              eigenen Ligen) → +{detail.bonus} gefahren / +{detail.bonus} Rennen.
-            </p>
-          )}
+          <h3 className="mt-5 mb-1 font-semibold text-zinc-100">Teilnahme</h3>
+          <p className="text-zinc-400">
+            {detail.drivenCount} Rennen gefahren
+            {detail.streamedCount ? `, ${detail.streamedCount} im offiziellen CAS-Stream übertragen` : ""} →{" "}
+            {detail.attendanceRaces} von {CR_WINDOW} gezählt
+            {detail.attendanceRaces < CR_WINDOW ? ` (die übrigen ${CR_WINDOW - detail.attendanceRaces} zählen halb)` : ""} ={" "}
+            {fmt(detail.attendance)} %. Nicht gefahrene Rennen ändern nichts.
+          </p>
         </section>
       )}
 
@@ -324,7 +298,7 @@ export default async function CasRatingLivePage({
                     <td className={`${td} ${num}`}>{fmt(r.performance)}</td>
                     <td className={`${td} ${num}`}>{fmt(r.attendance)} %</td>
                     <td className={`${td} ${num}`}>{r.raceCount}</td>
-                    <td className={td}>{r.leagues.map((l) => l.leagueName).join(", ")}</td>
+                    <td className={td}>{r.leagueNames.join(", ")}</td>
                   </tr>
                 ))}
               </tbody>

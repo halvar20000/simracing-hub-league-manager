@@ -174,7 +174,7 @@ export default async function MyCasRatingPage({
           performance={r.performance}
           attendance={r.attendance}
           races={r.raceCount}
-          leagues={all.length ? [...new Set(all.map((e) => e.race.leagueName))] : r.leagues.map((l) => l.leagueName)}
+          leagues={r.leagueNames}
         />
         <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
           <h2 className="mb-2 font-semibold text-zinc-100">{t.overTime}</h2>
@@ -211,7 +211,7 @@ export default async function MyCasRatingPage({
                   <tr key={`adj${i}`}>
                     <td className={td}>{fmtDate(a.at)}</td>
                     <td className={td} colSpan={5}>
-                      {a.reason === "no-show" ? t.noShow : t.penaltyNoResult}
+                      {t.penaltyNoResult}
                     </td>
                     <td className={`${td} ${num} text-red-400`}>−{a.points}</td>
                     <td className={td} />
@@ -224,36 +224,9 @@ export default async function MyCasRatingPage({
       </section>
 
       <section>
-        <h2 className="mb-2 font-semibold text-zinc-100">{t.attPerLeague}</h2>
-        {r.leagues.length === 0 ? (
-          <p className="text-zinc-500">{t.notRegistered}</p>
-        ) : (
-          <table className="w-full max-w-xl">
-            <thead>
-              <tr>
-                <th className={th}>{t.league}</th>
-                <th className={`${th} ${num}`}>{t.driven}</th>
-                <th className={`${th} ${num}`}>{t.heldSince}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.leagues.map((l) => (
-                <tr key={l.leagueSlug}>
-                  <td className={td}>{l.leagueName}</td>
-                  <td className={`${td} ${num}`}>
-                    {l.driven}
-                    {l.streamed ? ` ${t.streamed(l.streamed)}` : ""}
-                  </td>
-                  <td className={`${td} ${num}`}>
-                    {l.held}
-                    {l.held < CR_WINDOW ? ` ${t.restHalf(CR_WINDOW)}` : ""}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {r.bonus > 0 && <p className="mt-2 text-xs text-zinc-400">{t.bonus(r.bonus)}</p>}
+        <h2 className="mb-2 font-semibold text-zinc-100">{t.attendance}</h2>
+        <p>{t.attSummary(r.drivenCount, r.streamedCount, r.attendanceRaces, CR_WINDOW, f(r.attendance))}</p>
+        <p className="mt-1 text-xs text-zinc-500">{t.attRule}</p>
       </section>
 
       <section>

@@ -5,7 +5,7 @@ import { ExampleBlock, H2, H3, RatingLinks, RegulationLogo, num, td, th } from "
 
 const SPECIAL_CASES_EN: [string, string, string][] = [
   ["DNF / DSQ", "0 place points, clean points still count", "driven"],
-  ["DNS", "does not count", "not driven"],
+  ["DNS", "does not count", "does not count"],
   [
     "Double races (e.g. PCC, SFL, CC)",
     "each race counts on its own",
@@ -16,22 +16,15 @@ const SPECIAL_CASES_EN: [string, string, string][] = [
     "class position of the car, your own incidents; only if you drove a stint",
     "driven if at least one stint",
   ],
-  ["Declined a race", "–", "not driven, but no no-show penalty"],
   [
-    "Official withdrawal from the season",
-    "–",
-    "frozen; the league stops counting once the season ends. Before the first race: the league does not count at all.",
+    "Race not driven (declined or not)",
+    "nothing – the rating stays as it is",
+    "nothing – the rating stays as it is",
   ],
-  [
-    "Official CAS stream (stream calendar)",
-    "–",
-    "counts as driven; not registered: bonus (+1 driven / +1 race)",
-  ],
-  [
-    "Fun League",
-    "counts like any race",
-    "driven: bonus (+1 driven / +1 race); not driven: does not count – the Fun League is an open league with no duty to race every round",
-  ],
+  ["Withdrawal from the season", "nothing – earlier races stay", "nothing – earlier races stay"],
+  ["Official CAS stream (stream calendar)", "–", "counts like a race driven"],
+  ["Fill-in driver in another league", "counts like any race", "counts like any race"],
+  ["Fun League", "counts like any race", "counts like any race"],
   ["Pre-race and other one-off events (e.g. the Advent race)", "does not count", "does not count"],
 ];
 
@@ -56,11 +49,16 @@ export function RegulationEn() {
         <b className={b}>clean racing</b> and on drivers who <b className={b}>stay for the whole season</b>.
         That is what we want to make visible and reward.
       </p>
+      <p>
+        On top of that, many of us hardly race official iRacing races any more. Their iRating says
+        little about how fast and how safe they really are. The CAS Rating shows that in league
+        racing – performance, willingness to take part and fairness.
+      </p>
       <ul className="list-disc space-y-1 pl-5">
         <li>
-          <b className={b}>Loyalty counts.</b> If you register and race regularly, you go up. If you
-          stop showing up after a few races, you go down. Full grids are better for every driver and
-          for the viewers on the stream.
+          <b className={b}>Racing pays – missing costs nothing.</b> Every race you drive earns
+          attendance. If you cannot make a race, you lose nothing: like iRating, the CAS Rating only
+          changes when you race.
         </li>
         <li>
           <b className={b}>Clean racing counts.</b> Few incidents and no penalties are worth almost
@@ -81,8 +79,7 @@ export function RegulationEn() {
         The CAS Rating covers all leagues of the CAS Community: GT3 WCT, IEC, Combined Cup, SFL Cup,
         Porsche Community Cup and Fun League. Every driver has <b className={b}>one</b> rating for all
         leagues together. <b className={b}>Only what is recorded in CLS counts</b>: races whose result
-        is published in CLS. Pre-race and other one-off events (e.g. the Advent race) are not run in
-        CLS and therefore do not count.
+        is published in CLS. Pre-race and other one-off events (e.g. the Advent race) do not count.
       </p>
       <p>
         Each league counts <b className={b}>from the start of its next season</b>. Races from seasons
@@ -124,8 +121,6 @@ export function RegulationEn() {
             <td className={`${td} ${num}`}>–</td>
             <td className={td}>
               Steward penalty category 1 / 2 / 3: −5 / −10 / −20 in the race concerned.
-              <br />
-              No-show without declining: −5.
             </td>
           </tr>
         </tbody>
@@ -139,19 +134,20 @@ export function RegulationEn() {
 
       <H3>3.3 Attendance</H3>
       <p>
-        For every league the driver is <b className={b}>currently registered</b> in, the last 10
-        races held since registering count: how many of them did they drive? All registered leagues
-        are added up. 10 out of 10 = 100 %.
+        <b className={b}>Every race you drive counts</b> – in any league, the Fun League and fill-in
+        drives included. The last 10 count; missing ones up to 10 count as half. That means{" "}
+        <b className={b}>50 % plus 5 % per race</b>, 100 % after 10 races.
       </p>
       <p>
-        Registering for several leagues and racing only now and then gives a low attendance. A
-        driver who is not registered anywhere is at 50 %.
+        <b className={b}>Not racing costs nothing.</b> A race you do not drive – declined or not –
+        changes neither performance nor attendance. There are no deductions for missing races in the
+        CAS Rating. (Each league&apos;s own rules, e.g. no-show points in the championship, are not
+        affected.)
       </p>
       <p>
         <b className={b}>Streaming counts as attendance:</b> whoever broadcasts a race on the official
-        CAS stream gets that race counted as driven. If they are not registered in that league, it
-        counts as an extra race driven (bonus). The CAS stream calendar decides – other streams do
-        not count.
+        CAS stream gets it counted like a race driven. The CAS stream calendar decides – other streams
+        do not count.
       </p>
 
       <H3>3.4 Start</H3>
@@ -207,13 +203,18 @@ export function RegulationEn() {
             <td className={`${td} ${num} font-bold text-zinc-100`}>79.0</td>
           </tr>
           <tr>
-            <td className={td}>B drives the first 5 strongly, then no more</td>
-            <td className={`${td} ${num}`}>80</td>
-            <td className={`${td} ${num}`}>42 %</td>
-            <td className={`${td} ${num} font-bold text-zinc-100`}>68.5</td>
+            <td className={td}>B drives only 5, just as solid (cannot make more)</td>
+            <td className={`${td} ${num}`}>60</td>
+            <td className={`${td} ${num}`}>75 %</td>
+            <td className={`${td} ${num} font-bold text-zinc-100`}>64.5</td>
           </tr>
         </tbody>
       </table>
+      <p className="text-xs text-zinc-500">
+        B loses nothing in the weeks he does not race. He has simply collected fewer races: his 5
+        missing races still count as 50 for performance and as half for attendance. Every further race
+        lets him catch up – after 10 races the same calculation applies to him as to A.
+      </p>
 
       <H2>6. Where to see it in CLS</H2>
       <p>
@@ -240,7 +241,7 @@ export function RegulationEn() {
           the <b className={b}>last 10 races</b> with place, clean and penalty points,
         </li>
         <li>
-          their <b className={b}>attendance per league</b>.
+          how many races count for their <b className={b}>attendance</b>.
         </li>
       </ul>
       <p>The rating is updated after every publication of results and after every steward decision.</p>

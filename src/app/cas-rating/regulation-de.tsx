@@ -32,7 +32,7 @@ export const EXAMPLE_RACES: [string, string, string, string, string, string][] =
 
 const SPECIAL_CASES: [string, string, string][] = [
   ["DNF / DSQ", "0 Platzpunkte, Sauberkeit zählt", "gefahren"],
-  ["DNS", "zählt nicht", "nicht gefahren"],
+  ["DNS", "zählt nicht", "zählt nicht"],
   [
     "Doppelrennen (z. B. PCC, SFL, CC)",
     "jedes Rennen zählt einzeln",
@@ -43,22 +43,15 @@ const SPECIAL_CASES: [string, string, string][] = [
     "Klassenplatz des Autos, eigene Incidents; nur wer einen Stint gefahren ist",
     "gefahren, wenn mindestens ein Stint",
   ],
-  ["Abmeldung für ein Rennen", "–", "nicht gefahren, aber keine No-show-Strafe"],
   [
-    "Offizielle Abmeldung von der Saison",
-    "–",
-    "Stand wird eingefroren, ab Saisonende zählt die Liga nicht mehr. Vor dem ersten Rennen: Liga zählt gar nicht.",
+    "Rennen nicht gefahren (mit oder ohne Abmeldung)",
+    "nichts – das Rating bleibt, wie es ist",
+    "nichts – das Rating bleibt, wie es ist",
   ],
-  [
-    "Offizieller CAS-Stream (Stream-Kalender)",
-    "–",
-    "zählt als gefahren; nicht angemeldet: Bonus (+1 gefahren / +1 Rennen)",
-  ],
-  [
-    "Fun League",
-    "zählt wie jedes Rennen",
-    "gefahren: Bonus (+1 gefahren / +1 Rennen); nicht gefahren: zählt nicht – die Fun League ist eine offene Liga ohne Pflicht, jedes Rennen zu fahren",
-  ],
+  ["Abmeldung von der Saison", "nichts – bisherige Rennen bleiben", "nichts – bisherige Rennen bleiben"],
+  ["Offizieller CAS-Stream (Stream-Kalender)", "–", "zählt wie ein gefahrenes Rennen"],
+  ["Ersatzfahrer in einer fremden Liga", "zählt wie jedes Rennen", "zählt wie jedes Rennen"],
+  ["Fun League", "zählt wie jedes Rennen", "zählt wie jedes Rennen"],
   [
     "Pre-Race- und sonstige Einzel-Events (z. B. Adventsrennen)",
     "zählt nicht",
@@ -135,11 +128,17 @@ export function RegulationDe() {
         <b className="text-zinc-100">die ganze Saison dabei bleiben</b>. Genau das wollen
         wir sichtbar machen und belohnen.
       </p>
+      <p>
+        Dazu kommt: Viele von uns fahren in iRacing kaum noch offizielle Rennen. Ihr
+        iRating sagt deshalb wenig darüber aus, wie schnell und wie sicher sie wirklich
+        unterwegs sind. Das CAS Rating bildet das im Ligabetrieb ab – Leistung,
+        Teilnahmebereitschaft und Fairness.
+      </p>
       <ul className="list-disc space-y-1 pl-5">
         <li>
-          <b className="text-zinc-100">Treue zählt.</b> Wer sich anmeldet und regelmäßig
-          fährt, steigt. Wer nach ein paar Rennen nicht mehr kommt, sinkt. Volle Felder
-          sind besser für alle Fahrer und für die Zuschauer im Stream.
+          <b className="text-zinc-100">Mitfahren lohnt sich – Fehlen kostet nichts.</b>{" "}
+          Jedes gefahrene Rennen bringt Teilnahmepunkte. Wer ein Rennen nicht fahren kann,
+          verliert nichts: Wie beim iRating ändert sich das CAS Rating nur, wenn man fährt.
         </li>
         <li>
           <b className="text-zinc-100">Sauberkeit zählt.</b> Wenige Incidents und keine
@@ -163,7 +162,7 @@ export function RegulationDe() {
         <b className="text-zinc-100">ein</b> Rating für alle Ligen zusammen.
         <b className="text-zinc-100"> Gezählt wird nur, was im CLS erfasst ist</b>: Rennen,
         deren Ergebnis im CLS veröffentlicht ist. Pre-Race- und sonstige Einzel-Events (z. B.
-        das Adventsrennen) werden nicht im CLS geführt und zählen deshalb nicht.
+        das Adventsrennen) zählen nicht.
       </p>
       <p>
         Gezählt wird in jeder Liga <b className="text-zinc-100">ab dem Start ihrer nächsten
@@ -208,8 +207,6 @@ export function RegulationDe() {
             <td className={`${td} ${num}`}>–</td>
             <td className={td}>
               Steward-Strafe Kategorie 1 / 2 / 3: −5 / −10 / −20 im betroffenen Rennen.
-              <br />
-              No-show ohne Abmeldung: −5.
             </td>
           </tr>
         </tbody>
@@ -223,21 +220,22 @@ export function RegulationDe() {
 
       <H3>3.3 Teilnahme</H3>
       <p>
-        Für jede Liga, in der der Fahrer <b className="text-zinc-100">aktuell angemeldet</b>{" "}
-        ist, zählen die letzten 10 ausgetragenen Rennen seit seiner Anmeldung: Wie viele
-        davon ist er gefahren? Alle angemeldeten Ligen werden zusammengezählt. 10 von 10 =
-        100 %.
+        <b className="text-zinc-100">Jedes gefahrene Rennen zählt</b> – in jeder Liga, auch
+        in der Fun League und als Ersatzfahrer. Gezählt werden die letzten 10; fehlende bis
+        10 zählen halb. Das heißt: <b className="text-zinc-100">50 % plus 5 % pro Rennen</b>,
+        nach 10 Rennen 100 %.
       </p>
       <p>
-        Wer sich für mehrere Ligen anmeldet und nur sporadisch fährt, hat eine niedrige
-        Teilnahme. Wer nirgends angemeldet ist, steht bei 50 %.
+        <b className="text-zinc-100">Nicht fahren kostet nichts.</b> Ein Rennen, das man
+        nicht fährt – mit oder ohne Abmeldung – ändert weder die Leistung noch die
+        Teilnahme. Es gibt im CAS Rating keine Abzüge fürs Fehlen. (Die Regeln der
+        einzelnen Ligen, z. B. No-show-Punkte in der Meisterschaft, bleiben davon
+        unberührt.)
       </p>
       <p>
         <b className="text-zinc-100">Streamen zählt als Teilnahme:</b> Wer ein Rennen im
-        offiziellen CAS-Stream überträgt, bekommt dieses Rennen als gefahren angerechnet.
-        Ist er in der Liga nicht angemeldet, zählt es als zusätzliches gefahrenes Rennen
-        (Bonus). Maßgeblich ist der CAS-Stream-Kalender – andere Streams werden nicht
-        gezählt.
+        offiziellen CAS-Stream überträgt, bekommt es wie ein gefahrenes Rennen angerechnet.
+        Maßgeblich ist der CAS-Stream-Kalender – andere Streams werden nicht gezählt.
       </p>
 
       <H3>3.4 Start</H3>
@@ -294,13 +292,19 @@ export function RegulationDe() {
             <td className={`${td} ${num} font-bold text-zinc-100`}>79,0</td>
           </tr>
           <tr>
-            <td className={td}>B fährt die ersten 5 stark, dann nicht mehr</td>
-            <td className={`${td} ${num}`}>80</td>
-            <td className={`${td} ${num}`}>42 %</td>
-            <td className={`${td} ${num} font-bold text-zinc-100`}>68,5</td>
+            <td className={td}>B fährt nur 5, genauso solide (kann nicht öfter)</td>
+            <td className={`${td} ${num}`}>60</td>
+            <td className={`${td} ${num}`}>75 %</td>
+            <td className={`${td} ${num} font-bold text-zinc-100`}>64,5</td>
           </tr>
         </tbody>
       </table>
+      <p className="text-xs text-zinc-500">
+        B verliert in den Wochen, in denen er nicht fährt, nichts. Er hat nur weniger Rennen
+        gesammelt: Bei der Leistung zählen seine 5 fehlenden Rennen noch mit 50, bei der
+        Teilnahme halb. Mit jedem weiteren Rennen holt er auf – nach 10 Rennen gilt für ihn
+        dieselbe Rechnung wie für A.
+      </p>
 
       <H2>6. Einsicht im CLS</H2>
       <p>
@@ -321,7 +325,7 @@ export function RegulationDe() {
           und Strafpunkten,
         </li>
         <li>
-          seine <b className="text-zinc-100">Teilnahme pro Liga</b>.
+          wie viele Rennen für seine <b className="text-zinc-100">Teilnahme</b> zählen.
         </li>
       </ul>
       <p>
@@ -403,15 +407,15 @@ function LicenceCard({ lang }: { lang: CrLang }) {
         <div className="text-2xl font-extrabold text-white">Thomas Herbrig</div>
         <div className="mb-1 mt-2.5 inline-flex items-baseline gap-2.5 rounded-full border-[1.5px] border-[#ff6b35] px-4 py-1">
           <small className="text-xs font-bold tracking-widest text-[#ff6b35]">CR</small>
-          <b className="text-2xl tabular-nums text-white">{de ? "43,6" : "43.6"}</b>
+          <b className="text-2xl tabular-nums text-white">{de ? "55,6" : "55.6"}</b>
         </div>
-        <div className="text-sm text-red-400">{de ? "▼ 2,9 seit letztem Rennen" : "▼ 2.9 since last race"}</div>
+        <div className="text-sm text-red-400">{de ? "▼ 2,0 seit letztem Rennen" : "▼ 2.0 since last race"}</div>
         <div className="mt-2.5 flex justify-center gap-4 text-xs text-zinc-400">
           <div>
             <b className="block text-base text-white">{de ? "36,5" : "36.5"}</b>{de ? "Leistung" : "Performance"}
           </div>
           <div>
-            <b className="block text-base text-white">60 %</b>{de ? "Teilnahme" : "Attendance"}
+            <b className="block text-base text-white">100 %</b>{de ? "Teilnahme" : "Attendance"}
           </div>
           <div>
             <b className="block text-base text-white">58</b>{de ? "Rennen" : "Races"}

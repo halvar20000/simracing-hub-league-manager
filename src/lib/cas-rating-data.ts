@@ -14,7 +14,6 @@ import type { PrismaClient } from "@prisma/client";
 import {
   buildCasRating,
   penaltyForLevel,
-  CR_NO_SHOW,
   type CrAdjustment,
   type CrInput,
   type CrRace,
@@ -119,7 +118,7 @@ export async function loadCasRatingInput(
   const roundIds = countingRounds.map((r) => r.id);
   const seasonIds = counting.map((s) => s.id);
 
-  const [raceResults, teamResults, penalties, declined, registrations, streamRows] = await Promise.all([
+  const [raceResults, teamResults, penalties, registrations, streamRows] = await Promise.all([
     prisma.raceResult.findMany({
       where: { roundId: { in: roundIds } },
       select: {
@@ -165,10 +164,6 @@ export async function loadCasRatingInput(
         registration: { select: { userId: true } },
         sourceIncidentDecision: { select: { incidentReport: { select: { session: true } } } },
       },
-    }),
-    prisma.roundRsvp.findMany({
-      where: { roundId: { in: roundIds }, status: "DECLINED" },
-      select: { roundId: true, registration: { select: { userId: true } } },
     }),
     prisma.registration.findMany({
       where: { seasonId: { in: seasonIds }, isTeamManager: false, status: { in: ["APPROVED", "WITHDRAWN"] } },
@@ -319,8 +314,6 @@ export async function loadCasRatingInput(
 
   // ---- registrations -------------------------------------------------------
   const crRegs: CrRegistration[] = [];
-  // No-show penalty only from approval on (time on the waiting list is free).
-  const noShowFrom = new Map<CrRegistration, Date>();
   for (const r of registrations) {
     const season = seasonById.get(r.seasonId)!;
     const u = r.user;
@@ -340,9 +333,6 @@ export async function loadCasRatingInput(
         season.status === "COMPLETED" ? season.rounds[season.rounds.length - 1]?.startsAt ?? null : null,
     };
     crRegs.push(reg);
-    if (!season.teamRegistration) {
-      noShowFrom.set(reg, r.approvedAt && r.approvedAt > r.createdAt ? r.approvedAt : r.createdAt);
-    }
   }
 
   // ---- streams (official CAS stream calendar only) -------------------------
@@ -373,23 +363,9 @@ export async function loadCasRatingInput(
       }
     }
   }
-  const streamedRound = new Set(streams.map((s) => `${s.userId}|${raceByKey.get(s.raceKey)!.roundId}`));
 
-  // ---- no-show without declining (-5 once per round) -----------------------
-  const declinedSet = new Set(declined.map((d) => `${d.registration.userId}|${d.roundId}`));
-  const drovRound = new Set([...resultByUserRace.values()].map((r) => `${r.userId}|${raceByKey.get(r.raceKey)!.roundId}`));
-  // Team seasons (IEC) have none: a crew never puts every driver in the car.
-  for (const [reg, from] of noShowFrom) {
-    for (const round of countingRounds) {
-      if (round.season.id !== reg.seasonId) continue;
-      if (round.startsAt < from || (reg.until && round.startsAt > reg.until)) continue;
-      const k = `${reg.userId}|${round.id}`;
-      if (drovRound.has(k) || declinedSet.has(k) || streamedRound.has(k)) continue;
-      const first = races.find((x) => x.roundId === round.id);
-      if (!first) continue; // no results imported
-      adjustments.push({ userId: reg.userId, raceKey: first.key, at: first.at, points: CR_NO_SHOW, reason: "no-show" });
-    }
-  }
+  // No no-show deduction any more (rule change 2026-11-16): not racing never
+  // costs CR, with or without declining.
 
   // Names of drivers who only raced as fill-ins / streamed.
   const missing = [...new Set([...resultByUserRace.values()].map((r) => r.userId).concat(streams.map((s) => s.userId)))].filter(
