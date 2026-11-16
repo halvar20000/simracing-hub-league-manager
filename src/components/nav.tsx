@@ -60,6 +60,7 @@ export default async function Nav() {
     { href: "/teams", label: "Teams" },
     { href: "/incidents", label: "Incidents" },
     { href: "/streams", label: "Streams" },
+    { href: "/hall-of-fame", label: "Hall of Fame" },
     { href: "/stint-planner", label: "Stint Planner" },
     { href: "/cas-rating", label: "CAS Rating" },
     ...(isFullAdmin ? [{ href: "/admin", label: "Admin" }] : []),

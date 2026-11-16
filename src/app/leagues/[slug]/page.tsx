@@ -439,8 +439,11 @@ export default async function PublicLeagueDetail({
       {/* Hall of Fame */}
       {championedSeasons.length > 0 && (
         <section>
-          <h2 className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+          <h2 className="mb-1.5 flex items-baseline justify-between font-display text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
             Hall of Fame
+            <Link href={`/hall-of-fame?league=${league.slug}`} className="normal-case tracking-normal text-[#ff6b35] hover:underline">
+              All seasons incl. iRLM era →
+            </Link>
           </h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {championedSeasons.map((entry) => (

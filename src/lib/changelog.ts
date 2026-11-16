@@ -19,6 +19,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.62.0",
+    date: "2026-11-16",
+    changes: [
+      "New Hall of Fame page (menu: Hall of Fame): every champion of every CAS league on one page – overall champions with the full podium, Pro/Am and class champions and the team champions, newest season first, with a filter per league.",
+      "It reaches back before CLS: the seasons that ran on the old iRLM league manager (GT3 WCT 1–11, Combined Cup 2–9, SFL Cup 1–6, PCC 1–3, TSS GT4 1–2, IEC Season 2) are included.",
+      "Two rankings at the top: the drivers and the teams with the most titles across all leagues. Drivers are matched by iRacing ID, so titles from the iRLM days and from CLS add up.",
+    ],
+  },
+  {
     version: "2.61.1",
     date: "2026-11-16",
     changes: [
