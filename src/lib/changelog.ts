@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.59.1",
+    date: "2026-11-16",
+    changes: [
+      "Overlay feed: each round in /api/overlay/round-info now says who streams it (stream calendar), so the streamer's own tools only put their own races in the Twitch schedule.",
+    ],
+  },
+  {
     version: "2.59.0",
     date: "2026-11-16",
     changes: [

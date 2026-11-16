@@ -31,6 +31,7 @@ import { isPerRacePenaltySeason } from "@/lib/penalty-application";
 import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
 import { parseBeforeRound } from "@/lib/overlay-before-round";
 import { loadGuestLookup, neutraliseGuestResult } from "@/lib/proam-guest";
+import { streamerOfRound, streamKeysOfRound } from "@/lib/stream-calendar";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -115,6 +116,32 @@ export async function GET(req: NextRequest) {
       rsvpClosedAt: true,
     },
   });
+  // Who streams each round (admin stream calendar): "Thomas" / "Andreas" /
+  // "Open", null = league not on the calendar or before it started. Lets the
+  // streamer's own tools (Twitch schedule, countdown) pick their races.
+  const streamers = new Map<string, string | null>();
+  try {
+    const keys = rounds.flatMap((r) =>
+      streamKeysOfRound({ id: r.id, leagueSlug, startsAt: r.startsAt })
+    );
+    const settings = await prisma.appSetting.findMany({
+      where: { key: { in: keys } },
+      select: { key: true, value: true },
+    });
+    const overrides = new Map(settings.map((s) => [s.key, s.value]));
+    for (const r of rounds) {
+      streamers.set(
+        r.id,
+        streamerOfRound(
+          { id: r.id, seasonId: season.id, leagueSlug, roundNumber: r.roundNumber,
+            name: r.name ?? "", track: r.track ?? "", startsAt: r.startsAt },
+          overrides
+        )
+      );
+    }
+  } catch {
+    // calendar unreadable: leave streamer out (null) rather than fail the feed
+  }
   // ?beforeRound=N: the season as it stood before round N — last round = the
   // last completed one before N, next round = N, later rounds "UPCOMING".
   const beforeRound = parseBeforeRound(searchParams.get("beforeRound"));
@@ -466,6 +493,7 @@ export async function GET(req: NextRequest) {
         startsAt: r.startsAt,
         track: r.track,
         trackConfig: r.trackConfig,
+        streamer: streamers.get(r.id) ?? null,
       })),
       lastRound,
       nextRound,
