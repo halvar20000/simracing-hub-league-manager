@@ -6,6 +6,7 @@ import { SortableTableEnhancer } from "@/components/SortableTableEnhancer";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { refreshDiscordStatsAction } from "@/lib/actions/discord-stats";
 import type { DiscordStatsData, MonthlyRow } from "@/lib/discord-stats";
+import { loadMemberFlow, type MemberFlow } from "@/lib/discord-member-flow";
 
 // The Refresh action scans Discord message history — give the route room.
 export const maxDuration = 60;
@@ -13,7 +14,7 @@ export const maxDuration = 60;
 export default async function AdminDiscordStatsPage() {
   await requireAdmin();
 
-  const [snapshot, monthlyDesc] = await Promise.all([
+  const [snapshot, monthlyDesc, memberFlow] = await Promise.all([
     prisma.discordStatsSnapshot.findFirst({
       orderBy: { generatedAt: "desc" },
     }),
@@ -21,6 +22,7 @@ export default async function AdminDiscordStatsPage() {
       orderBy: { month: "desc" },
       take: 24,
     }),
+    loadMemberFlow(),
   ]);
   // Oldest → newest for the trend chart.
   const monthly: MonthlyRow[] = [...monthlyDesc].reverse().map((r) => ({
@@ -47,6 +49,8 @@ export default async function AdminDiscordStatsPage() {
           />
         </form>
       </div>
+
+      <MemberFlowChart flow={memberFlow} />
 
       <TrendChart months={monthly} />
 
@@ -382,6 +386,175 @@ function TrendChart({ months }: { months: MonthlyRow[] }) {
         month. The faded last bar is the month still in progress. Hover any bar
         for exact numbers.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Joined / left the server per month (from the #moderation join + leave
+ * messages, src/lib/discord-member-flow.ts): green bars up, red bars down,
+ * plus totals per year.
+ */
+function MemberFlowChart({ flow }: { flow: MemberFlow }) {
+  const keys = Object.keys(flow.months).sort();
+  if (keys.length === 0) {
+    return (
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-6 text-sm text-zinc-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Joined / left the server</h2>
+        <p className="mt-2">
+          Not counted yet. Click <strong className="text-zinc-200">Refresh now</strong> — it reads the
+          #moderation channel once in full, after that only new messages.
+        </p>
+      </div>
+    );
+  }
+  // Every month from the first one to now, also months without a message.
+  const months: string[] = [];
+  const [y0, m0] = keys[0].split("-").map(Number);
+  const now = new Date();
+  for (let y = y0, m = m0; y < now.getUTCFullYear() || (y === now.getUTCFullYear() && m <= now.getUTCMonth() + 1); m === 12 ? (y++, (m = 1)) : m++) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+  }
+  const rows = months.map((k) => ({ month: k, ...(flow.months[k] ?? { joined: 0, left: 0 }) }));
+  const years = new Map<string, { joined: number; left: number }>();
+  for (const r of rows) {
+    const y = years.get(r.month.slice(0, 4)) ?? { joined: 0, left: 0 };
+    y.joined += r.joined;
+    y.left += r.left;
+    years.set(r.month.slice(0, 4), y);
+  }
+  const total = rows.reduce((a, r) => ({ joined: a.joined + r.joined, left: a.left + r.left }), { joined: 0, left: 0 });
+
+  const W = 760;
+  const H = 280;
+  const padL = 30;
+  const padR = 8;
+  const padT = 14;
+  const padB = 26;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.joined, r.left)));
+  const half = chartH / 2;
+  const zeroY = padT + half;
+  const n = rows.length;
+  const colW = chartW / n;
+  const barW = Math.max(2, Math.min(18, colW * 0.7));
+  const sy = (v: number) => (v / max) * half;
+  const labelEvery = n > 24 ? 6 : n > 12 ? 3 : 1;
+  const step = max > 60 ? 25 : max > 30 ? 10 : 5;
+  const grid: number[] = [];
+  for (let v = step; v <= max; v += step) grid.push(v);
+  // Running net (joined − left) as a line on its own scale.
+  let run = 0;
+  const net = rows.map((r) => (run += r.joined - r.left));
+  const netMax = Math.max(1, ...net.map(Math.abs));
+  const netPts = net
+    .map((v, i) => `${padL + colW * i + colW / 2},${zeroY - (v / netMax) * half}`)
+    .join(" ");
+  const sign = (v: number) => (v > 0 ? `+${v}` : String(v));
+
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+          Joined / left the server — per month
+        </h2>
+        <div className="flex items-center gap-3 text-xs text-zinc-400">
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Joined
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-400" /> Left
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-0.5 w-3 bg-sky-400" /> Net growth since start
+          </span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Members joined and left per month">
+        {grid.map((v) => (
+          <g key={v}>
+            <line x1={padL} x2={W - padR} y1={zeroY - sy(v)} y2={zeroY - sy(v)} stroke="#27272a" />
+            <line x1={padL} x2={W - padR} y1={zeroY + sy(v)} y2={zeroY + sy(v)} stroke="#27272a" />
+            <text x={padL - 4} y={zeroY - sy(v) + 3} fontSize="9" fill="#71717a" textAnchor="end">{v}</text>
+            <text x={padL - 4} y={zeroY + sy(v) + 3} fontSize="9" fill="#71717a" textAnchor="end">{v}</text>
+          </g>
+        ))}
+        <line x1={padL} x2={W - padR} y1={zeroY} y2={zeroY} stroke="#52525b" />
+        {rows.map((r, i) => {
+          const cx = padL + colW * i + colW / 2;
+          const tip = `${r.month}: ${r.joined} joined, ${r.left} left, net ${sign(r.joined - r.left)}${i === n - 1 ? " (month in progress)" : ""}`;
+          const op = i === n - 1 ? 0.45 : 0.9;
+          return (
+            <g key={r.month}>
+              <rect x={cx - barW / 2} y={zeroY - sy(r.joined)} width={barW} height={sy(r.joined)} fill="#34d399" opacity={op}>
+                <title>{tip}</title>
+              </rect>
+              <rect x={cx - barW / 2} y={zeroY} width={barW} height={sy(r.left)} fill="#f87171" opacity={op}>
+                <title>{tip}</title>
+              </rect>
+              {i % labelEvery === 0 && (
+                <text x={cx} y={H - 8} fontSize="10" fill="#71717a" textAnchor="middle">
+                  {r.month.slice(2)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        <polyline points={netPts} fill="none" stroke="#38bdf8" strokeWidth="2" opacity="0.8" />
+      </svg>
+      <p className="mt-1 text-xs text-zinc-500">
+        Green up: members who joined, red down: members who left. Blue line: joined minus left, added
+        up since the first month (own scale, now {sign(net[net.length - 1])}). Hover a bar for the numbers.
+        Counted from the join and leave messages in #moderation (since {keys[0]}); someone who leaves and
+        comes back counts each time.
+      </p>
+      <div className="mt-4 grid gap-6 md:grid-cols-2">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs text-zinc-400">
+              <th className="py-1 pr-3 text-left font-semibold">Year</th>
+              <th className="py-1 pr-3 text-right font-semibold">Joined</th>
+              <th className="py-1 pr-3 text-right font-semibold">Left</th>
+              <th className="py-1 pr-3 text-right font-semibold">Net</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {[...years].map(([yr, v]) => (
+              <tr key={yr} className="border-t border-zinc-800">
+                <td className="py-1 pr-3">{yr}</td>
+                <td className="py-1 pr-3 text-right text-emerald-400">{v.joined}</td>
+                <td className="py-1 pr-3 text-right text-red-400">{v.left}</td>
+                <td className="py-1 pr-3 text-right font-semibold text-zinc-100">{sign(v.joined - v.left)}</td>
+              </tr>
+            ))}
+            <tr className="border-t border-zinc-700">
+              <td className="py-1 pr-3 font-semibold">Total</td>
+              <td className="py-1 pr-3 text-right text-emerald-400">{total.joined}</td>
+              <td className="py-1 pr-3 text-right text-red-400">{total.left}</td>
+              <td className="py-1 pr-3 text-right font-semibold text-zinc-100">{sign(total.joined - total.left)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <details className="text-sm">
+          <summary className="cursor-pointer text-xs text-zinc-400">Every month</summary>
+          <table className="mt-2 w-full">
+            <tbody className="tabular-nums">
+              {[...rows].reverse().map((r) => (
+                <tr key={r.month} className="border-t border-zinc-800">
+                  <td className="py-1 pr-3">{r.month}</td>
+                  <td className="py-1 pr-3 text-right text-emerald-400">{r.joined}</td>
+                  <td className="py-1 pr-3 text-right text-red-400">{r.left}</td>
+                  <td className="py-1 pr-3 text-right font-semibold text-zinc-100">{sign(r.joined - r.left)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      </div>
+      {flow.updatedAt && (
+        <p className="mt-2 text-xs text-zinc-500">Updated {formatDateTime(new Date(flow.updatedAt))}, daily with the stats refresh.</p>
+      )}
     </div>
   );
 }

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.61.0",
+    date: "2026-11-16",
+    changes: [
+      "Admin, Discord stats: new chart of how many members joined and left the CAS Discord server per month since February 2024, with the net growth and totals per year. Counted from the join and leave messages in the moderation channel and updated daily with the stats refresh.",
+    ],
+  },
+  {
     version: "2.60.0",
     date: "2026-11-16",
     changes: [

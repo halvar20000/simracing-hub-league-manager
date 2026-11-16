@@ -20,6 +20,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { refreshMemberFlow } from "@/lib/discord-member-flow";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const WINDOW_DAYS = 30;
@@ -524,5 +525,7 @@ export async function saveDiscordStatsSnapshot(): Promise<DiscordStatsData> {
       update: { messageCount: cm.messageCount, activeMembers: cm.activeMembers },
     });
   }
+  // Joined / left per month from #moderation (incremental, never throws).
+  await refreshMemberFlow();
   return data;
 }
