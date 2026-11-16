@@ -127,7 +127,8 @@ export async function applyNoRsvpNoShowPenalties(
 
   // Only run when the round is actually COMPLETED. If it's not, treat as
   // "clear stale auto-penalties" (in case the admin un-completed the round).
-  if (round.status !== "COMPLETED") {
+  // Not-scored round (pre-race / exhibition): never a no-show penalty.
+  if (round.status !== "COMPLETED" || !round.countsForChampionship) {
     const cleared = await prisma.penalty.deleteMany({
       where: { roundId, source: "NO_RSVP_NO_SHOW" },
     });

@@ -183,6 +183,7 @@ export async function runPushSweep(now = new Date()): Promise<SweepOutcome[]> {
     if (
       running &&
       r.status === "UPCOMING" &&
+      r.countsForChampionship &&
       !isDone("rsvp", r.id) &&
       rsvpOpens <= now &&
       now < rsvpCloses
@@ -210,6 +211,7 @@ export async function runPushSweep(now = new Date()): Promise<SweepOutcome[]> {
     // --- results (publish gate: COMPLETED only) ----------------------------
     if (
       r.status === "COMPLETED" &&
+      r.countsForChampionship &&
       r.raceResults.length > 0 &&
       !isDone("results", r.id)
     ) {
@@ -241,7 +243,7 @@ export async function runPushSweep(now = new Date()): Promise<SweepOutcome[]> {
 
     // --- reporting ---------------------------------------------------------
     const cooldown = r.season.scoringSystem?.protestCooldownHours;
-    if (cooldown != null && !isDone("reporting", r.id)) {
+    if (cooldown != null && r.countsForChampionship && !isDone("reporting", r.id)) {
       const opens = new Date(start.getTime() + cooldown * HOUR);
       const windowHrs = r.season.scoringSystem?.protestWindowHours;
       const closes = windowHrs != null ? new Date(opens.getTime() + windowHrs * HOUR) : null;

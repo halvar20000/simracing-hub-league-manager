@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.57.0",
+    date: "2026-11-16",
+    changes: [
+      "Pre-races and exhibition races: a round can be marked as not scored (round edit, untick \"Scored round\"). It earns no championship points, does not count for the CAS Rating (no race, no no-show), is left out of drop-week counting and gets no RSVP, protest or results post in Discord. It stays in the calendar, the stream calendar and keeps its race reminder. Shown as \"Not scored\" in the season schedule.",
+    ],
+  },
+  {
     version: "2.56.0",
     date: "2026-11-15",
     changes: [

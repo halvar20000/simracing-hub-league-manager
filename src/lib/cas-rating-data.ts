@@ -88,7 +88,13 @@ export async function loadCasRatingInput(
       isMulticlass: true,
       teamRegistration: true,
       league: { select: { slug: true, name: true } },
-      rounds: { select: { id: true, startsAt: true, status: true, roundNumber: true }, orderBy: { startsAt: "asc" } },
+      // A round marked "not scored" (pre-race) never counts: no race, no no-show,
+      // and it does not move the league's start date either.
+      rounds: {
+        where: { countsForChampionship: true },
+        select: { id: true, startsAt: true, status: true, roundNumber: true },
+        orderBy: { startsAt: "asc" },
+      },
     },
   });
 

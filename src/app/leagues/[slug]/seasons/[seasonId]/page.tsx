@@ -198,8 +198,10 @@ export default async function PublicSeasonDetail({
     ownRegistration?.status === "PENDING" ||
     ownRegistration?.status === "APPROVED";
   const hasResults = season.rounds.some((r) => r._count.raceResults > 0);
-  const completedRounds = season.rounds.filter((r) => r.status === "COMPLETED").length;
-  const totalRounds = season.rounds.length;
+  // Not-scored rounds (pre-race) are not part of the season's round count.
+  const scoredRounds = season.rounds.filter((r) => r.countsForChampionship);
+  const completedRounds = scoredRounds.filter((r) => r.status === "COMPLETED").length;
+  const totalRounds = scoredRounds.length;
 
   // Next round = first round whose startsAt is in the future, or first
   // non-completed round if all are in the past
@@ -366,6 +368,11 @@ export default async function PublicSeasonDetail({
                     >
                       {r.name}
                     </Link>
+                    {!r.countsForChampionship && (
+                      <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                        Not scored
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-zinc-400">
                     {r.track}

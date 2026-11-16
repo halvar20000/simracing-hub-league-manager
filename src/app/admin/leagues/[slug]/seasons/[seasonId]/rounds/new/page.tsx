@@ -81,13 +81,21 @@ export default async function NewRoundPage({
           />
         </label>
 
-        <label className="flex items-center gap-2 text-sm text-zinc-300">
+        <label className="flex items-start gap-2 text-sm text-zinc-300">
           <input
             type="checkbox"
+            className="mt-1"
             name="countsForChampionship"
             defaultChecked
           />
-          Counts for championship points
+          <span>
+            Scored round: counts for the championship and the CAS Rating
+            <span className="block text-xs text-zinc-500">
+              Untick for a pre-race / exhibition race: no points, no CAS Rating, no
+              no-show penalty, no RSVP, protest or results post in Discord. It stays in
+              the calendar and the stream calendar.
+            </span>
+          </span>
         </label>
 
         <div className="flex gap-2">

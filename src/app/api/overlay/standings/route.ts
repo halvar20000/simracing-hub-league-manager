@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
   // Round metadata — total count + how many are completed, so the overlay
   // can show "Round 5 of 10" or grey out scoring rows beyond the current event.
   const rounds = await prisma.round.findMany({
-    where: { seasonId: season.id },
+    where: { seasonId: season.id, countsForChampionship: true },
     orderBy: { roundNumber: "asc" },
     select: {
       id: true,

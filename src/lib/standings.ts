@@ -116,9 +116,11 @@ export async function computeDriverStandings(
 ): Promise<DriverStanding[]> {
   // Publish gate: by default only COMPLETED rounds contribute to standings.
   const onlyPublished = !opts.includeUnpublishedRounds;
+  // Rounds marked "not scored" (Round.countsForChampionship=false, e.g. a
+  // pre-race) never count, published or not.
   const completedRoundWhere = onlyPublished
-    ? ({ status: "COMPLETED" } as const)
-    : {};
+    ? ({ status: "COMPLETED", countsForChampionship: true } as const)
+    : ({ countsForChampionship: true } as const);
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: { scoringSystem: true, league: { select: { slug: true } } },
@@ -183,7 +185,7 @@ export async function computeDriverStandings(
     }),
     // Full season schedule size — drives the "best (total − dropN)" cap so
     // early-season drops never zero a driver (see the drop block below).
-    prisma.round.count({ where: { seasonId } }),
+    prisma.round.count({ where: { seasonId, countsForChampionship: true } }),
   ]);
 
   // Pro/Am intro races: an unclassified driver, or a round raced before his
@@ -720,9 +722,11 @@ export async function computeTeamStandings(
   opts: StandingsOptions = {}
 ): Promise<TeamStanding[]> {
   const onlyPublished = !opts.includeUnpublishedRounds;
+  // Rounds marked "not scored" (Round.countsForChampionship=false, e.g. a
+  // pre-race) never count, published or not.
   const completedRoundWhere = onlyPublished
-    ? ({ status: "COMPLETED" } as const)
-    : {};
+    ? ({ status: "COMPLETED", countsForChampionship: true } as const)
+    : ({ countsForChampionship: true } as const);
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: { teams: true, scoringSystem: true, league: { select: { slug: true } } },
@@ -1010,7 +1014,7 @@ export async function computeCarStandings(
   const onlyPublished = !opts.includeUnpublishedRounds;
   const results = await prisma.raceResult.findMany({
     where: {
-      round: { seasonId, ...(onlyPublished ? { status: "COMPLETED" } : {}) },
+      round: { seasonId, countsForChampionship: true, ...(onlyPublished ? { status: "COMPLETED" } : {}) },
       carId: { not: null },
     },
     include: {
@@ -1194,7 +1198,7 @@ export async function computeTeamClassStandings(
   const teamFprMinDistance = season.scoringSystem.driverFprMinDistancePct ?? 90;
 
   const results = await prisma.teamResult.findMany({
-    where: { round: { seasonId, ...(onlyPublished ? { status: "COMPLETED" } : {}) } },
+    where: { round: { seasonId, countsForChampionship: true, ...(onlyPublished ? { status: "COMPLETED" } : {}) } },
     include: {
       team: { select: { id: true, name: true } },
       carClass: { select: { id: true, name: true, shortCode: true, displayOrder: true } },
@@ -1222,7 +1226,7 @@ export async function computeTeamClassStandings(
         type: "POINTS_DEDUCTION",
         pointsValue: { gt: 0 },
         source: { not: "NO_RSVP_NO_SHOW" },
-        ...(onlyPublished ? { round: { status: "COMPLETED" } } : {}),
+        round: { countsForChampionship: true, ...(onlyPublished ? { status: "COMPLETED" } : {}) },
       },
       select: {
         roundId: true,

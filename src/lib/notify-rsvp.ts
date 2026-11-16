@@ -23,6 +23,7 @@ export type PostRsvpResult =
         | "already-notified"
         | "no-channel"
         | "round-not-upcoming"
+        | "not-scored"
         | "too-early";
     }
   | {
@@ -71,6 +72,8 @@ export async function postRsvpForRound(
   if (round.status !== "UPCOMING") {
     return { ok: false, reason: "round-not-upcoming" };
   }
+  // Not-scored round (pre-race / exhibition): nobody has to sign off.
+  if (!round.countsForChampionship) return { ok: false, reason: "not-scored" };
 
   const channelId = round.season.league.discordRsvpChannelId;
   if (!channelId) return { ok: false, reason: "no-channel" };

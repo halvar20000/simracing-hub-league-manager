@@ -22,6 +22,7 @@ export type NotifyResult =
         | "no-channel"
         | "no-cooldown"
         | "too-early"
+        | "not-scored"
         | "post-failed";
     };
 
@@ -37,6 +38,8 @@ export async function notifyReportingOpenForRound(
   });
   if (!round) return { ok: false, reason: "round-not-found" };
   if (round.reportingNotifiedAt) return { ok: false, reason: "already-notified" };
+  // Not-scored round (pre-race / exhibition): no protest window to announce.
+  if (!round.countsForChampionship) return { ok: false, reason: "not-scored" };
 
   const lg = round.season.league;
 

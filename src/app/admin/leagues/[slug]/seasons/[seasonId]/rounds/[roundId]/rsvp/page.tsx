@@ -24,6 +24,7 @@ const REASON_HINTS: Record<string, string> = {
   "already-notified": "Round was already notified (we use force=true here so this shouldn't appear).",
   "no-channel": "No Discord channel ID is configured on the league. Set it in Edit League.",
   "round-not-upcoming": "Round status is not UPCOMING — only upcoming rounds can be posted.",
+  "not-scored": "This round is marked as not scored (pre-race / exhibition) — no RSVP is posted for it.",
   "too-early": "Round is further out than the league's rsvpDaysBefore window.",
   "post-failed": "Discord rejected the post — see the details below.",
 };

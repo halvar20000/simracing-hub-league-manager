@@ -26,6 +26,7 @@ export type PostResultsResult =
         | "not-configured"
         | "round-not-found"
         | "no-results"
+        | "not-scored"
         | "post-failed";
     };
 
@@ -58,6 +59,7 @@ export async function postRoundResults(
   });
   if (!round) return { ok: false, reason: "round-not-found" };
   if (round.resultsPostedAt) return { ok: false, reason: "already-posted" };
+  if (!round.countsForChampionship) return { ok: false, reason: "not-scored" };
 
   const channelId = round.season.league.discordResultsChannelId;
   if (!channelId) return { ok: false, reason: "not-configured" };
