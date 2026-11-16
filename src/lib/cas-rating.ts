@@ -12,9 +12,10 @@
  *
  *   Performance = average race points of the last 10 races; missing races
  *   up to 10 count as 50.
- *   Attendance  = races driven (any counting league) + races streamed on the
- *   official CAS stream, newest 10; missing up to 10 count as half:
- *   50 % + 5 % per race, 100 % after 10 races.
+ *   Attendance  = from all races driven (any counting league) + races
+ *   streamed on the official CAS stream, ever: 100 % − 50 % × 0.2^(n/20)
+ *   (50 % at the start, 90 % after 20, 98 % after 40; every race adds a
+ *   little less, never a cap, never a drop).
  *
  * Pure module: no DB, no React. Data comes from src/lib/cas-rating-data.ts.
  */
@@ -28,6 +29,12 @@ export const CR_CLEAN_PER_INCIDENT = 4;
 export const CR_PENALTY_BY_LEVEL: Record<number, number> = { 1: 5, 2: 10, 3: 20 };
 export const CR_W_PERFORMANCE = 0.7;
 export const CR_W_ATTENDANCE = 0.3;
+/** Attendance curve (2026-11-16): 100 % − 50 % × 0.2^(races / 20) —
+ *  50 % at the start, 90 % after 20 races, ~100 % after 60. No cap. */
+export const CR_ATT_RACES_FOR_90 = 20;
+export function attendanceFor(races: number): number {
+  return 100 - 50 * Math.pow(0.2, Math.max(0, races) / CR_ATT_RACES_FOR_90);
+}
 
 /** One race held in a counting league. A two-race round is two races. */
 export type CrRace = {
@@ -110,7 +117,7 @@ export type CrRating = {
   /** Real races in the performance window (the rest are 50s). */
   windowRaces: CrRaceEntry[];
   adjustments: CrAdjustment[];
-  /** Races counting for attendance (driven + streamed), max 10. */
+  /** Races counting for attendance (driven + streamed), all of them. */
   attendanceRaces: number;
   drivenCount: number;
   /** Races streamed on the official CAS stream without driving them. */
@@ -203,17 +210,16 @@ export function buildCasRating(input: CrInput) {
     // Only what the driver DID counts (rule change 2026-11-16, Thomas +
     // Andreas): every race driven, in any counting league (Fun League and
     // fill-in drives included), and every race streamed on the official CAS
-    // stream. Missing a race changes nothing. The newest 10 count; missing
-    // races up to 10 count as half, so everybody starts at 50 % and reaches
-    // 100 % after 10 races.
+    // stream. Missing a race changes nothing. Every race closes part of the
+    // gap to 100 % (attendanceFor), so regulars stay ahead for years.
     const driven = new Set(entries.map((e) => e.race.key));
     const streamed = new Set(
       (streamsByUser.get(userId) ?? [])
         .filter((s) => (raceByKey.get(s.raceKey)?.at ?? asOf) <= asOf && !driven.has(s.raceKey))
         .map((s) => s.raceKey)
     );
-    const attendanceRaces = Math.min(CR_WINDOW, driven.size + streamed.size);
-    const attendance = (100 * (attendanceRaces + 0.5 * (CR_WINDOW - attendanceRaces))) / CR_WINDOW;
+    const attendanceRaces = driven.size + streamed.size;
+    const attendance = attendanceFor(attendanceRaces);
     const rating = Math.min(100, Math.max(0, CR_W_PERFORMANCE * performance + CR_W_ATTENDANCE * attendance));
 
     return {

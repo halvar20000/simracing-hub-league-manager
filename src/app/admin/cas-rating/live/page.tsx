@@ -255,9 +255,8 @@ export default async function CasRatingLivePage({
           <p className="text-zinc-400">
             {detail.drivenCount} Rennen gefahren
             {detail.streamedCount ? `, ${detail.streamedCount} im offiziellen CAS-Stream übertragen` : ""} →{" "}
-            {detail.attendanceRaces} von {CR_WINDOW} gezählt
-            {detail.attendanceRaces < CR_WINDOW ? ` (die übrigen ${CR_WINDOW - detail.attendanceRaces} zählen halb)` : ""} ={" "}
-            {fmt(detail.attendance)} %. Nicht gefahrene Rennen ändern nichts.
+            {detail.attendanceRaces} Rennen gezählt = {fmt(detail.attendance)} % (100 % − 50 % × 0,2
+            <sup>Rennen/20</sup>). Nicht gefahrene Rennen ändern nichts.
           </p>
         </section>
       )}

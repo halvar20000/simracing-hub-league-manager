@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.59.0",
+    date: "2026-11-16",
+    changes: [
+      "CAS Rating: attendance now counts all your races, not just the last 10. Everybody starts at 50 %; the first races add the most, each further one a little less — 78 % after 10 races, 90 % after 20, 98 % after 40, no upper limit. Missing a race still changes nothing. Rules page (German and English) updated with a table.",
+    ],
+  },
+  {
     version: "2.58.0",
     date: "2026-11-16",
     changes: [

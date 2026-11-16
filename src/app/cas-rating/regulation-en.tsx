@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExampleBlock, H2, H3, RatingLinks, RegulationLogo, num, td, th } from "./regulation-de";
+import { ATTENDANCE_STEPS, ExampleBlock, H2, H3, RatingLinks, RegulationLogo, num, td, th } from "./regulation-de";
 
 /** English version of the CAS Rating regulation (the German one is the original). */
 
@@ -92,8 +92,8 @@ export function RegulationEn() {
         <span className="text-[#ff6b35]">30 %</span> attendance
       </div>
       <p>
-        It is always calculated over the <b className={b}>last 10 races</b>. The result is rounded to
-        one decimal.
+        Performance is calculated over the <b className={b}>last 10 races</b>, attendance over{" "}
+        <b className={b}>all races driven</b>. The result is rounded to one decimal.
       </p>
 
       <H3>3.1 Points per race (max. 100)</H3>
@@ -135,8 +135,29 @@ export function RegulationEn() {
       <H3>3.3 Attendance</H3>
       <p>
         <b className={b}>Every race you drive counts</b> – in any league, the Fun League and fill-in
-        drives included. The last 10 count; missing ones up to 10 count as half. That means{" "}
-        <b className={b}>50 % plus 5 % per race</b>, 100 % after 10 races.
+        drives included. Everybody starts at 50 %, and every race closes part of the gap to 100 %:
+        the first races are worth the most, each further one a little less.{" "}
+        <b className={b}>After 20 races it is 90 %</b>; there is no cap. That way it stays visible
+        who has been racing with us for a long time.
+      </p>
+      <table className="w-full max-w-sm text-sm">
+        <thead>
+          <tr>
+            <th className={th}>Races in total</th>
+            <th className={`${th} ${num}`}>Attendance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ATTENDANCE_STEPS.map(([n, p]) => (
+            <tr key={n}>
+              <td className={td}>{n}</td>
+              <td className={`${td} ${num}`}>{p}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-xs text-zinc-500">
+        Formula: attendance = 100 % − 50 % × 0.2<sup>races / 20</sup>.
       </p>
       <p>
         <b className={b}>Not racing costs nothing.</b> A race you do not drive – declined or not –
@@ -153,8 +174,8 @@ export function RegulationEn() {
       <H3>3.4 Start</H3>
       <p>
         At the introduction <b className={b}>every driver starts at 50</b>: missing races up to 10
-        count as 50 points for performance and as half driven for attendance. Every real race
-        replaces one of them. So a single good race does not take you straight to the top – a win
+        count as 50 points for performance, every real race replaces one of them; attendance starts
+        at 50 %. So a single good race does not take you straight to the top – a win
         without incidents lifts performance from 50 to 55. Each league counts from the start of its
         next season; earlier results are not counted retroactively.
       </p>
@@ -199,21 +220,21 @@ export function RegulationEn() {
           <tr>
             <td className={td}>A drives all 12, solid</td>
             <td className={`${td} ${num}`}>70</td>
-            <td className={`${td} ${num}`}>100 %</td>
-            <td className={`${td} ${num} font-bold text-zinc-100`}>79.0</td>
+            <td className={`${td} ${num}`}>81 %</td>
+            <td className={`${td} ${num} font-bold text-zinc-100`}>73.3</td>
           </tr>
           <tr>
             <td className={td}>B drives only 5, just as solid (cannot make more)</td>
             <td className={`${td} ${num}`}>60</td>
-            <td className={`${td} ${num}`}>75 %</td>
-            <td className={`${td} ${num} font-bold text-zinc-100`}>64.5</td>
+            <td className={`${td} ${num}`}>67 %</td>
+            <td className={`${td} ${num} font-bold text-zinc-100`}>62.0</td>
           </tr>
         </tbody>
       </table>
       <p className="text-xs text-zinc-500">
         B loses nothing in the weeks he does not race. He has simply collected fewer races: his 5
-        missing races still count as 50 for performance and as half for attendance. Every further race
-        lets him catch up – after 10 races the same calculation applies to him as to A.
+        missing races still count as 50 for performance, and his attendance is only at 67 %. Every
+        further race lets him catch up.
       </p>
 
       <H2>6. Where to see it in CLS</H2>

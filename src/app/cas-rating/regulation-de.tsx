@@ -30,6 +30,16 @@ export const EXAMPLE_RACES: [string, string, string, string, string, string][] =
   ["16.09.", "SFL Cup · R1", "0,0", "24,0", "–", "24,0"],
 ];
 
+/** Attendance after n races (attendanceFor in src/lib/cas-rating.ts). */
+export const ATTENDANCE_STEPS: [number, string][] = [
+  [0, "50 %"],
+  [5, "67 %"],
+  [10, "78 %"],
+  [20, "90 %"],
+  [40, "98 %"],
+  [60, "≈ 100 %"],
+];
+
 const SPECIAL_CASES: [string, string, string][] = [
   ["DNF / DSQ", "0 Platzpunkte, Sauberkeit zählt", "gefahren"],
   ["DNS", "zählt nicht", "zählt nicht"],
@@ -176,7 +186,8 @@ export function RegulationDe() {
         <span className="text-[#ff6b35]">30 %</span> Teilnahme
       </div>
       <p>
-        Gerechnet wird immer über die <b className="text-zinc-100">letzten 10 Rennen</b>.
+        Die Leistung wird über die <b className="text-zinc-100">letzten 10 Rennen</b>{" "}
+        gerechnet, die Teilnahme über <b className="text-zinc-100">alle gefahrenen Rennen</b>.
         Das Ergebnis wird auf eine Nachkommastelle gerundet.
       </p>
 
@@ -221,9 +232,29 @@ export function RegulationDe() {
       <H3>3.3 Teilnahme</H3>
       <p>
         <b className="text-zinc-100">Jedes gefahrene Rennen zählt</b> – in jeder Liga, auch
-        in der Fun League und als Ersatzfahrer. Gezählt werden die letzten 10; fehlende bis
-        10 zählen halb. Das heißt: <b className="text-zinc-100">50 % plus 5 % pro Rennen</b>,
-        nach 10 Rennen 100 %.
+        in der Fun League und als Ersatzfahrer. Jeder startet bei 50 %, und jedes Rennen
+        schließt einen Teil der Lücke zu 100 %: Die ersten Rennen bringen am meisten, jedes
+        weitere etwas weniger. <b className="text-zinc-100">Nach 20 Rennen sind es 90 %</b>,
+        eine Obergrenze gibt es nicht. So bleibt sichtbar, wer über lange Zeit dabei ist.
+      </p>
+      <table className="w-full max-w-sm text-sm">
+        <thead>
+          <tr>
+            <th className={th}>Rennen insgesamt</th>
+            <th className={`${th} ${num}`}>Teilnahme</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ATTENDANCE_STEPS.map(([n, p]) => (
+            <tr key={n}>
+              <td className={td}>{n}</td>
+              <td className={`${td} ${num}`}>{p}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-xs text-zinc-500">
+        Formel: Teilnahme = 100 % − 50 % × 0,2<sup>Rennen / 20</sup>.
       </p>
       <p>
         <b className="text-zinc-100">Nicht fahren kostet nichts.</b> Ein Rennen, das man
@@ -241,8 +272,8 @@ export function RegulationDe() {
       <H3>3.4 Start</H3>
       <p>
         Beim Einführen beginnen <b className="text-zinc-100">alle Fahrer bei 50</b>:
-        Fehlende Rennen bis 10 zählen bei der Leistung mit 50 Punkten und bei der
-        Teilnahme als halb gefahren. Jedes echte Rennen ersetzt eines davon. Ein einzelnes
+        Fehlende Rennen bis 10 zählen bei der Leistung mit 50 Punkten, jedes echte Rennen
+        ersetzt eines davon; die Teilnahme beginnt bei 50 %. Ein einzelnes
         gutes Rennen bringt also nicht gleich an die Spitze – ein Sieg ohne Incidents hebt
         die Leistung von 50 auf 55. Gezählt wird ab dem Start der jeweils nächsten Saison
         jeder Liga; frühere Ergebnisse werden nicht rückwirkend gewertet.
@@ -288,22 +319,21 @@ export function RegulationDe() {
           <tr>
             <td className={td}>A fährt alle 12, solide</td>
             <td className={`${td} ${num}`}>70</td>
-            <td className={`${td} ${num}`}>100 %</td>
-            <td className={`${td} ${num} font-bold text-zinc-100`}>79,0</td>
+            <td className={`${td} ${num}`}>81 %</td>
+            <td className={`${td} ${num} font-bold text-zinc-100`}>73,3</td>
           </tr>
           <tr>
             <td className={td}>B fährt nur 5, genauso solide (kann nicht öfter)</td>
             <td className={`${td} ${num}`}>60</td>
-            <td className={`${td} ${num}`}>75 %</td>
-            <td className={`${td} ${num} font-bold text-zinc-100`}>64,5</td>
+            <td className={`${td} ${num}`}>67 %</td>
+            <td className={`${td} ${num} font-bold text-zinc-100`}>62,0</td>
           </tr>
         </tbody>
       </table>
       <p className="text-xs text-zinc-500">
         B verliert in den Wochen, in denen er nicht fährt, nichts. Er hat nur weniger Rennen
-        gesammelt: Bei der Leistung zählen seine 5 fehlenden Rennen noch mit 50, bei der
-        Teilnahme halb. Mit jedem weiteren Rennen holt er auf – nach 10 Rennen gilt für ihn
-        dieselbe Rechnung wie für A.
+        gesammelt: Bei der Leistung zählen seine 5 fehlenden Rennen noch mit 50, und seine
+        Teilnahme ist erst bei 67 %. Mit jedem weiteren Rennen holt er auf.
       </p>
 
       <H2>6. Einsicht im CLS</H2>
@@ -407,7 +437,7 @@ function LicenceCard({ lang }: { lang: CrLang }) {
         <div className="text-2xl font-extrabold text-white">Thomas Herbrig</div>
         <div className="mb-1 mt-2.5 inline-flex items-baseline gap-2.5 rounded-full border-[1.5px] border-[#ff6b35] px-4 py-1">
           <small className="text-xs font-bold tracking-widest text-[#ff6b35]">CR</small>
-          <b className="text-2xl tabular-nums text-white">{de ? "55,6" : "55.6"}</b>
+          <b className="text-2xl tabular-nums text-white">{de ? "55,4" : "55.4"}</b>
         </div>
         <div className="text-sm text-red-400">{de ? "▼ 2,0 seit letztem Rennen" : "▼ 2.0 since last race"}</div>
         <div className="mt-2.5 flex justify-center gap-4 text-xs text-zinc-400">
@@ -415,7 +445,7 @@ function LicenceCard({ lang }: { lang: CrLang }) {
             <b className="block text-base text-white">{de ? "36,5" : "36.5"}</b>{de ? "Leistung" : "Performance"}
           </div>
           <div>
-            <b className="block text-base text-white">100 %</b>{de ? "Teilnahme" : "Attendance"}
+            <b className="block text-base text-white">{de ? "99,5 %" : "99.5 %"}</b>{de ? "Teilnahme" : "Attendance"}
           </div>
           <div>
             <b className="block text-base text-white">58</b>{de ? "Rennen" : "Races"}

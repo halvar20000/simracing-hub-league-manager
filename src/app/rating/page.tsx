@@ -225,7 +225,7 @@ export default async function MyCasRatingPage({
 
       <section>
         <h2 className="mb-2 font-semibold text-zinc-100">{t.attendance}</h2>
-        <p>{t.attSummary(r.drivenCount, r.streamedCount, r.attendanceRaces, CR_WINDOW, f(r.attendance))}</p>
+        <p>{t.attSummary(r.drivenCount, r.streamedCount, r.attendanceRaces, f(r.attendance))}</p>
         <p className="mt-1 text-xs text-zinc-500">{t.attRule}</p>
       </section>
 
