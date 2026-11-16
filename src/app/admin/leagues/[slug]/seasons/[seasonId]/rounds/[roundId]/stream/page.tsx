@@ -9,6 +9,7 @@ import {
   refreshStreamEmbed,
 } from "@/lib/actions/stream-announcements";
 import { calendarStreamerOf, resolveStreamTwitchUrl } from "@/lib/stream-twitch-url";
+import { previousStream } from "@/lib/stream-post-timing";
 
 function toLocalInputValue(d: Date): string {
   // datetime-local input expects "YYYY-MM-DDTHH:mm" with no timezone.
@@ -52,6 +53,7 @@ export default async function AdminRoundStreamPage({
   const league = round.season.league;
   const calendarStreamer = await calendarStreamerOf(round);
   const autoTwitchUrl = await resolveStreamTwitchUrl(round, null);
+  const prevStream = await previousStream(round.startsAt, round.id);
   const defaultSchedule = a?.scheduledAt
     ? toLocalInputValue(a.scheduledAt)
     : toLocalInputValue(
@@ -129,7 +131,12 @@ export default async function AdminRoundStreamPage({
 
         <label className="block">
           <span className="mb-1 block text-sm text-zinc-300">
-            Post at — when the announcement is sent to Discord (your local time)
+            Post at — the LATEST moment the announcement is sent to Discord (your local time)
+          </span>
+          <span className="mb-1 block text-xs text-zinc-400">
+            {prevStream && (!a || prevStream.start > a.createdAt)
+              ? `Goes out automatically right after the previous CAS stream has ended: ${prevStream.leagueName} R${prevStream.roundNumber} ${prevStream.track}, ${prevStream.start.toLocaleString("de-DE", { timeZone: "Europe/Berlin", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} (Twitch offline, at the latest ${prevStream.latest.toLocaleString("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit" })}).`
+              : "No CAS stream between saving and this race - it goes out at this time."}
           </span>
           <input
             type="datetime-local"

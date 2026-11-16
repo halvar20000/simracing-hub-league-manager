@@ -23,6 +23,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-11-16",
     changes: [
       "Stream announcements: the Twitch link now follows the stream calendar — races Thomas streams link to twitch.tv/sim_racing_broadcast, races Andreas streams to twitch.tv/cas_sim_tv; the league's link is only the fallback for races still open. A link typed into an announcement still wins. The automatic race-video (VOD) linking looks in the same channel.",
+      "Stream announcements go to Discord right after the previous CAS stream (any league) has ended — checked every 10 minutes on Twitch (both channels offline), at the latest 4 h after that race's start (IEC 7 h) or at the announcement's own \"Post at\" time, whichever comes first.",
     ],
   },
   {

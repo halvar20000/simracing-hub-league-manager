@@ -227,6 +227,27 @@ export async function listChannelVideos(
 }
 
 /**
+ * Which of these channels are live right now (lowercase logins).
+ */
+export async function liveChannels(
+  logins: string[]
+): Promise<TwitchResult<string[]>> {
+  const params = new URLSearchParams();
+  for (const l of logins) params.append("user_login", l);
+  const res = await helix<{ data?: { user_login?: string; type?: string }[] }>(
+    "/streams",
+    params
+  );
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    data: (res.data.data ?? [])
+      .filter((s) => s.type === "live" && s.user_login)
+      .map((s) => s.user_login!.toLowerCase()),
+  };
+}
+
+/**
  * Extract a numeric Twitch VOD id from a pasted URL or a bare id.
  * Handles twitch.tv/videos/123456789, ?video=v123456789 and a raw "v123…".
  * Returns null if nothing usable is found.
