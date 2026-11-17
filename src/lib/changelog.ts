@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.64.1",
+    date: "2026-11-17",
+    changes: [
+      "The rest of the iRLM history is in CLS too: Porsche Community Cup seasons 1–3, TSS GT4 seasons 1–2, Combined Cup seasons 2–9 and GT3 WCT seasons 1–11 – 306 races and over 7,000 results, as archived seasons with the final standings as iRLM scored them.",
+      "264 drivers from those years now have a driver profile with their full career; they get linked to their account when they sign in with Discord.",
+    ],
+  },
+  {
     version: "2.64.0",
     date: "2026-11-17",
     changes: [
