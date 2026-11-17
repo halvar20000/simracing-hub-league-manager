@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.65.0",
+    date: "2026-11-17",
+    changes: [
+      "Next-race banner: a strip under the menu on every page shows the next race of any league – track, date, time and a countdown – and switches to LIVE while the race is running.",
+      "When the race is streamed, the banner shows the stream with its start time and a Twitch link (who streams it, from the stream calendar); it turns purple while the stream is live.",
+    ],
+  },
+  {
     version: "2.64.1",
     date: "2026-11-17",
     changes: [

@@ -6,6 +6,8 @@ import ContactFab from "@/components/ContactFab";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import MobileTabBar from "@/components/MobileTabBar";
 import { auth } from "@/auth";
+import { NextRaceBanner } from "@/components/NextRaceBanner";
+import { getNextRaceBanner } from "@/lib/next-race-banner";
 import "./globals.css";
 
 const inter = Inter({
@@ -70,7 +72,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const [session, nextRace] = await Promise.all([auth(), getNextRaceBanner()]);
   return (
     <html lang="en" className="dark">
       <body
@@ -78,6 +80,7 @@ export default async function RootLayout({
         style={{ fontFamily: "var(--font-inter), system-ui, sans-serif" }}
       >
         <Nav />
+        <NextRaceBanner data={nextRace} />
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
           {children}
         </main>
