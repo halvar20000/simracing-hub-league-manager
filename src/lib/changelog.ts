@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.66.0",
+    date: "2026-11-17",
+    changes: [
+      "Admin: new Lackierungen page — colours and logos of the CTP community liveries, build them on the livery server and see the previews.",
+    ],
+  },
+  {
     version: "2.65.3",
     date: "2026-11-17",
     changes: [
