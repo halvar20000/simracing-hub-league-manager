@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { notIrlmArchive } from "@/lib/irlm-archive";
 
 export type ClsDriverOption = {
   id: string;
@@ -12,7 +13,7 @@ export type ClsDriverOption = {
  *  planner's driver picker. Sorted by last then first name. */
 export async function getClsDrivers(): Promise<ClsDriverOption[]> {
   const users = await prisma.user.findMany({
-    where: { registrations: { some: {} } },
+    where: { registrations: { some: notIrlmArchive } },
     select: {
       id: true,
       firstName: true,

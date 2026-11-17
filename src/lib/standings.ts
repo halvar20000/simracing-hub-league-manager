@@ -7,6 +7,7 @@ import type { PrismaClient } from "@prisma/client";
 import { loadGuestLookup, neutraliseGuestResult } from "@/lib/proam-guest";
 import { readDriverFprTiers, fprPointsForIncidents } from "@/lib/driver-fpr";
 import { isPerRacePenaltySeason } from "@/lib/penalty-application";
+import { isIrlmArchiveSeason, loadIrlmArchiveTeams } from "@/lib/irlm-archive";
 import { penaltiesScoreToTeam } from "@/lib/team-penalty-attribution";
 
 export interface RoundPoints {
@@ -732,6 +733,23 @@ export async function computeTeamStandings(
     include: { teams: true, scoringSystem: true, league: { select: { slug: true } } },
   });
   if (!season || season.teamScoringMode === "NONE") return [];
+
+  // iRLM archive season: the frozen iRLM team standing (irlm-archive.ts).
+  if (isIrlmArchiveSeason(seasonId)) {
+    const frozen = await loadIrlmArchiveTeams(prisma, seasonId);
+    if (frozen) {
+      const idOf = new Map(season.teams.map((t) => [t.name, t.id]));
+      return frozen.map((t) => ({
+        teamId: idOf.get(t.name) ?? `irlm:${t.name}`,
+        teamName: t.name,
+        totalPoints: t.points,
+        scoringPoints: t.points,
+        fprPoints: 0,
+        bestN: season.teamScoringBestN ?? 0,
+        driversCount: t.drivers,
+      }));
+    }
+  }
 
   // Per-race penalty mode: incident penalties reduce the driver's round
   // contribution BEFORE best-N selection, so a penalty can change which

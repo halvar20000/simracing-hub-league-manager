@@ -24,6 +24,7 @@ import {
 } from "@/lib/standings";
 import { leagueHasTeamCompetition } from "@/lib/team-visibility";
 import { HOF_LEGACY, type HofEntry, type HofStanding } from "@/lib/hall-of-fame-legacy";
+import { IRLM_ARCHIVE_PREFIX } from "@/lib/irlm-archive";
 
 export type { HofEntry, HofStanding };
 
@@ -104,7 +105,10 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
 async function clsSeasons(): Promise<HofSeason[]> {
   const seasons = await prisma.season.findMany({
-    where: { status: "COMPLETED" },
+    // iRLM archive seasons are covered by the legacy snapshot (it also has
+    // standings CLS cannot model, e.g. SFL Silver Class); they only lend it
+    // their standings link, see buildHallOfFame.
+    where: { status: "COMPLETED", id: { not: { startsWith: IRLM_ARCHIVE_PREFIX } } },
     select: {
       id: true,
       name: true,
@@ -215,12 +219,20 @@ const nameKey = (n: string) =>
     .trim();
 
 async function buildHallOfFame(): Promise<HallOfFame> {
-  const [leagueRows, cls] = await Promise.all([
+  const [leagueRows, cls, archive] = await Promise.all([
     prisma.league.findMany({ select: { slug: true, name: true, logoUrl: true } }),
     clsSeasons(),
+    prisma.season.findMany({
+      where: { id: { startsWith: IRLM_ARCHIVE_PREFIX } },
+      select: { id: true, name: true, league: { select: { slug: true } } },
+    }),
   ]);
+  // Legacy seasons imported into CLS link to their CLS standings.
+  const archiveHref = new Map(
+    archive.map((a) => [`${a.league.slug}|${a.name}`, `/leagues/${a.league.slug}/seasons/${a.id}/standings`]),
+  );
   const all: HofSeason[] = [
-    ...HOF_LEGACY.map((s) => ({ ...s, href: null })),
+    ...HOF_LEGACY.map((s) => ({ ...s, href: archiveHref.get(`${s.leagueSlug}|${s.seasonName}`) ?? null })),
     ...cls,
   ].sort((a, b) => b.endedOn.localeCompare(a.endedOn));
 
@@ -310,7 +322,7 @@ async function buildHallOfFame(): Promise<HallOfFame> {
   };
 }
 
-export const getHallOfFame = unstable_cache(buildHallOfFame, ["hall-of-fame-v2"], { revalidate: 3600 });
+export const getHallOfFame = unstable_cache(buildHallOfFame, ["hall-of-fame-v3"], { revalidate: 3600 });
 
 /** Titles of one driver (by iRacing id) for the driver profile; null when none. */
 export async function getDriverTitles(iracingId: string): Promise<HofDriverTally | null> {

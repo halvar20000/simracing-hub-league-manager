@@ -2,6 +2,7 @@ import type {
   PrismaClient,
   FinishStatus,
 } from "@prisma/client";
+import { IRLM_ARCHIVE_ROUND_PREFIX } from "@/lib/irlm-archive";
 
 export interface PointsTable {
   [position: string]: number;
@@ -435,6 +436,9 @@ export async function recomputeRoundScoring(
   prisma: PrismaClient,
   roundId: string
 ): Promise<void> {
+  // iRLM archive rounds keep the points iRLM scored (irlm-archive.ts): the
+  // archive scoring system has no points table, a recompute would zero them.
+  if (roundId.startsWith(IRLM_ARCHIVE_ROUND_PREFIX)) return;
   await recomputeClassificationPointsForRound(prisma, roundId);
   await recomputeParticipationForRound(prisma, roundId);
   await recomputeDsqForfeitForRound(prisma, roundId);

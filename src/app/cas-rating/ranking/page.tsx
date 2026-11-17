@@ -9,6 +9,7 @@ import { fmtCr } from "@/components/CasRatingCard";
 import CrLangSwitch from "@/components/CrLangSwitch";
 import { getCrLang } from "@/lib/i18n/cas-rating-lang";
 import { crHref } from "@/lib/i18n/cas-rating";
+import { notIrlmArchive } from "@/lib/irlm-archive";
 
 /**
  * Public CAS Rating ranking: every driver who has ever been approved in a CAS
@@ -36,7 +37,7 @@ export default async function CasRatingRankingPage({
     auth(),
     getCasRatingCached(prisma),
     prisma.user.findMany({
-      where: { registrations: { some: { status: "APPROVED", isTeamManager: false } } },
+      where: { registrations: { some: { status: "APPROVED", isTeamManager: false, ...notIrlmArchive } } },
       select: { id: true, name: true, firstName: true, lastName: true, image: true },
     }),
     getCrLang(langParam),

@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.64.0",
+    date: "2026-11-17",
+    changes: [
+      "SFL Cup history is complete: seasons 1 to 6 from the old iRLM league manager are now in CLS as archived seasons, with every race, result and the final standings exactly as iRLM scored them.",
+      "Driver profiles and statistics now include those races. The Hall of Fame links the old seasons to their standings.",
+    ],
+  },
+  {
     version: "2.63.0",
     date: "2026-11-16",
     changes: [
