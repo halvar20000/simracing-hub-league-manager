@@ -30,7 +30,9 @@ export type NextRaceBannerData = {
   /** Real instants (ISO) for the client countdown / live switch. */
   startIso: string;
   endIso: string;
-  stream: { url: string; streamer: string | null; atLabel: string; atIso: string } | null;
+  /** atLabel/atIso only when a stream announcement sets "Stream goes live at":
+   *  the race start is not the stream start (GT3 WCT: race 18:00, stream 19:00). */
+  stream: { url: string; streamer: string | null; atLabel: string | null; atIso: string | null } | null;
 };
 
 const DEFAULT_RACE_MINUTES = 120;
@@ -84,12 +86,12 @@ async function load(): Promise<NextRaceBannerData | null> {
   if (ann || isCalendarStreamer) {
     const url = await resolveStreamTwitchUrl(r, ann?.twitchUrl);
     if (url) {
-      const at = ann?.streamAt ?? r.startsAt;
+      const at = ann?.streamAt ?? null;
       stream = {
         url,
         streamer: isCalendarStreamer ? streamer : null,
-        atLabel: timeLabel(at),
-        atIso: reinterpretLocalAsZone(at, LEAGUE_TIME_ZONE).toISOString(),
+        atLabel: at ? timeLabel(at) : null,
+        atIso: at ? reinterpretLocalAsZone(at, LEAGUE_TIME_ZONE).toISOString() : null,
       };
     }
   }
@@ -110,6 +112,6 @@ async function load(): Promise<NextRaceBannerData | null> {
 
 export const getNextRaceBanner = unstable_cache(
   () => load().catch(() => null),
-  ["next-race-banner-v1"],
+  ["next-race-banner-v2"],
   { revalidate: 60 },
 );

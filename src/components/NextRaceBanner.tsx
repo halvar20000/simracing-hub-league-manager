@@ -29,7 +29,7 @@ export function NextRaceBanner({ data }: { data: NextRaceBannerData | null }) {
   const start = Date.parse(data.startIso);
   const end = Date.parse(data.endIso);
   const live = now != null && now >= start && now < end;
-  const streamLive = !!data.stream && now != null && now >= Date.parse(data.stream.atIso) && now < end;
+  const streamLive = !!data.stream && now != null && now >= Date.parse(data.stream.atIso ?? data.startIso) && now < end;
 
   return (
     <div className="border-b border-zinc-800 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950">
@@ -73,7 +73,7 @@ export function NextRaceBanner({ data }: { data: NextRaceBannerData | null }) {
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden>
               <path d="M4.3 2 3 5.4v13.8h4.7V22h2.6l2.6-2.8h3.9l5.2-5.2V2H4.3Zm15.6 11.2-3 3h-4.7l-2.6 2.6v-2.6H5.6V3.8h14.3v9.4ZM16.9 7v5.2h-1.8V7h1.8Zm-4.8 0v5.2h-1.8V7h1.8Z" />
             </svg>
-            {streamLive ? "Live on Twitch now" : `Live stream ${data.stream.atLabel}`}
+            {streamLive ? "Live on Twitch now" : data.stream.atLabel ? `Live stream ${data.stream.atLabel}` : "Live stream"}
             {data.stream.streamer && <span className="font-normal opacity-80">· {data.stream.streamer}</span>}
           </a>
         )}

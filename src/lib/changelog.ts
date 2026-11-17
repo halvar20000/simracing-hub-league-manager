@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.65.2",
+    date: "2026-11-17",
+    changes: [
+      "Next-race banner: the stream time comes only from the stream announcement (\"Stream goes live at\"); without one the banner says \"Live stream\" without a time instead of showing the race start.",
+    ],
+  },
+  {
     version: "2.65.1",
     date: "2026-11-17",
     changes: ["Next-race banner: no more doubled round label (\"R9 · Round 9\")."],
