@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.65.3",
+    date: "2026-11-17",
+    changes: [
+      "Streams: replays of finished, archived seasons are listed again — the Porsche Cup (4th + 5th Season) and the older GT3 WCT and IEC streams were missing.",
+    ],
+  },
+  {
     version: "2.65.2",
     date: "2026-11-17",
     changes: [

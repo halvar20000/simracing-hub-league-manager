@@ -6,11 +6,11 @@
  *
  *   LIVE surfaces hide it   — home page, the season grid and active-season
  *                             hero on a league page, /rosters, /calendar and
- *                             the ICS feed, /streams, /reporting, the overlay
+ *                             the ICS feed, /reporting, the overlay
  *                             API, and every Discord cron. New registrations
  *                             are refused.
  *   HISTORY surfaces keep it — Hall of Fame, driver career profiles, /teams,
- *                             /incidents. A champion stays a champion and a
+ *                             /incidents, /streams (replays). A champion stays a champion and a
  *                             driver keeps the races he drove.
  *   DIRECT URLs keep working — standings, roster and round pages of an
  *                             archived season still open, so links already

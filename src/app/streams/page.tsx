@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { pageMetadata } from "@/lib/og";
 import { formatDateTime } from "@/lib/date";
 import { twitchVideoUrl } from "@/lib/twitch";
-import { liveSeasonWhere } from "@/lib/season-visibility";
 
 export const metadata: Metadata = pageMetadata({
   title: "Race Streams",
@@ -25,13 +24,14 @@ export default async function StreamsPage({
 }) {
   const { league: leagueParam } = await searchParams;
 
-  // All published rounds that have a linked stream video, across visible
-  // (non-archived) leagues, newest race first.
+  // All published rounds that have a linked stream video, newest race first.
+  // A replay is history: archived SEASONS stay in (their VODs are the whole
+  // point of this page), only archived leagues drop out.
   const rounds = await prisma.round.findMany({
     where: {
       status: "COMPLETED",
       OR: [{ youtubeVideoId: { not: null } }, { twitchVideoId: { not: null } }],
-      season: liveSeasonWhere,
+      season: { league: { isArchived: false } },
     },
     select: {
       id: true,
