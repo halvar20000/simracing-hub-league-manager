@@ -99,7 +99,7 @@ async function load(): Promise<NextRaceBannerData | null> {
     href: `/leagues/${league.slug}/seasons/${r.seasonId}/rounds/${r.id}`,
     leagueName: league.name,
     leagueLogoUrl: league.logoUrl,
-    roundLabel: `R${r.roundNumber}${name && name !== r.track ? ` · ${name}` : ""}`,
+    roundLabel: `R${r.roundNumber}${name && name !== r.track && !/^(round|r)\s*\d+$/i.test(name) ? ` · ${name}` : ""}`,
     track: `${r.track}${r.trackConfig ? ` (${r.trackConfig})` : ""}`,
     whenLabel: wallLabel(r.startsAt),
     startIso: start.toISOString(),

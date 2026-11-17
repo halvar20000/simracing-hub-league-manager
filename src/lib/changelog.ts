@@ -19,6 +19,11 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.65.1",
+    date: "2026-11-17",
+    changes: ["Next-race banner: no more doubled round label (\"R9 · Round 9\")."],
+  },
+  {
     version: "2.65.0",
     date: "2026-11-17",
     changes: [
