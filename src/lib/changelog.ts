@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.67.0",
+    date: "2026-11-20",
+    changes: [
+      "Streams: new public Stream Calendar (/streams/calendar) — which upcoming race is streamed live and on which Twitch channel, read-only, no login needed.",
+      "Stream Calendar for other websites: /embed/stream-calendar is the same calendar as a plain page for an iframe (?theme=light for a light background).",
+    ],
+  },
+  {
     version: "2.66.0",
     date: "2026-11-17",
     changes: [

@@ -1,14 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { prisma } from "@/lib/prisma";
-import { liveSeasonWhere } from "@/lib/season-visibility";
+import { loadStreamCalendar } from "@/lib/stream-calendar-data";
 import { StreamerSelect } from "@/components/StreamerSelect";
 import {
-  STREAM_KEY_PREFIX,
   STREAM_LEAGUES,
   STREAMERS,
-  buildStreamCalendar,
   type StreamRace,
   type StreamWeek,
 } from "@/lib/stream-calendar";
@@ -27,46 +24,7 @@ function dayLabel(date: string): string {
 export default async function AdminStreamCalendarPage() {
   await requireAdmin();
 
-  const [rows, settings] = await Promise.all([
-    prisma.round.findMany({
-      where: {
-        season: {
-          ...liveSeasonWhere,
-          status: { not: "COMPLETED" },
-          league: {
-            ...liveSeasonWhere.league,
-            slug: { in: STREAM_LEAGUES.map((l) => l.slug) },
-          },
-        },
-      },
-      select: {
-        id: true,
-        seasonId: true,
-        roundNumber: true,
-        name: true,
-        track: true,
-        startsAt: true,
-        season: { select: { league: { select: { slug: true } } } },
-      },
-    }),
-    prisma.appSetting.findMany({
-      where: { key: { startsWith: STREAM_KEY_PREFIX } },
-      select: { key: true, value: true },
-    }),
-  ]);
-
-  const calendar = buildStreamCalendar(
-    rows.map((r) => ({
-      id: r.id,
-      seasonId: r.seasonId,
-      leagueSlug: r.season.league.slug,
-      roundNumber: r.roundNumber,
-      name: r.name,
-      track: r.track,
-      startsAt: r.startsAt,
-    })),
-    new Map(settings.map((s) => [s.key, s.value]))
-  );
+  const calendar = await loadStreamCalendar();
 
   return (
     <div className="space-y-6">
@@ -74,7 +32,11 @@ export default async function AdminStreamCalendarPage() {
         <h1 className="text-2xl font-bold">Stream calendar</h1>
         <p className="mt-1 text-sm text-zinc-400">
           Who streams which race. A change in a dropdown is saved immediately
-          and the counts update. Only admins can see this page.
+          and the counts update. Read-only for everyone:{" "}
+          <Link href="/streams/calendar" className="underline hover:text-zinc-200">
+            /streams/calendar
+          </Link>{" "}
+          (iframe: /embed/stream-calendar).
         </p>
       </div>
 

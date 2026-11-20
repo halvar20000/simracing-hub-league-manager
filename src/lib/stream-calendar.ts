@@ -1,6 +1,8 @@
 /**
  * Stream calendar: who streams which league race (admin page
- * /admin/stream-calendar). Thomas and Andreas share the broadcasts.
+ * /admin/stream-calendar, read-only public page /streams/calendar and the
+ * iframe version /embed/stream-calendar). Thomas and Andreas share the
+ * broadcasts.
  *
  * Storage: `AppSetting`, one row per race, so a change is a single atomic
  * upsert and no schema change is needed:
@@ -140,6 +142,8 @@ export type StreamRace = {
   streamer: string;
   planned: boolean;
   href: string | null;
+  /** The public round page (null for a race not in CLS yet). */
+  publicHref: string | null;
 };
 
 export type StreamWeek = {
@@ -241,6 +245,7 @@ export function buildStreamCalendar(
         STREAM_OPEN,
       planned: false,
       href: `/admin/leagues/${r.leagueSlug}/seasons/${r.seasonId}/rounds/${r.id}`,
+      publicHref: `/leagues/${r.leagueSlug}/seasons/${r.seasonId}/rounds/${r.id}`,
     });
   }
 
@@ -256,6 +261,7 @@ export function buildStreamCalendar(
       streamer: overrides.get(key) ?? streamer,
       planned: true,
       href: null,
+      publicHref: null,
     });
   }
 
@@ -318,4 +324,12 @@ export function buildStreamCalendar(
     openCount: races.filter((r) => r.streamer === STREAM_OPEN).length,
     raceCount: races.length,
   };
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Wed 18.11." for a YYYY-MM-DD date. */
+export function streamDayLabel(date: string): string {
+  const [, month, day] = date.split("-");
+  return `${WEEKDAYS[asUtc(date).getUTCDay()]} ${day}.${month}.`;
 }

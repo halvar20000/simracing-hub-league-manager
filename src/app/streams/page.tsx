@@ -75,7 +75,12 @@ export default async function StreamsPage({
         <p className="mt-1 text-sm text-zinc-400">
           {visible.length} stream{visible.length === 1 ? "" : "s"}
           {selectedSlug ? ` · ${leagueChips.get(selectedSlug)}` : ""} · newest
-          first. Each opens the full replay on YouTube or Twitch.
+          first. Each opens the full replay on YouTube or Twitch. Upcoming
+          live streams:{" "}
+          <Link href="/streams/calendar" className="underline hover:text-zinc-200">
+            Stream Calendar
+          </Link>
+          .
         </p>
       </div>
 
