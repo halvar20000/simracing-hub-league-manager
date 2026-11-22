@@ -1166,6 +1166,13 @@ function RosterExportButtons({
         Download CSV
       </a>
       <a
+        href={`/admin/leagues/${slug}/seasons/${seasonId}/roster/export?format=xlsx`}
+        className="rounded border border-emerald-700/60 bg-emerald-900/40 px-3 py-1.5 text-sm text-emerald-100 hover:bg-emerald-800/50"
+        title="Excel file (.xlsx) — opens directly in Excel, Numbers or Google Sheets."
+      >
+        Download Excel
+      </a>
+      <a
         href={`/admin/leagues/${slug}/seasons/${seasonId}/roster/print`}
         target="_blank"
         rel="noopener noreferrer"

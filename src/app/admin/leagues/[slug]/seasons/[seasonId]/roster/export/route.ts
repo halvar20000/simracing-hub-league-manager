@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getUserLiveIratingForLeague } from "@/lib/league-irating-category";
@@ -36,9 +37,12 @@ function adminCheck(v: "YES" | "NO" | "PENDING" | "FREE" | null | undefined): st
  *
  * Excel-friendly tweaks: UTF-8 BOM at the start so umlauts / accents
  * render correctly when Excel opens the file directly.
+ *
+ * `?format=xlsx` returns the same table as a real Excel file (bold frozen
+ * header, autofilter, column widths) — no CSV import step needed.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ slug: string; seasonId: string }> }
 ) {
   await requireAdmin();
@@ -98,9 +102,16 @@ export async function GET(
     return (a.user.lastName ?? "").localeCompare(b.user.lastName ?? "");
   });
 
+  // Team column whenever anyone has a team (solo leagues like GT3 WCT have
+  // teams too, not only team-registration seasons); Fee when the league
+  // charges one.
+  const showTeam =
+    season.teamRegistration || registrations.some((r) => r.team || r.extraTeams.length > 0);
+  const showFee = !!season.league.registrationFee && season.league.registrationFee > 0;
+
   // Header row.
   const cols: string[] = [];
-  if (season.teamRegistration) cols.push("Team");
+  if (showTeam) cols.push("Team");
   cols.push(
     "Start #",
     "First name",
@@ -114,18 +125,18 @@ export async function GET(
   cols.push(
     "Car",
     "Email",
+    ...(showFee ? ["Fee"] : []),
     "iRacing invitation sent",
     "iRacing invitation accepted",
     "Status"
   );
 
-  const rows: string[] = [];
-  rows.push(cols.map(csvCell).join(","));
+  const table: (string | number | null)[][] = [];
 
   for (const r of registrations) {
     const row: (string | number | null)[] = [];
     // Home team first, then any extra teams (TeamMembership).
-    if (season.teamRegistration)
+    if (showTeam)
       row.push(
         [r.team?.name, ...r.extraTeams.map((m) => m.team.name)]
           .filter(Boolean)
@@ -144,17 +155,63 @@ export async function GET(
     row.push(
       r.car?.name ?? "",
       r.user.email ?? "",
+      ...(showFee
+        ? [r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "FREE" ? "Free" : "Not paid"]
+        : []),
       adminCheck(r.iracingInvitationSent),
       adminCheck(r.iracingInvitationAccepted),
       r.status
     );
-    rows.push(row.map(csvCell).join(","));
+    table.push(row);
   }
+
+  const baseName = `roster-${slug}-${season.name.replace(/\s+/g, "-")}-${season.year}`;
+
+  if (new URL(req.url).searchParams.get("format") === "xlsx") {
+    // iRating as a number so Excel can sort/filter it; everything else as
+    // text (start numbers keep their leading zeros, iRacing IDs stay exact).
+    const iRatingCol = cols.indexOf("iRating");
+    const aoa = [
+      cols,
+      ...table.map((row) =>
+        row.map((v, i) =>
+          i === iRatingCol && v !== "" && v != null && !Number.isNaN(Number(v))
+            ? Number(v)
+            : v == null ? "" : String(v)
+        )
+      ),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = cols.map((c, i) => ({
+      wch: Math.min(
+        40,
+        Math.max(c.length, ...aoa.slice(1).map((r) => String(r[i] ?? "").length)) + 2
+      ),
+    }));
+    ws["!autofilter"] = {
+      ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: cols.length - 1 } }),
+    };
+    // Freeze the header row.
+    ws["!views"] = [{ state: "frozen", ySplit: 1 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Roster");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    return new NextResponse(new Uint8Array(buf), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${baseName}.xlsx"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  const rows = [cols, ...table].map((row) => row.map(csvCell).join(","));
 
   // Prepend UTF-8 BOM so Excel auto-detects encoding and renders
   // umlauts (ü, ö, ä, ß) and accents correctly.
   const body = "﻿" + rows.join("\r\n");
-  const fileName = `roster-${slug}-${season.name.replace(/\s+/g, "-")}-${season.year}.csv`;
+  const fileName = `${baseName}.csv`;
 
   return new NextResponse(body, {
     status: 200,

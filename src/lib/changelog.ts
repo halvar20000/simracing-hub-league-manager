@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.69.0",
+    date: "2026-11-22",
+    changes: [
+      "Admin roster: new \"Download Excel\" button — the roster as a real .xlsx file (header row frozen, filters on, columns sized), no more converting the CSV.",
+      "Roster export (Excel and CSV): now includes the Team column in solo leagues with teams (GT3 WCT) and a Fee column (Paid / Not paid / Free) where the league charges a fee.",
+    ],
+  },
+  {
     version: "2.68.1",
     date: "2026-11-22",
     changes: [
