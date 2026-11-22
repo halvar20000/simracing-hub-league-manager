@@ -73,6 +73,7 @@ export default async function ManageTeamPage({
       extraMembers: {
         include: {
           carClass: true,
+          car: true,
           registration: { include: { user: true, carClass: true, car: true } },
         },
         orderBy: { createdAt: "asc" },

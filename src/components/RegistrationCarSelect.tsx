@@ -6,14 +6,18 @@ export default function RegistrationCarSelect({
   registrationId,
   currentCarId,
   cars,
+  teamId,
 }: {
   registrationId: string;
+  /** Set for a row of an EXTRA team: the car is saved for that team only. */
+  teamId?: string;
   currentCarId: string | null;
   cars: { id: string; name: string }[];
 }) {
   return (
     <form action={updateRegistrationCar}>
       <input type="hidden" name="registrationId" value={registrationId} />
+      {teamId && <input type="hidden" name="teamId" value={teamId} />}
       <select
         key={currentCarId ?? "none"}
         name="carId"

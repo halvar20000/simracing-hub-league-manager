@@ -19,10 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.69.1",
+    date: "2026-11-22",
+    changes: [
+      "IEC multi-team drivers: the car is now stored per team. A driver entered with a second team showed his home team's car in that team's row (e.g. a Mercedes in a Porsche Cup crew); the roster now shows the car of the team he drives for there, and changing it no longer changes his home team's car.",
+    ],
+  },
+  {
     version: "2.69.0",
     date: "2026-11-22",
     changes: [
-      "Admin roster: new \"Download Excel\" button — the roster as a real .xlsx file (header row frozen, filters on, columns sized), no more converting the CSV.",
+      "Admin roster: new \"Download Excel\" button — the roster as a real .xlsx file (filters on, columns sized), no more converting the CSV.",
       "Roster export (Excel and CSV): now includes the Team column in solo leagues with teams (GT3 WCT) and a Fee column (Paid / Not paid / Free) where the league charges a fee.",
     ],
   },

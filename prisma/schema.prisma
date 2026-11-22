@@ -522,6 +522,10 @@ model TeamMembership {
   registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
   carClassId     String?
   carClass       CarClass?    @relation(fields: [carClassId], references: [id], onDelete: SetNull)
+  /// The car the driver runs FOR THIS TEAM (Registration.carId is the home
+  /// team's car). Null on rows from before v2.69.1 that had no car set.
+  carId          String?
+  car            Car?         @relation(fields: [carId], references: [id], onDelete: SetNull)
   createdAt      DateTime     @default(now())
 
   @@unique([teamId, registrationId])
@@ -1138,6 +1142,7 @@ model Car {
   iracingCarId Int?
   displayOrder Int     @default(0)
 
+  teamMemberships TeamMembership[]
   registrations Registration[]
   raceResults   RaceResult[]
   teamResults   TeamResult[]

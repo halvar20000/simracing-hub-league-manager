@@ -1012,6 +1012,7 @@ export async function createTeamRegistration(
       userId: leader!.id,
       teamId: team.id,
       carClassId,
+      carId: carId || null,
     }));
   if (!skipOwnRegistration && !ownEnteredAsExtra) {
     await prisma.registration.upsert({
@@ -1122,6 +1123,7 @@ export async function createTeamRegistration(
         userId: mate.id,
         teamId: team.id,
         carClassId,
+        carId: carId || null,
       })
     ) {
       teammateNames.push(`${mate.firstName ?? ""} ${mate.lastName ?? ""}`.trim());
@@ -1495,6 +1497,7 @@ export async function updateTeamRegistration(formData: FormData) {
         userId: mate.id,
         teamId: team.id,
         carClassId: baseReg?.carClassId ?? null,
+        carId: baseReg?.carId ?? null,
       })
     ) {
       // nothing else to write — his registration stays with his home team
@@ -1787,7 +1790,7 @@ export async function updateTeamClassCar(formData: FormData) {
   // the registration; their class for THIS team lives on the membership.
   await prisma.teamMembership.updateMany({
     where: { teamId: team.id },
-    data: { carClassId },
+    data: { carClassId, carId },
   });
 
   await notifyTeamChange({

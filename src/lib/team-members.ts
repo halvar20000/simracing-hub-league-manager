@@ -38,6 +38,7 @@ export const extraTeamsInclude = {
     select: {
       teamId: true,
       carClassId: true,
+      carId: true,
       team: { select: { id: true, name: true } },
     },
   },
@@ -82,13 +83,21 @@ export function classInTeam(
  * it as an extra team, the latter carrying THIS team's car class. Pages load
  * `registrations` and `extraMembers: { include: { registration, carClass } }`
  * with the same filters and merge them here. Each extra row is tagged
- * `isExtraMember: true` so a page can mark it.
+ * `isExtraMember: true` so a page can mark it. The car is THIS team's car
+ * too (TeamMembership.carId, v2.69.1) — before that the home team's car was
+ * shown in the extra team's row (a Porsche Cup crew "driving" a Mercedes).
  */
 export function mergeExtraMembers<
   R extends { id: string; carClassId: string | null },
 >(
   registrations: R[],
-  extras: { carClassId: string | null; carClass?: unknown; registration: R }[]
+  extras: {
+    carClassId: string | null;
+    carClass?: unknown;
+    carId?: string | null;
+    car?: unknown;
+    registration: R;
+  }[]
 ): (R & { isExtraMember?: boolean })[] {
   const out: (R & { isExtraMember?: boolean })[] = [...registrations];
   for (const m of extras) {
@@ -100,6 +109,12 @@ export function mergeExtraMembers<
     } as R & { isExtraMember?: boolean };
     if ("carClass" in m.registration && m.carClass !== undefined) {
       (row as Record<string, unknown>).carClass = m.carClass;
+    }
+    if ("carId" in m.registration && m.carId !== undefined) {
+      (row as Record<string, unknown>).carId = m.carId;
+    }
+    if ("car" in m.registration && m.car !== undefined) {
+      (row as Record<string, unknown>).car = m.car;
     }
     out.push(row);
   }

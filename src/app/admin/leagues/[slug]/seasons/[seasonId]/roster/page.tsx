@@ -120,6 +120,7 @@ export default async function RosterPage({
           where: { registration: { isTeamManager: false, status: { not: "WITHDRAWN" } } },
           include: {
             carClass: true,
+            car: true,
             registration: { include: { user: true, carClass: true, car: true } },
           },
           orderBy: { createdAt: "asc" },
@@ -376,6 +377,7 @@ export default async function RosterPage({
                           registrationId={reg.id}
                           currentCarId={reg.carId}
                           cars={seasonCars}
+                          teamId={reg.isExtraMember ? team.id : undefined}
                         />
                       </td>
                       <td className="px-2 py-3 text-zinc-400 whitespace-nowrap tabular-nums">

@@ -30,6 +30,8 @@ export async function enterAsExtraTeamIfElsewhere(
     userId: string;
     teamId: string;
     carClassId: string | null;
+    /** The car for THIS team; undefined = leave an existing row's car alone. */
+    carId?: string | null;
   }
 ): Promise<boolean> {
   const reg = await db.registration.findUnique({
@@ -48,11 +50,15 @@ export async function enterAsExtraTeamIfElsewhere(
   }
   await db.teamMembership.upsert({
     where: { teamId_registrationId: { teamId: input.teamId, registrationId: reg.id } },
-    update: { carClassId: input.carClassId },
+    update: {
+      carClassId: input.carClassId,
+      ...(input.carId !== undefined ? { carId: input.carId } : {}),
+    },
     create: {
       teamId: input.teamId,
       registrationId: reg.id,
       carClassId: input.carClassId,
+      carId: input.carId ?? null,
     },
   });
   return true;
@@ -75,7 +81,7 @@ export async function leaveTeam(
       teamId: true,
       extraTeams: {
         orderBy: { createdAt: "asc" },
-        select: { id: true, teamId: true, carClassId: true },
+        select: { id: true, teamId: true, carClassId: true, carId: true },
       },
     },
   });
@@ -90,7 +96,11 @@ export async function leaveTeam(
   if (next) {
     await db.registration.update({
       where: { id: registrationId },
-      data: { teamId: next.teamId, carClassId: next.carClassId },
+      data: {
+        teamId: next.teamId,
+        carClassId: next.carClassId,
+        ...(next.carId ? { carId: next.carId } : {}),
+      },
     });
     await db.teamMembership.delete({ where: { id: next.id } });
     return "promoted";

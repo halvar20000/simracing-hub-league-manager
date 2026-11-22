@@ -80,6 +80,7 @@ export default async function PublicSeasonRoster({
           where: { registration: { status: { in: ["APPROVED", "PENDING"] }, isTeamManager: false } },
           include: {
             carClass: true,
+            car: true,
             registration: { include: { user: true, carClass: true, car: true } },
           },
           orderBy: { createdAt: "asc" },

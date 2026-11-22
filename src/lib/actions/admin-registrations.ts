@@ -426,10 +426,27 @@ export async function updateRegistrationCar(formData: FormData): Promise<void> {
   await requireAdmin();
   const registrationId = String(formData.get("registrationId") ?? "");
   const carIdRaw = String(formData.get("carId") ?? "");
+  const teamId = String(formData.get("teamId") ?? "");
   if (!registrationId) throw new Error("registrationId required");
 
   // Empty value = clear the car (None).
   const carId: string | null = carIdRaw ? carIdRaw : null;
+
+  // Row of a team the driver is in as an EXTRA team: the car belongs to that
+  // membership, the home team's car (Registration.carId) stays untouched.
+  if (teamId) {
+    const m = await prisma.teamMembership.findUnique({
+      where: { teamId_registrationId: { teamId, registrationId } },
+      select: { id: true, registration: { select: { seasonId: true, season: { select: { league: { select: { slug: true } } } } } } },
+    });
+    if (m) {
+      await prisma.teamMembership.update({ where: { id: m.id }, data: { carId } });
+      revalidatePath(
+        `/admin/leagues/${m.registration.season.league.slug}/seasons/${m.registration.seasonId}/roster`
+      );
+      return;
+    }
+  }
 
   // Use the writeable update's own include so we don't read first; this
   // surfaces any DB-level failure (FK / constraint) on the actual write.
