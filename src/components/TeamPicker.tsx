@@ -250,7 +250,7 @@ export default function TeamPicker({
       </div>
 
       <p className="text-xs text-zinc-500">
-        Each team is limited to {limit} drivers — full teams are marked and
+        Each team is limited to {`${limit} drivers`} — full teams are marked and
         can&apos;t be picked. Pick your team from the list (teams from earlier
         seasons are in it too), create a new one by typing its name, or leave
         this as Independent to race without a team.

@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.68.1",
+    date: "2026-11-22",
+    changes: [
+      "Registration: leagues without PayPal (GT3 WCT) no longer show a registration-fee notice to drivers at all; the admin roster keeps its Fee column (Paid / Not paid / Free).",
+    ],
+  },
+  {
     version: "2.68.0",
     date: "2026-11-22",
     changes: [
