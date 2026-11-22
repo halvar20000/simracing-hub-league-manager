@@ -19,10 +19,11 @@ function csvCell(raw: unknown): string {
 /** AdminCheckStatus is the YES / NO / PENDING enum stored on
  * Registration for invitation tracking. Map it to short labels for
  * the CSV column: "Y" for YES, "N" for NO, "?" for PENDING. */
-function adminCheck(v: "YES" | "NO" | "PENDING" | null | undefined): string {
+function adminCheck(v: "YES" | "NO" | "PENDING" | "FREE" | null | undefined): string {
   if (v === "YES") return "Y";
   if (v === "NO") return "N";
   if (v === "PENDING") return "?";
+  if (v === "FREE") return "Free";
   return "";
 }
 

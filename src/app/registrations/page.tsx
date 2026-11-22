@@ -275,7 +275,7 @@ export default async function MyRegistrationsPage({
                 )}
               {(() => {
                 const pi = getLeaguePayment(r.season.league);
-                if (!pi) return null;
+                if (!pi || r.startingFeePaid === "FREE") return null;
                 const isPaid = r.startingFeePaid === "YES";
                 return (
                   <div className="mt-3">

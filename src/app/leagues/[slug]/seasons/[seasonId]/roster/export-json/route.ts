@@ -86,7 +86,7 @@ export async function GET(
     status: r.status, // "APPROVED" | "PENDING"
     waitlisted: r.waitlistedAt != null,
     retired: r.retiredAt != null,
-    feePaid: r.startingFeePaid, // "YES" | "NO" | "PENDING"
+    feePaid: r.startingFeePaid, // "YES" | "NO" | "PENDING" | "FREE"
     iracingInviteSent: r.iracingInvitationSent,
     iracingInviteAccepted: r.iracingInvitationAccepted,
   }));

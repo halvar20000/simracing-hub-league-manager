@@ -16,13 +16,14 @@ function csvCell(raw: unknown): string {
 }
 
 function adminCheckLabel(
-  v: "YES" | "NO" | "PENDING" | null | undefined,
+  v: "YES" | "NO" | "PENDING" | "FREE" | null | undefined,
   labels: { YES: string; NO: string }
 ): string {
   // The public page renders the YES/NO/PENDING enum as a friendly badge
   // ("Sent" / "Not sent", "Accepted" / "Not accepted", "Paid" / "Not
   // paid"). Mirror that in the CSV so the file matches what users see.
   if (v === "YES") return labels.YES;
+  if (v === "FREE") return "Free";
   return labels.NO;
 }
 

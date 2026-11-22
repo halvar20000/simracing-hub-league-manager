@@ -689,7 +689,7 @@ export default async function RosterPage({
                 data-r-gdc={r.inGdc ? "GDC" : ""}
                 data-r-eligibler1={r.eligibleRound1 ? "Eligible" : "Not eligible"}
                 data-r-status={r.status}
-                data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
+                data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "FREE" ? "Free" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
                 data-r-invsent={r.iracingInvitationSent === "YES" ? "Sent" : r.iracingInvitationSent === "NO" ? "Not sent" : "Pending"}
                 data-r-invaccepted={r.iracingInvitationAccepted === "YES" ? "Accepted" : r.iracingInvitationAccepted === "NO" ? "Not accepted" : "Pending"}
                 data-email={r.user.email ?? ""}
@@ -914,9 +914,9 @@ type RosterRegistration = {
   status: string;
   waitlistedAt: Date | null;
   retiredAt: Date | null;
-  startingFeePaid: "PENDING" | "YES" | "NO";
-  iracingInvitationSent: "PENDING" | "YES" | "NO";
-  iracingInvitationAccepted: "PENDING" | "YES" | "NO";
+  startingFeePaid: "PENDING" | "YES" | "NO" | "FREE";
+  iracingInvitationSent: "PENDING" | "YES" | "NO" | "FREE";
+  iracingInvitationAccepted: "PENDING" | "YES" | "NO" | "FREE";
   user: { firstName: string | null; lastName: string | null };
 };
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { KNOWN_TEAM_VALUE_PREFIX, findOrCreateSeasonTeam } from "@/lib/league-team-names";
 import { leaveTeam } from "@/lib/team-membership-writes";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -233,7 +234,12 @@ export async function updateRegistration(
       `/admin/leagues/${leagueSlug}/seasons/${seasonId}/roster/${registrationId}/edit?error=Start+number+must+be+1-4+digits`
     );
   }
-  const teamId = String(formData.get("teamId") ?? "").trim() || null;
+  const teamRaw = String(formData.get("teamId") ?? "").trim();
+  // "new:<name>" = a team from an earlier season of the league: create it in
+  // this season under exactly that name (or reuse it if it exists by now).
+  const teamId = teamRaw.startsWith(KNOWN_TEAM_VALUE_PREFIX)
+    ? await findOrCreateSeasonTeam(prisma, seasonId, teamRaw.slice(KNOWN_TEAM_VALUE_PREFIX.length))
+    : teamRaw || null;
   const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
   const proAmClassRaw = String(formData.get("proAmClass") ?? "").trim();
   const proAmClass: ProAmClass | null =
@@ -373,7 +379,7 @@ const ADMIN_CHECK_FIELDS = new Set([
   "iracingInvitationAccepted",
 ]);
 
-const ADMIN_CHECK_VALUES = new Set(["PENDING", "YES", "NO"]);
+const ADMIN_CHECK_VALUES = new Set(["PENDING", "YES", "NO", "FREE"]);
 
 export async function updateRegistrationFlag(formData: FormData) {
   await requireAdmin();
@@ -384,6 +390,7 @@ export async function updateRegistrationFlag(formData: FormData) {
   if (!registrationId) throw new Error("registrationId required");
   if (!ADMIN_CHECK_FIELDS.has(field)) throw new Error("Invalid field");
   if (!ADMIN_CHECK_VALUES.has(value)) throw new Error("Invalid value");
+  if (value === "FREE" && field !== "startingFeePaid") throw new Error("Invalid value");
 
   // Atomic, so a double submit can only count as one change to Sent.
   const inviteBecameSent =

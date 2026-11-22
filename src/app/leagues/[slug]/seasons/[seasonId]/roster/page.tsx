@@ -553,7 +553,7 @@ export default async function PublicSeasonRoster({
                     data-r-class={r.carClass?.name ?? ""}
                     data-r-proam={r.proAmClass ?? ""}
                     data-r-car={r.car?.name ?? ""}
-                    data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
+                    data-r-fee={r.startingFeePaid === "YES" ? "Paid" : r.startingFeePaid === "FREE" ? "Free" : r.startingFeePaid === "NO" ? "Not paid" : "Pending"}
                     data-r-invsent={r.iracingInvitationSent === "YES" ? "Sent" : r.iracingInvitationSent === "NO" ? "Not sent" : "Pending"}
                     data-r-invaccepted={r.iracingInvitationAccepted === "YES" ? "Accepted" : r.iracingInvitationAccepted === "NO" ? "Not accepted" : "Pending"}
                     className="border-t border-zinc-800 hover:bg-zinc-900"
@@ -725,15 +725,17 @@ function FlagBadge({
   value,
   labels,
 }: {
-  value: "PENDING" | "YES" | "NO";
+  value: "PENDING" | "YES" | "NO" | "FREE";
   labels: { YES: string; NO: string };
 }) {
   const safe = value === "PENDING" ? "NO" : value;
   const cls =
     safe === "YES"
       ? "border-emerald-700/50 bg-emerald-950/40 text-emerald-200"
+      : safe === "FREE"
+      ? "border-sky-700/50 bg-sky-950/40 text-sky-200"
       : "border-red-800/50 bg-red-950/40 text-red-200";
-  const text = safe === "YES" ? labels.YES : labels.NO;
+  const text = safe === "YES" ? labels.YES : safe === "FREE" ? "Free" : labels.NO;
   return (
     <span
       className={`inline-block rounded border px-2 py-0.5 text-xs ${cls}`}

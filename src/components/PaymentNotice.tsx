@@ -26,9 +26,30 @@ export default function PaymentNotice({
           Registration fee: {payment.amount} {payment.currency}
         </p>
         <p className="mt-1 text-xs text-amber-200">
-          After registering, you&apos;ll see a PayPal link with payment
-          instructions. Send as <strong>Friends &amp; Family</strong> with your
-          real name in the message field.
+          {payment.paypalUrl ? (
+            <>
+              After registering, you&apos;ll see a PayPal link with payment
+              instructions. Send as <strong>Friends &amp; Family</strong> with
+              your real name in the message field.
+            </>
+          ) : (
+            <>The league admin will tell you how to pay after you register.</>
+          )}
+        </p>
+      </div>
+    );
+  }
+
+  // No PayPal configured for the league (since 2026-11-22 for GT3 WCT):
+  // no PayPal link, no PayPal instructions — the admin collects the fee.
+  if (!payment.paypalUrl) {
+    return (
+      <div className="rounded border border-amber-700/50 bg-amber-950/30 p-3 text-sm">
+        <p className="font-semibold text-amber-100">
+          Registration fee pending: {payment.amount} {payment.currency}
+        </p>
+        <p className="mt-1 text-xs text-amber-200">
+          The league admin will tell you how to pay.
         </p>
       </div>
     );

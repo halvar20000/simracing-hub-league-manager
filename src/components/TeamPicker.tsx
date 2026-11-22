@@ -15,6 +15,11 @@ import { useEffect, useRef, useState } from "react";
  *   - teamId       — set when an existing team is chosen
  *   - newTeamName  — set when a new team name is typed
  * Both empty = race independently.
+ *
+ * `knownTeams` are team names from the league's earlier seasons (teams are
+ * per season, so a new season starts empty). Picking one sends it as
+ * newTeamName — the action finds-or-creates the team under exactly that
+ * name, so nobody has to retype it (and a typo can't split a team).
  */
 
 type Team = { id: string; name: string; memberCount: number };
@@ -28,10 +33,12 @@ export default function TeamPicker({
   teams,
   limit,
   currentTeamId,
+  knownTeams = [],
 }: {
   teams: Team[];
   limit: number;
   currentTeamId: string | null;
+  knownTeams?: string[];
 }) {
   const [selection, setSelection] = useState<Selection>(() => {
     if (currentTeamId) {
@@ -66,8 +73,12 @@ export default function TeamPicker({
   const filtered = q
     ? teams.filter((t) => t.name.toLowerCase().includes(q))
     : teams;
+  const filteredKnown = q
+    ? knownTeams.filter((n) => n.toLowerCase().includes(q))
+    : knownTeams;
+  const exactKnown = knownTeams.find((n) => n.toLowerCase() === q) ?? null;
   const exactExists = teams.some((t) => t.name.toLowerCase() === q);
-  const showCreate = q.length > 0 && !exactExists;
+  const showCreate = q.length > 0 && !exactExists && !exactKnown;
 
   function pickTeam(t: Team) {
     if (isFull(t) && t.id !== currentTeamId) return;
@@ -82,6 +93,11 @@ export default function TeamPicker({
     setOpen(false);
     setQuery("");
   }
+  function pickKnown(name: string) {
+    setSelection({ kind: "new", name });
+    setOpen(false);
+    setQuery("");
+  }
   function pickNone() {
     setSelection({ kind: "none" });
     setOpen(false);
@@ -92,7 +108,9 @@ export default function TeamPicker({
     selection.kind === "team"
       ? selection.name
       : selection.kind === "new"
-      ? `${selection.name}  (new team)`
+      ? knownTeams.includes(selection.name)
+        ? selection.name
+        : `${selection.name}  (new team)`
       : "No team / Independent";
 
   return (
@@ -137,6 +155,8 @@ export default function TeamPicker({
               if (exactExists) {
                 const exact = teams.find((t) => t.name.toLowerCase() === q);
                 if (exact) pickTeam(exact);
+              } else if (exactKnown) {
+                pickKnown(exactKnown);
               } else if (showCreate) {
                 pickNew();
               } else if (firstSelectable) {
@@ -162,7 +182,7 @@ export default function TeamPicker({
               No team / Independent
             </button>
 
-            {filtered.length === 0 && !showCreate && (
+            {filtered.length === 0 && filteredKnown.length === 0 && !showCreate && (
               <div className="px-3 py-2 text-sm text-zinc-500">
                 No teams match — keep typing to create one.
               </div>
@@ -199,6 +219,23 @@ export default function TeamPicker({
               );
             })}
 
+            {filteredKnown.length > 0 && (
+              <div className="border-t border-zinc-800 px-3 pb-1 pt-2 text-[10px] uppercase tracking-wider text-zinc-500">
+                Teams from earlier seasons
+              </div>
+            )}
+            {filteredKnown.map((n) => (
+              <button
+                key={`known-${n}`}
+                type="button"
+                onClick={() => pickKnown(n)}
+                className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+              >
+                <span className="font-medium">{n}</span>{" "}
+                <span className="text-zinc-500">(0/{limit})</span>
+              </button>
+            ))}
+
             {showCreate && (
               <button
                 type="button"
@@ -214,8 +251,9 @@ export default function TeamPicker({
 
       <p className="text-xs text-zinc-500">
         Each team is limited to {limit} drivers — full teams are marked and
-        can&apos;t be picked. Choose another team, create your own by typing a
-        new name, or leave this as Independent to race without a team.
+        can&apos;t be picked. Pick your team from the list (teams from earlier
+        seasons are in it too), create a new one by typing its name, or leave
+        this as Independent to race without a team.
       </p>
     </fieldset>
   );

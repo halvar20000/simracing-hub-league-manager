@@ -1,5 +1,6 @@
 "use server";
 
+import { KNOWN_TEAM_VALUE_PREFIX } from "@/lib/league-team-names";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -160,9 +161,15 @@ export async function createRegistration(
       `${registerBase}error=Start+number+must+be+1-4+digits`
     );
   }
-  const teamIdFromDropdown =
-    String(formData.get("teamId") ?? "").trim() || null;
-  const newTeamName = String(formData.get("newTeamName") ?? "").trim();
+  const teamRaw = String(formData.get("teamId") ?? "").trim();
+  // "new:<name>" = a team name from an earlier season (league-team-names.ts):
+  // treated like a typed new team name, i.e. find-or-create in this season.
+  const knownTeamName = teamRaw.startsWith(KNOWN_TEAM_VALUE_PREFIX)
+    ? teamRaw.slice(KNOWN_TEAM_VALUE_PREFIX.length).trim()
+    : "";
+  const teamIdFromDropdown = knownTeamName ? null : teamRaw || null;
+  const newTeamName =
+    String(formData.get("newTeamName") ?? "").trim() || knownTeamName;
   const carClassId = String(formData.get("carClassId") ?? "").trim() || null;
   const carId = String(formData.get("carId") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;

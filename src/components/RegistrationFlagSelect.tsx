@@ -15,6 +15,7 @@ const LABELS: Record<Field, { YES: string; NO: string }> = {
 
 const COLOR: Record<string, string> = {
   YES: "border-emerald-700/50 bg-emerald-950/40 text-emerald-200",
+  FREE: "border-sky-700/50 bg-sky-950/40 text-sky-200",
   NO: "border-red-800/50 bg-red-950/40 text-red-200",
 };
 
@@ -27,7 +28,7 @@ export default function RegistrationFlagSelect({
   field: Field;
   // PENDING is still a valid enum but no longer offered in the UI; if a row
   // somehow still has it, render as NO so the select isn't blank.
-  value: "PENDING" | "YES" | "NO";
+  value: "PENDING" | "YES" | "NO" | "FREE";
 }) {
   const safeValue = value === "PENDING" ? "NO" : value;
   const labels = LABELS[field];
@@ -47,6 +48,8 @@ export default function RegistrationFlagSelect({
       >
         <option value="NO">{labels.NO}</option>
         <option value="YES">{labels.YES}</option>
+        {/* The fee alone has a third state: the driver races for free. */}
+        {field === "startingFeePaid" && <option value="FREE">Free</option>}
       </select>
     </form>
   );

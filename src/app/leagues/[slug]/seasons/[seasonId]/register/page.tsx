@@ -10,6 +10,7 @@ import SoloIRatingValidator from "@/components/SoloIRatingValidator";
 import TeamClassCarSelect from "@/components/TeamClassCarSelect";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import TeamPicker from "@/components/TeamPicker";
+import { KNOWN_TEAM_VALUE_PREFIX, loadEarlierTeamNames } from "@/lib/league-team-names";
 import TeamManagerToggle from "@/components/TeamManagerToggle";
 import { teamSizeLimit, GT3_WCT_TEAM_LIMIT } from "@/lib/team-limit";
 import { getSflIRatingGate } from "@/lib/sfl-irating-gate";
@@ -732,6 +733,10 @@ export default async function RegisterPage({
     memberCount: countByTeamId.get(tm.id) ?? 0,
   }));
 
+  // Team names from the league's earlier seasons (a new season has no teams
+  // yet), offered in the picker so nobody retypes — or mistypes — his team.
+  const knownTeams = await loadEarlierTeamNames(prisma, season.leagueId, seasonId);
+
   // SFL Cup: iRating cap for new drivers — drivers who raced in the most
   // recent prior SFL Cup season are exempt. getSflIRatingGate returns
   // applies=false for every other league, so this is a no-op elsewhere.
@@ -929,6 +934,7 @@ export default async function RegisterPage({
               }) ?? GT3_WCT_TEAM_LIMIT
             }
             currentTeamId={existing?.teamId ?? null}
+            knownTeams={knownTeams}
           />
         ) : (
           <fieldset className="space-y-2 rounded border border-zinc-800 bg-zinc-900/50 p-4">
@@ -949,6 +955,15 @@ export default async function RegisterPage({
                     {t.name}
                   </option>
                 ))}
+                {knownTeams.length > 0 && (
+                  <optgroup label="Teams from earlier seasons">
+                    {knownTeams.map((n) => (
+                      <option key={`known-${n}`} value={`${KNOWN_TEAM_VALUE_PREFIX}${n}`}>
+                        {n}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </label>
 

@@ -19,6 +19,16 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.68.0",
+    date: "2026-11-22",
+    changes: [
+      "Registration: the team picker also lists the teams from the league's earlier seasons, so a new season no longer starts with an empty list — pick your team instead of typing it (no more near-duplicate teams from a typo).",
+      "Admin registration edit: the Team dropdown offers the teams from earlier seasons too; choosing one creates it in this season under exactly that name.",
+      "Roster: the Fee column has a third option, Free, for drivers who don't pay a fee.",
+      "Registration fee: when a league has no PayPal set up, drivers no longer see PayPal instructions — just the fee and a note that the admin tells them how to pay.",
+    ],
+  },
+  {
     version: "2.67.0",
     date: "2026-11-20",
     changes: [

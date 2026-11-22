@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth-helpers";
+import { KNOWN_TEAM_VALUE_PREFIX, loadEarlierTeamNames } from "@/lib/league-team-names";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -77,6 +78,12 @@ export default async function EditRegistrationPage({
     slug,
     seasonId,
     registrationId
+  );
+
+  const knownTeams = await loadEarlierTeamNames(
+    prisma,
+    registration.season.leagueId,
+    seasonId,
   );
 
   // Per-team driver cap — used to disable full teams in the dropdown. The
@@ -168,6 +175,15 @@ export default async function EditRegistrationPage({
                 </option>
               );
             })}
+            {knownTeams.length > 0 && (
+              <optgroup label="Teams from earlier seasons (created in this season on save)">
+                {knownTeams.map((n) => (
+                  <option key={`known-${n}`} value={`${KNOWN_TEAM_VALUE_PREFIX}${n}`}>
+                    {n}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
 

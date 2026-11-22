@@ -1154,6 +1154,8 @@ enum AdminCheckStatus {
   PENDING
   YES
   NO
+  /// Fee only: the driver races for free (no fee owed). Counts as settled.
+  FREE
 }
 
 /// Cached snapshot of iRacing's track catalog (one row per track *variant* —
