@@ -156,6 +156,18 @@ function tracksLookAlike(a: string | null | undefined, b: string | null | undefi
   return ka === kb || ka.includes(kb) || kb.includes(ka);
 }
 
+/**
+ * Whether a logged session is a race (RACE, HEAT 1, FEATURE, …). The logger
+ * also closes and uploads a log for practice / qualifying / warm-up; those
+ * must never be auto-attached to a round, or the Driver of the Day form ticks
+ * them by default and then refuses ("1 race, you provided 2"). Unknown = race,
+ * so old logs without a session name keep working.
+ */
+export function isRaceSessionName(name: string | null | undefined): boolean {
+  if (!name) return true;
+  return !/practice|qualif|warm ?up|testing/i.test(name);
+}
+
 /** How far a log's session start may sit from the round's scheduled start. */
 const MATCH_WINDOW_MS = 36 * 60 * 60 * 1000;
 
@@ -179,9 +191,10 @@ export type MatchedRound = {
  */
 export async function matchRoundForLog(
   userId: string,
-  meta: { track: string | null; startedAt: Date | null },
+  meta: { track: string | null; startedAt: Date | null; sessionName?: string | null },
   fallbackTime: Date
 ): Promise<MatchedRound | null> {
+  if (!isRaceSessionName(meta.sessionName)) return null;
   const when = meta.startedAt ?? fallbackTime;
   const rounds = await prisma.round.findMany({
     where: {
@@ -206,7 +219,11 @@ export async function matchRoundForLog(
   if (rounds.length === 0) return null;
 
   const withTrack = rounds.filter((r) => tracksLookAlike(r.track, meta.track));
-  const pool = withTrack.length > 0 ? withTrack : rounds;
+  // A log that names its track only goes to a round at that track: falling
+  // back to "any round in the window" put a Misano log on an SFL round at
+  // another circuit. Only a log without a track name uses the time alone.
+  const pool = meta.track ? withTrack : rounds;
+  if (pool.length === 0) return null;
   // Unambiguous only: several rounds at the same track in the same 3-day
   // window means we cannot tell them apart — let a human decide.
   if (pool.length > 1) {

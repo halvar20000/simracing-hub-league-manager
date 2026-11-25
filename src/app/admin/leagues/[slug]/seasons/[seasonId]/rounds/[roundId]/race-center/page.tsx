@@ -16,6 +16,7 @@ import { RACE_CENTER_CHART_TYPES, defaultTitleForChartType } from "@/lib/race-ce
 import { skiesLabel } from "@/lib/iracing-weather";
 import { computeAndSaveDotd, deleteDotd } from "@/lib/actions/driver-of-the-day";
 import { assignRaceLogUploadToRound, deleteRaceLogUpload } from "@/lib/actions/race-logger";
+import { isRaceSessionName } from "@/lib/race-logger";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 
 export default async function AdminRaceCenterPage({
@@ -379,7 +380,7 @@ export default async function AdminRaceCenterPage({
                       type="checkbox"
                       name="logUploadIds"
                       value={u.id}
-                      defaultChecked
+                      defaultChecked={isRaceSessionName(u.sessionName)}
                       className="mt-1 accent-orange-500"
                     />
                     <span>
@@ -395,6 +396,11 @@ export default async function AdminRaceCenterPage({
                           u.uploadedBy?.name ||
                           "unknown driver"}
                       </span>
+                      {!isRaceSessionName(u.sessionName) ? (
+                        <span className="ml-1 text-[10px] uppercase tracking-wide text-amber-400">
+                          not a race — not used unless ticked
+                        </span>
+                      ) : null}
                       {u.matchedAutomatically ? (
                         <span className="ml-1 text-[10px] uppercase tracking-wide text-emerald-500">
                           auto-matched

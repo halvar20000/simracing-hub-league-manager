@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
 
   const round = await matchRoundForLog(
     user.id,
-    { track: meta.track, startedAt: meta.startedAt },
+    { track: meta.track, startedAt: meta.startedAt, sessionName: meta.sessionName },
     new Date()
   );
 

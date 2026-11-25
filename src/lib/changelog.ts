@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.69.2",
+    date: "2026-11-25",
+    changes: [
+      "Race Logger: practice, qualifying and warm-up logs are no longer attached to a round automatically. One had been ticked by default in the Driver of the Day form, so the award refused to compute (one race, two logs).",
+      "Race Logger: a log is only auto-matched to a round at the same track. Before, a log could land on a round of another league at a different circuit.",
+    ],
+  },
+  {
     version: "2.69.1",
     date: "2026-11-22",
     changes: [
