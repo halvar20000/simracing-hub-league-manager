@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.70.0",
+    date: "2026-11-26",
+    changes: [
+      "CAS Rating now counts in every league from 26 November 2026 — GT3 WCT, IEC, Combined Cup, SFL Cup, Porsche Community Cup and Fun League — including seasons that are already running. The first race after that is the IEC race on 28 November. The regulation explains the CAS leadership's decision.",
+    ],
+  },
+  {
     version: "2.69.2",
     date: "2026-11-25",
     changes: [

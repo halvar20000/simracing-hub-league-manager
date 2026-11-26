@@ -175,9 +175,9 @@ export function RegulationDe() {
         das Adventsrennen) zählen nicht.
       </p>
       <p>
-        Gezählt wird in jeder Liga <b className="text-zinc-100">ab dem Start ihrer nächsten
-        Saison</b>. Rennen aus Saisons, die bei der Einführung schon laufen, zählen nicht
-        (siehe Abschnitt 8).
+        Gezählt wird in allen Ligen <b className="text-zinc-100">jedes Rennen ab dem
+        26.11.2026</b> – auch in Saisons, die zu diesem Zeitpunkt schon laufen. Frühere
+        Rennen zählen nicht (siehe Abschnitt 8).
       </p>
 
       <H2>3. Berechnung</H2>
@@ -275,8 +275,8 @@ export function RegulationDe() {
         Fehlende Rennen bis 10 zählen bei der Leistung mit 50 Punkten, jedes echte Rennen
         ersetzt eines davon; die Teilnahme beginnt bei 50 %. Ein einzelnes
         gutes Rennen bringt also nicht gleich an die Spitze – ein Sieg ohne Incidents hebt
-        die Leistung von 50 auf 55. Gezählt wird ab dem Start der jeweils nächsten Saison
-        jeder Liga; frühere Ergebnisse werden nicht rückwirkend gewertet.
+        die Leistung von 50 auf 55. Gezählt wird jedes Rennen ab dem 26.11.2026; frühere
+        Ergebnisse werden nicht rückwirkend gewertet.
       </p>
 
       <H2>4. Sonderfälle</H2>
@@ -392,18 +392,18 @@ export function RegulationDe() {
 
       <H2>8. Inkrafttreten und Änderungen</H2>
       <p>
-        Es gibt <b className="text-zinc-100">keinen gemeinsamen Stichtag</b>. Das CAS
-        Rating startet in jeder Liga{" "}
-        <b className="text-zinc-100">mit ihrer nächsten neuen Saison</b>. Ab dann zählen
-        die Rennen dieser Liga für Leistung und Teilnahme. Rennen aus Saisons, die schon
-        vor der Einführung liefen, zählen nicht.
+        Den Anfang machte der <b className="text-zinc-100">SFL Cup mit seiner 9. Saison (erstes
+        Rennen am 25.11.2026)</b>. Ursprünglich sollten die übrigen Ligen jeweils erst mit
+        ihrer nächsten neuen Saison folgen.
       </p>
       <p>
-        Den Anfang macht der <b className="text-zinc-100">SFL Cup mit seiner 9. Saison (erstes
-        Rennen am 25.11.2026)</b>. Danach folgen der Porsche Community Cup und die GT3 WCT
-        mit ihren nächsten Saisons, später Combined Cup und Fun League, die IEC ab ihrer
-        nächsten Saison. Die Fun League hat keine Saisons; ab wann ihre Rennen zählen, wird
-        vorher angekündigt.
+        Weil die Berechnung beim Start zuverlässig funktioniert hat, hat die{" "}
+        <b className="text-zinc-100">CAS-Leitung entschieden, das CAS Rating ab sofort in
+        allen Ligen einzuführen</b>: Seit dem <b className="text-zinc-100">26.11.2026</b>{" "}
+        zählt jedes Rennen in GT3 WCT, IEC, Combined Cup, SFL Cup, Porsche Community Cup und
+        Fun League für Leistung und Teilnahme – auch in Saisons, die bereits laufen. Das
+        erste Rennen danach ist das IEC-Rennen am 28.11.2026. Rennen vor dem 26.11.2026 (außer
+        dem SFL-Auftakt am 25.11.) zählen nicht.
       </p>
       <p>
         Bis zu seinem ersten gewerteten Rennen steht jeder Fahrer bei 50. Das CAS Rating

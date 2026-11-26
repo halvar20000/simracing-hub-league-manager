@@ -82,8 +82,8 @@ export function RegulationEn() {
         is published in CLS. Pre-race and other one-off events (e.g. the Advent race) do not count.
       </p>
       <p>
-        Each league counts <b className={b}>from the start of its next season</b>. Races from seasons
-        already running when the rating is introduced do not count (see section 8).
+        In every league <b className={b}>every race from 26 November 2026</b> counts – also in seasons
+        that were already running then. Earlier races do not count (see section 8).
       </p>
 
       <H2>3. Calculation</H2>
@@ -176,8 +176,8 @@ export function RegulationEn() {
         At the introduction <b className={b}>every driver starts at 50</b>: missing races up to 10
         count as 50 points for performance, every real race replaces one of them; attendance starts
         at 50 %. So a single good race does not take you straight to the top – a win
-        without incidents lifts performance from 50 to 55. Each league counts from the start of its
-        next season; earlier results are not counted retroactively.
+        without incidents lifts performance from 50 to 55. Every race from 26 November 2026 counts;
+        earlier results are not counted retroactively.
       </p>
 
       <H2>4. Special cases</H2>
@@ -292,16 +292,17 @@ export function RegulationEn() {
 
       <H2>8. Entry into force and changes</H2>
       <p>
-        There is <b className={b}>no common start date</b>. The CAS Rating starts in each league{" "}
-        <b className={b}>with its next new season</b>. From then on that league&apos;s races count for
-        performance and attendance. Races from seasons that were already running before the
-        introduction do not count.
+        First up was the <b className={b}>SFL Cup with its 9th season (first race on 25 November
+        2026)</b>. Originally the other leagues were to follow only with their next new season.
       </p>
       <p>
-        First up is the <b className={b}>SFL Cup with its 9th season (first race on 25 November 2026)</b>.
-        The Porsche Community Cup and the GT3 WCT follow with their next seasons, later the Combined
-        Cup and the Fun League, and the IEC from its next season. The Fun League has no seasons; when
-        its races start to count will be announced beforehand.
+        Because the calculation worked reliably at the start, the{" "}
+        <b className={b}>CAS leadership decided to introduce the CAS Rating in all leagues right
+        away</b>: since <b className={b}>26 November 2026</b> every race in GT3 WCT, IEC, Combined
+        Cup, SFL Cup, Porsche Community Cup and Fun League counts for performance and attendance –
+        also in seasons that are already running. The first race after that is the IEC race on
+        28 November 2026. Races before 26 November 2026 (apart from the SFL opener on 25 November)
+        do not count.
       </p>
       <p>
         Until their first counted race every driver is at 50. The CAS Rating is{" "}
