@@ -33,6 +33,7 @@ export async function loadStreamCalendar(): Promise<StreamCalendar> {
         track: true,
         startsAt: true,
         season: { select: { league: { select: { slug: true } } } },
+        streamAnnouncement: { select: { posterBlobUrl: true, postedAt: true } },
       },
     }),
     prisma.appSetting.findMany({
@@ -50,6 +51,11 @@ export async function loadStreamCalendar(): Promise<StreamCalendar> {
       name: r.name,
       track: r.track,
       startsAt: r.startsAt,
+      poster: r.streamAnnouncement?.postedAt
+        ? ("posted" as const)
+        : r.streamAnnouncement?.posterBlobUrl
+          ? ("ready" as const)
+          : ("none" as const),
     })),
     new Map(settings.map((s) => [s.key, s.value]))
   );

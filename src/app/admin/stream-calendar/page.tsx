@@ -6,6 +6,8 @@ import { StreamerSelect } from "@/components/StreamerSelect";
 import {
   STREAM_LEAGUES,
   STREAMERS,
+  STREAM_OPEN,
+  type PosterState,
   type StreamRace,
   type StreamWeek,
 } from "@/lib/stream-calendar";
@@ -32,7 +34,9 @@ export default async function AdminStreamCalendarPage() {
         <h1 className="text-2xl font-bold">Stream calendar</h1>
         <p className="mt-1 text-sm text-zinc-400">
           Who streams which race. A change in a dropdown is saved immediately
-          and the counts update. Read-only for everyone:{" "}
+          and the counts update. Click a race to open its stream announcement
+          (poster upload); the line under the dropdown shows whether the poster
+          is there. Read-only for everyone:{" "}
           <Link href="/streams/calendar" className="underline hover:text-zinc-200">
             /streams/calendar
           </Link>{" "}
@@ -207,8 +211,12 @@ function RaceCell({ race, league }: { race: StreamRace; league: string }) {
         className={`mb-1 truncate text-[11px] text-zinc-500 ${race.planned ? "italic" : ""}`}
         title={race.title}
       >
-        {race.href ? (
-          <Link href={race.href} className="hover:text-zinc-300 hover:underline">
+        {race.streamHref ? (
+          <Link
+            href={race.streamHref}
+            className="hover:text-zinc-300 hover:underline"
+            title={`${race.title} — stream announcement / poster`}
+          >
             {race.title}
           </Link>
         ) : (
@@ -221,6 +229,33 @@ function RaceCell({ race, league }: { race: StreamRace; league: string }) {
         value={race.streamer}
         label={`${league}, ${when}`}
       />
+      {race.streamHref && race.poster && (
+        <PosterLink href={race.streamHref} state={race.poster} streamed={race.streamer !== STREAM_OPEN} />
+      )}
     </div>
+  );
+}
+
+function PosterLink({
+  href,
+  state,
+  streamed,
+}: {
+  href: string;
+  state: PosterState;
+  streamed: boolean;
+}) {
+  const look =
+    state === "posted"
+      ? { text: "✓ Poster posted", cls: "text-emerald-400" }
+      : state === "ready"
+        ? { text: "🖼 Poster ready", cls: "text-cyan-300" }
+        : streamed
+          ? { text: "＋ Upload poster", cls: "text-amber-300" }
+          : { text: "＋ Poster", cls: "text-zinc-500" };
+  return (
+    <Link href={href} className={`mt-1 block text-[11px] hover:underline ${look.cls}`}>
+      {look.text}
+    </Link>
   );
 }

@@ -131,7 +131,14 @@ export type StreamRoundInput = {
   name: string;
   track: string;
   startsAt: Date;
+  /** Stream-announcement state (admin calendar only; optional for callers
+   *  that do not load it). */
+  poster?: PosterState;
 };
+
+/** none = no poster uploaded, ready = uploaded and waiting for the bot,
+ *  posted = the bot has announced it in Discord. */
+export type PosterState = "none" | "ready" | "posted";
 
 export type StreamRace = {
   key: string;
@@ -144,6 +151,9 @@ export type StreamRace = {
   href: string | null;
   /** The public round page (null for a race not in CLS yet). */
   publicHref: string | null;
+  /** Admin page where the stream poster is uploaded (null when not in CLS). */
+  streamHref: string | null;
+  poster: PosterState | null;
 };
 
 export type StreamWeek = {
@@ -246,6 +256,8 @@ export function buildStreamCalendar(
       planned: false,
       href: `/admin/leagues/${r.leagueSlug}/seasons/${r.seasonId}/rounds/${r.id}`,
       publicHref: `/leagues/${r.leagueSlug}/seasons/${r.seasonId}/rounds/${r.id}`,
+      streamHref: `/admin/leagues/${r.leagueSlug}/seasons/${r.seasonId}/rounds/${r.id}/stream`,
+      poster: r.poster ?? null,
     });
   }
 
@@ -262,6 +274,8 @@ export function buildStreamCalendar(
       planned: true,
       href: null,
       publicHref: null,
+      streamHref: null,
+      poster: null,
     });
   }
 

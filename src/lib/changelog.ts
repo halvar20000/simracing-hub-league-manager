@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.71.0",
+    date: "2026-11-27",
+    changes: [
+      "Admin stream calendar: clicking a race opens its stream announcement page (poster upload) directly, and a line under each race shows the poster state: posted, ready, or still to upload.",
+    ],
+  },
+  {
     version: "2.70.0",
     date: "2026-11-26",
     changes: [
