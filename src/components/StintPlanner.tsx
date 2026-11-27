@@ -485,6 +485,8 @@ export default function StintPlanner({
     setG61Collapsed,
     pitCollapsed,
     setPitCollapsed,
+    fineTuneShown,
+    setFineTuneShown,
   } = usePlannerUi();
   const [s, setS] = useState<PlannerState>(initial);
   const [curId, setCurId] = useState<string | null>(planId);
@@ -2501,6 +2503,9 @@ export default function StintPlanner({
     // Fuel profiles only exist in Advanced mode; in Easy the lap time and
     // consumption are typed per driver, so send the checklist there.
     const anchor = requested === "card-fuel" && !advanced ? "card-drivers" : requested;
+    if ((anchor === "card-fuel" || anchor === "card-paceadj") && !fineTuneShown) {
+      setFineTuneShown(true);
+    }
     const CARD_TAB: Record<string, PlanTab> = {
       "card-event": "basis",
       "card-pit": "basis",
@@ -5627,11 +5632,26 @@ export default function StintPlanner({
             );
           })()}
       </div>
+      <AdvancedOnly>
+        <div className="flex flex-wrap items-center gap-3 rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-500 lg:col-span-2 print:hidden">
+          <button
+            type="button"
+            onClick={() => setFineTuneShown(!fineTuneShown)}
+            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300 hover:bg-zinc-800"
+          >
+            {fineTuneShown ? t.fuel.fineTuneHide : t.fuel.fineTuneShow}
+          </button>
+          <span>{t.fuel.fineTuneNote}</span>
+        </div>
+      </AdvancedOnly>
       {/* Fuel profiles — Advanced only since v2.73.0 (users' feedback, Nov
           2026): in Easy mode every stint runs on the drivers' own figures and
           the fuel-save switch lives in the Fuel-save card. Hidden, never
           altered: the fallback profiles keep computing. */}
       <AdvancedOnly>
+        {/* Folded away by default even in Advanced (Johann, Nov 2026) —
+            shown with the toggle above, always printed. */}
+        <div className={fineTuneShown ? "contents" : "hidden print:contents"}>
         <div className={card} id="card-fuel">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
@@ -5775,6 +5795,7 @@ export default function StintPlanner({
           )}
         </div>
 
+        </div>
       </AdvancedOnly>
       {/* Pace corrections — temperature, weather, traffic.
           These three sat on the Basics tab under the track temperature, which
@@ -5783,6 +5804,7 @@ export default function StintPlanner({
           Advanced only — in Easy mode a plan runs on the standard lap time
           alone. */}
       <AdvancedOnly>
+      <div className={fineTuneShown ? "contents" : "hidden print:contents"}>
       <div className={card} id="card-paceadj">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
@@ -5871,6 +5893,7 @@ export default function StintPlanner({
             </div>
             <p className="text-zinc-600">{t.ev.weatherNote}</p>
           </div>
+      </div>
       </div>
       </AdvancedOnly>
 

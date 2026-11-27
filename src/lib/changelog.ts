@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.74.1",
+    date: "2026-11-27",
+    changes: [
+      "Stint planner (Preparation): Fuel profiles and Pace corrections are now folded away in Advanced mode too, behind a \"Show fuel profiles & pace corrections\" button. The values keep counting and are always printed.",
+    ],
+  },
+  {
     version: "2.74.0",
     date: "2026-11-27",
     changes: [

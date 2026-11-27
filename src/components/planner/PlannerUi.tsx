@@ -33,6 +33,10 @@ const G61_KEY = "cls.planner.g61";
  *  measured constants are set once per car and then never touched again, so
  *  the card is a wall of fields between the event and the line-up. */
 const PIT_KEY = "cls.planner.pit";
+/** Fuel profiles + Pace corrections shown in Advanced mode. Starts hidden
+ *  (Johann, Nov 2026): with per-driver figures they are fallbacks you set
+ *  once, and Advanced is needed for the pit model anyway. */
+const FINE_KEY = "cls.planner.finetune";
 
 const isLang = (v: unknown): v is Lang => v === "de" || v === "en";
 const isMode = (v: unknown): v is PlannerMode => v === "easy" || v === "advanced";
@@ -42,6 +46,7 @@ type Prefs = {
   mode: PlannerMode;
   g61Collapsed: boolean;
   pitCollapsed: boolean;
+  fineTuneShown: boolean;
 };
 
 /** What the server renders, and what a browser with no stored choice gets.
@@ -55,6 +60,7 @@ const DEFAULTS: Prefs = {
    *  loses nothing: the numbers keep counting, the summary line says so, and
    *  the card is one click away. */
   pitCollapsed: true,
+  fineTuneShown: false,
 };
 
 let prefs: Prefs = DEFAULTS;
@@ -74,12 +80,14 @@ function getSnapshot(): Prefs {
       const mode = window.localStorage.getItem(MODE_KEY);
       const g61 = window.localStorage.getItem(G61_KEY);
       const pit = window.localStorage.getItem(PIT_KEY);
+      const fine = window.localStorage.getItem(FINE_KEY);
       prefs = {
         lang: isLang(lang) ? lang : DEFAULTS.lang,
         mode: isMode(mode) ? mode : DEFAULTS.mode,
         g61Collapsed: g61 === "collapsed",
         // Closed unless this device said otherwise, hence `!== "open"`.
         pitCollapsed: pit !== "open",
+        fineTuneShown: fine === "open",
       };
     } catch {
       // Private mode / blocked site data — the defaults are perfectly usable.
@@ -110,6 +118,9 @@ function update(next: Partial<Prefs>) {
     if (next.pitCollapsed !== undefined) {
       window.localStorage.setItem(PIT_KEY, next.pitCollapsed ? "collapsed" : "open");
     }
+    if (next.fineTuneShown !== undefined) {
+      window.localStorage.setItem(FINE_KEY, next.fineTuneShown ? "open" : "collapsed");
+    }
   } catch {
     // Not worth telling the user about — the choice still holds for this tab.
   }
@@ -131,10 +142,13 @@ export type PlannerUiValue = {
   /** Pit-stop model card folded away on this device. */
   pitCollapsed: boolean;
   setPitCollapsed: (v: boolean) => void;
+  /** Fuel profiles + Pace corrections shown (Advanced mode) on this device. */
+  fineTuneShown: boolean;
+  setFineTuneShown: (v: boolean) => void;
 };
 
 export function usePlannerUi(): PlannerUiValue {
-  const { lang, mode, g61Collapsed, pitCollapsed } = useSyncExternalStore(
+  const { lang, mode, g61Collapsed, pitCollapsed, fineTuneShown } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getServerSnapshot
@@ -149,6 +163,10 @@ export function usePlannerUi(): PlannerUiValue {
     (v: boolean) => update({ pitCollapsed: v }),
     []
   );
+  const setFineTuneShown = useCallback(
+    (v: boolean) => update({ fineTuneShown: v }),
+    []
+  );
   return useMemo(
     () => ({
       lang,
@@ -161,8 +179,12 @@ export function usePlannerUi(): PlannerUiValue {
       setG61Collapsed,
       pitCollapsed,
       setPitCollapsed,
+      fineTuneShown,
+      setFineTuneShown,
     }),
     [
+      fineTuneShown,
+      setFineTuneShown,
       lang,
       mode,
       g61Collapsed,

@@ -391,6 +391,9 @@ export const de: PlannerDict = {
       "aus der Fahrertabelle; das Standard-Profil oben ist nur der Rückfall für einen Fahrer, der keine hat. Ein Spritspar-Stint addiert obendrauf das Spritspar-Delta dieses Fahrers.",
     absoluteExplain:
       "Alt-Modus: die Profile unten SIND die Zahlen, und die eigenen Werte eines Fahrers ersetzen sie einfach — womit das Spritspar-Profil für jeden wirkungslos wird, der eigene Pace und Verbrauch hat. Bleibt erhalten, damit Pläne, die so gebaut und abgesegnet wurden, sich weiterhin genau so lesen.",
+    fineTuneShow: "Fuel Profiles & Pace Corrections einblenden",
+    fineTuneHide: "Fuel Profiles & Pace Corrections ausblenden",
+    fineTuneNote: "Ersatzprofile, Temperatur- und Verkehrskorrektur. Nur ausgeblendet – die Werte rechnen weiter.",
     enableSaving: "Spritspar-Profil aktivieren",
     enableSavingHint:
       "Fügt ein zweites Profil fürs Lift-and-Coast hinzu, damit ein Stint langsamer, aber mit weniger Litern geplant werden kann — was manchmal einen Stopp aus dem Rennen nimmt.",

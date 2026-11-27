@@ -398,6 +398,9 @@ export const en = {
       "from the Drivers table; the Standard profile above is only the fallback for a driver who has none. A fuel-save stint adds that driver’s fuel-save delta on top.",
     absoluteExplain:
       "Legacy model: the profiles below are the numbers, and a driver’s own figures simply replace them — which makes the fuel-saving profile a no-op for anyone who has their own pace and fuel. Kept so plans that were built and signed off this way still read exactly as they did.",
+    fineTuneShow: "Show fuel profiles & pace corrections",
+    fineTuneHide: "Hide fuel profiles & pace corrections",
+    fineTuneNote: "Fallback profiles, temperature and traffic corrections. Hidden only — they keep counting.",
     enableSaving: "Enable a fuel-saving profile",
     enableSavingHint:
       "Adds a second profile for lifting and coasting, so a stint can be planned slower but with fewer litres — which sometimes takes a stop out of the race.",
