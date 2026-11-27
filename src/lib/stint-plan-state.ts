@@ -454,6 +454,12 @@ export type PlannerState = {
      *  finish, so an archived plan re-opens with the schedule it was signed
      *  off with. */
     roundRaceEnd: boolean;
+    /** Laps after the lap the clock expires on: 0, 1 (iRacing's white-flag
+     *  lap, default) or 2 (one more as a safety margin). Since v2.73.0 a timed
+     *  race ALWAYS ends on a whole lap — the last stint is never fuelled for a
+     *  fraction of a lap — so this replaced the on/off `roundRaceEnd`. A plan
+     *  stored before keeps 1 if it had the box ticked, else 0. */
+    marginLaps: number;
     /** Lap target when raceLimit = "laps" (e.g. "500"). */
     raceLaps: string;
     /** Distance when raceLimit = "distance" (e.g. "1000"), in `distanceUnit`. */
@@ -616,6 +622,7 @@ export function defaultPlannerState(): PlannerState {
       raceLimit: "time",
       raceDuration: "6:00:00",
       roundRaceEnd: true,
+      marginLaps: 1,
       raceLaps: "",
       raceDistance: "",
       distanceUnit: "km",
@@ -693,6 +700,12 @@ export function hydratePlanState(payload: unknown, title: string): PlannerState 
       roundRaceEnd:
         migrated.event?.roundRaceEnd ??
         (migrated.event ? false : base.event.roundRaceEnd),
+      marginLaps: (() => {
+        const m = (migrated.event as { marginLaps?: unknown } | undefined)?.marginLaps;
+        if (typeof m === "number" && isFinite(m)) return Math.max(0, Math.min(2, Math.round(m)));
+        if (!migrated.event) return base.event.marginLaps;
+        return migrated.event.roundRaceEnd === true ? 1 : 0;
+      })(),
       // The green-flag offset field is gone (v2.19.0). "Race start" now means
       // the moment the flag falls, full stop. A plan saved under the old
       // meaning stored the SESSION start plus an offset, so fold the offset
@@ -926,7 +939,10 @@ export function stateToInput(s: PlannerState): PlannerInput {
     })),
     // Only a timed race can be rounded up to a whole lap — a distance race
     // already ends on one.
-    roundRaceEnd: s.event.raceLimit === "time" && s.event.roundRaceEnd === true,
+    // A timed race always ends on a whole lap (+ the margin laps); a distance
+    // race already ends on one.
+    roundRaceEnd: s.event.raceLimit === "time",
+    marginLaps: s.event.marginLaps ?? 1,
     // The rain profile when there is one, else the measured/typed wet model,
     // else the default — so ticking a stint wet always lengthens it.
     wetDeltaSec: wetDeltaSecOf(s),

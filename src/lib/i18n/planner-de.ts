@@ -747,6 +747,12 @@ export const de: PlannerDict = {
   sched: {
     title: "Stint-Zeitplan & Boxen-Timeline",
     showSpotter: "Spotter einblenden",
+    marginLaps: "Margin Laps",
+    marginLapsHint:
+      "Runden nach der Runde, in der die Uhr abläuft. 1 = normales iRacing-Ende (der Führende beendet die Runde, in der die Zeit abläuft, und fährt noch eine). 2 = eine Runde Sprit extra als Sicherheit. 0 = nur bis zum Ende der Runde, in der die Uhr abläuft. Der letzte Stint wird immer für volle Runden betankt.",
+    totalLapsLabel: "Runden gesamt",
+    inclMargin: (n: number) =>
+      n === 0 ? "(volle Runden, ohne Margin Lap)" : `(volle Runden, inkl. ${n} Margin Lap${n === 1 ? "" : "s"})`,
     hideSpotter: "Spotter ausblenden",
     spotterToggleHint:
       "Die Spotter-Spalte ist standardmäßig ausgeblendet — sie ist die breiteste Spalte, die niemand zweimal liest.",

@@ -755,6 +755,12 @@ export const en = {
   sched: {
     title: "Stint schedule & pit timeline",
     showSpotter: "Show spotter",
+    marginLaps: "Margin Laps",
+    marginLapsHint:
+      "Laps run after the lap the clock expires on. 1 = iRacing's normal finish (the leader completes the lap the timer runs out on, then one more). 2 = one extra lap of fuel as a safety margin. 0 = only to the end of the lap the clock expires on. The last stint is always fuelled for whole laps.",
+    totalLapsLabel: "Total laps",
+    inclMargin: (n: number) =>
+      n === 0 ? "(whole laps, no margin lap)" : `(whole laps, incl. ${n} margin lap${n === 1 ? "" : "s"})`,
     hideSpotter: "Hide spotter",
     spotterToggleHint:
       "The spotter column is hidden by default — it is the widest column nobody reads twice.",

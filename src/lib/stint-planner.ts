@@ -271,6 +271,10 @@ export type PlannerInput = {
    *  last laps cost real fuel: a plan that only just made it on the old rule
    *  now correctly shows it needs a splash. */
   roundRaceEnd?: boolean;
+  /** Laps run after the lap the clock expires on (0-2) when `roundRaceEnd`
+   *  is set. iRacing runs one (the white-flag lap); a second one is a safety
+   *  margin. Undefined = 1, the behaviour before this was a number. */
+  marginLaps?: number;
 };
 
 export type StintMode = "fuel" | "time" | "laps";
@@ -556,6 +560,7 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
   // race, so the loop can no longer stop on the clock: it stops when the
   // chequered lap has actually been driven.
   const roundEnd = !lapLimited && input.roundRaceEnd === true;
+  const marginLaps = Math.max(0, Math.min(2, Math.round(input.marginLaps ?? 1)));
   let finished = false;
 
   const stints: ScheduleStint[] = [];
@@ -760,7 +765,9 @@ export function buildSchedule(input: PlannerInput): PlannerResult {
       // answer and the reason for doing this at all.
       const remSec = raceDurationSec - t;
       const need =
-        effLaptime > 0 ? Math.max(1, Math.ceil(remSec / effLaptime - 1e-9) + 1) : 1;
+        effLaptime > 0
+          ? Math.max(1, Math.ceil(remSec / effLaptime - 1e-9) + marginLaps)
+          : 1;
       if (plannedLaps >= need) {
         isFinal = true;
         partial = plannedLaps > need;

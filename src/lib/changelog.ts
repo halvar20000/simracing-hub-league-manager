@@ -19,6 +19,17 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.73.0",
+    date: "2026-11-27",
+    changes: [
+      "Stint planner: Margin Laps moved from the Event card to the head of the stint schedule and is now a number (0, 1 or 2) instead of a tick box. 1 is iRacing's normal finish, 2 adds a lap of fuel as a safety margin.",
+      "Stint planner: a timed race now always ends on a whole lap — the last stint is fuelled for full laps (e.g. 24 instead of 23.4).",
+      "Stint planner: total laps, fuel, pit stops and the projected finish are shown right under the stint table, so switching a stint to fuel-save shows at once how far the plan gets.",
+      "Stint planner (Preparation): the \"Enable a fuel-saving profile\" switch is now in the Fuel-save strategy card, next to Rain. Fuel profiles and Pace corrections only show in Advanced mode.",
+      "Stint planner (Pit-stop model): Driver swap sits next to Tyre change, with \"Tyres after fuelling\" directly below.",
+    ],
+  },
+  {
     version: "2.72.1",
     date: "2026-11-27",
     changes: [
