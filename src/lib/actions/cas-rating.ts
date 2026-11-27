@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { CR_CONFIG_KEY, clearCasRatingCache, type CrConfig } from "@/lib/cas-rating-data";
-import { STREAMERS } from "@/lib/stream-calendar";
+import { PERSON_STREAMERS } from "@/lib/stream-calendar";
 
 /**
  * Saves the CAS Rating configuration: per league the season it counts from
@@ -28,7 +28,7 @@ export async function saveCasRatingConfigAction(formData: FormData): Promise<voi
       fromDate: /^\d{4}-\d{2}-\d{2}$/.test(fromDate) ? fromDate : null,
     };
   }
-  for (const name of STREAMERS) {
+  for (const name of PERSON_STREAMERS) {
     const userId = String(formData.get(`streamer:${name}`) ?? "").trim();
     if (!userId) continue;
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });

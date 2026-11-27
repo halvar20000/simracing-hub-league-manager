@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { SubmitWithSpinner } from "@/components/SubmitWithSpinner";
 import { loadCasRating, CR_OPEN_LEAGUE_SLUGS } from "@/lib/cas-rating-data";
 import { round1, CR_WINDOW, type CrRating } from "@/lib/cas-rating";
-import { STREAMERS } from "@/lib/stream-calendar";
+import { PERSON_STREAMERS } from "@/lib/stream-calendar";
 import { saveCasRatingConfigAction } from "@/lib/actions/cas-rating";
 
 export const metadata: Metadata = { title: "CAS Rating – Berechnung" };
@@ -139,7 +139,7 @@ export default async function CasRatingLivePage({
           <div>
             <h3 className="mb-2 font-semibold text-zinc-100">Streamer (Stream-Kalender → CLS-Account)</h3>
             <div className="flex flex-wrap gap-4">
-              {STREAMERS.map((name) => (
+              {PERSON_STREAMERS.map((name) => (
                 <label key={name} className="flex items-center gap-2">
                   {name}
                   <select

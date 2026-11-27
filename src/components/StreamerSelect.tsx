@@ -7,6 +7,7 @@ import { STREAMERS, STREAM_VALUES } from "@/lib/stream-calendar";
 const COLOR: Record<string, string> = {
   [STREAMERS[0]]: "border-sky-700 bg-sky-950 text-sky-200",
   [STREAMERS[1]]: "border-orange-700 bg-orange-950 text-orange-200",
+  [STREAMERS[2]]: "border-violet-700 bg-violet-950 text-violet-200",
 };
 
 /** Saves on change; the page's counts refresh through revalidatePath. */

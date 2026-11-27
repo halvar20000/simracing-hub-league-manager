@@ -2,7 +2,8 @@
  * Stream calendar: who streams which league race (admin page
  * /admin/stream-calendar, read-only public page /streams/calendar and the
  * iframe version /embed/stream-calendar). Thomas and Andreas share the
- * broadcasts.
+ * broadcasts; "AI-Streamer" (added 2026-11-27) is the automated stream - not a
+ * person, so it has no CLS account (no CR stream credit, no no-show exemption).
  *
  * Storage: `AppSetting`, one row per race, so a change is a single atomic
  * upsert and no schema change is needed:
@@ -20,7 +21,9 @@
  */
 import { iracingSeasonAt } from "./iracing-season";
 
-export const STREAMERS = ["Thomas", "Andreas"] as const;
+export const STREAMERS = ["Thomas", "Andreas", "AI-Streamer"] as const;
+/** The streamers who are people with a CLS account (CAS Rating mapping). */
+export const PERSON_STREAMERS = ["Thomas", "Andreas"] as const;
 export const STREAM_OPEN = "Open";
 
 /** Twitch channel login of each streamer (twitch.tv/<login>). */
@@ -206,7 +209,7 @@ function isoWeekOf(monday: string): number {
 }
 
 /**
- * Who streams this one round ("Thomas", "Andreas", "Open"), with the same
+ * Who streams this one round ("Thomas", "Andreas", "AI-Streamer", "Open"), with the same
  * lookup as the calendar: round row -> slot row -> STREAM_PLAN -> Open.
  * Null when the round is before the calendar starts.
  */

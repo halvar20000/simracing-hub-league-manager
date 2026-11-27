@@ -21,7 +21,7 @@ import {
   type CrResult,
   type CrStream,
 } from "./cas-rating";
-import { buildStreamCalendar, STREAM_KEY_PREFIX, STREAMERS } from "./stream-calendar";
+import { buildStreamCalendar, STREAM_KEY_PREFIX, PERSON_STREAMERS } from "./stream-calendar";
 
 export const CR_CONFIG_KEY = "cas-rating:config";
 export const crWithdrawnKey = (registrationId: string) => `cas-rating:withdrawn:${registrationId}`;
@@ -354,7 +354,7 @@ export async function loadCasRatingInput(
     for (const w of cal.weeks) {
       for (const race of w.races) {
         if (race.planned) continue;
-        const userId = (STREAMERS as readonly string[]).includes(race.streamer)
+        const userId = (PERSON_STREAMERS as readonly string[]).includes(race.streamer)
           ? streamerIds[race.streamer]
           : undefined;
         if (!userId) continue;

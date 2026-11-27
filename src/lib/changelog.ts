@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.72.0",
+    date: "2026-11-27",
+    changes: [
+      "Stream calendar: \"AI-Streamer\" can now be picked as the streamer of a race, next to Thomas and Andreas, with its own column in the counts.",
+    ],
+  },
+  {
     version: "2.71.0",
     date: "2026-11-27",
     changes: [
