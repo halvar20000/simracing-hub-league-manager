@@ -8,6 +8,7 @@ import { hydratePlanState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
 import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
 import { getPitReferences } from "@/lib/pit-references";
+import { getTrackLaneLosses } from "@/lib/pit-lane-loss";
 import { getPaceReferences } from "@/lib/pace-references";
 import {
   canAccessStintPlan,
@@ -69,7 +70,7 @@ export default async function SavedStintPlanPage({
   const initial = hydratePlanState(plan.payload, plan.title);
   // The de-briefing only exists once there is something to brief on.
   const hasRaceLog = initial.raceLog != null;
-  const [clsDrivers, tracks, cars, pitReferences, paceReferences, people] =
+  const [clsDrivers, tracks, cars, pitReferences, paceReferences, people, trackLaneLosses] =
     await Promise.all([
       getClsDrivers(),
       getClsTracks(),
@@ -77,6 +78,7 @@ export default async function SavedStintPlanPage({
       getPitReferences(),
       getPaceReferences(),
       describePlanPeople(plan, canManage),
+      getTrackLaneLosses(),
     ]);
 
   return (
@@ -101,6 +103,7 @@ export default async function SavedStintPlanPage({
         cars={cars}
         pitReferences={pitReferences}
         paceReferences={paceReferences}
+        trackLaneLosses={trackLaneLosses}
       />
     </main>
   );

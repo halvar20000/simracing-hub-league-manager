@@ -233,6 +233,17 @@ export const de: PlannerDict = {
     paceAdjTitle: "Pace-Zuschläge",
   },
   pit: {
+    laneSave: "Für künftige Pläne speichern",
+    laneSaving: "Speichere …",
+    laneSaveHint:
+      "Speichert diesen Pit Lane Loss für diese Streckenkonfiguration. Jeder Plan, der die Strecke danach auswählt, wird damit vorbelegt (überschreiben geht weiterhin). Klassenunabhängig: Die Streuung zwischen den Klassen liegt bei 1-2 s.",
+    laneSavedFor: (sec: number, by: string | null, day: string) =>
+      `Gespeichert für diese Strecke: ${sec} s${by ? ` (${by}, ${day})` : ` (${day})`}`,
+    laneNoneSaved: "Für diese Strecke ist noch kein Wert gespeichert.",
+    laneUseSaved: "übernehmen",
+    laneSavedOk: (track: string) => `Gespeichert für ${track}.`,
+    laneSavedApplied: (sec: number) => `Pit Lane Loss mit den gespeicherten ${sec} s vorbelegt.`,
+    laneSaveFailed: "Speichern fehlgeschlagen – Verbindung prüfen und nochmal versuchen.",
     title: "Boxenstopp-Modell",
     loadMeasured: "📥 Gemessene Werte laden",
     hide: "Einklappen",

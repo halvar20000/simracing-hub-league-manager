@@ -88,6 +88,8 @@ import RaceLogDashboard from "@/components/RaceLogDashboard";
 import RaceGallery from "@/components/RaceGallery";
 import { uploadStintPlanImages } from "@/lib/actions/stint-plan-images";
 import { matchPitReference, type PitReferenceRow } from "@/lib/pit-references";
+import { trackLaneLossKey, type TrackLaneLossMap } from "@/lib/pit-lane-loss";
+import { saveTrackLaneLoss } from "@/lib/actions/pit-lane-loss";
 import {
   suggestPaceReference,
   type PaceReferenceRow,
@@ -458,6 +460,8 @@ type StintPlannerProps = {
   /** iRating → lap time curves (admin-curated shared library). Only used by a
    *  plan set to "Official race" — see the Event card. */
   paceReferences?: PaceReferenceRow[];
+  /** Pit lane loss saved per track configuration ("Save for future plans"). */
+  trackLaneLosses?: TrackLaneLossMap;
 };
 
 export default function StintPlanner({
@@ -472,6 +476,7 @@ export default function StintPlanner({
   cars,
   pitReferences = [],
   paceReferences = [],
+  trackLaneLosses = {},
 }: StintPlannerProps) {
   const {
     t,
@@ -883,6 +888,42 @@ export default function StintPlanner({
         tankSize: r.tankSizeL != null ? String(r.tankSizeL) : p.event.tankSize,
       },
     }));
+  // Pit lane loss per track configuration (Johann, Nov 2026): picking a track
+  // pre-fills the saved figure; "Save for future plans" stores this plan's.
+  const [laneMap, setLaneMap] = useState<TrackLaneLossMap>(trackLaneLosses);
+  const [laneMsg, setLaneMsg] = useState<string | null>(null);
+  const [laneBusy, setLaneBusy] = useState(false);
+  const savedLane = s.event.track ? laneMap[trackLaneLossKey(s.event.track)] ?? null : null;
+  const pickTrack = (track: string) => {
+    const saved = track ? laneMap[trackLaneLossKey(track)] : undefined;
+    setS((p) => ({
+      ...p,
+      event: {
+        ...p.event,
+        track,
+        ...(saved ? { pitLaneLossSec: String(saved.sec) } : {}),
+      },
+    }));
+    setLaneMsg(saved ? t.pit.laneSavedApplied(saved.sec) : null);
+  };
+  const saveLaneForTrack = async () => {
+    const sec = parseTypedNumber(s.event.pitLaneLossSec, NaN);
+    if (!s.event.track || !isFinite(sec) || sec <= 0) return;
+    setLaneBusy(true);
+    try {
+      const res = await saveTrackLaneLoss(curId, s.event.track, sec);
+      if (res.ok) {
+        setLaneMap(res.map);
+        setLaneMsg(t.pit.laneSavedOk(s.event.track));
+      } else {
+        setLaneMsg(res.error);
+      }
+    } catch {
+      setLaneMsg(t.pit.laneSaveFailed);
+    } finally {
+      setLaneBusy(false);
+    }
+  };
   const [rainFromStr, setRainFromStr] = useState("");
 
   // Ticking wall clock for the live "now" tracker. Starts at 0 (SSR-safe: no
@@ -3507,7 +3548,7 @@ export default function StintPlanner({
           <div className="grid grid-cols-2 gap-3">
             <Field label={t.ev.track} hint={t.ev.trackHint}>
               <select className={inp} value={s.event.track}
-                onChange={(e) => patchEvent("track", e.target.value)}>
+                onChange={(e) => pickTrack(e.target.value)}>
                 <option value="">{t.common.selectTrack}</option>
                 {trackOptions.map((name) => (
                   <option key={name} value={name}>{name}</option>
@@ -3979,8 +4020,45 @@ export default function StintPlanner({
                     className={inp}
                     value={s.event.pitLaneLossSec}
                     onChange={(e) => patchEvent("pitLaneLossSec", e.target.value)}
-                    placeholder="41"
+                    placeholder={savedLane ? String(savedLane.sec) : "41"}
                   />
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500 print:hidden">
+                    {savedLane ? (
+                      <span>
+                        {t.pit.laneSavedFor(
+                          savedLane.sec,
+                          savedLane.byName,
+                          fmtDay(Date.parse(savedLane.updatedAt))
+                        )}
+                      </span>
+                    ) : s.event.track ? (
+                      <span>{t.pit.laneNoneSaved}</span>
+                    ) : null}
+                    {savedLane &&
+                      parseTypedNumber(s.event.pitLaneLossSec, NaN) !== savedLane.sec && (
+                        <button
+                          type="button"
+                          onClick={() => patchEvent("pitLaneLossSec", String(savedLane.sec))}
+                          className="text-emerald-300 underline hover:text-emerald-200"
+                        >
+                          {t.pit.laneUseSaved}
+                        </button>
+                      )}
+                    {s.event.track &&
+                      parseTypedNumber(s.event.pitLaneLossSec, NaN) > 0 &&
+                      parseTypedNumber(s.event.pitLaneLossSec, NaN) !== savedLane?.sec && (
+                        <button
+                          type="button"
+                          disabled={laneBusy}
+                          onClick={saveLaneForTrack}
+                          title={t.pit.laneSaveHint}
+                          className="rounded border border-emerald-800/60 bg-emerald-950/30 px-1.5 py-0.5 text-emerald-200 hover:bg-emerald-900/40 disabled:opacity-50"
+                        >
+                          {laneBusy ? t.pit.laneSaving : t.pit.laneSave}
+                        </button>
+                      )}
+                    {laneMsg && <span className="text-emerald-300/80">{laneMsg}</span>}
+                  </div>
                 </Field>
                 <Field label={t.pit.refuelRate} hint={t.pit.refuelRateHint}>
                   <input

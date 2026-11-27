@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.74.0",
+    date: "2026-11-27",
+    changes: [
+      "Stint planner (Pit-stop model): \"Save for future plans\" next to Pit lane loss stores the figure for that track configuration. Every plan that picks the same track afterwards is pre-filled with it and can still overwrite it. One value per track and layout, for all car classes.",
+    ],
+  },
+  {
     version: "2.73.0",
     date: "2026-11-27",
     changes: [

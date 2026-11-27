@@ -240,6 +240,17 @@ export const en = {
   },
   // ---- Pit-stop model card ----------------------------------------------
   pit: {
+    laneSave: "Save for future plans",
+    laneSaving: "Saving…",
+    laneSaveHint:
+      "Stores this pit lane loss for this track configuration. Every plan that picks the track afterwards is pre-filled with it (you can still overwrite it). Class-independent: the spread between classes is 1-2 s.",
+    laneSavedFor: (sec: number, by: string | null, day: string) =>
+      `Saved for this track: ${sec} s${by ? ` (${by}, ${day})` : ` (${day})`}`,
+    laneNoneSaved: "No value saved for this track yet.",
+    laneUseSaved: "use",
+    laneSavedOk: (track: string) => `Saved for ${track}.`,
+    laneSavedApplied: (sec: number) => `Pit lane loss pre-filled with the saved ${sec} s.`,
+    laneSaveFailed: "Could not save — check your connection and try again.",
     title: "Pit-stop model",
     loadMeasured: "📥 Load measured values",
     hide: "Hide",
