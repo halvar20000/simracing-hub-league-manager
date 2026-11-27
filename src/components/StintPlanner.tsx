@@ -98,8 +98,8 @@ import {
   resolvePitRule,
   type PitRuleset,
 } from "@/lib/pit-rules";
-import { trackLaneLossKey, type TrackLaneLossMap } from "@/lib/pit-lane-loss";
-import { saveTrackLaneLoss } from "@/lib/actions/pit-lane-loss";
+import { trackLaneLossKey, type TrackLaneLossMap, type CarTankMap } from "@/lib/pit-lane-loss";
+import { saveTrackLaneLoss, saveCarTank } from "@/lib/actions/pit-lane-loss";
 import {
   suggestPaceReference,
   type PaceReferenceRow,
@@ -472,6 +472,8 @@ type StintPlannerProps = {
   paceReferences?: PaceReferenceRow[];
   /** Pit lane loss saved per track configuration ("Save for future plans"). */
   trackLaneLosses?: TrackLaneLossMap;
+  /** Fuel tank size saved per car ("Save for this car"). */
+  carTanks?: CarTankMap;
 };
 
 export default function StintPlanner({
@@ -487,6 +489,7 @@ export default function StintPlanner({
   pitReferences = [],
   paceReferences = [],
   trackLaneLosses = {},
+  carTanks = {},
 }: StintPlannerProps) {
   const {
     t,
@@ -970,6 +973,37 @@ export default function StintPlanner({
       setLaneMsg(t.pit.laneSaveFailed);
     } finally {
       setLaneBusy(false);
+    }
+  };
+  // Tank size per car (Johann's lookup sheet): picking the car pre-fills it.
+  const [tankMap, setTankMap] = useState<CarTankMap>(carTanks);
+  const [tankMsg, setTankMsg] = useState<string | null>(null);
+  const [tankBusy, setTankBusy] = useState(false);
+  const savedTank = s.event.car ? tankMap[trackLaneLossKey(s.event.car)] ?? null : null;
+  const pickCar = (car: string) => {
+    const saved = car ? tankMap[trackLaneLossKey(car)] : undefined;
+    setS((p) => ({
+      ...p,
+      event: { ...p.event, car, ...(saved ? { tankSize: String(saved.litres) } : {}) },
+    }));
+    setTankMsg(saved ? t.ev.tankSavedApplied(saved.litres) : null);
+  };
+  const saveTankForCar = async () => {
+    const litres = parseTypedNumber(s.event.tankSize, NaN);
+    if (!s.event.car || !isFinite(litres) || litres <= 0) return;
+    setTankBusy(true);
+    try {
+      const res = await saveCarTank(curId, s.event.car, litres);
+      if (res.ok) {
+        setTankMap(res.map);
+        setTankMsg(t.ev.tankSavedOk(s.event.car));
+      } else {
+        setTankMsg(res.error);
+      }
+    } catch {
+      setTankMsg(t.ev.tankSaveFailed);
+    } finally {
+      setTankBusy(false);
     }
   };
   const [rainFromStr, setRainFromStr] = useState("");
@@ -2861,7 +2895,7 @@ export default function StintPlanner({
         {pitRule && pitRule.adjust !== "none" && (
           <p className="mb-3 rounded border border-sky-900/50 bg-sky-950/20 px-3 py-1.5 text-xs text-sky-200">
             <strong className="text-sky-300">
-              {t.sched.pitRulesLabel(pitRule.cls.label, t.pit.rulesetNames[pitRule.fellBack ? "default" : pitRuleset])}:
+              {t.sched.pitRulesLabel(pitRule.cls.label, pitRule.fellBack || pitRuleset === "default" ? "Default" : t.pit.rulesetNames[pitRuleset])}:
             </strong>{" "}
             {t.pit.adjust[pitRule.adjust]}
             {" · "}
@@ -3618,7 +3652,7 @@ export default function StintPlanner({
             </Field>
             <Field label={t.ev.car} hint={t.ev.carHint}>
               <select className={inp} value={s.event.car}
-                onChange={(e) => patchEvent("car", e.target.value)}>
+                onChange={(e) => pickCar(e.target.value)}>
                 <option value="">{t.common.selectCar}</option>
                 {carOptions.map((c) => (
                   <option key={c.name} value={c.name}>{c.name}</option>
@@ -3756,6 +3790,43 @@ export default function StintPlanner({
             <Field label={t.ev.tank} hint={t.ev.tankHint}>
               <input className={inp} value={s.event.tankSize}
                 onChange={(e) => patchEvent("tankSize", e.target.value)} />
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500 print:hidden">
+                {savedTank ? (
+                  <span>
+                    {t.ev.tankSavedFor(
+                      savedTank.litres,
+                      savedTank.byName,
+                      fmtDay(Date.parse(savedTank.updatedAt))
+                    )}
+                  </span>
+                ) : s.event.car ? (
+                  <span>{t.ev.tankNoneSaved}</span>
+                ) : null}
+                {savedTank &&
+                  parseTypedNumber(s.event.tankSize, NaN) !== savedTank.litres && (
+                    <button
+                      type="button"
+                      onClick={() => patchEvent("tankSize", String(savedTank.litres))}
+                      className="text-emerald-300 underline hover:text-emerald-200"
+                    >
+                      {t.ev.tankUseSaved}
+                    </button>
+                  )}
+                {s.event.car &&
+                  parseTypedNumber(s.event.tankSize, NaN) > 0 &&
+                  parseTypedNumber(s.event.tankSize, NaN) !== savedTank?.litres && (
+                    <button
+                      type="button"
+                      disabled={tankBusy}
+                      onClick={saveTankForCar}
+                      title={t.ev.tankSaveHint}
+                      className="rounded border border-emerald-800/60 bg-emerald-950/30 px-1.5 py-0.5 text-emerald-200 hover:bg-emerald-900/40 disabled:opacity-50"
+                    >
+                      {tankBusy ? t.ev.tankSaving : t.ev.tankSave}
+                    </button>
+                  )}
+                {tankMsg && <span className="text-emerald-300/80">{tankMsg}</span>}
+              </div>
             </Field>
             <Field label={t.ev.reserve} hint={t.ev.reserveHint}>
               <input className={inp} value={s.event.fuelReserve}

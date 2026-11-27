@@ -159,6 +159,17 @@ export const en = {
     stopFlatPre: "Every stop costs a flat",
     stopFlatPost: ".",
     stopWhere: "Pit times, driver swap and the measured constants are set under",
+    tankSavedFor: (l: number, by: string | null, day: string) =>
+      `Saved for this car: ${l} L${by ? ` (${by}, ${day})` : ` (${day})`}`,
+    tankNoneSaved: "No tank size saved for this car yet.",
+    tankUseSaved: "use",
+    tankSave: "Save for this car",
+    tankSaving: "Saving…",
+    tankSaveHint:
+      "Stores this tank size for the car. Every plan that picks the car afterwards is pre-filled with it (you can still overwrite it).",
+    tankSavedOk: (car: string) => `Saved for ${car}.`,
+    tankSavedApplied: (l: number) => `Tank size pre-filled with the saved ${l} L.`,
+    tankSaveFailed: "Could not save — check your connection and try again.",
     tank: "Fuel tank (L)",
     tankHint:
       "Usable tank capacity of the car in litres. This, and the consumption per lap, is what sets the maximum stint length.",
@@ -246,7 +257,7 @@ export const en = {
     rulesClassUnknown: "— pick the class —",
     rulesRuleset: "Rule set",
     rulesetNames: {
-      default: "Default (global)",
+      default: "Default (Global, WSC2017, PMNA, Rookie, NOTC, NOABS, NOABSTC)",
       imsa: "IMSA",
       nec: "NEC",
       dtm: "DTM",

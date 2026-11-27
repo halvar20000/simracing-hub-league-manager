@@ -39,3 +39,31 @@ export async function getTrackLaneLosses(): Promise<TrackLaneLossMap> {
     return {};
   }
 }
+
+/**
+ * Fuel tank size per car (Johann's lookup sheet, Nov 2026): with the tank
+ * known per car, picking the car pre-fills it, and the pit rules turn the
+ * full-tank time into a refuel rate. Same pattern as the lane loss above.
+ */
+export const CAR_TANK_KEY = "fuel-tank:cars";
+
+export type CarTank = {
+  car: string;
+  litres: number;
+  updatedAt: string; // ISO
+  byName: string | null;
+};
+
+/** Keyed by `trackLaneLossKey(car)` (same normalisation). */
+export type CarTankMap = Record<string, CarTank>;
+
+export async function getCarTanks(): Promise<CarTankMap> {
+  const row = await prisma.appSetting.findUnique({ where: { key: CAR_TANK_KEY } });
+  if (!row) return {};
+  try {
+    const v = JSON.parse(row.value);
+    return v && typeof v === "object" ? (v as CarTankMap) : {};
+  } catch {
+    return {};
+  }
+}

@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.76.0",
+    date: "2026-11-27",
+    changes: [
+      "Stint planner: the fuel tank size can be saved per car (\"Save for this car\" under the tank field). Every plan that picks that car afterwards is pre-filled with it, so the pit rules can turn the full-tank time straight into a refuel rate.",
+      "Stint planner: the Default pit rule set now names the iRacing rule sets it covers (Global, WSC2017, PMNA, Rookie, NOTC, NOABS, NOABSTC).",
+    ],
+  },
+  {
     version: "2.75.1",
     date: "2026-11-27",
     changes: [

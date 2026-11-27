@@ -153,6 +153,17 @@ export const de: PlannerDict = {
     stopFlatPre: "Jeder Stopp kostet pauschal",
     stopFlatPost: ".",
     stopWhere: "Boxenzeiten, Fahrerwechsel und die gemessenen Konstanten stehen unter",
+    tankSavedFor: (l: number, by: string | null, day: string) =>
+      `Gespeichert für dieses Auto: ${l} L${by ? ` (${by}, ${day})` : ` (${day})`}`,
+    tankNoneSaved: "Für dieses Auto ist noch keine Tankgröße gespeichert.",
+    tankUseSaved: "übernehmen",
+    tankSave: "Für dieses Auto speichern",
+    tankSaving: "Speichere …",
+    tankSaveHint:
+      "Speichert diese Tankgröße für das Auto. Jeder Plan, der das Auto danach auswählt, wird damit vorbelegt (überschreiben geht weiterhin).",
+    tankSavedOk: (car: string) => `Gespeichert für ${car}.`,
+    tankSavedApplied: (l: number) => `Tankgröße mit den gespeicherten ${l} L vorbelegt.`,
+    tankSaveFailed: "Speichern fehlgeschlagen — Verbindung prüfen und nochmal versuchen.",
     tank: "Tankgröße (L)",
     tankHint:
       "Nutzbares Tankvolumen des Autos in Litern. Zusammen mit dem Verbrauch pro Runde ergibt das die maximale Stintlänge.",
@@ -239,7 +250,7 @@ export const de: PlannerDict = {
     rulesClassUnknown: "— Klasse wählen —",
     rulesRuleset: "Regelwerk",
     rulesetNames: {
-      default: "Default (global)",
+      default: "Default (Global, WSC2017, PMNA, Rookie, NOTC, NOABS, NOABSTC)",
       imsa: "IMSA",
       nec: "NEC",
       dtm: "DTM",

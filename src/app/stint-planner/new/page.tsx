@@ -6,7 +6,7 @@ import { defaultPlannerState } from "@/lib/stint-plan-state";
 import { getClsDrivers } from "@/lib/cls-drivers";
 import { getClsTracks, getClsCars } from "@/lib/cls-tracks-cars";
 import { getPitReferences } from "@/lib/pit-references";
-import { getTrackLaneLosses } from "@/lib/pit-lane-loss";
+import { getTrackLaneLosses, getCarTanks } from "@/lib/pit-lane-loss";
 import { getPaceReferences } from "@/lib/pace-references";
 import { getStintPlanViewer } from "@/lib/stint-plan-access";
 import PlanPageHeader from "@/components/planner/PlanPageHeader";
@@ -24,13 +24,14 @@ export default async function NewStintPlanPage() {
   const viewer = await getStintPlanViewer();
   if (!viewer) redirect("/api/auth/signin?callbackUrl=/stint-planner/new");
 
-  const [clsDrivers, tracks, cars, pitReferences, paceReferences, trackLaneLosses] = await Promise.all([
+  const [clsDrivers, tracks, cars, pitReferences, paceReferences, trackLaneLosses, carTanks] = await Promise.all([
     getClsDrivers(),
     getClsTracks(),
     getClsCars(),
   getPitReferences(),
     getPaceReferences(),
     getTrackLaneLosses(),
+    getCarTanks(),
   ]);
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
@@ -43,6 +44,7 @@ export default async function NewStintPlanPage() {
         pitReferences={pitReferences}
         paceReferences={paceReferences}
         trackLaneLosses={trackLaneLosses}
+        carTanks={carTanks}
       />
     </main>
   );

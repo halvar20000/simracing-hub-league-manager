@@ -3,6 +3,9 @@
 import { prisma } from "@/lib/prisma";
 import { gateStintPlan, getStintPlanViewer } from "@/lib/stint-plan-access";
 import {
+  CAR_TANK_KEY,
+  getCarTanks,
+  type CarTankMap,
   TRACK_LANE_LOSS_KEY,
   getTrackLaneLosses,
   trackLaneLossKey,
@@ -42,6 +45,43 @@ export async function saveTrackLaneLoss(
   await prisma.appSetting.upsert({
     where: { key: TRACK_LANE_LOSS_KEY },
     create: { key: TRACK_LANE_LOSS_KEY, value },
+    update: { value },
+  });
+  return { ok: true, map };
+}
+
+/** Store a plan's tank size as the default for its car. Same gate as above. */
+export async function saveCarTank(
+  planId: string | null,
+  car: string,
+  litres: number
+): Promise<{ ok: true; map: CarTankMap } | { ok: false; error: string }> {
+  if (planId) {
+    const gate = await gateStintPlan(planId);
+    if (!gate.ok) return { ok: false, error: gate.error };
+  } else if (!(await getStintPlanViewer())) {
+    return { ok: false, error: "Sign in to CLS first." };
+  }
+  const name = String(car ?? "").trim();
+  if (!name) return { ok: false, error: "Pick a car first." };
+  if (!Number.isFinite(litres) || litres <= 0 || litres > 1000) {
+    return { ok: false, error: "Tank size must be between 0 and 1000 L." };
+  }
+  const viewer = await getStintPlanViewer();
+  const user = viewer
+    ? await prisma.user.findUnique({ where: { id: viewer.userId }, select: { name: true } })
+    : null;
+  const map = await getCarTanks();
+  map[trackLaneLossKey(name)] = {
+    car: name,
+    litres: Math.round(litres * 10) / 10,
+    updatedAt: new Date().toISOString(),
+    byName: user?.name ?? null,
+  };
+  const value = JSON.stringify(map);
+  await prisma.appSetting.upsert({
+    where: { key: CAR_TANK_KEY },
+    create: { key: CAR_TANK_KEY, value },
     update: { value },
   });
   return { ok: true, map };
