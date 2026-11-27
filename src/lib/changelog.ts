@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.74.2",
+    date: "2026-11-27",
+    changes: [
+      "Stint planner: the Garage 61 Hide button now sits on the right, where Show Garage 61 is.",
+    ],
+  },
+  {
     version: "2.74.1",
     date: "2026-11-27",
     changes: [

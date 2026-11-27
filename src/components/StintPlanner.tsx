@@ -4375,8 +4375,10 @@ export default function StintPlanner({
             {t.g61.title}
             <GuideLink section="pace" />
           </h2>
-          <div className="flex flex-wrap items-center gap-2 print:hidden">
-            {/* Fold the whole block away once the data is in. After a pull the
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2 print:hidden">
+            {/* Show/Hide always sits at the far right (order-last), in the
+                same spot in both states (Johann, Nov 2026).
+                Fold the whole block away once the data is in. After a pull the
                 numbers already sit in the plan's driver rows; the tables and
                 charts below are a screen you scroll past on every later visit.
                 Per device (localStorage), like language and Easy/Advanced. */}
@@ -4394,7 +4396,7 @@ export default function StintPlanner({
                     setG61Collapsed(!g61Collapsed);
                   }
                 }}
-                className="cursor-pointer select-none rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                className="order-last cursor-pointer select-none rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                 title={g61Collapsed ? t.g61.showHint : t.g61.hideHint}
               >
                 {g61Collapsed ? t.g61.show : t.g61.hide}
