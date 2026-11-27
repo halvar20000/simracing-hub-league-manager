@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { pageMetadata } from "@/lib/og";
+import { de as plannerDe } from "@/lib/i18n/planner-de";
+import { PIT_RULE_CLASSES, PIT_RULESETS, resolvePitRule } from "@/lib/pit-rules";
 
 export const metadata: Metadata = pageMetadata({
   title: "Stint Planner — Anleitung",
@@ -137,6 +139,11 @@ export default function StintPlannerGuidePage() {
           <li>
             <a href="#faq" className="text-[#ff6b35] hover:underline">
               8. Häufige Fragen
+            </a>
+          </li>
+          <li>
+            <a href="#boxenregeln" className="text-[#ff6b35] hover:underline">
+              9. iRacing-Boxenregeln je Klasse
             </a>
           </li>
         </ol>
@@ -627,6 +634,68 @@ export default function StintPlannerGuidePage() {
               </dd>
             </div>
           </dl>
+        </Section>
+
+        <Section
+          id="boxenregeln"
+          title="9. iRacing-Boxenregeln je Klasse"
+          lead="Genau die Werte, mit denen der Planner rechnet (Karte Pit-stop model → iRacing-Boxenregeln). Quelle: iRacing-Forentabelle, Saison 2026 S4."
+        >
+          <p>
+            Pro Zelle: <K>‖</K> = Tanken und Reifen gleichzeitig,{" "}
+            <K>→</K> = erst Tanken, dann Reifen; danach Sekunden für einen
+            vollen Tank / für 4 Reifen. <em>Default</em> heißt: Das Regelwerk
+            deckt die Klasse nicht ab, iRacing nimmt die Default-Regeln.
+            Fahrerwechsel immer 30 s, parallel zum Service.
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-zinc-800">
+            <table className="w-full text-xs tabular-nums">
+              <thead className="bg-zinc-900 text-zinc-400">
+                <tr>
+                  <th className="px-2 py-1.5 text-left">Klasse</th>
+                  {PIT_RULESETS.map((r) => (
+                    <th key={r} className="px-2 py-1.5 text-left">
+                      {plannerDe.pit.rulesetNames[r]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PIT_RULE_CLASSES.map((c) => (
+                  <tr key={c.id} className="border-t border-zinc-800 align-top">
+                    <td className="px-2 py-1.5 font-medium text-zinc-200">{c.label}</td>
+                    {PIT_RULESETS.map((r) => {
+                      const rule = resolvePitRule(c, r);
+                      if (rule.fellBack) {
+                        return (
+                          <td key={r} className="px-2 py-1.5 text-zinc-600">
+                            Default
+                          </td>
+                        );
+                      }
+                      return (
+                        <td key={r} className="px-2 py-1.5 text-zinc-300">
+                          {rule.parallel ? "‖" : "→"} {rule.fillSec ?? "?"} / {rule.tyresSec}
+                          {rule.adjust !== "none" && (
+                            <div className="mt-0.5 text-[10px] leading-snug text-sky-300/80">
+                              {plannerDe.pit.adjust[rule.adjust]}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-zinc-400">
+            Porsche Mission R: Die Forentabelle nennt 820 s für den vollen Tank,
+            vermutlich ein Tippfehler, deshalb <K>?</K>. Ovale Stockcars,
+            Australian Supercars, Brasil Stockcars, Euro Nascar und alle
+            Formelautos fahren nach ihren echten Regeln (nur Default). Im
+            Default-Regelwerk wird erst nach dem Tanken repariert.
+          </p>
         </Section>
       </div>
 

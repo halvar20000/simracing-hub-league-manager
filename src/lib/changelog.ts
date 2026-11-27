@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.75.1",
+    date: "2026-11-27",
+    changes: [
+      "Stint planner: on the Event tab the Pit-stop model now sits next to Event, the Roster below.",
+      "Stint planner guide: new section 9 lists the iRacing pit rules per class and rule set exactly as the planner uses them, to check against the forum table.",
+    ],
+  },
+  {
     version: "2.75.0",
     date: "2026-11-27",
     changes: [

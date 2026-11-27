@@ -3862,94 +3862,6 @@ export default function StintPlanner({
           </div>
         </div>
 
-        {/* Roster — who is on this plan, and the one place to add someone.
-            The table that settles their pace and fuel sits far below now (after
-            the Garage 61 charts, because that is the order the work happens
-            in), which left no obvious place to build the line-up while setting
-            the race up. This is that place; the numbers stay down there. */}
-        <div className={card} id="card-drivers">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
-              {t.roster.title}
-              <GuideLink section="setup" />
-            </h2>
-            <ClsDriverPicker
-              options={clsDrivers.filter(
-                (d) => !s.drivers.some((r) => r.id === d.id)
-              )}
-              onPick={addClsDriver}
-            />
-          </div>
-          {s.drivers.length === 0 ? (
-            <p className="text-sm text-zinc-500">{t.roster.empty}</p>
-          ) : (
-            (() => {
-              const missing = s.drivers.filter(
-                (d) => !d.laptime.trim() || !d.fuelPerLap?.trim()
-              );
-              return (
-                <>
-                  <div className="flex flex-wrap gap-1.5">
-                    {s.drivers.map((d) => {
-                      const gap = !d.laptime.trim() || !d.fuelPerLap?.trim();
-                      // The CLS snapshot first — that is the driver's real
-                      // iRating, kept up to date by the iRacing sync. The
-                      // number typed into the driver table is the fallback:
-                      // it only exists on an official-race plan, where it is
-                      // what the pace curve is read with. Somebody added by
-                      // hand (not a CLS member) has neither, and simply shows
-                      // a name, which is the honest thing to show.
-                      const fromCls =
-                        clsDrivers.find((c) => c.id === d.id)?.iRating ?? null;
-                      const typed = parseTypedNumber(d.iRating ?? "", 0);
-                      const ir = fromCls ?? (typed > 0 ? typed : 0);
-                      return (
-                        <span
-                          key={d.id}
-                          title={
-                            gap
-                              ? t.roster.gapHint
-                              : t.roster.ownFigures(d.laptime, d.fuelPerLap ?? "—")
-                          }
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm ${
-                            gap
-                              ? "border-amber-800/60 bg-amber-950/20 text-amber-100"
-                              : "border-zinc-700 bg-zinc-900/60 text-zinc-200"
-                          }`}
-                        >
-                          <span
-                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${driverColour(d.id).dot}`}
-                          />
-                          <span className="flex flex-col leading-tight">
-                            <span>{d.name}</span>
-                            <span
-                              className="text-[10px] text-zinc-500"
-                              title={t.roster.iRatingHint}
-                            >
-                              {ir > 0 ? t.roster.iRatingValue(ir) : t.roster.iRatingNone}
-                            </span>
-                          </span>
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500">
-                    {t.roster.countPre(s.drivers.length)} {t.roster.countPost}{" "}
-                    <strong className="text-zinc-400">{t.roster.driversWord}</strong>{" "}
-                    {t.roster.countPost2}
-                    {missing.length > 0 && (
-                      <span className="text-amber-300">
-                        {" "}
-                        {t.roster.missing(missing.length)}
-                      </span>
-                    )}
-                  </p>
-                </>
-              );
-            })()
-          )}
-        </div>
-
         {/* Pit-stop model — measured constants instead of one flat number.
             Off by default: an existing plan keeps its flat pit loss until
             somebody switches this on.
@@ -4485,6 +4397,94 @@ export default function StintPlanner({
           )}
         </div>
         </AdvancedOnly>
+
+        {/* Roster — who is on this plan, and the one place to add someone.
+            The table that settles their pace and fuel sits far below now (after
+            the Garage 61 charts, because that is the order the work happens
+            in), which left no obvious place to build the line-up while setting
+            the race up. This is that place; the numbers stay down there. */}
+        <div className={card} id="card-drivers">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-orange-300">
+              {t.roster.title}
+              <GuideLink section="setup" />
+            </h2>
+            <ClsDriverPicker
+              options={clsDrivers.filter(
+                (d) => !s.drivers.some((r) => r.id === d.id)
+              )}
+              onPick={addClsDriver}
+            />
+          </div>
+          {s.drivers.length === 0 ? (
+            <p className="text-sm text-zinc-500">{t.roster.empty}</p>
+          ) : (
+            (() => {
+              const missing = s.drivers.filter(
+                (d) => !d.laptime.trim() || !d.fuelPerLap?.trim()
+              );
+              return (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {s.drivers.map((d) => {
+                      const gap = !d.laptime.trim() || !d.fuelPerLap?.trim();
+                      // The CLS snapshot first — that is the driver's real
+                      // iRating, kept up to date by the iRacing sync. The
+                      // number typed into the driver table is the fallback:
+                      // it only exists on an official-race plan, where it is
+                      // what the pace curve is read with. Somebody added by
+                      // hand (not a CLS member) has neither, and simply shows
+                      // a name, which is the honest thing to show.
+                      const fromCls =
+                        clsDrivers.find((c) => c.id === d.id)?.iRating ?? null;
+                      const typed = parseTypedNumber(d.iRating ?? "", 0);
+                      const ir = fromCls ?? (typed > 0 ? typed : 0);
+                      return (
+                        <span
+                          key={d.id}
+                          title={
+                            gap
+                              ? t.roster.gapHint
+                              : t.roster.ownFigures(d.laptime, d.fuelPerLap ?? "—")
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm ${
+                            gap
+                              ? "border-amber-800/60 bg-amber-950/20 text-amber-100"
+                              : "border-zinc-700 bg-zinc-900/60 text-zinc-200"
+                          }`}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${driverColour(d.id).dot}`}
+                          />
+                          <span className="flex flex-col leading-tight">
+                            <span>{d.name}</span>
+                            <span
+                              className="text-[10px] text-zinc-500"
+                              title={t.roster.iRatingHint}
+                            >
+                              {ir > 0 ? t.roster.iRatingValue(ir) : t.roster.iRatingNone}
+                            </span>
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-500">
+                    {t.roster.countPre(s.drivers.length)} {t.roster.countPost}{" "}
+                    <strong className="text-zinc-400">{t.roster.driversWord}</strong>{" "}
+                    {t.roster.countPost2}
+                    {missing.length > 0 && (
+                      <span className="text-amber-300">
+                        {" "}
+                        {t.roster.missing(missing.length)}
+                      </span>
+                    )}
+                  </p>
+                </>
+              );
+            })()
+          )}
+        </div>
       </div>
 
       </fieldset>
