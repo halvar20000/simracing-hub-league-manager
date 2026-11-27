@@ -240,6 +240,39 @@ export const en = {
   },
   // ---- Pit-stop model card ----------------------------------------------
   pit: {
+    rulesTitle: "iRacing pit rules",
+    rulesClass: "Car class",
+    rulesClassAuto: (label: string) => `Automatic: ${label}`,
+    rulesClassUnknown: "— pick the class —",
+    rulesRuleset: "Rule set",
+    rulesetNames: {
+      default: "Default (global)",
+      imsa: "IMSA",
+      nec: "NEC",
+      dtm: "DTM",
+    },
+    rulesFill: (sec: number | null) => (sec == null ? "full tank: unknown" : `full tank ${sec} s`),
+    rulesTyres: (sec: number) => `4 tyres ${sec} s`,
+    rulesParallel: "fuel and tyres at the same time",
+    rulesSequential: "fuel first, then tyres",
+    rulesSwap: "driver swap 30 s (runs in parallel)",
+    rulesFellBack: (rs: string) =>
+      `${rs} does not cover this class, so iRacing uses the default rules.`,
+    rulesRepairs: "Default rule set: repairs only start after refuelling.",
+    rulesApply: "Apply to the pit stop",
+    rulesApplyHint:
+      "Writes the refuel rate (tank size ÷ full-tank time), the tyre change time, fuel-and-tyres-together/one-after-the-other and the 30 s driver swap into the pit stop. Pit lane loss stays as it is: it depends on the track, not on the class.",
+    rulesApplied: "Applied.",
+    rulesNeedTank: "Enter the tank size in the Event card first, so the full-tank time can become a refuel rate.",
+    rulesSource: "Source: iRacing forum table, season 2026 S4.",
+    adjust: {
+      none: "",
+      bodyworkAfterTyres: "Bodywork changes are done AFTER the tyre service",
+      arbWingAfterFuelDuringTyres: "ARB and wing changes are done AFTER refuelling and DURING the tyre service",
+      arbWingDuringService: "ARB and wing changes are done DURING the fuel and tyre service",
+      arbAfterFuelDuringTyres: "ARB changes are done AFTER refuelling and DURING the tyre service",
+      arbDuringService: "ARB changes are done DURING the fuel and tyre service",
+    },
     laneSave: "Save for future plans",
     laneSaving: "Saving…",
     laneSaveHint:
@@ -769,6 +802,7 @@ export const en = {
   sched: {
     title: "Stint schedule & pit timeline",
     showSpotter: "Show spotter",
+    pitRulesLabel: (cls: string, rs: string) => `Pit rules (${cls} · ${rs})`,
     marginLaps: "Margin Laps",
     marginLapsHint:
       "Laps run after the lap the clock expires on. 1 = iRacing's normal finish (the leader completes the lap the timer runs out on, then one more). 2 = one extra lap of fuel as a safety margin. 0 = only to the end of the lap the clock expires on. The last stint is always fuelled for whole laps.",

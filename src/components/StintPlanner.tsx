@@ -88,6 +88,16 @@ import RaceLogDashboard from "@/components/RaceLogDashboard";
 import RaceGallery from "@/components/RaceGallery";
 import { uploadStintPlanImages } from "@/lib/actions/stint-plan-images";
 import { matchPitReference, type PitReferenceRow } from "@/lib/pit-references";
+import {
+  PIT_RULE_CLASSES,
+  PIT_RULESETS,
+  IRACING_DRIVER_SWAP_SEC,
+  guessPitRuleClass,
+  isPitRuleset,
+  pitRuleClassById,
+  resolvePitRule,
+  type PitRuleset,
+} from "@/lib/pit-rules";
 import { trackLaneLossKey, type TrackLaneLossMap } from "@/lib/pit-lane-loss";
 import { saveTrackLaneLoss } from "@/lib/actions/pit-lane-loss";
 import {
@@ -890,6 +900,42 @@ export default function StintPlanner({
         tankSize: r.tankSizeL != null ? String(r.tankSizeL) : p.event.tankSize,
       },
     }));
+  // iRacing pit rules per car class + rule set (forum table via Johann,
+  // 2026-11-27). The class is guessed from the car name unless picked.
+  const pitRuleCls =
+    pitRuleClassById(s.event.pitRuleClass) ?? guessPitRuleClass(s.event.car);
+  const pitRuleset: PitRuleset = isPitRuleset(s.event.pitRuleset) ? s.event.pitRuleset : "default";
+  const pitRule = pitRuleCls ? resolvePitRule(pitRuleCls, pitRuleset) : null;
+  const [pitRuleMsg, setPitRuleMsg] = useState<string | null>(null);
+  const pitRuleTank = parseTypedNumber(s.event.tankSize, 0);
+  const applyPitRule = () => {
+    if (!pitRule) return;
+    setS((p) => {
+      const tank = parseTypedNumber(p.event.tankSize, 0);
+      const usable = Math.max(0, tank - parseTypedNumber(p.event.fuelReserve, 0));
+      const fill = pitRule.fillSec;
+      return {
+        ...p,
+        event: {
+          ...p.event,
+          refuelLps: fill && tank > 0 ? (tank / fill).toFixed(2) : p.event.refuelLps,
+          refuelSec: fill && tank > 0 ? String(Math.round((fill * usable) / tank)) : p.event.refuelSec,
+          tyreChangeSec: String(pitRule.tyresSec),
+          tyreSequential: !pitRule.parallel,
+          driverSwapSec: String(IRACING_DRIVER_SWAP_SEC),
+        },
+      };
+    });
+    setPitRuleMsg(t.pit.rulesApplied);
+  };
+  const pitRuleSummary = pitRule
+    ? [
+        pitRule.parallel ? t.pit.rulesParallel : t.pit.rulesSequential,
+        t.pit.rulesFill(pitRule.fillSec),
+        t.pit.rulesTyres(pitRule.tyresSec),
+        t.pit.rulesSwap,
+      ].join(" · ")
+    : "";
   // Pit lane loss per track configuration (Johann, Nov 2026): picking a track
   // pre-fills the saved figure; "Save for future plans" stores this plan's.
   const [laneMap, setLaneMap] = useState<TrackLaneLossMap>(trackLaneLosses);
@@ -2812,6 +2858,16 @@ export default function StintPlanner({
             </button>
           </div>
         </div>
+        {pitRule && pitRule.adjust !== "none" && (
+          <p className="mb-3 rounded border border-sky-900/50 bg-sky-950/20 px-3 py-1.5 text-xs text-sky-200">
+            <strong className="text-sky-300">
+              {t.sched.pitRulesLabel(pitRule.cls.label, t.pit.rulesetNames[pitRule.fellBack ? "default" : pitRuleset])}:
+            </strong>{" "}
+            {t.pit.adjust[pitRule.adjust]}
+            {" · "}
+            {pitRule.parallel ? t.pit.rulesParallel : t.pit.rulesSequential}
+          </p>
+        )}
         {alertMsg && (
           <p className="mb-3 rounded border border-indigo-800/60 bg-indigo-950/30 px-3 py-2 text-xs text-indigo-200">
             {alertMsg}
@@ -3966,6 +4022,84 @@ export default function StintPlanner({
             </span>
             </div>
           </div>
+          {!pitCollapsed && (
+            <div className="mb-4 rounded border border-sky-900/50 bg-sky-950/20 p-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-sky-300">
+                {t.pit.rulesTitle}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={t.pit.rulesClass}>
+                  <select
+                    className={inp}
+                    value={s.event.pitRuleClass ?? ""}
+                    onChange={(e) => {
+                      patchEvent("pitRuleClass", e.target.value);
+                      setPitRuleMsg(null);
+                    }}
+                  >
+                    <option value="">
+                      {guessPitRuleClass(s.event.car)
+                        ? t.pit.rulesClassAuto(guessPitRuleClass(s.event.car)!.label)
+                        : t.pit.rulesClassUnknown}
+                    </option>
+                    {PIT_RULE_CLASSES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label={t.pit.rulesRuleset}>
+                  <select
+                    className={inp}
+                    value={pitRuleset}
+                    onChange={(e) => {
+                      patchEvent("pitRuleset", e.target.value);
+                      setPitRuleMsg(null);
+                    }}
+                  >
+                    {PIT_RULESETS.map((r) => (
+                      <option key={r} value={r}>
+                        {t.pit.rulesetNames[r]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              {pitRule && (
+                <div className="mt-2 space-y-1 text-xs text-zinc-300">
+                  <p>{pitRuleSummary}</p>
+                  {pitRule.adjust !== "none" && (
+                    <p className="text-sky-200">{t.pit.adjust[pitRule.adjust]}</p>
+                  )}
+                  {pitRule.fellBack && (
+                    <p className="text-amber-300">
+                      {t.pit.rulesFellBack(t.pit.rulesetNames[pitRuleset])}
+                    </p>
+                  )}
+                  {(pitRuleset === "default" || pitRule.fellBack) && (
+                    <p className="text-zinc-500">{t.pit.rulesRepairs}</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 pt-1 print:hidden">
+                    <button
+                      type="button"
+                      onClick={applyPitRule}
+                      title={t.pit.rulesApplyHint}
+                      className="rounded border border-sky-800/60 bg-sky-950/40 px-2 py-1 text-xs text-sky-100 hover:bg-sky-900/40"
+                    >
+                      {t.pit.rulesApply}
+                    </button>
+                    <Hint text={t.pit.rulesApplyHint} />
+                    {pitRule.fillSec != null && pitRuleTank <= 0 && (
+                      <span className="text-amber-300">{t.pit.rulesNeedTank}</span>
+                    )}
+                    {pitRuleMsg && <span className="text-emerald-300">{pitRuleMsg}</span>}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">{t.pit.rulesSource}</p>
+                </div>
+              )}
+            </div>
+          )}
           {pitCollapsed ? (
             <p className="text-xs text-zinc-500">
               {s.event.pitModelOn

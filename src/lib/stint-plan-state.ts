@@ -525,6 +525,10 @@ export type PlannerState = {
     pitModelOn: boolean;
     /** Time lost entering, stopping and leaving WITHOUT service, in seconds. */
     pitLaneLossSec: string;
+    /** iRacing pit-rule class id (`pit-rules.ts`); "" = guess from the car name. */
+    pitRuleClass: string;
+    /** iRacing pit rule set: "default" | "imsa" | "nec" | "dtm". */
+    pitRuleset: string;
     /** Refuel rate in litres per second (GT3 ≈ 2.5, LMP ≈ 1.81). */
     refuelLps: string;
     /** Tyre change duration in seconds (≈ 20). */
@@ -649,6 +653,8 @@ export function defaultPlannerState(): PlannerState {
       refuelSec: "",
       pitModelOn: false,
       pitLaneLossSec: "",
+      pitRuleClass: "",
+      pitRuleset: "default",
       refuelLps: "",
       tyreChangeSec: "",
       tyreSequential: true,

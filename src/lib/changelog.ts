@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.75.0",
+    date: "2026-11-27",
+    changes: [
+      "Stint planner: iRacing pit rules per car class and rule set (Default, IMSA, NEC, DTM) in the pit stop card, from the iRacing forum table for 2026 S4. The class is recognised from the car name, or can be picked. One click fills in the refuel rate, the tyre change time, fuel-and-tyres-together or one-after-the-other, and the 30 s driver swap.",
+      "Stint planner: the pit adjustment rule of the chosen class and rule set (e.g. ARB and wing changes during the fuel and tyre service) is shown above the stint schedule.",
+    ],
+  },
+  {
     version: "2.74.2",
     date: "2026-11-27",
     changes: [

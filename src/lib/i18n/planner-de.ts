@@ -233,6 +233,39 @@ export const de: PlannerDict = {
     paceAdjTitle: "Pace-Zuschläge",
   },
   pit: {
+    rulesTitle: "iRacing-Boxenregeln",
+    rulesClass: "Fahrzeugklasse",
+    rulesClassAuto: (label: string) => `Automatisch: ${label}`,
+    rulesClassUnknown: "— Klasse wählen —",
+    rulesRuleset: "Regelwerk",
+    rulesetNames: {
+      default: "Default (global)",
+      imsa: "IMSA",
+      nec: "NEC",
+      dtm: "DTM",
+    },
+    rulesFill: (sec: number | null) => (sec == null ? "voller Tank: unbekannt" : `voller Tank ${sec} s`),
+    rulesTyres: (sec: number) => `4 Reifen ${sec} s`,
+    rulesParallel: "Tanken und Reifen gleichzeitig",
+    rulesSequential: "erst Tanken, dann Reifen",
+    rulesSwap: "Fahrerwechsel 30 s (läuft parallel)",
+    rulesFellBack: (rs: string) =>
+      `${rs} deckt diese Klasse nicht ab, iRacing nimmt dann die Default-Regeln.`,
+    rulesRepairs: "Default-Regelwerk: Reparaturen beginnen erst nach dem Tanken.",
+    rulesApply: "In den Boxenstopp übernehmen",
+    rulesApplyHint:
+      "Trägt Tankrate (Tankgröße ÷ Zeit für vollen Tank), Reifenwechselzeit, gleichzeitig/nacheinander und den 30-s-Fahrerwechsel in den Boxenstopp ein. Der Pit Lane Loss bleibt, wie er ist: Er hängt an der Strecke, nicht an der Klasse.",
+    rulesApplied: "Übernommen.",
+    rulesNeedTank: "Erst im Event die Tankgröße eintragen, damit aus der Zeit für den vollen Tank eine Tankrate wird.",
+    rulesSource: "Quelle: iRacing-Forentabelle, Saison 2026 S4.",
+    adjust: {
+      none: "",
+      bodyworkAfterTyres: "Bodywork-Änderungen erst NACH dem Reifenservice",
+      arbWingAfterFuelDuringTyres: "ARB- und Flügeländerungen NACH dem Tanken und WÄHREND des Reifenservice",
+      arbWingDuringService: "ARB- und Flügeländerungen WÄHREND Tanken und Reifenservice",
+      arbAfterFuelDuringTyres: "ARB-Änderungen NACH dem Tanken und WÄHREND des Reifenservice",
+      arbDuringService: "ARB-Änderungen WÄHREND Tanken und Reifenservice",
+    },
     laneSave: "Für künftige Pläne speichern",
     laneSaving: "Speichere …",
     laneSaveHint:
@@ -761,6 +794,7 @@ export const de: PlannerDict = {
   sched: {
     title: "Stint-Zeitplan & Boxen-Timeline",
     showSpotter: "Spotter einblenden",
+    pitRulesLabel: (cls: string, rs: string) => `Boxenregeln (${cls} · ${rs})`,
     marginLaps: "Margin Laps",
     marginLapsHint:
       "Runden nach der Runde, in der die Uhr abläuft. 1 = normales iRacing-Ende (der Führende beendet die Runde, in der die Zeit abläuft, und fährt noch eine). 2 = eine Runde Sprit extra als Sicherheit. 0 = nur bis zum Ende der Runde, in der die Uhr abläuft. Der letzte Stint wird immer für volle Runden betankt.",
