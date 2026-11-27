@@ -106,7 +106,7 @@ export async function postDecision(
 export function liveChecker(): () => Promise<string[] | null> {
   let cached: Promise<string[] | null> | null = null;
   return () => {
-    cached ??= liveChannels(Object.values(STREAMER_CHANNELS)).then((r) =>
+    cached ??= liveChannels([...new Set(Object.values(STREAMER_CHANNELS))]).then((r) =>
       r.ok ? r.data : null
     );
     return cached;

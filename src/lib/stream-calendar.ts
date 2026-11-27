@@ -30,6 +30,8 @@ export const STREAM_OPEN = "Open";
 export const STREAMER_CHANNELS: Record<string, string> = {
   Thomas: "sim_racing_broadcast",
   Andreas: "cas_sim_tv",
+  // The AI stream runs on Thomas's channel (Thomas, 2026-11-27).
+  "AI-Streamer": "sim_racing_broadcast",
 };
 
 export function streamerTwitchUrl(streamer: string | null | undefined): string | null {

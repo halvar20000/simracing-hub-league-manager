@@ -19,6 +19,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.72.1",
+    date: "2026-11-27",
+    changes: [
+      "Stream calendar: races streamed by the AI-Streamer now link to the SimRacing Broadcast Twitch channel (sim_racing_broadcast), and their VODs are matched from there.",
+    ],
+  },
+  {
     version: "2.72.0",
     date: "2026-11-27",
     changes: [
