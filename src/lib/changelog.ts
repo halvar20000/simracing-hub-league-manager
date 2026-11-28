@@ -19,6 +19,14 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2.76.1",
+    date: "2026-11-28",
+    changes: [
+      "Stint planner: the Roster now sits inside the Event card, so the Event tab needs less scrolling.",
+      "Stint planner: Porsche Mission R pit rules use the 820 s from the iRacing table. It is electric, so that is the battery recharge.",
+    ],
+  },
+  {
     version: "2.76.0",
     date: "2026-11-27",
     changes: [

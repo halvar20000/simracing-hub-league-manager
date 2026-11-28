@@ -173,9 +173,9 @@ export const PIT_RULE_CLASSES: PitRuleClass[] = [
   legacy("gtp-classic", "Nissan GTP & Audi 90 GTO", ["zx-t", "90 gto"], 45, 15),
   legacy("radical", "Radical SR8 & SR10", ["radical"], 40, 20),
   legacy("srf", "Spec Racer Ford", ["spec racer"], 36, 40),
-  // The forum table says 820 s for a full tank — almost certainly a typo, so
-  // no fill time rather than a refuel rate that would wreck the schedule.
-  legacy("missionr", "Porsche Mission R", ["mission r"], null, 20),
+  // Electric: the 820 s is a battery recharge, not a typo (Johann: the real
+  // car charges to 75 % in 15 min). The "tank" is the battery.
+  legacy("missionr", "Porsche Mission R", ["mission r"], 820, 20),
 ];
 
 export function pitRuleClassById(id: string | null | undefined): PitRuleClass | null {

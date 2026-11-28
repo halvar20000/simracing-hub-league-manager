@@ -690,8 +690,8 @@ export default function StintPlannerGuidePage() {
             </table>
           </div>
           <p className="text-zinc-400">
-            Porsche Mission R: Die Forentabelle nennt 820 s für den vollen Tank,
-            vermutlich ein Tippfehler, deshalb <K>?</K>. Ovale Stockcars,
+            Porsche Mission R: Die 820 s sind kein Tippfehler, der Wagen ist
+            elektrisch und lädt seinen Akku. Ovale Stockcars,
             Australian Supercars, Brasil Stockcars, Euro Nascar und alle
             Formelautos fahren nach ihren echten Regeln (nur Default). Im
             Default-Regelwerk wird erst nach dem Tanken repariert.
